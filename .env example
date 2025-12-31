@@ -1,0 +1,9 @@
+# BINGO ELITE - Environment Configuration
+# 1. Copy this file and rename to .env
+# 2. Fill in your actual values below
+# 3. NEVER share the real .env file!
+
+PORT=3000
+MONGODB_URI=mongodb+srv://israelnegasi:YOUR_PASSWORD@cluster0.b2hukwx.mongodb.net/bingo?retryWrites=true&w=majority&appName=Cluster0
+ADMIN_PASSWORD=create_a_strong_password_here
+NODE_ENV=production
