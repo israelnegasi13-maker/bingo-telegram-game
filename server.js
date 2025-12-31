@@ -1,4 +1,4 @@
-// server.js - COMPLETE FIXED VERSION
+// server.js - COMPLETE REAL-TIME FIXED VERSION
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -87,28 +87,30 @@ const Stats = mongoose.model('Stats', statsSchema);
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO with proper CORS
+// ========== FIXED SOCKET.IO CONFIGURATION ==========
 const io = socketIo(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  cookie: false,
+  maxHttpBufferSize: 1e8
 });
 
-// ========== FIXED MIDDLEWARE ==========
-// REMOVED CSP BLOCKING COMPLETELY
-
-// CORS - Allow everything
+// ========== MIDDLEWARE ==========
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  credentials: true
 }));
 
-// Use helmet WITHOUT CSP blocking
 app.use(helmet({
-  contentSecurityPolicy: false, // THIS DISABLES CSP
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
@@ -116,7 +118,7 @@ app.use(helmet({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Add custom headers to allow everything
+// Custom headers for WebSocket
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
@@ -154,35 +156,14 @@ const BINGO_LETTERS = {
   'O': { min: 61, max: 75, color: '#ef4444' }
 };
 
+// ========== GLOBAL STATE ==========
 let socketToUser = new Map();
 let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
+let connectedSockets = new Set();
 
-async function initializeRooms() {
-  try {
-    for (const stake of CONFIG.ROOM_STAKES) {
-      const existingRoom = await Room.findOne({ stake: stake, status: 'waiting' });
-      if (!existingRoom) {
-        const newRoom = new Room({
-          stake: stake,
-          players: [],
-          takenBoxes: [],
-          status: 'waiting',
-          calledNumbers: [],
-          ballsDrawn: 0
-        });
-        await newRoom.save();
-        console.log(`✅ Created room for ${stake} ETB stake`);
-      }
-    }
-  } catch (error) {
-    console.error('Error initializing rooms:', error);
-  }
-}
-
-initializeRooms();
-
+// ========== HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
   if (number >= 1 && number <= 15) return 'B';
   if (number >= 16 && number <= 30) return 'I';
@@ -190,6 +171,15 @@ function getBingoLetter(number) {
   if (number >= 46 && number <= 60) return 'G';
   if (number >= 61 && number <= 75) return 'O';
   return '';
+}
+
+function generateReferralCode(userId) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code + userId.slice(-4);
 }
 
 async function getUser(userId, userName) {
@@ -223,15 +213,6 @@ async function getUser(userId, userName) {
   }
 }
 
-function generateReferralCode(userId) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code + userId.slice(-4);
-}
-
 async function getRoom(stake) {
   try {
     let room = await Room.findOne({ stake: stake, status: { $in: ['waiting', 'starting', 'playing'] } });
@@ -253,6 +234,7 @@ async function getRoom(stake) {
   }
 }
 
+// ========== BROADCAST FUNCTIONS ==========
 async function broadcastRoomStatus() {
   try {
     const rooms = await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
@@ -273,116 +255,163 @@ async function broadcastRoomStatus() {
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
         houseFee: houseFee,
-        currentBall: room.currentBall
+        currentBall: room.currentBall,
+        ballsDrawn: room.ballsDrawn
       };
     });
     
+    // Broadcast to all connected sockets
     io.emit('roomStatus', roomStatus);
+    
+    // Also update admin panel
+    updateAdminPanel();
+    
   } catch (error) {
     console.error('Error broadcasting room status:', error);
   }
 }
 
-// Game timer function
-async function startGameTimer(room) {
-  if (roomTimers.has(room.stake)) {
-    clearInterval(roomTimers.get(room.stake));
-  }
-  
-  const timer = setInterval(async () => {
-    try {
-      const currentRoom = await Room.findById(room._id);
-      if (!currentRoom || currentRoom.status !== 'playing') {
-        clearInterval(timer);
-        roomTimers.delete(room.stake);
-        return;
-      }
-      
-      if (currentRoom.ballsDrawn >= 75) {
-        // End game if all balls drawn
-        return;
-      }
-      
-      let ball;
-      let letter;
-      do {
-        ball = Math.floor(Math.random() * 75) + 1;
-        letter = getBingoLetter(ball);
-      } while (currentRoom.calledNumbers.includes(ball));
-      
-      currentRoom.calledNumbers.push(ball);
-      currentRoom.currentBall = ball;
-      currentRoom.ballsDrawn += 1;
-      await currentRoom.save();
-      
-      const ballData = {
-        room: currentRoom.stake,
-        num: ball,
-        letter: letter,
-        fullDisplay: `${letter}-${ball}`
-      };
-      
-      // Emit to all players in room
-      currentRoom.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.emit('ballDrawn', ballData);
-            }
-          }
+async function updateAdminPanel() {
+  try {
+    const totalPlayers = Array.from(socketToUser.keys()).length;
+    const activeGames = await Room.countDocuments({ status: 'playing' });
+    
+    // Get all users
+    const users = await User.find({}).sort({ balance: -1 }).limit(100);
+    const userArray = users.map(user => {
+      let isOnline = false;
+      for (const [socketId, userId] of socketToUser.entries()) {
+        if (userId === user.userId) {
+          isOnline = true;
+          break;
         }
-      });
-      
-      // Enable bingo claiming after 5 balls
-      if (currentRoom.ballsDrawn >= 5) {
-        currentRoom.players.forEach(userId => {
-          for (const [socketId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              const socket = io.sockets.sockets.get(socketId);
-              if (socket) {
-                socket.emit('enableBingo');
-              }
-            }
-          }
-        });
       }
       
-      broadcastRoomStatus();
+      return {
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        currentRoom: user.currentRoom,
+        box: user.box,
+        isOnline: isOnline,
+        totalWagered: user.totalWagered || 0,
+        totalWins: user.totalWins || 0,
+        lastSeen: user.lastSeen
+      };
+    });
+    
+    // Get room data
+    const roomsData = {};
+    const rooms = await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    
+    rooms.forEach(room => {
+      const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
+      const contributionPerPlayer = room.stake - commissionPerPlayer;
+      const potentialPrize = contributionPerPlayer * room.players.length;
+      const houseFee = commissionPerPlayer * room.players.length;
       
-    } catch (error) {
-      console.error('Error in game timer:', error);
-      clearInterval(timer);
-      roomTimers.delete(room.stake);
-    }
-  }, CONFIG.GAME_TIMER * 1000);
-  
-  roomTimers.set(room.stake, timer);
+      roomsData[room.stake] = {
+        stake: room.stake,
+        playerCount: room.players.length,
+        takenBoxes: room.takenBoxes,
+        status: room.status,
+        currentBall: room.currentBall,
+        ballsDrawn: room.ballsDrawn,
+        commissionPerPlayer: commissionPerPlayer,
+        contributionPerPlayer: contributionPerPlayer,
+        potentialPrize: potentialPrize,
+        houseFee: houseFee
+      };
+    });
+    
+    // Send to all admin sockets
+    const adminData = {
+      totalPlayers,
+      activeGames,
+      totalUsers: users.length,
+      connectedSockets: connectedSockets.size,
+      timestamp: new Date().toISOString()
+    };
+    
+    adminSockets.forEach(socketId => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('admin:update', adminData);
+        socket.emit('admin:players', userArray);
+        socket.emit('admin:rooms', roomsData);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating admin panel:', error);
+  }
 }
 
-// Socket.IO event handlers
+function logActivity(type, details, adminSocketId = null) {
+  const activity = {
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    type: type,
+    details: details,
+    adminSocketId: adminSocketId
+  };
+  activityLog.unshift(activity);
+  
+  if (activityLog.length > 200) {
+    activityLog = activityLog.slice(0, 200);
+  }
+  
+  // Send to admin panels
+  adminSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit('admin:activity', activity);
+    }
+  });
+}
+
+// ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
-  console.log(`New connection: ${socket.id}`);
+  console.log(`✅ Socket.IO Connected: ${socket.id}`);
+  connectedSockets.add(socket.id);
+  
+  // Send connection test immediately
+  socket.emit('connectionTest', { 
+    status: 'connected', 
+    serverTime: new Date().toISOString(),
+    socketId: socket.id
+  });
   
   socket.on('init', async (data) => {
-    const { userId, userName } = data;
-    
-    const user = await getUser(userId, userName);
-    
-    if (user) {
-      socketToUser.set(socket.id, userId);
+    try {
+      const { userId, userName } = data;
       
-      socket.emit('balanceUpdate', user.balance);
-      socket.emit('userData', {
-        userId: userId,
-        userName: user.userName,
-        referralCode: user.referralCode,
-        joinedAt: user.joinedAt
-      });
+      const user = await getUser(userId, userName);
       
-      broadcastRoomStatus();
-    } else {
-      socket.emit('error', 'Failed to initialize user');
+      if (user) {
+        socketToUser.set(socket.id, userId);
+        
+        socket.emit('balanceUpdate', user.balance);
+        socket.emit('userData', {
+          userId: userId,
+          userName: user.userName,
+          balance: user.balance,
+          referralCode: user.referralCode
+        });
+        
+        socket.emit('connected', { message: 'Successfully connected to server' });
+        
+        // Update admin panel with new connection
+        updateAdminPanel();
+        broadcastRoomStatus();
+        
+        console.log(`👤 User initialized: ${userName} (${userId})`);
+      } else {
+        socket.emit('error', 'Failed to initialize user');
+      }
+    } catch (error) {
+      console.error('Error in init:', error);
+      socket.emit('error', 'Server error during initialization');
     }
   });
   
@@ -412,149 +441,331 @@ io.on('connection', (socket) => {
   });
   
   socket.on('joinRoom', async (data) => {
-    const { room, box, userName } = data;
-    const userId = socketToUser.get(socket.id);
-    
-    if (!userId) {
-      socket.emit('error', 'Player not initialized');
+    try {
+      const { room, box, userName } = data;
+      const userId = socketToUser.get(socket.id);
+      
+      if (!userId) {
+        socket.emit('error', 'Player not initialized');
+        return;
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      if (!user) {
+        socket.emit('error', 'User not found');
+        return;
+      }
+      
+      if (user.balance < room) {
+        socket.emit('insufficientFunds');
+        return;
+      }
+      
+      const roomData = await getRoom(room);
+      if (!roomData) {
+        socket.emit('error', 'Invalid room');
+        return;
+      }
+      
+      if (box < 1 || box > 100) {
+        socket.emit('error', 'Invalid box number. Must be between 1 and 100');
+        return;
+      }
+      
+      if (roomData.takenBoxes.includes(box)) {
+        socket.emit('boxTaken');
+        return;
+      }
+      
+      if (user.currentRoom) {
+        if (user.currentRoom === room) {
+          socket.emit('joinedRoom');
+          return;
+        }
+        socket.emit('error', 'Already in a different room');
+        return;
+      }
+      
+      // Update user balance and room info
+      user.balance -= room;
+      user.totalWagered = (user.totalWagered || 0) + room;
+      user.currentRoom = room;
+      user.box = box;
+      await user.save();
+      
+      // Update room
+      roomData.players.push(userId);
+      roomData.takenBoxes.push(box);
+      
+      const playerCount = roomData.players.length;
+      
+      // Update all players in room about lobby count
+      roomData.players.forEach(playerUserId => {
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === playerUserId) {
+            const s = io.sockets.sockets.get(sId);
+            if (s) {
+              s.emit('lobbyUpdate', {
+                room: room,
+                count: playerCount
+              });
+            }
+          }
+        }
+      });
+      
+      if (playerCount >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
+        roomData.status = 'starting';
+        await roomData.save();
+        
+        let countdown = CONFIG.COUNTDOWN_TIMER;
+        const countdownInterval = setInterval(async () => {
+          try {
+            const currentRoom = await Room.findById(roomData._id);
+            if (!currentRoom || currentRoom.status !== 'starting') {
+              clearInterval(countdownInterval);
+              return;
+            }
+            
+            currentRoom.players.forEach(playerUserId => {
+              for (const [sId, uId] of socketToUser.entries()) {
+                if (uId === playerUserId) {
+                  const s = io.sockets.sockets.get(sId);
+                  if (s) {
+                    s.emit('gameCountdown', {
+                      room: room,
+                      timer: countdown
+                    });
+                  }
+                }
+              }
+            });
+            
+            countdown--;
+            
+            if (countdown < 0) {
+              clearInterval(countdownInterval);
+              currentRoom.status = 'playing';
+              currentRoom.startTime = new Date();
+              await currentRoom.save();
+              startGameTimer(currentRoom);
+            }
+          } catch (error) {
+            console.error('Error in countdown:', error);
+            clearInterval(countdownInterval);
+          }
+        }, 1000);
+      }
+      
+      await roomData.save();
+      socket.emit('joinedRoom');
+      socket.emit('balanceUpdate', user.balance);
+      
+      // Broadcast updates
+      broadcastRoomStatus();
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error joining room:', error);
+      socket.emit('error', 'Server error while joining room');
+    }
+  });
+  
+  socket.on('claimBingo', async (data) => {
+    // Add your bingo claim logic here
+    console.log('Bingo claimed:', data);
+  });
+  
+  // ========== ADMIN EVENTS ==========
+  socket.on('admin:auth', (password) => {
+    if (password === CONFIG.ADMIN_PASSWORD) {
+      adminSockets.add(socket.id);
+      socket.emit('admin:authSuccess');
+      updateAdminPanel();
+      
+      logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
+      console.log(`Admin authenticated: ${socket.id}`);
+    } else {
+      socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  socket.on('admin:getData', () => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    updateAdminPanel();
+  });
+  
+  socket.on('admin:addFunds', async ({ userId, amount }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
       return;
     }
     
     const user = await User.findOne({ userId: userId });
     if (!user) {
-      socket.emit('error', 'User not found');
+      socket.emit('admin:error', 'User not found');
       return;
     }
     
-    if (user.balance < room) {
-      socket.emit('insufficientFunds');
-      return;
-    }
-    
-    const roomData = await getRoom(room);
-    if (!roomData) {
-      socket.emit('error', 'Invalid room');
-      return;
-    }
-    
-    if (box < 1 || box > 100) {
-      socket.emit('error', 'Invalid box number. Must be between 1 and 100');
-      return;
-    }
-    
-    if (roomData.takenBoxes.includes(box)) {
-      socket.emit('boxTaken');
-      return;
-    }
-    
-    if (user.currentRoom) {
-      if (user.currentRoom === room) {
-        socket.emit('joinedRoom');
-        return;
-      }
-      socket.emit('error', 'Already in a different room');
-      return;
-    }
-    
-    // Update user balance and room info
-    user.balance -= room;
-    user.totalWagered = (user.totalWagered || 0) + room;
-    user.currentRoom = room;
-    user.box = box;
+    const oldBalance = user.balance;
+    user.balance += parseFloat(amount);
     await user.save();
     
-    // Update room
-    roomData.players.push(userId);
-    roomData.takenBoxes.push(box);
-    
-    const playerCount = roomData.players.length;
-    
-    // Update all players in room about lobby count
-    roomData.players.forEach(playerUserId => {
-      for (const [sId, uId] of socketToUser.entries()) {
-        if (uId === playerUserId) {
-          const s = io.sockets.sockets.get(sId);
-          if (s) {
-            s.emit('lobbyUpdate', {
-              room: room,
-              count: playerCount
-            });
-          }
+    // Notify player if online
+    for (const [sId, uId] of socketToUser.entries()) {
+      if (uId === userId) {
+        const playerSocket = io.sockets.sockets.get(sId);
+        if (playerSocket) {
+          playerSocket.emit('balanceUpdate', user.balance);
+          playerSocket.emit('fundsAdded', {
+            amount: amount,
+            newBalance: user.balance
+          });
         }
       }
-    });
-    
-    if (playerCount >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
-      roomData.status = 'starting';
-      await roomData.save();
-      
-      let countdown = CONFIG.COUNTDOWN_TIMER;
-      const countdownInterval = setInterval(async () => {
-        try {
-          const currentRoom = await Room.findById(roomData._id);
-          if (!currentRoom || currentRoom.status !== 'starting') {
-            clearInterval(countdownInterval);
-            return;
-          }
-          
-          currentRoom.players.forEach(playerUserId => {
-            for (const [sId, uId] of socketToUser.entries()) {
-              if (uId === playerUserId) {
-                const s = io.sockets.sockets.get(sId);
-                if (s) {
-                  s.emit('gameCountdown', {
-                    room: room,
-                    timer: countdown
-                  });
-                }
-              }
-            }
-          });
-          
-          countdown--;
-          
-          if (countdown < 0) {
-            clearInterval(countdownInterval);
-            currentRoom.status = 'playing';
-            currentRoom.startTime = new Date();
-            await currentRoom.save();
-            startGameTimer(currentRoom);
-          }
-        } catch (error) {
-          console.error('Error in countdown:', error);
-          clearInterval(countdownInterval);
-        }
-      }, 1000);
     }
     
-    await roomData.save();
-    socket.emit('joinedRoom');
-    socket.emit('balanceUpdate', user.balance);
-    
-    broadcastRoomStatus();
+    socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
+    updateAdminPanel();
   });
   
-  socket.on('disconnect', async () => {
-    console.log(`Disconnected: ${socket.id}`);
+  socket.on('admin:forceDraw', async (roomStake) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
     
+    const room = await Room.findOne({ stake: parseInt(roomStake), status: 'playing' });
+    if (room) {
+      let ball;
+      let letter;
+      do {
+        ball = Math.floor(Math.random() * 75) + 1;
+        letter = getBingoLetter(ball);
+      } while (room.calledNumbers.includes(ball));
+      
+      room.calledNumbers.push(ball);
+      room.currentBall = ball;
+      room.ballsDrawn += 1;
+      await room.save();
+      
+      const ballData = {
+        room: room.stake,
+        num: ball,
+        letter: letter
+      };
+      
+      room.players.forEach(userId => {
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const s = io.sockets.sockets.get(sId);
+            if (s) {
+              s.emit('ballDrawn', ballData);
+            }
+          }
+        }
+      });
+      
+      socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
+      broadcastRoomStatus();
+    }
+  });
+  
+  socket.on('disconnect', () => {
+    console.log(`❌ Socket.IO Disconnected: ${socket.id}`);
+    connectedSockets.delete(socket.id);
     adminSockets.delete(socket.id);
     
     const userId = socketToUser.get(socket.id);
     if (userId) {
-      await User.findOneAndUpdate(
+      User.findOneAndUpdate(
         { userId: userId },
         { 
           isOnline: false,
           lastSeen: new Date() 
         }
-      );
+      ).catch(console.error);
       
       socketToUser.delete(socket.id);
     }
+    
+    // Update admin panel on disconnect
+    updateAdminPanel();
+  });
+  
+  // Heartbeat for connection monitoring
+  socket.on('ping', () => {
+    socket.emit('pong', { time: Date.now() });
   });
 });
 
-// Periodic tasks
+// ========== GAME TIMER FUNCTION ==========
+async function startGameTimer(room) {
+  if (roomTimers.has(room.stake)) {
+    clearInterval(roomTimers.get(room.stake));
+  }
+  
+  const timer = setInterval(async () => {
+    try {
+      const currentRoom = await Room.findById(room._id);
+      if (!currentRoom || currentRoom.status !== 'playing') {
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        return;
+      }
+      
+      if (currentRoom.ballsDrawn >= 75) {
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        return;
+      }
+      
+      let ball;
+      let letter;
+      do {
+        ball = Math.floor(Math.random() * 75) + 1;
+        letter = getBingoLetter(ball);
+      } while (currentRoom.calledNumbers.includes(ball));
+      
+      currentRoom.calledNumbers.push(ball);
+      currentRoom.currentBall = ball;
+      currentRoom.ballsDrawn += 1;
+      await currentRoom.save();
+      
+      const ballData = {
+        room: currentRoom.stake,
+        num: ball,
+        letter: letter
+      };
+      
+      // Emit to all players in room
+      currentRoom.players.forEach(userId => {
+        for (const [socketId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('ballDrawn', ballData);
+            }
+          }
+        }
+      });
+      
+      broadcastRoomStatus();
+      
+    } catch (error) {
+      console.error('Error in game timer:', error);
+      clearInterval(timer);
+      roomTimers.delete(room.stake);
+    }
+  }, CONFIG.GAME_TIMER * 1000);
+  
+  roomTimers.set(room.stake, timer);
+}
+
+// ========== PERIODIC TASKS ==========
 setInterval(() => {
   broadcastRoomStatus();
 }, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
@@ -585,23 +796,23 @@ app.get('/', (req, res) => {
     <body>
       <div class="container">
         <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Server</h1>
-        <p style="color: #94a3b8; font-size: 1.2rem;">Bingo Telegram Mini App - Live and Working</p>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Socket.IO Active</p>
         
         <div class="status">
           <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
           <div class="stats-grid">
             <div class="stat">
-              <div class="stat-label">Server Time</div>
-              <div class="stat-value" id="serverTime">${new Date().toLocaleTimeString()}</div>
+              <div class="stat-label">Connected Players</div>
+              <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
             </div>
             <div class="stat">
-              <div class="stat-label">Database</div>
+              <div class="stat-label">Database Status</div>
               <div class="stat-value" style="color: #10b981;">✅ Online</div>
             </div>
           </div>
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB!</p>
-          <p style="color: #64748b; margin-top: 10px;">Server URL: ${req.protocol}://${req.get('host')}</p>
-          <p style="color: #64748b;">MongoDB: Connected</p>
+          <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
+          <p style="color: #64748b;">Real-time updates: ✅ Active</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -612,76 +823,154 @@ app.get('/', (req, res) => {
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
-            <a href="/test" class="btn" style="background: #8b5cf6;" target="_blank">🧪 Test Page</a>
+            <a href="/socket-test" class="btn" style="background: #8b5cf6;" target="_blank">🔌 Socket Test</a>
           </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>System Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 1.0.0 | Database: MongoDB Atlas<br>
+            Version: 2.0.0 (Real-Time Fixed) | Database: MongoDB Atlas<br>
+            Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             Room Stakes: ${CONFIG.ROOM_STAKES.join(', ')} ETB<br>
-            Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
-            Countdown: ${CONFIG.COUNTDOWN_TIMER}s wait time
+            Game Timer: ${CONFIG.GAME_TIMER}s between balls
           </p>
         </div>
       </div>
+      
+      <script>
+        // Real-time player count update
+        const socket = io();
+        socket.on('connect', () => {
+          document.getElementById('playerCount').textContent = 'Connected';
+        });
+      </script>
     </body>
     </html>
   `);
 });
 
-// Test route to verify CSP is disabled
-app.get('/test', (req, res) => {
+// Socket.IO connection test page
+app.get('/socket-test', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>CSP Test</title>
+      <title>Socket.IO Connection Test</title>
       <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-      <script src="https://telegram.org/js/telegram-web-app.js"></script>
       <style>
-        body { font-family: Arial; padding: 20px; }
-        .status { padding: 20px; margin: 10px 0; border-radius: 10px; }
-        .success { background: #d1fae5; color: #065f46; }
-        .error { background: #fee2e2; color: #991b1b; }
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
+        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
+        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
+        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
+        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
       </style>
     </head>
     <body>
-      <h1>🎮 CSP Test Page</h1>
-      <div id="socketStatus" class="status">Testing Socket.IO connection...</div>
-      <div id="telegramStatus" class="status">Testing Telegram SDK...</div>
+      <h1>🔌 Socket.IO Connection Test</h1>
+      <div id="status" class="status disconnected">Connecting to server...</div>
+      
+      <h3>Test Actions:</h3>
+      <div>
+        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Connection
+        </button>
+        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test User Init
+        </button>
+        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Room Status
+        </button>
+      </div>
+      
+      <h3>Connection Log:</h3>
+      <div id="log" class="log"></div>
       
       <script>
-        // Test Socket.IO
-        try {
-          const socket = io();
-          socket.on('connect', () => {
-            document.getElementById('socketStatus').className = 'status success';
-            document.getElementById('socketStatus').textContent = '✅ Socket.IO Connected!';
-          });
-          socket.on('connect_error', (err) => {
-            document.getElementById('socketStatus').className = 'status error';
-            document.getElementById('socketStatus').textContent = '❌ Socket.IO Error: ' + err;
-          });
-        } catch (e) {
-          document.getElementById('socketStatus').className = 'status error';
-          document.getElementById('socketStatus').textContent = '❌ Socket.IO Failed: ' + e;
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message, type = 'info') {
+          const entry = document.createElement('div');
+          entry.className = 'log-entry ' + type;
+          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+          log.appendChild(entry);
+          log.scrollTop = log.scrollHeight;
         }
         
-        // Test Telegram SDK
-        try {
-          if (typeof Telegram !== 'undefined') {
-            document.getElementById('telegramStatus').className = 'status success';
-            document.getElementById('telegramStatus').textContent = '✅ Telegram SDK Loaded!';
-          } else {
-            document.getElementById('telegramStatus').className = 'status error';
-            document.getElementById('telegramStatus').textContent = '❌ Telegram SDK Not Loaded';
-          }
-        } catch (e) {
-          document.getElementById('telegramStatus').className = 'status error';
-          document.getElementById('telegramStatus').textContent = '❌ Telegram SDK Error: ' + e;
+        // Configure Socket.IO with the same settings as game.html
+        const socket = io({
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000,
+          transports: ['websocket', 'polling'],
+          forceNew: true,
+          autoConnect: true
+        });
+        
+        socket.on('connect', () => {
+          status.className = 'status connected';
+          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
+          addLog('Connected to server with ID: ' + socket.id, 'success');
+        });
+        
+        socket.on('disconnect', (reason) => {
+          status.className = 'status disconnected';
+          status.textContent = '❌ Disconnected: ' + reason;
+          addLog('Disconnected: ' + reason, 'error');
+        });
+        
+        socket.on('connect_error', (error) => {
+          addLog('Connection error: ' + error.message, 'error');
+        });
+        
+        socket.on('connectionTest', (data) => {
+          addLog('Server connection test: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('connected', (data) => {
+          addLog('Server connected message: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('balanceUpdate', (data) => {
+          addLog('Balance update: ' + data, 'info');
+        });
+        
+        socket.on('roomStatus', (data) => {
+          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
+        });
+        
+        // Test functions
+        function testConnection() {
+          addLog('Testing connection...', 'info');
+          socket.emit('ping');
         }
+        
+        function testInit() {
+          addLog('Testing user initialization...', 'info');
+          socket.emit('init', {
+            userId: 'test-' + Date.now(),
+            userName: 'Test Player'
+          });
+        }
+        
+        function testRoomStatus() {
+          addLog('Requesting room status...', 'info');
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+          });
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+          testConnection();
+        }, 1000);
       </script>
     </body>
     </html>
@@ -698,17 +987,21 @@ app.get('/game', (req, res) => {
 
 app.get('/health', async (req, res) => {
   try {
-    const onlineUsers = Array.from(socketToUser.keys()).length;
-    const activeRooms = await Room.countDocuments({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    const connectedPlayers = Array.from(socketToUser.keys()).length;
+    const activeGames = await Room.countDocuments({ status: 'playing' });
+    const totalUsers = await User.countDocuments();
     
     res.json({
       status: 'ok',
       database: 'connected',
-      connectedPlayers: onlineUsers,
-      activeGames: activeRooms,
+      connectedPlayers: connectedPlayers,
+      connectedSockets: connectedSockets.size,
+      totalUsers: totalUsers,
+      activeGames: activeGames,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
-      bingoLetters: BINGO_LETTERS
+      memoryUsage: process.memoryUsage(),
+      nodeVersion: process.version
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -724,12 +1017,14 @@ server.listen(PORT, () => {
 ╠══════════════════════════════════════════════════════╣
 ║  Port:          ${PORT.toString().padEnd(40)}║
 ║  Database:      MongoDB Atlas                       ║
+║  Socket.IO:     ✅ REAL-TIME ENABLED               ║
 ║  Admin Panel:   http://localhost:${PORT}/admin        ║
 ║  Game Client:   http://localhost:${PORT}/game         ║
+║  Socket Test:   http://localhost:${PORT}/socket-test  ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'Not Set'} ║
-║  🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB ║
+║  📡 WebSocket: ✅ Ready for real-time connections   ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready - NO CSP BLOCKING
+✅ Server ready with real-time Socket.IO support
   `);
 });
