@@ -250,6 +250,21 @@ async function getRoom(stake) {
   }
 }
 
+// ========== REAL-TIME TRACKING FUNCTIONS ==========
+function getConnectedUsers() {
+  const connectedUsers = [];
+  
+  socketToUser.forEach((userId, socketId) => {
+    // Check if socket is still connected
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected) {
+      connectedUsers.push(userId);
+    }
+  });
+  
+  return connectedUsers;
+}
+
 // ========== BROADCAST FUNCTIONS ==========
 async function broadcastRoomStatus() {
   try {
@@ -289,19 +304,17 @@ async function broadcastRoomStatus() {
 
 async function updateAdminPanel() {
   try {
-    const totalPlayers = Array.from(socketToUser.keys()).length;
+    const connectedPlayers = getConnectedUsers().length;
     const activeGames = await Room.countDocuments({ status: 'playing' });
     
     // Get all users
     const users = await User.find({}).sort({ balance: -1 }).limit(100);
+    
+    // Get connected user IDs for real-time status
+    const connectedUserIds = getConnectedUsers();
+    
     const userArray = users.map(user => {
-      let isOnline = false;
-      for (const [socketId, userId] of socketToUser.entries()) {
-        if (userId === user.userId) {
-          isOnline = true;
-          break;
-        }
-      }
+      const isOnline = connectedUserIds.includes(user.userId);
       
       return {
         userId: user.userId,
@@ -312,7 +325,8 @@ async function updateAdminPanel() {
         isOnline: isOnline,
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
-        lastSeen: user.lastSeen
+        lastSeen: user.lastSeen,
+        telegramId: user.telegramId || ''
       };
     });
     
@@ -336,17 +350,29 @@ async function updateAdminPanel() {
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
-        houseFee: houseFee
+        houseFee: houseFee,
+        players: room.players // Include player IDs
       };
     });
     
+    // Calculate total house balance
+    const houseBalance = await Transaction.aggregate([
+      { $match: { type: { $in: ['HOUSE_EARNINGS', 'ADMIN_ADD'] } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Get real-time connected sockets count
+    const connectedSocketsCount = connectedSockets.size;
+    
     // Send to all admin sockets
     const adminData = {
-      totalPlayers,
-      activeGames,
+      totalPlayers: connectedPlayers, // Real-time connected players
+      activeGames: activeGames,
       totalUsers: users.length,
-      connectedSockets: connectedSockets.size,
-      timestamp: new Date().toISOString()
+      connectedSockets: connectedSocketsCount,
+      houseBalance: houseBalance,
+      timestamp: new Date().toISOString(),
+      serverUptime: process.uptime()
     };
     
     adminSockets.forEach(socketId => {
@@ -357,13 +383,15 @@ async function updateAdminPanel() {
         socket.emit('admin:rooms', roomsData);
         
         // Send recent transactions
-        Transaction.find().sort({ createdAt: -1 }).limit(20)
+        Transaction.find().sort({ createdAt: -1 }).limit(50)
           .then(transactions => {
             socket.emit('admin:transactions', transactions);
           })
           .catch(err => console.error('Error fetching transactions:', err));
       }
     });
+    
+    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games`);
     
   } catch (error) {
     console.error('Error updating admin panel:', error);
@@ -589,12 +617,12 @@ io.on('connection', (socket) => {
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
-        // Update admin panel with new connection
+        // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
         logActivity('USER_CONNECTED', { userId, userName });
-        console.log(`👤 User initialized: ${userName} (${userId})`);
+        console.log(`👤 User initialized: ${userName} (${userId}) - Now online`);
       } else {
         socket.emit('error', 'Failed to initialize user');
       }
@@ -1077,6 +1105,23 @@ io.on('connection', (socket) => {
     logActivity('ADMIN_BAN', { adminSocket: socket.id, userId }, socket.id);
   });
   
+  socket.on('player:activity', async (data) => {
+    const userId = socketToUser.get(socket.id);
+    if (userId) {
+      try {
+        await User.findOneAndUpdate(
+          { userId: userId },
+          { lastSeen: new Date() }
+        );
+        
+        // Update admin panel with activity
+        updateAdminPanel();
+      } catch (error) {
+        console.error('Error updating player activity:', error);
+      }
+    }
+  });
+  
   socket.on('disconnect', () => {
     console.log(`❌ Socket.IO Disconnected: ${socket.id}`);
     connectedSockets.delete(socket.id);
@@ -1090,12 +1135,14 @@ io.on('connection', (socket) => {
           isOnline: false,
           lastSeen: new Date() 
         }
-      ).catch(console.error);
+      ).then(() => {
+        console.log(`👤 User went offline: ${userId}`);
+      }).catch(console.error);
       
       socketToUser.delete(socket.id);
     }
     
-    // Update admin panel on disconnect
+    // Update admin panel on disconnect IN REAL-TIME
     updateAdminPanel();
   });
   
@@ -1109,6 +1156,22 @@ io.on('connection', (socket) => {
 setInterval(() => {
   broadcastRoomStatus();
 }, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
+
+// Update admin panel every 2 seconds for real-time tracking
+setInterval(() => {
+  updateAdminPanel();
+}, 2000);
+
+// Clean up disconnected sockets periodically
+setInterval(() => {
+  socketToUser.forEach((userId, socketId) => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket || !socket.connected) {
+      socketToUser.delete(socketId);
+      console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
+    }
+  });
+}, 10000);
 
 // ========== EXPRESS ROUTES ==========
 app.get('/', (req, res) => {
@@ -1466,7 +1529,7 @@ app.get('/game', (req, res) => {
 
 app.get('/health', async (req, res) => {
   try {
-    const connectedPlayers = Array.from(socketToUser.keys()).length;
+    const connectedPlayers = getConnectedUsers().length;
     const activeGames = await Room.countDocuments({ status: 'playing' });
     const totalUsers = await User.countDocuments();
     const rooms = await Room.countDocuments();
@@ -1477,6 +1540,7 @@ app.get('/health', async (req, res) => {
       database: 'connected',
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSockets.size,
+      socketToUser: socketToUser.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
       totalRooms: rooms,
@@ -1549,6 +1613,26 @@ app.post('/api/add-funds', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Real-time tracking test endpoint
+app.get('/real-time-status', async (req, res) => {
+  try {
+    const connectedPlayers = getConnectedUsers().length;
+    const connectedSocketsCount = connectedSockets.size;
+    const socketToUserSize = socketToUser.size;
+    
+    res.json({
+      connectedPlayers: connectedPlayers,
+      connectedSockets: connectedSocketsCount,
+      socketToUserSize: socketToUserSize,
+      socketToUser: Array.from(socketToUser.entries()),
+      adminSockets: Array.from(adminSockets),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.json({ error: error.message });
   }
 });
 
@@ -1764,6 +1848,7 @@ server.listen(PORT, () => {
 ║  Admin:        /admin (password: admin1234)         ║
 ║  Telegram:     /telegram                             ║
 ║  Bot Setup:    /setup-telegram                       ║
+║  Real-Time:    /real-time-status                     ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
@@ -1771,7 +1856,7 @@ server.listen(PORT, () => {
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready for Telegram Mini App integration
+✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
   
   // Initial broadcast
