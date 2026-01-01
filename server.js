@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED FOR ADMIN LOGIN
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -598,6 +598,234 @@ io.on('connection', (socket) => {
     server: 'Bingo Elite Telegram'
   });
   
+  // ========== ADMIN AUTHENTICATION - FIXED ==========
+  socket.on('admin:auth', (password) => {
+    console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
+    
+    if (password === CONFIG.ADMIN_PASSWORD) {
+      adminSockets.add(socket.id);
+      socket.emit('admin:authSuccess');
+      updateAdminPanel();
+      
+      logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
+      console.log(`✅ Admin authenticated: ${socket.id}`);
+    } else {
+      console.log(`❌ Admin auth failed for socket ${socket.id}`);
+      socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  socket.on('admin:getData', () => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized - Please authenticate first');
+      return;
+    }
+    updateAdminPanel();
+  });
+  
+  socket.on('admin:addFunds', async ({ userId, amount }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      socket.emit('admin:error', 'User not found');
+      return;
+    }
+    
+    const oldBalance = user.balance;
+    user.balance += parseFloat(amount);
+    await user.save();
+    
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'ADMIN_ADD',
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      admin: true,
+      description: `Admin added ${amount} ETB`
+    });
+    await transaction.save();
+    
+    // Notify player if online
+    for (const [sId, uId] of socketToUser.entries()) {
+      if (uId === userId) {
+        const playerSocket = io.sockets.sockets.get(sId);
+        if (playerSocket) {
+          playerSocket.emit('balanceUpdate', user.balance);
+          playerSocket.emit('fundsAdded', {
+            amount: amount,
+            newBalance: user.balance
+          });
+        }
+      }
+    }
+    
+    socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
+    updateAdminPanel();
+    
+    logActivity('ADMIN_ADD_FUNDS', { adminSocket: socket.id, userId, amount }, socket.id);
+  });
+  
+  socket.on('admin:forceDraw', async (roomStake) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const room = await Room.findOne({ stake: parseInt(roomStake), status: 'playing' });
+    if (room) {
+      let ball;
+      let letter;
+      do {
+        ball = Math.floor(Math.random() * 75) + 1;
+        letter = getBingoLetter(ball);
+      } while (room.calledNumbers.includes(ball));
+      
+      room.calledNumbers.push(ball);
+      room.currentBall = ball;
+      room.ballsDrawn += 1;
+      await room.save();
+      
+      const ballData = {
+        room: room.stake,
+        num: ball,
+        letter: letter
+      };
+      
+      room.players.forEach(userId => {
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const s = io.sockets.sockets.get(sId);
+            if (s) {
+              s.emit('ballDrawn', ballData);
+            }
+          }
+        }
+      });
+      
+      socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
+      broadcastRoomStatus();
+      
+      logActivity('ADMIN_FORCE_DRAW', { adminSocket: socket.id, roomStake, ball, letter }, socket.id);
+    }
+  });
+  
+  socket.on('admin:banPlayer', async (userId) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      socket.emit('admin:error', 'User not found');
+      return;
+    }
+    
+    // Notify the user if online
+    for (const [sId, uId] of socketToUser.entries()) {
+      if (uId === userId) {
+        const playerSocket = io.sockets.sockets.get(sId);
+        if (playerSocket) {
+          playerSocket.emit('banned');
+          playerSocket.disconnect();
+        }
+      }
+    }
+    
+    socket.emit('admin:success', `Banned user ${user.userName}`);
+    updateAdminPanel();
+    
+    logActivity('ADMIN_BAN', { adminSocket: socket.id, userId }, socket.id);
+  });
+  
+  socket.on('admin:forceStartGame', async (roomStake) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const room = await Room.findOne({ stake: parseInt(roomStake) });
+    if (room) {
+      room.status = 'starting';
+      await room.save();
+      
+      socket.emit('admin:success', `Force started ${roomStake} ETB room`);
+      broadcastRoomStatus();
+      
+      logActivity('ADMIN_FORCE_START', { adminSocket: socket.id, roomStake }, socket.id);
+    }
+  });
+  
+  socket.on('admin:forceEndGame', async (roomStake) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const room = await Room.findOne({ stake: parseInt(roomStake) });
+    if (room) {
+      // Clear game timer
+      if (roomTimers.has(roomStake)) {
+        clearInterval(roomTimers.get(roomStake));
+        roomTimers.delete(roomStake);
+      }
+      
+      // Return funds to all players
+      for (const userId of room.players) {
+        const user = await User.findOne({ userId: userId });
+        if (user) {
+          user.balance += roomStake;
+          user.currentRoom = null;
+          user.box = null;
+          await user.save();
+          
+          const transaction = new Transaction({
+            type: 'REFUND',
+            userId: userId,
+            userName: user.userName,
+            amount: roomStake,
+            room: roomStake,
+            description: `Game force ended by admin - stake refunded`
+          });
+          await transaction.save();
+          
+          // Notify player
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              const s = io.sockets.sockets.get(sId);
+              if (s) {
+                s.emit('gameOver', {
+                  room: roomStake,
+                  winnerId: 'ADMIN',
+                  winnerName: 'Admin',
+                  prize: 0,
+                  bonus: 0,
+                  isFourCornersWin: false
+                });
+                s.emit('balanceUpdate', user.balance);
+              }
+            }
+          }
+        }
+      }
+      
+      room.status = 'ended';
+      room.endTime = new Date();
+      await room.save();
+      
+      socket.emit('admin:success', `Force ended ${roomStake} ETB game`);
+      broadcastRoomStatus();
+      
+      logActivity('ADMIN_FORCE_END', { adminSocket: socket.id, roomStake }, socket.id);
+    }
+  });
+  
+  // Player events
   socket.on('init', async (data) => {
     try {
       const { userId, userName } = data;
@@ -961,148 +1189,6 @@ io.on('connection', (socket) => {
       console.error('Error in claimBingo:', error);
       socket.emit('error', 'Server error processing bingo claim');
     }
-  });
-  
-  // ========== ADMIN EVENTS ==========
-  socket.on('admin:auth', (password) => {
-    if (password === CONFIG.ADMIN_PASSWORD) {
-      adminSockets.add(socket.id);
-      socket.emit('admin:authSuccess');
-      updateAdminPanel();
-      
-      logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
-      console.log(`Admin authenticated: ${socket.id}`);
-    } else {
-      socket.emit('admin:authError', 'Invalid password');
-    }
-  });
-  
-  socket.on('admin:getData', () => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    updateAdminPanel();
-  });
-  
-  socket.on('admin:addFunds', async ({ userId, amount }) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    const user = await User.findOne({ userId: userId });
-    if (!user) {
-      socket.emit('admin:error', 'User not found');
-      return;
-    }
-    
-    const oldBalance = user.balance;
-    user.balance += parseFloat(amount);
-    await user.save();
-    
-    // Record transaction
-    const transaction = new Transaction({
-      type: 'ADMIN_ADD',
-      userId: userId,
-      userName: user.userName,
-      amount: amount,
-      admin: true,
-      description: `Admin added ${amount} ETB`
-    });
-    await transaction.save();
-    
-    // Notify player if online
-    for (const [sId, uId] of socketToUser.entries()) {
-      if (uId === userId) {
-        const playerSocket = io.sockets.sockets.get(sId);
-        if (playerSocket) {
-          playerSocket.emit('balanceUpdate', user.balance);
-          playerSocket.emit('fundsAdded', {
-            amount: amount,
-            newBalance: user.balance
-          });
-        }
-      }
-    }
-    
-    socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
-    updateAdminPanel();
-    
-    logActivity('ADMIN_ADD_FUNDS', { adminSocket: socket.id, userId, amount }, socket.id);
-  });
-  
-  socket.on('admin:forceDraw', async (roomStake) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    const room = await Room.findOne({ stake: parseInt(roomStake), status: 'playing' });
-    if (room) {
-      let ball;
-      let letter;
-      do {
-        ball = Math.floor(Math.random() * 75) + 1;
-        letter = getBingoLetter(ball);
-      } while (room.calledNumbers.includes(ball));
-      
-      room.calledNumbers.push(ball);
-      room.currentBall = ball;
-      room.ballsDrawn += 1;
-      await room.save();
-      
-      const ballData = {
-        room: room.stake,
-        num: ball,
-        letter: letter
-      };
-      
-      room.players.forEach(userId => {
-        for (const [sId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              s.emit('ballDrawn', ballData);
-            }
-          }
-        }
-      });
-      
-      socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
-      broadcastRoomStatus();
-      
-      logActivity('ADMIN_FORCE_DRAW', { adminSocket: socket.id, roomStake, ball, letter }, socket.id);
-    }
-  });
-  
-  socket.on('admin:banPlayer', async (userId) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    const user = await User.findOne({ userId: userId });
-    if (!user) {
-      socket.emit('admin:error', 'User not found');
-      return;
-    }
-    
-    // Notify the user if online
-    for (const [sId, uId] of socketToUser.entries()) {
-      if (uId === userId) {
-        const playerSocket = io.sockets.sockets.get(sId);
-        if (playerSocket) {
-          playerSocket.emit('banned');
-          playerSocket.disconnect();
-        }
-      }
-    }
-    
-    socket.emit('admin:success', `Banned user ${user.userName}`);
-    updateAdminPanel();
-    
-    logActivity('ADMIN_BAN', { adminSocket: socket.id, userId }, socket.id);
   });
   
   socket.on('player:activity', async (data) => {
