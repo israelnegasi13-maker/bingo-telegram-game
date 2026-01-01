@@ -168,7 +168,7 @@ let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
 
-// ========== HELPER FUNCTIONS ==========
+// ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
   if (number >= 1 && number <= 15) return 'B';
   if (number >= 16 && number <= 30) return 'I';
@@ -250,10 +250,11 @@ async function getRoom(stake) {
   }
 }
 
-// ========== REAL-TIME TRACKING FUNCTIONS ==========
+// ========== IMPROVED REAL-TIME TRACKING FUNCTIONS ==========
 function getConnectedUsers() {
   const connectedUsers = [];
   
+  // Get from socketToUser map (direct WebSocket connections)
   socketToUser.forEach((userId, socketId) => {
     // Check if socket is still connected
     const socket = io.sockets.sockets.get(socketId);
@@ -262,7 +263,21 @@ function getConnectedUsers() {
     }
   });
   
-  return connectedUsers;
+  // Also check all connected sockets for Telegram users
+  // Some Telegram users might connect without being in socketToUser
+  connectedSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected && socket.handshake && socket.handshake.query) {
+      // Check if this socket has a userId in query params
+      const query = socket.handshake.query;
+      if (query.userId) {
+        connectedUsers.push(query.userId);
+      }
+    }
+  });
+  
+  // Remove duplicates
+  return [...new Set(connectedUsers)];
 }
 
 // ========== BROADCAST FUNCTIONS ==========
@@ -314,7 +329,24 @@ async function updateAdminPanel() {
     const connectedUserIds = getConnectedUsers();
     
     const userArray = users.map(user => {
-      const isOnline = connectedUserIds.includes(user.userId);
+      // Better online detection - check multiple sources
+      let isOnline = false;
+      
+      // Check socketToUser map
+      if (connectedUserIds.includes(user.userId)) {
+        isOnline = true;
+      }
+      // Also check if user has been active recently (within 30 seconds)
+      else if (user.lastSeen) {
+        const lastSeenTime = new Date(user.lastSeen);
+        const now = new Date();
+        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+        
+        // If user was active in last 30 seconds, consider them online
+        if (secondsSinceLastSeen < 30) {
+          isOnline = true;
+        }
+      }
       
       return {
         userId: user.userId,
@@ -326,7 +358,8 @@ async function updateAdminPanel() {
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
         lastSeen: user.lastSeen,
-        telegramId: user.telegramId || ''
+        telegramId: user.telegramId || '',
+        joinedAt: user.joinedAt
       };
     });
     
@@ -585,17 +618,24 @@ async function endGameWithNoWinner(room) {
   }
 }
 
-// ========== SOCKET.IO EVENT HANDLERS ==========
+// ========== IMPROVED SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
-  console.log(`✅ Socket.IO Connected: ${socket.id}`);
+  console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
   connectedSockets.add(socket.id);
+  
+  // Enhanced connection logging
+  const query = socket.handshake.query;
+  if (query.userId) {
+    console.log(`👤 User connected via query: ${query.userId}`);
+  }
   
   // Send connection test immediately
   socket.emit('connectionTest', { 
     status: 'connected', 
     serverTime: new Date().toISOString(),
     socketId: socket.id,
-    server: 'Bingo Elite Telegram'
+    server: 'Bingo Elite Telegram',
+    userId: query.userId || 'unknown'
   });
   
   // ========== ADMIN AUTHENTICATION - FIXED ==========
@@ -830,10 +870,22 @@ io.on('connection', (socket) => {
     try {
       const { userId, userName } = data;
       
+      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
+      
       const user = await getUser(userId, userName);
       
       if (user) {
         socketToUser.set(socket.id, userId);
+        
+        // Also update user's lastSeen immediately
+        await User.findOneAndUpdate(
+          { userId: userId },
+          { 
+            isOnline: true,
+            lastSeen: new Date(),
+            sessionCount: (user.sessionCount || 0) + 1
+          }
+        );
         
         socket.emit('balanceUpdate', user.balance);
         socket.emit('userData', {
@@ -845,12 +897,14 @@ io.on('connection', (socket) => {
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
+        // Log the successful connection
+        console.log(`✅ User connected successfully: ${userName} (${userId})`);
+        
         // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity('USER_CONNECTED', { userId, userName });
-        console.log(`👤 User initialized: ${userName} (${userId}) - Now online`);
+        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
       } else {
         socket.emit('error', 'Failed to initialize user');
       }
@@ -1259,6 +1313,42 @@ setInterval(() => {
   });
 }, 10000);
 
+// ========== CONNECTION CLEANUP FUNCTION ==========
+async function cleanupStaleConnections() {
+  console.log('🧹 Running connection cleanup...');
+  
+  const now = new Date();
+  const thirtySecondsAgo = new Date(now.getTime() - 30000);
+  
+  try {
+    // Update users who haven't been seen in 30 seconds
+    await User.updateMany(
+      { 
+        lastSeen: { $lt: thirtySecondsAgo },
+        isOnline: true 
+      },
+      { 
+        isOnline: false 
+      }
+    );
+    
+    // Clean up socketToUser map
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket || !socket.connected) {
+        socketToUser.delete(socketId);
+        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in cleanupStaleConnections:', error);
+  }
+}
+
+// Run cleanup every 30 seconds
+setInterval(cleanupStaleConnections, 30000);
+
 // ========== EXPRESS ROUTES ==========
 app.get('/', (req, res) => {
   res.send(`
@@ -1313,6 +1403,9 @@ app.get('/', (req, res) => {
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
             <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
+          </div>
+          <div style="margin-top: 20px;">
+            <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
           </div>
         </div>
         
@@ -1722,6 +1815,37 @@ app.get('/real-time-status', async (req, res) => {
   }
 });
 
+// ========== DEBUG CONNECTION ENDPOINT ==========
+app.get('/debug-connections', async (req, res) => {
+  try {
+    const connectedUserIds = getConnectedUsers();
+    const socketToUserArray = Array.from(socketToUser.entries());
+    const connectedSocketsArray = Array.from(connectedSockets);
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalConnectedUsers: connectedUserIds.length,
+      connectedUserIds: connectedUserIds,
+      socketToUserCount: socketToUser.size,
+      socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
+      connectedSocketsCount: connectedSockets.size,
+      connectedSockets: connectedSocketsArray.map(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        return {
+          socketId,
+          connected: socket?.connected || false,
+          userId: socketToUser.get(socketId) || 'unknown',
+          handshakeQuery: socket?.handshake?.query || {}
+        };
+      }),
+      adminSocketsCount: adminSockets.size,
+      adminSockets: Array.from(adminSockets)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========== TELEGRAM BOT INTEGRATION ==========
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
@@ -1935,6 +2059,7 @@ server.listen(PORT, () => {
 ║  Telegram:     /telegram                             ║
 ║  Bot Setup:    /setup-telegram                       ║
 ║  Real-Time:    /real-time-status                     ║
+║  Debug:        /debug-connections                    ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
