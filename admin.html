@@ -833,6 +833,66 @@
             opacity: 1;
             visibility: visible;
         }
+        
+        /* Filter Controls */
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+        
+        .filter-select {
+            padding: 10px 15px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--dark-border);
+            border-radius: 8px;
+            color: var(--text);
+            min-width: 150px;
+        }
+        
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .filter-checkbox input {
+            margin: 0;
+        }
+        
+        .user-id-badge {
+            background: rgba(100, 116, 139, 0.15);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        
+        .telegram-badge {
+            background: linear-gradient(45deg, #0088cc, #34b7f1);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-top: 2px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -898,6 +958,10 @@
                     <i class="fas fa-clipboard-list"></i>
                     <span>Activity Log</span>
                 </div>
+                <div class="nav-item" data-section="debug">
+                    <i class="fas fa-bug"></i>
+                    <span>Debug</span>
+                </div>
             </div>
             
             <div style="padding: 30px 20px; margin-top: auto;">
@@ -907,6 +971,9 @@
                     <div id="connectionStatus" style="display: flex; align-items: center; gap: 5px; margin-top: 5px;">
                         <div class="status-dot" style="width: 8px; height: 8px;"></div>
                         <p style="font-size: 0.75rem; color: var(--success);">Connected</p>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
+                        <span id="activeConnections">0</span> active connections
                     </div>
                 </div>
             </div>
@@ -932,6 +999,9 @@
                     <div style="display: flex; align-items: center; gap: 15px;">
                         <button class="btn-action btn-add" onclick="forceRefreshData()" title="Refresh Data">
                             <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn-action btn-add" onclick="openDebugConnections()" title="Debug Connections">
+                            <i class="fas fa-network-wired"></i>
                         </button>
                         <button class="btn-logout" onclick="logout()">
                             <i class="fas fa-sign-out-alt"></i> Logout
@@ -1091,6 +1161,34 @@
                         </div>
                     </div>
                     
+                    <div class="filter-controls">
+                        <div class="filter-group">
+                            <label>Status Filter</label>
+                            <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+                                <option value="all">All Users</option>
+                                <option value="online">Online Only</option>
+                                <option value="offline">Offline Only</option>
+                                <option value="telegram">Telegram Users</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Sort By</label>
+                            <select class="filter-select" id="sortFilter" onchange="applyFilters()">
+                                <option value="online">Online Status</option>
+                                <option value="balance">Balance (High to Low)</option>
+                                <option value="name">Name (A-Z)</option>
+                                <option value="recent">Most Recent</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label style="visibility: hidden;">.</label>
+                            <label class="filter-checkbox">
+                                <input type="checkbox" id="showDetails" onchange="toggleUserDetails()">
+                                Show Details
+                            </label>
+                        </div>
+                    </div>
+                    
                     <table class="table" id="usersTable">
                         <thead>
                             <tr>
@@ -1106,6 +1204,9 @@
                             <!-- Users will be inserted here -->
                         </tbody>
                     </table>
+                    <div style="text-align: center; padding: 15px; color: var(--text-muted); font-size: 0.9rem;" id="userCountDisplay">
+                        Showing 0 users
+                    </div>
                 </div>
             </div>
 
@@ -1307,6 +1408,84 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Debug Section -->
+            <div id="debugSection" class="content-section">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Debug Information</h3>
+                        <div class="table-controls">
+                            <button class="btn-action btn-add" onclick="refreshDebugInfo()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" style="margin-top: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);">
+                                <i class="fas fa-plug"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Socket Connections</h3>
+                                <div class="stat-value" id="debugSockets">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-network-wired"></i> Active sockets
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">
+                                <i class="fas fa-user-check"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Mapped Users</h3>
+                                <div class="stat-value" id="debugMappedUsers">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-link"></i> Socket to user
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Admin Sessions</h3>
+                                <div class="stat-value" id="debugAdmins">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-user-secret"></i> Active admin
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(6, 214, 160, 0.15); color: var(--success);">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Telegram Users</h3>
+                                <div class="stat-value" id="debugTelegramUsers">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-telegram"></i> Telegram connected
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 30px;">
+                        <h3 style="margin-bottom: 15px;">Connection Debug</h3>
+                        <button class="btn-action btn-add" onclick="fetchDebugConnections()" style="margin-bottom: 15px;">
+                            <i class="fas fa-download"></i> Fetch Connection Data
+                        </button>
+                        <div id="debugOutput" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap;">
+                            Click "Fetch Connection Data" to load debug information
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1323,6 +1502,7 @@
             <div class="form-group">
                 <label>User ID</label>
                 <input type="text" id="fundsUserId" placeholder="Enter user ID from Telegram">
+                <small style="color: var(--text-muted); font-size: 0.85rem;">Format: tg_123456789 or regular user ID</small>
             </div>
             
             <div class="form-group">
@@ -1339,6 +1519,29 @@
             
             <button class="btn-modal" onclick="addFunds()">
                 <i class="fas fa-check"></i> Add Funds
+            </button>
+        </div>
+    </div>
+    
+    <!-- Debug Connections Modal -->
+    <div id="debugConnectionsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-network-wired"></i> Connection Debug</h3>
+                <button class="btn-close" onclick="hideModal('debugConnectionsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4>Real-time Connection Status</h4>
+                <div id="debugConnectionsInfo" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
+                    Loading connection data...
+                </div>
+            </div>
+            
+            <button class="btn-action btn-add" onclick="fetchDebugConnections()" style="width: 100%;">
+                <i class="fas fa-sync"></i> Refresh Connection Data
             </button>
         </div>
     </div>
@@ -1361,13 +1564,16 @@
         let state = {
             isAdmin: false,
             users: [],
+            filteredUsers: [],
             rooms: {},
             transactions: [],
             activityLog: [],
             charts: {},
             lastUpdate: new Date(),
             socket: null,
-            lastPlayerCount: 0
+            lastPlayerCount: 0,
+            debugInfo: {},
+            showUserDetails: false
         };
 
         // Initialize
@@ -1389,7 +1595,52 @@
             
             // Add initial system log
             addSystemLog('Admin panel initialized');
+            
+            // Add debug section to navigation
+            document.querySelector('.nav').innerHTML += `
+                <div class="nav-item" data-section="debug">
+                    <i class="fas fa-bug"></i>
+                    <span>Debug</span>
+                </div>
+            `;
+            
+            // Re-attach navigation event listeners
+            attachNavListeners();
         });
+        
+        function attachNavListeners() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const section = this.dataset.section;
+                    
+                    // Update active nav item
+                    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update page title
+                    const titleMap = {
+                        'overview': 'Dashboard Overview',
+                        'users': 'User Management',
+                        'rooms': 'Game Rooms',
+                        'transactions': 'Transactions',
+                        'analytics': 'Analytics',
+                        'controls': 'System Controls',
+                        'logs': 'Activity Log',
+                        'debug': 'Debug Information'
+                    };
+                    document.getElementById('pageTitle').textContent = titleMap[section] || 'Dashboard';
+                    
+                    // Show section
+                    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+                    document.getElementById(`${section}Section`).classList.add('active');
+                    
+                    // Close sidebar on mobile
+                    if (window.innerWidth < 992) {
+                        toggleSidebar();
+                    }
+                });
+            });
+        }
 
         // Socket Functions
         function connectSocket() {
@@ -1403,12 +1654,14 @@
                 showToast('Connected to server', 'success');
                 updateServerStatus('Connected', true);
                 addSystemLog('Connected to server');
+                updateDebugStats();
             });
 
             state.socket.on('disconnect', () => {
                 showToast('Disconnected from server', 'error');
                 updateServerStatus('Disconnected', false);
                 addSystemLog('Disconnected from server', 'error');
+                updateDebugStats();
             });
 
             state.socket.on('admin:authSuccess', () => {
@@ -1437,6 +1690,9 @@
                 
                 // Initialize charts
                 setTimeout(initCharts, 1000);
+                
+                // Update debug info
+                updateDebugStats();
             });
 
             state.socket.on('admin:authError', (message) => {
@@ -1454,16 +1710,28 @@
                 
                 // Update online status indicator
                 updateOnlineStatus(data.totalPlayers || 0);
+                
+                // Update debug stats
+                document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
+                updateDebugStats();
             });
 
             state.socket.on('admin:players', (data) => {
                 const previousUsers = [...state.users];
                 state.users = data;
+                applyFilters();
                 updateUsersTable();
                 
                 // Count online users
                 const onlineCount = data.filter(user => user.isOnline).length;
                 updateUserCountBadge(onlineCount);
+                
+                // Count Telegram users
+                const telegramCount = data.filter(user => user.telegramId).length;
+                document.getElementById('debugTelegramUsers').textContent = telegramCount;
+                
+                // Update user count display
+                document.getElementById('userCountDisplay').textContent = `Showing ${state.filteredUsers.length} of ${state.users.length} users`;
                 
                 // Detect changes for logging
                 detectUserChanges(previousUsers, data);
@@ -1565,36 +1833,39 @@
         }
 
         // Navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', function() {
-                const section = this.dataset.section;
-                
-                // Update active nav item
-                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Update page title
-                const titleMap = {
-                    'overview': 'Dashboard Overview',
-                    'users': 'User Management',
-                    'rooms': 'Game Rooms',
-                    'transactions': 'Transactions',
-                    'analytics': 'Analytics',
-                    'controls': 'System Controls',
-                    'logs': 'Activity Log'
-                };
-                document.getElementById('pageTitle').textContent = titleMap[section] || 'Dashboard';
-                
-                // Show section
-                document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-                document.getElementById(`${section}Section`).classList.add('active');
-                
-                // Close sidebar on mobile
-                if (window.innerWidth < 992) {
-                    toggleSidebar();
-                }
+        function setupNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const section = this.dataset.section;
+                    
+                    // Update active nav item
+                    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Update page title
+                    const titleMap = {
+                        'overview': 'Dashboard Overview',
+                        'users': 'User Management',
+                        'rooms': 'Game Rooms',
+                        'transactions': 'Transactions',
+                        'analytics': 'Analytics',
+                        'controls': 'System Controls',
+                        'logs': 'Activity Log',
+                        'debug': 'Debug Information'
+                    };
+                    document.getElementById('pageTitle').textContent = titleMap[section] || 'Dashboard';
+                    
+                    // Show section
+                    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+                    document.getElementById(`${section}Section`).classList.add('active');
+                    
+                    // Close sidebar on mobile
+                    if (window.innerWidth < 992) {
+                        toggleSidebar();
+                    }
+                });
             });
-        });
+        }
 
         // Data Update Functions
         function updateStats(data) {
@@ -1628,20 +1899,84 @@
                 onlineStatus.innerHTML = '<i class="fas fa-circle"></i> No players online';
             }
         }
+        
+        function applyFilters() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const sortFilter = document.getElementById('sortFilter').value;
+            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+            
+            // Apply status filter
+            let filtered = [...state.users];
+            
+            if (statusFilter === 'online') {
+                filtered = filtered.filter(user => user.isOnline);
+            } else if (statusFilter === 'offline') {
+                filtered = filtered.filter(user => !user.isOnline);
+            } else if (statusFilter === 'telegram') {
+                filtered = filtered.filter(user => user.telegramId);
+            }
+            
+            // Apply search filter
+            if (searchTerm) {
+                filtered = filtered.filter(user => 
+                    user.userName.toLowerCase().includes(searchTerm) ||
+                    user.userId.toLowerCase().includes(searchTerm) ||
+                    (user.telegramId && user.telegramId.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            // Apply sorting
+            if (sortFilter === 'balance') {
+                filtered.sort((a, b) => b.balance - a.balance);
+            } else if (sortFilter === 'name') {
+                filtered.sort((a, b) => a.userName.localeCompare(b.userName));
+            } else if (sortFilter === 'recent') {
+                filtered.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+            } else {
+                // Default: online status first
+                filtered.sort((a, b) => {
+                    if (a.isOnline && !b.isOnline) return -1;
+                    if (!a.isOnline && b.isOnline) return 1;
+                    return 0;
+                });
+            }
+            
+            state.filteredUsers = filtered;
+            updateUsersTable();
+            
+            // Update user count display
+            document.getElementById('userCountDisplay').textContent = `Showing ${filtered.length} of ${state.users.length} users`;
+        }
+        
+        function searchUsers() {
+            applyFilters();
+        }
+        
+        function toggleUserDetails() {
+            state.showUserDetails = !state.showUserDetails;
+            updateUsersTable();
+        }
 
         function updateUsersTable() {
             const tbody = document.getElementById('usersTableBody');
             tbody.innerHTML = '';
             
-            // Sort by online status first (online users on top)
-            const sortedUsers = [...state.users].sort((a, b) => {
-                if (a.isOnline && !b.isOnline) return -1;
-                if (!a.isOnline && b.isOnline) return 1;
-                return 0;
-            });
+            if (state.filteredUsers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-users-slash" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
+                            No users found matching your filters
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             
-            sortedUsers.forEach(user => {
+            state.filteredUsers.forEach(user => {
                 const row = document.createElement('tr');
+                row.setAttribute('data-online', user.isOnline);
+                row.setAttribute('data-telegram', !!user.telegramId);
                 
                 // Status badge with real-time indicator
                 let statusBadge = '';
@@ -1658,7 +1993,15 @@
                     const diffMinutes = Math.floor((now - lastSeen) / (1000 * 60));
                     let timeText = 'Just now';
                     if (diffMinutes > 0) {
-                        timeText = `${diffMinutes}m ago`;
+                        if (diffMinutes < 60) {
+                            timeText = `${diffMinutes}m ago`;
+                        } else if (diffMinutes < 1440) {
+                            const hours = Math.floor(diffMinutes / 60);
+                            timeText = `${hours}h ago`;
+                        } else {
+                            const days = Math.floor(diffMinutes / 1440);
+                            timeText = `${days}d ago`;
+                        }
                     }
                     statusBadge = `<span class="status-badge status-offline"><i class="fas fa-clock"></i> ${timeText}</span>`;
                 }
@@ -1688,8 +2031,19 @@
                     lastActivity = lastSeenDate.toLocaleDateString();
                 }
                 
-                // Telegram ID if available
-                const telegramId = user.telegramId ? `<div style="font-size: 0.75rem; color: var(--text-muted);">TG: ${user.telegramId}</div>` : '';
+                // Telegram badge
+                const telegramBadge = user.telegramId ? 
+                    `<div class="telegram-badge" title="Telegram User">TG: ${user.telegramId.substring(0, 8)}...</div>` : 
+                    '<div style="font-size: 0.75rem; color: var(--text-muted);">Web User</div>';
+                
+                // User details (shown based on toggle)
+                const userDetails = state.showUserDetails ? `
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                        <div>Joined: ${new Date(user.joinedAt).toLocaleDateString()}</div>
+                        <div>Wagered: ${user.totalWagered.toFixed(2)} ETB | Wins: ${user.totalWins}</div>
+                        <div>Bingos: ${user.totalBingos} | Session: ${user.sessionCount || 1}</div>
+                    </div>
+                ` : '';
                 
                 row.innerHTML = `
                     <td>
@@ -1703,8 +2057,9 @@
                                     ${user.userName}
                                     ${user.isOnline ? '<span style="font-size: 0.6rem; color: var(--success);">●</span>' : ''}
                                 </div>
-                                <div style="font-size: 0.85rem; color: var(--text-muted);">ID: ${user.userId.substring(0, 8)}...</div>
-                                ${telegramId}
+                                <div class="user-id-badge">ID: ${user.userId.substring(0, 12)}...</div>
+                                ${telegramBadge}
+                                ${userDetails}
                             </div>
                         </div>
                     </td>
@@ -2096,6 +2451,11 @@
                 showToast('Emergency controls coming soon', 'warning');
             }
         }
+        
+        function openDebugConnections() {
+            showModal('debugConnectionsModal');
+            fetchDebugConnections();
+        }
 
         function forceRefreshData() {
             if (state.socket) {
@@ -2174,16 +2534,6 @@
             }
         }
 
-        function searchUsers() {
-            const searchTerm = document.getElementById('userSearch').value.toLowerCase();
-            const rows = document.querySelectorAll('#usersTableBody tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
-            });
-        }
-        
         function searchTransactions() {
             const searchTerm = document.getElementById('transactionSearch').value.toLowerCase();
             const items = document.querySelectorAll('#transactionFeed .activity-item');
@@ -2321,6 +2671,50 @@
             }
         }
         
+        // Debug functions
+        function updateDebugStats() {
+            if (!state.socket) return;
+            
+            document.getElementById('debugSockets').textContent = state.socket.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('debugMappedUsers').textContent = state.users.filter(u => u.isOnline).length;
+            document.getElementById('debugAdmins').textContent = '1'; // Current admin session
+            document.getElementById('debugTelegramUsers').textContent = state.users.filter(u => u.telegramId).length;
+        }
+        
+        function fetchDebugConnections() {
+            fetch(`${CONFIG.SERVER_URL}/debug-connections`)
+                .then(response => response.json())
+                .then(data => {
+                    state.debugInfo = data;
+                    displayDebugConnections(data);
+                    showToast('Debug data fetched', 'success');
+                })
+                .catch(error => {
+                    console.error('Error fetching debug connections:', error);
+                    showToast('Failed to fetch debug data', 'error');
+                });
+        }
+        
+        function displayDebugConnections(data) {
+            const debugOutput = document.getElementById('debugOutput');
+            const debugModal = document.getElementById('debugConnectionsInfo');
+            
+            const formattedData = JSON.stringify(data, null, 2);
+            
+            if (debugOutput) {
+                debugOutput.textContent = formattedData;
+            }
+            
+            if (debugModal) {
+                debugModal.textContent = formattedData;
+            }
+        }
+        
+        function refreshDebugInfo() {
+            fetchDebugConnections();
+            updateDebugStats();
+        }
+
         // System control functions
         function restartServer() {
             if (confirm('Restart the game server? This will disconnect all players.')) {
@@ -2376,14 +2770,17 @@
         function exportUsers() {
             // Simple CSV export
             const csv = [
-                ['User ID', 'Name', 'Balance', 'Status', 'Last Seen', 'Telegram ID'],
+                ['User ID', 'Name', 'Telegram ID', 'Balance', 'Status', 'Last Seen', 'Joined At', 'Total Wagered', 'Total Wins'],
                 ...state.users.map(user => [
                     user.userId,
                     user.userName,
+                    user.telegramId || '',
                     user.balance,
                     user.isOnline ? 'Online' : 'Offline',
                     new Date(user.lastSeen).toLocaleString(),
-                    user.telegramId || ''
+                    new Date(user.joinedAt).toLocaleDateString(),
+                    user.totalWagered,
+                    user.totalWins
                 ])
             ].map(row => row.join(',')).join('\n');
             
@@ -2423,6 +2820,12 @@
                 document.querySelectorAll('.modal.active').forEach(modal => {
                     modal.classList.remove('active');
                 });
+            }
+            
+            // Ctrl + D = Debug
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                openDebugConnections();
             }
         });
 
