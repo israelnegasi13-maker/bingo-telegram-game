@@ -7,7 +7,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const mongoose = require('mongoose');
-const fs = require('fs');
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo', {
@@ -120,7 +119,7 @@ app.use(helmet({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Custom headers for WebSocket
+// Custom headers for WebSocket and Telegram
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
@@ -199,6 +198,16 @@ async function getUser(userId, userName) {
         telegramId: userId
       });
       await user.save();
+      
+      // Record first transaction
+      const transaction = new Transaction({
+        type: 'NEW_USER',
+        userId: userId,
+        userName: userName || 'Guest',
+        amount: 0,
+        description: 'New user registered'
+      });
+      await transaction.save();
     } else {
       user.lastSeen = new Date();
       user.sessionCount = (user.sessionCount || 0) + 1;
@@ -344,6 +353,13 @@ async function updateAdminPanel() {
         socket.emit('admin:update', adminData);
         socket.emit('admin:players', userArray);
         socket.emit('admin:rooms', roomsData);
+        
+        // Send recent transactions
+        Transaction.find().sort({ createdAt: -1 }).limit(20)
+          .then(transactions => {
+            socket.emit('admin:transactions', transactions);
+          })
+          .catch(err => console.error('Error fetching transactions:', err));
       }
     });
     
@@ -393,6 +409,8 @@ async function startGameTimer(room) {
       if (currentRoom.ballsDrawn >= 75) {
         clearInterval(timer);
         roomTimers.delete(room.stake);
+        // Game timeout - no one won
+        endGameWithNoWinner(currentRoom);
         return;
       }
       
@@ -421,6 +439,7 @@ async function startGameTimer(room) {
             const socket = io.sockets.sockets.get(socketId);
             if (socket) {
               socket.emit('ballDrawn', ballData);
+              socket.emit('enableBingo');
             }
           }
         }
@@ -481,6 +500,61 @@ function checkBingo(markedNumbers, grid) {
   return { isBingo: false };
 }
 
+async function endGameWithNoWinner(room) {
+  try {
+    // Return funds to all players
+    for (const userId of room.players) {
+      const user = await User.findOne({ userId: userId });
+      if (user) {
+        user.balance += room.stake; // Return their stake
+        user.currentRoom = null;
+        user.box = null;
+        await user.save();
+        
+        // Record transaction
+        const transaction = new Transaction({
+          type: 'REFUND',
+          userId: userId,
+          userName: user.userName,
+          amount: room.stake,
+          room: room.stake,
+          description: `Game ended with no winner - stake refunded`
+        });
+        await transaction.save();
+        
+        // Notify player
+        for (const [socketId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('gameOver', {
+                room: room.stake,
+                winnerId: 'HOUSE',
+                winnerName: 'House',
+                prize: 0,
+                bonus: 0,
+                isFourCornersWin: false
+              });
+              socket.emit('balanceUpdate', user.balance);
+            }
+          }
+        }
+      }
+    }
+    
+    // Update room
+    room.status = 'ended';
+    room.endTime = new Date();
+    await room.save();
+    
+    broadcastRoomStatus();
+    updateAdminPanel();
+    
+  } catch (error) {
+    console.error('Error ending game with no winner:', error);
+  }
+}
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`✅ Socket.IO Connected: ${socket.id}`);
@@ -490,7 +564,8 @@ io.on('connection', (socket) => {
   socket.emit('connectionTest', { 
     status: 'connected', 
     serverTime: new Date().toISOString(),
-    socketId: socket.id
+    socketId: socket.id,
+    server: 'Bingo Elite Telegram'
   });
   
   socket.on('init', async (data) => {
@@ -510,12 +585,13 @@ io.on('connection', (socket) => {
           referralCode: user.referralCode
         });
         
-        socket.emit('connected', { message: 'Successfully connected to server' });
+        socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
         // Update admin panel with new connection
         updateAdminPanel();
         broadcastRoomStatus();
         
+        logActivity('USER_CONNECTED', { userId, userName });
         console.log(`👤 User initialized: ${userName} (${userId})`);
       } else {
         socket.emit('error', 'Failed to initialize user');
@@ -604,6 +680,17 @@ io.on('connection', (socket) => {
       user.box = box;
       await user.save();
       
+      // Record transaction
+      const transaction = new Transaction({
+        type: 'STAKE',
+        userId: userId,
+        userName: user.userName,
+        amount: -room,
+        room: room,
+        description: `Joined ${room} ETB room with ticket ${box}`
+      });
+      await transaction.save();
+      
       // Update room
       roomData.players.push(userId);
       roomData.takenBoxes.push(box);
@@ -676,6 +763,8 @@ io.on('connection', (socket) => {
       broadcastRoomStatus();
       updateAdminPanel();
       
+      logActivity('ROOM_JOIN', { userId, userName: user.userName, room, box });
+      
     } catch (error) {
       console.error('Error joining room:', error);
       socket.emit('error', 'Server error while joining room');
@@ -739,8 +828,9 @@ io.on('connection', (socket) => {
       await user.save();
       
       // Record transaction
+      const transactionType = isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN';
       const transaction = new Transaction({
-        type: isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN',
+        type: transactionType,
         userId: userId,
         userName: user.userName,
         amount: prize,
@@ -774,6 +864,12 @@ io.on('connection', (socket) => {
         isFourCorners: isFourCornersWin
       });
       await roomData.save();
+      
+      // Clear game timer
+      if (roomTimers.has(room)) {
+        clearInterval(roomTimers.get(room));
+        roomTimers.delete(room);
+      }
       
       // Notify all players in the room
       roomData.players.forEach(playerUserId => {
@@ -819,14 +915,17 @@ io.on('connection', (socket) => {
         }
       });
       
-      // Clear game timer
-      if (roomTimers.has(room)) {
-        clearInterval(roomTimers.get(room));
-        roomTimers.delete(room);
-      }
-      
       broadcastRoomStatus();
       updateAdminPanel();
+      
+      logActivity('BINGO_WIN', { 
+        userId, 
+        userName: user.userName, 
+        room, 
+        prize, 
+        bonus, 
+        isFourCorners: isFourCornersWin 
+      });
       
     } catch (error) {
       console.error('Error in claimBingo:', error);
@@ -899,6 +998,8 @@ io.on('connection', (socket) => {
     
     socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
     updateAdminPanel();
+    
+    logActivity('ADMIN_ADD_FUNDS', { adminSocket: socket.id, userId, amount }, socket.id);
   });
   
   socket.on('admin:forceDraw', async (roomStake) => {
@@ -940,6 +1041,8 @@ io.on('connection', (socket) => {
       
       socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
       broadcastRoomStatus();
+      
+      logActivity('ADMIN_FORCE_DRAW', { adminSocket: socket.id, roomStake, ball, letter }, socket.id);
     }
   });
   
@@ -968,6 +1071,8 @@ io.on('connection', (socket) => {
     
     socket.emit('admin:success', `Banned user ${user.userName}`);
     updateAdminPanel();
+    
+    logActivity('ADMIN_BAN', { adminSocket: socket.id, userId }, socket.id);
   });
   
   socket.on('disconnect', () => {
@@ -1009,7 +1114,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Bingo Elite Server - Telegram Mini App</title>
+      <title>Bingo Elite - Telegram Mini App</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -1344,6 +1449,7 @@ app.get('/health', async (req, res) => {
     const activeGames = await Room.countDocuments({ status: 'playing' });
     const totalUsers = await User.countDocuments();
     const rooms = await Room.countDocuments();
+    const totalTransactions = await Transaction.countDocuments();
     
     res.json({
       status: 'ok',
@@ -1353,12 +1459,13 @@ app.get('/health', async (req, res) => {
       totalUsers: totalUsers,
       activeGames: activeGames,
       totalRooms: rooms,
+      totalTransactions: totalTransactions,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       memoryUsage: process.memoryUsage(),
       nodeVersion: process.version,
       telegramReady: true,
-      serverUrl: process.env.SERVER_URL || 'Not set'
+      serverUrl: 'https://bingo-telegram-game.onrender.com'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1429,13 +1536,11 @@ server.listen(PORT, () => {
 ╔══════════════════════════════════════════════════════╗
 ║             🤖 BINGO ELITE - TELEGRAM READY         ║
 ╠══════════════════════════════════════════════════════╣
-║  Port:          ${PORT.toString().padEnd(40)}║
-║  Database:      MongoDB Atlas                       ║
-║  Socket.IO:     ✅ REAL-TIME ENABLED               ║
-║  Telegram:      ✅ MINI APP READY                  ║
-║  Admin Panel:   http://localhost:${PORT}/admin        ║
-║  Game Client:   http://localhost:${PORT}/game         ║
-║  Telegram Entry: http://localhost:${PORT}/telegram     ║
+║  URL:          https://bingo-telegram-game.onrender.com ║
+║  Port:         ${PORT}                                ║
+║  Game:         /game                                 ║
+║  Admin:        /admin (password: admin1234)         ║
+║  Telegram:     /telegram                             ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
@@ -1443,4 +1548,9 @@ server.listen(PORT, () => {
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for Telegram Mini App integration
   `);
+  
+  // Initial broadcast
+  setTimeout(() => {
+    broadcastRoomStatus();
+  }, 1000);
 });
