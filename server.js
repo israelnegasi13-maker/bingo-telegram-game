@@ -259,24 +259,26 @@ function getConnectedUsers() {
     // Check if socket is still connected
     const socket = io.sockets.sockets.get(socketId);
     if (socket && socket.connected) {
-      connectedUsers.push(userId);
-    }
-  });
-  
-  // Also check all connected sockets for Telegram users
-  // Some Telegram users might connect without being in socketToUser
-  connectedSockets.forEach(socketId => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket && socket.connected && socket.handshake && socket.handshake.query) {
-      // Check if this socket has a userId in query params
-      const query = socket.handshake.query;
-      if (query.userId) {
-        connectedUsers.push(query.userId);
+      if (!connectedUsers.includes(userId)) {
+        connectedUsers.push(userId);
       }
     }
   });
   
-  // Remove duplicates
+  // Also check all connected sockets for users with query params
+  connectedSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected && socket.handshake && socket.handshake.query) {
+      const query = socket.handshake.query;
+      if (query.userId) {
+        const userId = query.userId;
+        if (!connectedUsers.includes(userId)) {
+          connectedUsers.push(userId);
+        }
+      }
+    }
+  });
+  
   return [...new Set(connectedUsers)];
 }
 
@@ -329,23 +331,13 @@ async function updateAdminPanel() {
     const connectedUserIds = getConnectedUsers();
     
     const userArray = users.map(user => {
-      // Better online detection - check multiple sources
-      let isOnline = false;
+      // Check if user is currently connected via sockets
+      const isOnline = connectedUserIds.includes(user.userId);
       
-      // Check socketToUser map
-      if (connectedUserIds.includes(user.userId)) {
-        isOnline = true;
-      }
-      // Also check if user has been active recently (within 30 seconds)
-      else if (user.lastSeen) {
-        const lastSeenTime = new Date(user.lastSeen);
-        const now = new Date();
-        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
-        
-        // If user was active in last 30 seconds, consider them online
-        if (secondsSinceLastSeen < 30) {
-          isOnline = true;
-        }
+      // Update user's online status in database if it changed
+      if (user.isOnline !== isOnline) {
+        User.findByIdAndUpdate(user._id, { isOnline: isOnline, lastSeen: new Date() })
+          .catch(err => console.error('Error updating user online status:', err));
       }
       
       return {
@@ -1302,29 +1294,18 @@ setInterval(() => {
   updateAdminPanel();
 }, 2000);
 
-// Clean up disconnected sockets periodically
-setInterval(() => {
-  socketToUser.forEach((userId, socketId) => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (!socket || !socket.connected) {
-      socketToUser.delete(socketId);
-      console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
-    }
-  });
-}, 10000);
-
 // ========== CONNECTION CLEANUP FUNCTION ==========
 async function cleanupStaleConnections() {
   console.log('🧹 Running connection cleanup...');
   
   const now = new Date();
-  const thirtySecondsAgo = new Date(now.getTime() - 30000);
+  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
   
   try {
-    // Update users who haven't been seen in 30 seconds
+    // Update users who haven't been seen in 5 minutes
     await User.updateMany(
       { 
-        lastSeen: { $lt: thirtySecondsAgo },
+        lastSeen: { $lt: fiveMinutesAgo },
         isOnline: true 
       },
       { 
@@ -1332,12 +1313,20 @@ async function cleanupStaleConnections() {
       }
     );
     
-    // Clean up socketToUser map
+    // Clean up socketToUser map for disconnected sockets
     socketToUser.forEach((userId, socketId) => {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
         socketToUser.delete(socketId);
         console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
+      }
+    });
+    
+    // Clean up connectedSockets set
+    connectedSockets.forEach(socketId => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket || !socket.connected) {
+        connectedSockets.delete(socketId);
       }
     });
     
