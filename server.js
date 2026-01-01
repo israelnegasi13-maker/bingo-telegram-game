@@ -166,7 +166,7 @@ let socketToUser = new Map();
 let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
-let connectedSockets = new Set();
+let connectedSockets = new Map(); // Changed to Map for better tracking
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -250,36 +250,37 @@ async function getRoom(stake) {
   }
 }
 
-// ========== IMPROVED REAL-TIME TRACKING FUNCTIONS ==========
+// ========== FIXED REAL-TIME TRACKING FUNCTIONS ==========
 function getConnectedUsers() {
   const connectedUsers = [];
   
-  // Get from socketToUser map (direct WebSocket connections)
-  socketToUser.forEach((userId, socketId) => {
-    // Check if socket is still connected
-    const socket = io.sockets.sockets.get(socketId);
+  // Iterate through all sockets that are connected
+  for (const [socketId, socket] of io.sockets.sockets) {
     if (socket && socket.connected) {
-      if (!connectedUsers.includes(userId)) {
+      // Get userId from multiple possible sources
+      let userId = null;
+      
+      // Check socketToUser map first
+      if (socketToUser.has(socketId)) {
+        userId = socketToUser.get(socketId);
+      }
+      // Check if userId is stored on socket object
+      else if (socket.userId) {
+        userId = socket.userId;
+      }
+      // Check handshake query
+      else if (socket.handshake && socket.handshake.query && socket.handshake.query.userId) {
+        userId = socket.handshake.query.userId;
+      }
+      
+      if (userId && !connectedUsers.includes(userId)) {
         connectedUsers.push(userId);
       }
     }
-  });
+  }
   
-  // Also check all connected sockets for users with query params
-  connectedSockets.forEach(socketId => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket && socket.connected && socket.handshake && socket.handshake.query) {
-      const query = socket.handshake.query;
-      if (query.userId) {
-        const userId = query.userId;
-        if (!connectedUsers.includes(userId)) {
-          connectedUsers.push(userId);
-        }
-      }
-    }
-  });
-  
-  return [...new Set(connectedUsers)];
+  console.log(`🔍 Found ${connectedUsers.length} connected users:`, connectedUsers);
+  return connectedUsers;
 }
 
 // ========== BROADCAST FUNCTIONS ==========
@@ -319,27 +320,34 @@ async function broadcastRoomStatus() {
   }
 }
 
+// ========== FIXED ADMIN PANEL UPDATE FUNCTION ==========
 async function updateAdminPanel() {
   try {
-    const connectedPlayers = getConnectedUsers().length;
+    const connectedUsersList = getConnectedUsers();
+    const connectedPlayers = connectedUsersList.length;
     const activeGames = await Room.countDocuments({ status: 'playing' });
     
-    // Get all users
-    const users = await User.find({}).sort({ balance: -1 }).limit(100);
+    // Get all users from database
+    const users = await User.find({}).sort({ lastSeen: -1 }).limit(100);
     
-    // Get connected user IDs for real-time status
-    const connectedUserIds = getConnectedUsers();
+    // Create a map of connected user IDs for quick lookup
+    const connectedUserIds = new Set(connectedUsersList);
     
     const userArray = users.map(user => {
-      // Check if user is currently connected via sockets
-      const isOnline = connectedUserIds.includes(user.userId);
+      const isOnline = connectedUserIds.has(user.userId);
       
-      // Update user's online status in database if it changed
+      // Update database if online status changed
       if (user.isOnline !== isOnline) {
-        User.findByIdAndUpdate(user._id, { isOnline: isOnline, lastSeen: new Date() })
-          .catch(err => console.error('Error updating user online status:', err));
+        User.findOneAndUpdate(
+          { userId: user.userId },
+          { 
+            isOnline: isOnline,
+            lastSeen: new Date()
+          }
+        ).catch(err => console.error('Error updating user status:', err));
       }
       
+      // Format user data for admin panel
       return {
         userId: user.userId,
         userName: user.userName,
@@ -349,9 +357,12 @@ async function updateAdminPanel() {
         isOnline: isOnline,
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
+        totalBingos: user.totalBingos || 0,
         lastSeen: user.lastSeen,
         telegramId: user.telegramId || '',
-        joinedAt: user.joinedAt
+        telegramUsername: user.telegramUsername || '',
+        joinedAt: user.joinedAt,
+        sessionCount: user.sessionCount || 1
       };
     });
     
@@ -376,7 +387,7 @@ async function updateAdminPanel() {
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
         houseFee: houseFee,
-        players: room.players // Include player IDs
+        players: room.players
       };
     });
     
@@ -386,20 +397,40 @@ async function updateAdminPanel() {
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
-    // Get real-time connected sockets count
-    const connectedSocketsCount = connectedSockets.size;
+    // Calculate other stats
+    const totalWagered = await Transaction.aggregate([
+      { $match: { type: 'STAKE' } },
+      { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+    ]).then(result => result[0]?.total || 0);
     
-    // Send to all admin sockets
+    const totalWins = await Transaction.aggregate([
+      { $match: { type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    const totalBingos = await Transaction.countDocuments({ 
+      type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] } 
+    });
+    
+    // Prepare admin data
     const adminData = {
-      totalPlayers: connectedPlayers, // Real-time connected players
+      totalPlayers: connectedPlayers,
       activeGames: activeGames,
       totalUsers: users.length,
-      connectedSockets: connectedSocketsCount,
+      connectedSockets: io.sockets.sockets.size,
+      socketToUserSize: socketToUser.size,
       houseBalance: houseBalance,
+      totalWagered: totalWagered,
+      totalWins: totalWins,
+      totalBingos: totalBingos,
+      houseEarnings: houseBalance,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime()
     };
     
+    console.log(`📊 Admin Panel Update: ${connectedPlayers} players online, ${io.sockets.sockets.size} sockets connected`);
+    
+    // Send data to all admin sockets
     adminSockets.forEach(socketId => {
       const socket = io.sockets.sockets.get(socketId);
       if (socket) {
@@ -416,10 +447,8 @@ async function updateAdminPanel() {
       }
     });
     
-    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games`);
-    
   } catch (error) {
-    console.error('Error updating admin panel:', error);
+    console.error('❌ Error updating admin panel:', error);
   }
 }
 
@@ -610,15 +639,22 @@ async function endGameWithNoWinner(room) {
   }
 }
 
-// ========== IMPROVED SOCKET.IO EVENT HANDLERS ==========
+// ========== FIXED SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
-  console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
-  connectedSockets.add(socket.id);
+  console.log(`✅ Socket.IO Connected: ${socket.id} - Query:`, socket.handshake.query);
+  
+  // Store socket connection data
+  connectedSockets.set(socket.id, {
+    connectedAt: new Date(),
+    handshake: socket.handshake.query,
+    socket: socket
+  });
   
   // Enhanced connection logging
   const query = socket.handshake.query;
   if (query.userId) {
     console.log(`👤 User connected via query: ${query.userId}`);
+    socket.userId = query.userId; // Store userId on socket object
   }
   
   // Send connection test immediately
@@ -630,7 +666,7 @@ io.on('connection', (socket) => {
     userId: query.userId || 'unknown'
   });
   
-  // ========== ADMIN AUTHENTICATION - FIXED ==========
+  // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', (password) => {
     console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
     
@@ -857,7 +893,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Player events
+  // ========== PLAYER EVENTS ==========
   socket.on('init', async (data) => {
     try {
       const { userId, userName } = data;
@@ -867,7 +903,9 @@ io.on('connection', (socket) => {
       const user = await getUser(userId, userName);
       
       if (user) {
+        // Store user ID in multiple places for redundancy
         socketToUser.set(socket.id, userId);
+        socket.userId = userId;
         
         // Also update user's lastSeen immediately
         await User.findOneAndUpdate(
@@ -890,11 +928,13 @@ io.on('connection', (socket) => {
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
         // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId})`);
+        console.log(`✅ User connected successfully: ${userName} (${userId}) - Socket: ${socket.id}`);
         
-        // Update admin panel with new connection IN REAL-TIME
-        updateAdminPanel();
-        broadcastRoomStatus();
+        // Force immediate admin panel update
+        setTimeout(() => {
+          updateAdminPanel();
+          broadcastRoomStatus();
+        }, 100);
         
         logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
       } else {
@@ -1063,9 +1103,11 @@ io.on('connection', (socket) => {
       socket.emit('joinedRoom');
       socket.emit('balanceUpdate', user.balance);
       
-      // Broadcast updates
-      broadcastRoomStatus();
-      updateAdminPanel();
+      // Force immediate updates
+      setTimeout(() => {
+        broadcastRoomStatus();
+        updateAdminPanel();
+      }, 100);
       
       logActivity('ROOM_JOIN', { userId, userName: user.userName, room, box });
       
@@ -1219,8 +1261,11 @@ io.on('connection', (socket) => {
         }
       });
       
-      broadcastRoomStatus();
-      updateAdminPanel();
+      // Force immediate updates
+      setTimeout(() => {
+        broadcastRoomStatus();
+        updateAdminPanel();
+      }, 100);
       
       logActivity('BINGO_WIN', { 
         userId, 
@@ -1274,8 +1319,10 @@ io.on('connection', (socket) => {
       socketToUser.delete(socket.id);
     }
     
-    // Update admin panel on disconnect IN REAL-TIME
-    updateAdminPanel();
+    // Force immediate admin panel update
+    setTimeout(() => {
+      updateAdminPanel();
+    }, 100);
   });
   
   // Heartbeat for connection monitoring
@@ -1322,8 +1369,8 @@ async function cleanupStaleConnections() {
       }
     });
     
-    // Clean up connectedSockets set
-    connectedSockets.forEach(socketId => {
+    // Clean up connectedSockets map
+    connectedSockets.forEach((socketData, socketId) => {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
         connectedSockets.delete(socketId);
@@ -1371,7 +1418,7 @@ app.get('/', (req, res) => {
           <div class="stats-grid">
             <div class="stat">
               <div class="stat-label">Connected Players</div>
-              <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
+              <div class="stat-value" id="playerCount">${getConnectedUsers().length}</div>
             </div>
             <div class="stat">
               <div class="stat-label">Database Status</div>
@@ -1402,7 +1449,7 @@ app.get('/', (req, res) => {
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
             Version: 2.0.0 (Telegram Ready) | Database: MongoDB Atlas<br>
-            Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
+            Socket.IO: ✅ Connected Sockets: ${io.sockets.sockets.size}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Bot Username: @ethio_games1_bot
@@ -1707,7 +1754,7 @@ app.get('/health', async (req, res) => {
       status: 'ok',
       database: 'connected',
       connectedPlayers: connectedPlayers,
-      connectedSockets: connectedSockets.size,
+      connectedSockets: io.sockets.sockets.size,
       socketToUser: socketToUser.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
@@ -1788,7 +1835,7 @@ app.post('/api/add-funds', async (req, res) => {
 app.get('/real-time-status', async (req, res) => {
   try {
     const connectedPlayers = getConnectedUsers().length;
-    const connectedSocketsCount = connectedSockets.size;
+    const connectedSocketsCount = io.sockets.sockets.size;
     const socketToUserSize = socketToUser.size;
     
     res.json({
@@ -1809,7 +1856,16 @@ app.get('/debug-connections', async (req, res) => {
   try {
     const connectedUserIds = getConnectedUsers();
     const socketToUserArray = Array.from(socketToUser.entries());
-    const connectedSocketsArray = Array.from(connectedSockets);
+    
+    const allSockets = [];
+    for (const [socketId, socket] of io.sockets.sockets) {
+      allSockets.push({
+        socketId,
+        connected: socket.connected || false,
+        userId: socketToUser.get(socketId) || socket.userId || 'unknown',
+        handshakeQuery: socket.handshake?.query || {}
+      });
+    }
     
     res.json({
       timestamp: new Date().toISOString(),
@@ -1817,21 +1873,39 @@ app.get('/debug-connections', async (req, res) => {
       connectedUserIds: connectedUserIds,
       socketToUserCount: socketToUser.size,
       socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
-      connectedSocketsCount: connectedSockets.size,
-      connectedSockets: connectedSocketsArray.map(socketId => {
-        const socket = io.sockets.sockets.get(socketId);
-        return {
-          socketId,
-          connected: socket?.connected || false,
-          userId: socketToUser.get(socketId) || 'unknown',
-          handshakeQuery: socket?.handshake?.query || {}
-        };
-      }),
+      connectedSocketsCount: io.sockets.sockets.size,
+      connectedSockets: allSockets,
       adminSocketsCount: adminSockets.size,
       adminSockets: Array.from(adminSockets)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== DEBUG ADMIN PANEL ENDPOINT ==========
+app.get('/debug-admin', async (req, res) => {
+  try {
+    const connectedUsers = getConnectedUsers();
+    const users = await User.find({}).limit(10);
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      connectedSockets: Array.from(io.sockets.sockets.keys()),
+      socketToUser: Array.from(socketToUser.entries()),
+      connectedUsers: connectedUsers,
+      connectedUsersCount: connectedUsers.length,
+      adminSockets: Array.from(adminSockets),
+      recentUsers: users.map(u => ({
+        userId: u.userId,
+        userName: u.userName,
+        isOnline: u.isOnline,
+        lastSeen: u.lastSeen,
+        balance: u.balance
+      }))
+    });
+  } catch (error) {
+    res.json({ error: error.message });
   }
 });
 
@@ -2049,6 +2123,7 @@ server.listen(PORT, () => {
 ║  Bot Setup:    /setup-telegram                       ║
 ║  Real-Time:    /real-time-status                     ║
 ║  Debug:        /debug-connections                    ║
+║  Debug Admin:  /debug-admin                          ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
