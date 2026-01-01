@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED FOR ADMIN LOGIN
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - FIXED ADMIN PANEL
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -166,7 +166,8 @@ let socketToUser = new Map();
 let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
-let connectedSockets = new Map(); // Changed to Map for better tracking
+let connectedSockets = new Set();
+let connectedUsers = new Set(); // Track connected users by their userId
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -250,37 +251,9 @@ async function getRoom(stake) {
   }
 }
 
-// ========== FIXED REAL-TIME TRACKING FUNCTIONS ==========
-function getConnectedUsers() {
-  const connectedUsers = [];
-  
-  // Iterate through all sockets that are connected
-  for (const [socketId, socket] of io.sockets.sockets) {
-    if (socket && socket.connected) {
-      // Get userId from multiple possible sources
-      let userId = null;
-      
-      // Check socketToUser map first
-      if (socketToUser.has(socketId)) {
-        userId = socketToUser.get(socketId);
-      }
-      // Check if userId is stored on socket object
-      else if (socket.userId) {
-        userId = socket.userId;
-      }
-      // Check handshake query
-      else if (socket.handshake && socket.handshake.query && socket.handshake.query.userId) {
-        userId = socket.handshake.query.userId;
-      }
-      
-      if (userId && !connectedUsers.includes(userId)) {
-        connectedUsers.push(userId);
-      }
-    }
-  }
-  
-  console.log(`🔍 Found ${connectedUsers.length} connected users:`, connectedUsers);
-  return connectedUsers;
+// ========== SIMPLIFIED CONNECTION TRACKING ==========
+function getConnectedUsersList() {
+  return Array.from(connectedUsers);
 }
 
 // ========== BROADCAST FUNCTIONS ==========
@@ -312,42 +285,25 @@ async function broadcastRoomStatus() {
     // Broadcast to all connected sockets
     io.emit('roomStatus', roomStatus);
     
-    // Also update admin panel
-    updateAdminPanel();
-    
   } catch (error) {
     console.error('Error broadcasting room status:', error);
   }
 }
 
-// ========== FIXED ADMIN PANEL UPDATE FUNCTION ==========
+// ========== FIXED ADMIN PANEL UPDATE ==========
 async function updateAdminPanel() {
   try {
-    const connectedUsersList = getConnectedUsers();
-    const connectedPlayers = connectedUsersList.length;
-    const activeGames = await Room.countDocuments({ status: 'playing' });
-    
     // Get all users from database
     const users = await User.find({}).sort({ lastSeen: -1 }).limit(100);
     
-    // Create a map of connected user IDs for quick lookup
+    // Get real-time connected users
+    const connectedUsersList = getConnectedUsersList();
     const connectedUserIds = new Set(connectedUsersList);
     
+    // Update user online status based on real-time connections
     const userArray = users.map(user => {
       const isOnline = connectedUserIds.has(user.userId);
       
-      // Update database if online status changed
-      if (user.isOnline !== isOnline) {
-        User.findOneAndUpdate(
-          { userId: user.userId },
-          { 
-            isOnline: isOnline,
-            lastSeen: new Date()
-          }
-        ).catch(err => console.error('Error updating user status:', err));
-      }
-      
-      // Format user data for admin panel
       return {
         userId: user.userId,
         userName: user.userName,
@@ -391,13 +347,12 @@ async function updateAdminPanel() {
       };
     });
     
-    // Calculate total house balance
+    // Calculate stats
     const houseBalance = await Transaction.aggregate([
       { $match: { type: { $in: ['HOUSE_EARNINGS', 'ADMIN_ADD'] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
-    // Calculate other stats
     const totalWagered = await Transaction.aggregate([
       { $match: { type: 'STAKE' } },
       { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
@@ -414,10 +369,10 @@ async function updateAdminPanel() {
     
     // Prepare admin data
     const adminData = {
-      totalPlayers: connectedPlayers,
-      activeGames: activeGames,
+      totalPlayers: connectedUsersList.length,
+      activeGames: await Room.countDocuments({ status: 'playing' }),
       totalUsers: users.length,
-      connectedSockets: io.sockets.sockets.size,
+      connectedSockets: connectedSockets.size,
       socketToUserSize: socketToUser.size,
       houseBalance: houseBalance,
       totalWagered: totalWagered,
@@ -428,12 +383,12 @@ async function updateAdminPanel() {
       serverUptime: process.uptime()
     };
     
-    console.log(`📊 Admin Panel Update: ${connectedPlayers} players online, ${io.sockets.sockets.size} sockets connected`);
+    console.log(`📊 Admin Panel: ${connectedUsersList.length} players online, ${connectedSockets.size} sockets`);
     
-    // Send data to all admin sockets
+    // Send to ALL admin sockets
     adminSockets.forEach(socketId => {
       const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
+      if (socket && socket.connected) {
         socket.emit('admin:update', adminData);
         socket.emit('admin:players', userArray);
         socket.emit('admin:rooms', roomsData);
@@ -639,31 +594,17 @@ async function endGameWithNoWinner(room) {
   }
 }
 
-// ========== FIXED SOCKET.IO EVENT HANDLERS ==========
+// ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
-  console.log(`✅ Socket.IO Connected: ${socket.id} - Query:`, socket.handshake.query);
-  
-  // Store socket connection data
-  connectedSockets.set(socket.id, {
-    connectedAt: new Date(),
-    handshake: socket.handshake.query,
-    socket: socket
-  });
-  
-  // Enhanced connection logging
-  const query = socket.handshake.query;
-  if (query.userId) {
-    console.log(`👤 User connected via query: ${query.userId}`);
-    socket.userId = query.userId; // Store userId on socket object
-  }
+  console.log(`✅ New connection: ${socket.id}`);
+  connectedSockets.add(socket.id);
   
   // Send connection test immediately
   socket.emit('connectionTest', { 
     status: 'connected', 
     serverTime: new Date().toISOString(),
     socketId: socket.id,
-    server: 'Bingo Elite Telegram',
-    userId: query.userId || 'unknown'
+    server: 'Bingo Elite Telegram'
   });
   
   // ========== ADMIN AUTHENTICATION ==========
@@ -903,11 +844,12 @@ io.on('connection', (socket) => {
       const user = await getUser(userId, userName);
       
       if (user) {
-        // Store user ID in multiple places for redundancy
+        // Store user ID mapping
         socketToUser.set(socket.id, userId);
         socket.userId = userId;
+        connectedUsers.add(userId);
         
-        // Also update user's lastSeen immediately
+        // Update user status
         await User.findOneAndUpdate(
           { userId: userId },
           { 
@@ -927,14 +869,11 @@ io.on('connection', (socket) => {
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
-        // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId}) - Socket: ${socket.id}`);
+        console.log(`✅ User connected: ${userName} (${userId})`);
         
-        // Force immediate admin panel update
-        setTimeout(() => {
-          updateAdminPanel();
-          broadcastRoomStatus();
-        }, 100);
+        // Update admin panel
+        updateAdminPanel();
+        broadcastRoomStatus();
         
         logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
       } else {
@@ -1103,11 +1042,9 @@ io.on('connection', (socket) => {
       socket.emit('joinedRoom');
       socket.emit('balanceUpdate', user.balance);
       
-      // Force immediate updates
-      setTimeout(() => {
-        broadcastRoomStatus();
-        updateAdminPanel();
-      }, 100);
+      // Update admin panel
+      updateAdminPanel();
+      broadcastRoomStatus();
       
       logActivity('ROOM_JOIN', { userId, userName: user.userName, room, box });
       
@@ -1261,11 +1198,8 @@ io.on('connection', (socket) => {
         }
       });
       
-      // Force immediate updates
-      setTimeout(() => {
-        broadcastRoomStatus();
-        updateAdminPanel();
-      }, 100);
+      updateAdminPanel();
+      broadcastRoomStatus();
       
       logActivity('BINGO_WIN', { 
         userId, 
@@ -1291,7 +1225,7 @@ io.on('connection', (socket) => {
           { lastSeen: new Date() }
         );
         
-        // Update admin panel with activity
+        // Update admin panel
         updateAdminPanel();
       } catch (error) {
         console.error('Error updating player activity:', error);
@@ -1306,6 +1240,9 @@ io.on('connection', (socket) => {
     
     const userId = socketToUser.get(socket.id);
     if (userId) {
+      // Remove from connected users
+      connectedUsers.delete(userId);
+      
       User.findOneAndUpdate(
         { userId: userId },
         { 
@@ -1319,10 +1256,8 @@ io.on('connection', (socket) => {
       socketToUser.delete(socket.id);
     }
     
-    // Force immediate admin panel update
-    setTimeout(() => {
-      updateAdminPanel();
-    }, 100);
+    // Update admin panel
+    updateAdminPanel();
   });
   
   // Heartbeat for connection monitoring
@@ -1334,56 +1269,24 @@ io.on('connection', (socket) => {
 // ========== PERIODIC TASKS ==========
 setInterval(() => {
   broadcastRoomStatus();
-}, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
-
-// Update admin panel every 2 seconds for real-time tracking
-setInterval(() => {
   updateAdminPanel();
-}, 2000);
+}, 3000);
 
-// ========== CONNECTION CLEANUP FUNCTION ==========
-async function cleanupStaleConnections() {
-  console.log('🧹 Running connection cleanup...');
+// ========== CONNECTION CLEANUP ==========
+setInterval(() => {
+  // Clean up users who haven't been active for 5 minutes
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   
-  const now = new Date();
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-  
-  try {
-    // Update users who haven't been seen in 5 minutes
-    await User.updateMany(
-      { 
-        lastSeen: { $lt: fiveMinutesAgo },
-        isOnline: true 
-      },
-      { 
-        isOnline: false 
-      }
-    );
-    
-    // Clean up socketToUser map for disconnected sockets
-    socketToUser.forEach((userId, socketId) => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (!socket || !socket.connected) {
-        socketToUser.delete(socketId);
-        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
-      }
-    });
-    
-    // Clean up connectedSockets map
-    connectedSockets.forEach((socketData, socketId) => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (!socket || !socket.connected) {
-        connectedSockets.delete(socketId);
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error in cleanupStaleConnections:', error);
-  }
-}
-
-// Run cleanup every 30 seconds
-setInterval(cleanupStaleConnections, 30000);
+  User.updateMany(
+    { 
+      lastSeen: { $lt: fiveMinutesAgo },
+      isOnline: true 
+    },
+    { 
+      isOnline: false 
+    }
+  ).catch(err => console.error('Error cleaning up users:', err));
+}, 60000);
 
 // ========== EXPRESS ROUTES ==========
 app.get('/', (req, res) => {
@@ -1418,7 +1321,7 @@ app.get('/', (req, res) => {
           <div class="stats-grid">
             <div class="stat">
               <div class="stat-label">Connected Players</div>
-              <div class="stat-value" id="playerCount">${getConnectedUsers().length}</div>
+              <div class="stat-value" id="playerCount">${connectedUsers.size}</div>
             </div>
             <div class="stat">
               <div class="stat-label">Database Status</div>
@@ -1440,295 +1343,8 @@ app.get('/', (req, res) => {
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
             <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
           </div>
-          <div style="margin-top: 20px;">
-            <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
-          </div>
-        </div>
-        
-        <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-          <h4>Telegram Mini App Information</h4>
-          <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.0.0 (Telegram Ready) | Database: MongoDB Atlas<br>
-            Socket.IO: ✅ Connected Sockets: ${io.sockets.sockets.size}<br>
-            Telegram Integration: ✅ Ready<br>
-            Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
-            Bot Username: @ethio_games1_bot
-          </p>
         </div>
       </div>
-      
-      <script>
-        // Real-time player count update
-        const socket = io();
-        socket.on('connect', () => {
-          document.getElementById('playerCount').textContent = 'Connected';
-        });
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-// Telegram Mini App entry point
-app.get('/telegram', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Bingo Elite - Telegram Mini App</title>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <style>
-            body {
-                margin: 0;
-                padding: 0;
-                font-family: Arial, sans-serif;
-                background: #0f172a;
-                color: white;
-                height: 100vh;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
-            }
-            
-            .container {
-                padding: 20px;
-                max-width: 500px;
-            }
-            
-            .logo {
-                font-size: 3rem;
-                margin-bottom: 20px;
-                color: #fbbf24;
-            }
-            
-            .btn {
-                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                border-radius: 15px;
-                font-size: 1.2rem;
-                font-weight: bold;
-                cursor: pointer;
-                margin: 20px 0;
-                text-decoration: none;
-                display: inline-block;
-            }
-            
-            .btn:hover {
-                transform: scale(1.05);
-            }
-            
-            .info {
-                background: rgba(255,255,255,0.1);
-                padding: 15px;
-                border-radius: 10px;
-                margin: 20px 0;
-                font-size: 0.9rem;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="logo">🎮</div>
-            <h1>Bingo Elite</h1>
-            <p>Play real-time Bingo with players worldwide on Telegram!</p>
-            
-            <div class="info">
-                <p><strong>💰 Win Real Money in ETB</strong></p>
-                <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
-                <p><strong>👥 Play with 100 players per room</strong></p>
-                <p><strong>🤖 Telegram Mini App Integrated</strong></p>
-            </div>
-            
-            <button class="btn" id="playBtn">LAUNCH GAME</button>
-            
-            <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
-                <p>Bot: @ethio_games1_bot</p>
-                <p>Stakes: 10, 20, 50, 100 ETB</p>
-                <p>Minimum 2 players to start</p>
-            </div>
-        </div>
-        
-        <script>
-            // Initialize Telegram Web App
-            const tg = window.Telegram.WebApp;
-            
-            // Expand the app to full height
-            tg.ready();
-            tg.expand();
-            
-            // Set Telegram theme colors
-            tg.setHeaderColor('#3b82f6');
-            tg.setBackgroundColor('#0f172a');
-            
-            // Get user info from Telegram
-            const user = tg.initDataUnsafe?.user;
-            
-            if (user) {
-                document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
-                
-                // Store user info for game
-                localStorage.setItem('telegramUser', JSON.stringify({
-                    id: user.id,
-                    firstName: user.first_name,
-                    username: user.username,
-                    languageCode: user.language_code
-                }));
-            }
-            
-            // Launch game
-            document.getElementById('playBtn').addEventListener('click', function() {
-                // Add haptic feedback
-                if (tg && tg.HapticFeedback) {
-                    tg.HapticFeedback.impactOccurred('light');
-                }
-                
-                // Redirect to game
-                window.location.href = '/game';
-            });
-            
-            // Add Telegram Main Button if available
-            if (tg && tg.MainButton) {
-                tg.MainButton.setText('🎮 PLAY BINGO');
-                tg.MainButton.show();
-                tg.MainButton.onClick(function() {
-                    window.location.href = '/game';
-                });
-            }
-        </script>
-    </body>
-    </html>
-  `);
-});
-
-// Socket.IO connection test page
-app.get('/socket-test', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Socket.IO Connection Test</title>
-      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
-        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
-        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
-        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
-        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
-        .success { color: #10b981; }
-        .error { color: #ef4444; }
-        .info { color: #3b82f6; }
-      </style>
-    </head>
-    <body>
-      <h1>🔌 Socket.IO Connection Test</h1>
-      <div id="status" class="status disconnected">Connecting to server...</div>
-      
-      <h3>Test Actions:</h3>
-      <div>
-        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Connection
-        </button>
-        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test User Init
-        </button>
-        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Room Status
-        </button>
-      </div>
-      
-      <h3>Connection Log:</h3>
-      <div id="log" class="log"></div>
-      
-      <script>
-        const log = document.getElementById('log');
-        const status = document.getElementById('status');
-        
-        function addLog(message, type = 'info') {
-          const entry = document.createElement('div');
-          entry.className = 'log-entry ' + type;
-          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
-          log.appendChild(entry);
-          log.scrollTop = log.scrollHeight;
-        }
-        
-        // Configure Socket.IO
-        const socket = io({
-          reconnection: true,
-          reconnectionAttempts: Infinity,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          timeout: 20000,
-          transports: ['websocket', 'polling'],
-          forceNew: true,
-          autoConnect: true
-        });
-        
-        socket.on('connect', () => {
-          status.className = 'status connected';
-          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
-          addLog('Connected to server with ID: ' + socket.id, 'success');
-        });
-        
-        socket.on('disconnect', (reason) => {
-          status.className = 'status disconnected';
-          status.textContent = '❌ Disconnected: ' + reason;
-          addLog('Disconnected: ' + reason, 'error');
-        });
-        
-        socket.on('connect_error', (error) => {
-          addLog('Connection error: ' + error.message, 'error');
-        });
-        
-        socket.on('connectionTest', (data) => {
-          addLog('Server connection test: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('connected', (data) => {
-          addLog('Server connected message: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('balanceUpdate', (data) => {
-          addLog('Balance update: ' + data, 'info');
-        });
-        
-        socket.on('roomStatus', (data) => {
-          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
-        });
-        
-        // Test functions
-        function testConnection() {
-          addLog('Testing connection...', 'info');
-          socket.emit('ping');
-        }
-        
-        function testInit() {
-          addLog('Testing user initialization...', 'info');
-          socket.emit('init', {
-            userId: 'test-' + Date.now(),
-            userName: 'Test Player'
-          });
-        }
-        
-        function testRoomStatus() {
-          addLog('Requesting room status...', 'info');
-          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
-            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
-          });
-        }
-        
-        // Auto-test on load
-        setTimeout(() => {
-          testConnection();
-        }, 1000);
-      </script>
     </body>
     </html>
   `);
@@ -1744,367 +1360,24 @@ app.get('/game', (req, res) => {
 
 app.get('/health', async (req, res) => {
   try {
-    const connectedPlayers = getConnectedUsers().length;
-    const activeGames = await Room.countDocuments({ status: 'playing' });
     const totalUsers = await User.countDocuments();
+    const activeGames = await Room.countDocuments({ status: 'playing' });
     const rooms = await Room.countDocuments();
     const totalTransactions = await Transaction.countDocuments();
     
     res.json({
       status: 'ok',
       database: 'connected',
-      connectedPlayers: connectedPlayers,
-      connectedSockets: io.sockets.sockets.size,
-      socketToUser: socketToUser.size,
+      connectedPlayers: connectedUsers.size,
+      connectedSockets: connectedSockets.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
       totalRooms: rooms,
       totalTransactions: totalTransactions,
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-      memoryUsage: process.memoryUsage(),
-      nodeVersion: process.version,
-      telegramReady: true,
-      botUsername: '@ethio_games1_bot',
-      serverUrl: 'https://bingo-telegram-game.onrender.com'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to get user balance
-app.get('/api/user/:userId', async (req, res) => {
-  try {
-    const user = await User.findOne({ userId: req.params.userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({
-      userId: user.userId,
-      userName: user.userName,
-      balance: user.balance,
-      isOnline: user.isOnline,
-      lastSeen: user.lastSeen,
-      telegramId: user.telegramId
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to add funds (for admin)
-app.post('/api/add-funds', async (req, res) => {
-  try {
-    const { userId, amount, adminPassword } = req.body;
-    
-    if (adminPassword !== CONFIG.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const user = await User.findOne({ userId: userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    user.balance += parseFloat(amount);
-    await user.save();
-    
-    // Record transaction
-    const transaction = new Transaction({
-      type: 'ADMIN_ADD',
-      userId: userId,
-      userName: user.userName,
-      amount: amount,
-      admin: true,
-      description: `Admin added ${amount} ETB via API`
-    });
-    await transaction.save();
-    
-    res.json({
-      success: true,
-      message: `Added ${amount} ETB to ${user.userName}`,
-      newBalance: user.balance
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Real-time tracking test endpoint
-app.get('/real-time-status', async (req, res) => {
-  try {
-    const connectedPlayers = getConnectedUsers().length;
-    const connectedSocketsCount = io.sockets.sockets.size;
-    const socketToUserSize = socketToUser.size;
-    
-    res.json({
-      connectedPlayers: connectedPlayers,
-      connectedSockets: connectedSocketsCount,
-      socketToUserSize: socketToUserSize,
-      socketToUser: Array.from(socketToUser.entries()),
-      adminSockets: Array.from(adminSockets),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// ========== DEBUG CONNECTION ENDPOINT ==========
-app.get('/debug-connections', async (req, res) => {
-  try {
-    const connectedUserIds = getConnectedUsers();
-    const socketToUserArray = Array.from(socketToUser.entries());
-    
-    const allSockets = [];
-    for (const [socketId, socket] of io.sockets.sockets) {
-      allSockets.push({
-        socketId,
-        connected: socket.connected || false,
-        userId: socketToUser.get(socketId) || socket.userId || 'unknown',
-        handshakeQuery: socket.handshake?.query || {}
-      });
-    }
-    
-    res.json({
-      timestamp: new Date().toISOString(),
-      totalConnectedUsers: connectedUserIds.length,
-      connectedUserIds: connectedUserIds,
-      socketToUserCount: socketToUser.size,
-      socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
-      connectedSocketsCount: io.sockets.sockets.size,
-      connectedSockets: allSockets,
-      adminSocketsCount: adminSockets.size,
-      adminSockets: Array.from(adminSockets)
-    });
-  } catch (error) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== DEBUG ADMIN PANEL ENDPOINT ==========
-app.get('/debug-admin', async (req, res) => {
-  try {
-    const connectedUsers = getConnectedUsers();
-    const users = await User.find({}).limit(10);
-    
-    res.json({
-      timestamp: new Date().toISOString(),
-      connectedSockets: Array.from(io.sockets.sockets.keys()),
-      socketToUser: Array.from(socketToUser.entries()),
-      connectedUsers: connectedUsers,
-      connectedUsersCount: connectedUsers.length,
-      adminSockets: Array.from(adminSockets),
-      recentUsers: users.map(u => ({
-        userId: u.userId,
-        userName: u.userName,
-        isOnline: u.isOnline,
-        lastSeen: u.lastSeen,
-        balance: u.balance
-      }))
-    });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
-
-// Simple Telegram webhook
-app.post('/telegram-webhook', express.json(), async (req, res) => {
-  try {
-    const { message } = req.body;
-    
-    if (message) {
-      const chatId = message.chat.id;
-      const text = message.text || '';
-      const userId = message.from.id.toString();
-      const userName = message.from.first_name || 'Player';
-      const username = message.from.username || '';
-      
-      if (text === '/start' || text === '/play') {
-        // Check if user exists, create if not
-        let user = await User.findOne({ telegramId: userId });
-        
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0.00,
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
-        }
-        
-        // Send welcome message with game button
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
-                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                  `🎯 *Features:*\n` +
-                  `• 10/20/50/100 ETB rooms\n` +
-                  `• Four Corners Bonus: 50 ETB\n` +
-                  `• Real-time multiplayer\n` +
-                  `• Telegram login\n\n` +
-                  `_Need funds? Contact admin_`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎮 Play Bingo Now',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `🎮 Play: @ethio_games1_bot\n` +
-                  `👑 Admin: Contact for funds\n` +
-                  `🆔 Your ID: \`${userId}\``,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/help') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Bingo Elite Help*\n\n` +
-                  `*Commands:*\n` +
-                  `/start - Start the bot\n` +
-                  `/play - Play game\n` +
-                  `/balance - Check balance\n` +
-                  `/help - This message\n\n` +
-                  `*How to Play:*\n` +
-                  `1. Click "Play Now"\n` +
-                  `2. Select room (10-100 ETB)\n` +
-                  `3. Choose ticket (1-100)\n` +
-                  `4. Mark numbers as called\n` +
-                  `5. Claim BINGO!\n\n` +
-                  `*Four Corners Bonus:* 50 ETB!\n\n` +
-                  `_Need help? Contact admin_`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-    }
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Telegram webhook error:', error);
-    res.sendStatus(200);
-  }
-});
-
-// Setup endpoint for Telegram bot
-app.get('/setup-telegram', async (req, res) => {
-  try {
-    // Set webhook
-    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
-        drop_pending_updates: true
-      })
-    });
-    
-    const webhookResult = await webhookResponse.json();
-    
-    // Set menu button
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        menu_button: {
-          type: 'web_app',
-          text: '🎮 Play Bingo',
-          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-        }
-      })
-    });
-    
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Telegram Bot Setup Complete</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
-          .container { max-width: 600px; margin: 0 auto; }
-          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
-          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
-          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>✅ Telegram Bot Setup Complete!</h1>
-          <div class="success">✓ Webhook Configured</div>
-          <div class="success">✓ Menu Button Set</div>
-          
-          <div class="info-box">
-            <h3>Bot Information:</h3>
-            <p><strong>Bot:</strong> @ethio_games1_bot</p>
-            <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
-            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
-            <p><strong>Admin Password:</strong> admin1234</p>
-          </div>
-          
-          <div>
-            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
-            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
-          </div>
-          
-          <div style="margin-top: 30px; text-align: left;">
-            <h4>Next Steps:</h4>
-            <ol>
-              <li>Open @ethio_games1_bot in Telegram</li>
-              <li>Click "Start"</li>
-              <li>Click menu button (bottom left)</li>
-              <li>Play Bingo!</li>
-            </ol>
-            
-            <h4>To Add Funds to Players:</h4>
-            <ol>
-              <li>Open Admin Panel (link above)</li>
-              <li>Login with password: admin1234</li>
-              <li>Find user by Telegram ID</li>
-              <li>Click "Add Funds" button</li>
-            </ol>
-          </div>
-        </div>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    res.send(`
-      <h1 style="color: #ef4444;">❌ Setup Error</h1>
-      <p>${error.message}</p>
-      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
-    `);
   }
 });
 
@@ -2119,15 +1392,9 @@ server.listen(PORT, () => {
 ║  Port:         ${PORT}                                ║
 ║  Game:         /game                                 ║
 ║  Admin:        /admin (password: admin1234)         ║
-║  Telegram:     /telegram                             ║
-║  Bot Setup:    /setup-telegram                       ║
-║  Real-Time:    /real-time-status                     ║
-║  Debug:        /debug-connections                    ║
-║  Debug Admin:  /debug-admin                          ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
-║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}... ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ╚══════════════════════════════════════════════════════╝
@@ -2137,29 +1404,6 @@ server.listen(PORT, () => {
   // Initial broadcast
   setTimeout(() => {
     broadcastRoomStatus();
+    updateAdminPanel();
   }, 1000);
-  
-  // Setup Telegram bot after server starts
-  setTimeout(async () => {
-    try {
-      // Auto-setup Telegram webhook if token exists
-      if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
-        const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
-        
-        const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: webhookUrl,
-            drop_pending_updates: true
-          })
-        });
-        
-        const webhookResult = await webhookResponse.json();
-        console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
-      }
-    } catch (error) {
-      console.log('⚠️ Telegram auto-setup skipped or failed');
-    }
-  }, 3000);
 });
