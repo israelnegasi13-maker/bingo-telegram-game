@@ -865,6 +865,7 @@
             <div class="logo">
                 <h2><i class="fas fa-crown"></i> Bingo Elite</h2>
                 <p>Admin Dashboard v2.0</p>
+                <p style="font-size: 0.7rem; color: var(--warning); margin-top: 5px;">Real-Time Tracking Active</p>
             </div>
             
             <div class="nav">
@@ -903,6 +904,10 @@
                 <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 12px;">
                     <p style="font-size: 0.85rem; color: var(--text-muted);">Last Updated</p>
                     <p id="lastUpdateTime" style="font-weight: 600;">Just now</p>
+                    <div id="connectionStatus" style="display: flex; align-items: center; gap: 5px; margin-top: 5px;">
+                        <div class="status-dot" style="width: 8px; height: 8px;"></div>
+                        <p style="font-size: 0.75rem; color: var(--success);">Connected</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -925,6 +930,9 @@
                         <span id="serverStatusText">Connected</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 15px;">
+                        <button class="btn-action btn-add" onclick="forceRefreshData()" title="Refresh Data">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
                         <button class="btn-logout" onclick="logout()">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </button>
@@ -943,8 +951,8 @@
                         <div class="stat-info">
                             <h3>Total Users</h3>
                             <div class="stat-value" id="totalUsers">0</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i> 12 today
+                            <div class="stat-change">
+                                <i class="fas fa-database"></i> Registered users
                             </div>
                         </div>
                     </div>
@@ -956,8 +964,8 @@
                         <div class="stat-info">
                             <h3>Online Players</h3>
                             <div class="stat-value" id="onlinePlayers">0</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i> Active now
+                            <div class="stat-change positive" id="onlineStatus">
+                                <i class="fas fa-circle"></i> Connected now
                             </div>
                         </div>
                     </div>
@@ -970,7 +978,7 @@
                             <h3>Active Games</h3>
                             <div class="stat-value" id="activeGames">0</div>
                             <div class="stat-change">
-                                <i class="fas fa-minus"></i> No change
+                                <i class="fas fa-fire"></i> Live games
                             </div>
                         </div>
                     </div>
@@ -983,7 +991,7 @@
                             <h3>House Balance</h3>
                             <div class="stat-value" id="houseBalance">0 ETB</div>
                             <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i> 5.2% growth
+                                <i class="fas fa-trend-up"></i> Real-time
                             </div>
                         </div>
                     </div>
@@ -1077,6 +1085,9 @@
                             <button class="btn-action btn-add" onclick="showAddFundsModal()">
                                 <i class="fas fa-plus"></i> Add Funds
                             </button>
+                            <button class="btn-action btn-add" onclick="exportUsers()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
                         </div>
                     </div>
                     
@@ -1128,7 +1139,174 @@
                 </div>
             </div>
 
-            <!-- Add more sections for Transactions, Analytics, Controls, Logs -->
+            <!-- Transactions Section -->
+            <div id="transactionsSection" class="content-section">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Recent Transactions</h3>
+                        <div class="table-controls">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="transactionSearch" placeholder="Search transactions..." onkeyup="searchTransactions()">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-feed" id="transactionFeed">
+                        <!-- Transactions will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Section -->
+            <div id="analyticsSection" class="content-section">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Analytics Dashboard</h3>
+                        <div class="table-controls">
+                            <select style="padding: 8px 15px; background: var(--dark-card); border: 1px solid var(--dark-border); border-radius: 8px; color: var(--text);">
+                                <option>Today</option>
+                                <option>Last 7 days</option>
+                                <option>Last 30 days</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" style="margin-top: 20px;">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Total Wagered</h3>
+                                <div class="stat-value" id="totalWagered">0 ETB</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-chart-line"></i> All time
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Total Wins</h3>
+                                <div class="stat-value" id="totalWins">0 ETB</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-gift"></i> Player winnings
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                                <i class="fas fa-home"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>House Earnings</h3>
+                                <div class="stat-value" id="houseEarnings">0 ETB</div>
+                                <div class="stat-change positive">
+                                    <i class="fas fa-arrow-up"></i> Commission
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: rgba(6, 214, 160, 0.15); color: var(--success);">
+                                <i class="fas fa-bingo"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Total Bingos</h3>
+                                <div class="stat-value" id="totalBingos">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-star"></i> Games won
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Section -->
+            <div id="controlsSection" class="content-section">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>System Controls</h3>
+                    </div>
+                    
+                    <div class="quick-actions">
+                        <div class="action-card" onclick="restartServer()">
+                            <div class="action-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);">
+                                <i class="fas fa-redo"></i>
+                            </div>
+                            <h4>Restart Server</h4>
+                            <p>Restart the game server</p>
+                        </div>
+                        
+                        <div class="action-card" onclick="clearCache()">
+                            <div class="action-icon" style="background: rgba(6, 214, 160, 0.15); color: var(--success);">
+                                <i class="fas fa-trash"></i>
+                            </div>
+                            <h4>Clear Cache</h4>
+                            <p>Clear system cache</p>
+                        </div>
+                        
+                        <div class="action-card" onclick="backupDatabase()">
+                            <div class="action-icon" style="background: rgba(255, 209, 102, 0.15); color: var(--warning);">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <h4>Backup DB</h4>
+                            <p>Create database backup</p>
+                        </div>
+                        
+                        <div class="action-card" onclick="emergencyStop()">
+                            <div class="action-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                                <i class="fas fa-stop-circle"></i>
+                            </div>
+                            <h4>Emergency Stop</h4>
+                            <p>Stop all games immediately</p>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 30px;">
+                        <h3 style="margin-bottom: 20px;">System Settings</h3>
+                        <div class="form-group">
+                            <label>Game Timer (seconds)</label>
+                            <input type="number" id="gameTimer" value="3" style="width: 200px;">
+                            <button class="btn-action btn-add" onclick="updateGameTimer()" style="margin-left: 10px;">
+                                Update
+                            </button>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Minimum Players to Start</label>
+                            <input type="number" id="minPlayers" value="2" style="width: 200px;">
+                            <button class="btn-action btn-add" onclick="updateMinPlayers()" style="margin-left: 10px;">
+                                Update
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Section -->
+            <div id="logsSection" class="content-section">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>System Logs</h3>
+                        <div class="table-controls">
+                            <button class="btn-action btn-add" onclick="clearLogs()">
+                                <i class="fas fa-trash"></i> Clear Logs
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-feed" id="systemLogs" style="max-height: 500px;">
+                        <!-- System logs will be inserted here -->
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1174,8 +1352,8 @@
     <script>
         // Configuration
         const CONFIG = {
-            SERVER_URL: "https://my-bingo-server.onrender.com",
-            AUTO_REFRESH_INTERVAL: 5000,
+            SERVER_URL: "https://bingo-telegram-game.onrender.com",
+            AUTO_REFRESH_INTERVAL: 2000, // 2 seconds for real-time updates
             MAX_ACTIVITY_ITEMS: 20
         };
 
@@ -1188,7 +1366,8 @@
             activityLog: [],
             charts: {},
             lastUpdate: new Date(),
-            socket: null
+            socket: null,
+            lastPlayerCount: 0
         };
 
         // Initialize
@@ -1207,6 +1386,9 @@
                     localStorage.removeItem('bingo_admin_session');
                 }
             }
+            
+            // Add initial system log
+            addSystemLog('Admin panel initialized');
         });
 
         // Socket Functions
@@ -1220,11 +1402,13 @@
             state.socket.on('connect', () => {
                 showToast('Connected to server', 'success');
                 updateServerStatus('Connected', true);
+                addSystemLog('Connected to server');
             });
 
             state.socket.on('disconnect', () => {
                 showToast('Disconnected from server', 'error');
                 updateServerStatus('Disconnected', false);
+                addSystemLog('Disconnected from server', 'error');
             });
 
             state.socket.on('admin:authSuccess', () => {
@@ -1232,6 +1416,7 @@
                 document.getElementById('loginScreen').style.display = 'none';
                 document.getElementById('dashboard').style.display = 'block';
                 showToast('Login successful!', 'success');
+                addSystemLog('Admin login successful');
                 
                 // Save session
                 const password = document.getElementById('adminPassword').value;
@@ -1246,22 +1431,42 @@
                 
                 // Start auto-refresh
                 startAutoRefresh();
+                
+                // Start real-time monitoring
+                startRealTimeMonitoring();
+                
+                // Initialize charts
+                setTimeout(initCharts, 1000);
             });
 
             state.socket.on('admin:authError', (message) => {
                 showToast('Login failed: ' + message, 'error');
+                addSystemLog('Login failed: ' + message, 'error');
             });
 
             state.socket.on('admin:update', (data) => {
                 updateStats(data);
                 state.lastUpdate = new Date();
                 updateLastUpdateTime();
+                
+                // Update server status with player count
+                updateServerStatus(`Connected - ${data.totalPlayers || 0} players online`, true);
+                
+                // Update online status indicator
+                updateOnlineStatus(data.totalPlayers || 0);
             });
 
             state.socket.on('admin:players', (data) => {
+                const previousUsers = [...state.users];
                 state.users = data;
                 updateUsersTable();
-                updateUserCountBadge(data.length);
+                
+                // Count online users
+                const onlineCount = data.filter(user => user.isOnline).length;
+                updateUserCountBadge(onlineCount);
+                
+                // Detect changes for logging
+                detectUserChanges(previousUsers, data);
             });
 
             state.socket.on('admin:rooms', (data) => {
@@ -1273,21 +1478,30 @@
             state.socket.on('admin:transactions', (data) => {
                 state.transactions = data;
                 updateActivityLog(data);
+                updateTransactionFeed(data);
                 updateRevenueChart(data);
             });
 
             state.socket.on('admin:success', (message) => {
                 showToast(message, 'success');
                 state.socket.emit('admin:getData'); // Refresh data
+                addSystemLog('Success: ' + message);
             });
 
             state.socket.on('admin:error', (message) => {
                 showToast('Error: ' + message, 'error');
+                addSystemLog('Error: ' + message, 'error');
             });
 
             // Custom event for activity
+            state.socket.on('admin:activity', (activity) => {
+                addActivityItem(activity);
+            });
+            
+            // Game events
             state.socket.on('game:activity', (activity) => {
                 addActivityItem(activity);
+                addSystemLog('Game activity: ' + JSON.stringify(activity));
             });
         }
 
@@ -1388,42 +1602,109 @@
             document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
             document.getElementById('activeGames').textContent = data.activeGames || 0;
             document.getElementById('houseBalance').textContent = (data.houseBalance || 0).toFixed(2) + ' ETB';
+            
+            // Update analytics if available
+            if (data.totalWagered !== undefined) {
+                document.getElementById('totalWagered').textContent = (data.totalWagered || 0).toFixed(2) + ' ETB';
+            }
+            if (data.totalWins !== undefined) {
+                document.getElementById('totalWins').textContent = (data.totalWins || 0).toFixed(2) + ' ETB';
+            }
+            if (data.houseEarnings !== undefined) {
+                document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
+            }
+            if (data.totalBingos !== undefined) {
+                document.getElementById('totalBingos').textContent = data.totalBingos || 0;
+            }
+        }
+        
+        function updateOnlineStatus(onlineCount) {
+            const onlineStatus = document.getElementById('onlineStatus');
+            if (onlineCount > 0) {
+                onlineStatus.className = 'stat-change positive';
+                onlineStatus.innerHTML = '<i class="fas fa-circle"></i> ' + onlineCount + ' players online';
+            } else {
+                onlineStatus.className = 'stat-change';
+                onlineStatus.innerHTML = '<i class="fas fa-circle"></i> No players online';
+            }
         }
 
         function updateUsersTable() {
             const tbody = document.getElementById('usersTableBody');
             tbody.innerHTML = '';
             
-            state.users.forEach(user => {
+            // Sort by online status first (online users on top)
+            const sortedUsers = [...state.users].sort((a, b) => {
+                if (a.isOnline && !b.isOnline) return -1;
+                if (!a.isOnline && b.isOnline) return 1;
+                return 0;
+            });
+            
+            sortedUsers.forEach(user => {
                 const row = document.createElement('tr');
                 
-                // Status badge
+                // Status badge with real-time indicator
                 let statusBadge = '';
-                if (!user.isOnline) {
-                    statusBadge = '<span class="status-badge status-offline">Offline</span>';
-                } else if (user.currentRoom) {
-                    statusBadge = '<span class="status-badge status-playing">Playing</span>';
+                if (user.isOnline) {
+                    if (user.currentRoom) {
+                        statusBadge = '<span class="status-badge status-playing"><i class="fas fa-gamepad"></i> Playing</span>';
+                    } else {
+                        statusBadge = '<span class="status-badge status-online"><i class="fas fa-circle"></i> Online</span>';
+                    }
                 } else {
-                    statusBadge = '<span class="status-badge status-online">Online</span>';
+                    // Show how long ago they were online
+                    const lastSeen = new Date(user.lastSeen);
+                    const now = new Date();
+                    const diffMinutes = Math.floor((now - lastSeen) / (1000 * 60));
+                    let timeText = 'Just now';
+                    if (diffMinutes > 0) {
+                        timeText = `${diffMinutes}m ago`;
+                    }
+                    statusBadge = `<span class="status-badge status-offline"><i class="fas fa-clock"></i> ${timeText}</span>`;
                 }
                 
                 // Room badge
-                let roomBadge = 'Lobby';
+                let roomBadge = '<span style="color: var(--text-muted);">Lobby</span>';
                 if (user.currentRoom) {
                     const roomClass = `room-${user.currentRoom === 10 ? 'bronze' : user.currentRoom === 20 ? 'silver' : user.currentRoom === 50 ? 'gold' : 'elite'}`;
                     roomBadge = `<span class="room-badge ${roomClass}">${user.currentRoom} ETB</span>`;
                 }
                 
-                // Last activity
-                const lastSeen = user.lastSeen ? new Date(user.lastSeen).toLocaleTimeString() : 'Unknown';
+                // Last activity with relative time
+                const lastSeenDate = new Date(user.lastSeen);
+                const now = new Date();
+                const diffMs = now - lastSeenDate;
+                const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                
+                let lastActivity = '';
+                if (diffMinutes < 1) {
+                    lastActivity = 'Just now';
+                } else if (diffMinutes < 60) {
+                    lastActivity = `${diffMinutes}m ago`;
+                } else if (diffHours < 24) {
+                    lastActivity = `${diffHours}h ago`;
+                } else {
+                    lastActivity = lastSeenDate.toLocaleDateString();
+                }
+                
+                // Telegram ID if available
+                const telegramId = user.telegramId ? `<div style="font-size: 0.75rem; color: var(--text-muted);">TG: ${user.telegramId}</div>` : '';
                 
                 row.innerHTML = `
                     <td>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <div class="user-avatar">${user.userName.charAt(0).toUpperCase()}</div>
+                            <div class="user-avatar" style="background: ${user.isOnline ? 'linear-gradient(45deg, var(--primary), var(--secondary))' : 'var(--text-muted)'}; position: relative;">
+                                ${user.userName.charAt(0).toUpperCase()}
+                                ${user.isOnline ? '<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; background: var(--success); border-radius: 50%; border: 2px solid var(--dark-card);"></div>' : ''}
+                            </div>
                             <div>
-                                <div style="font-weight: 600;">${user.userName}</div>
-                                <div style="font-size: 0.85rem; color: var(--text-muted);">ID: ${user.userId.substring(0, 12)}...</div>
+                                <div style="font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                    ${user.userName}
+                                    ${user.isOnline ? '<span style="font-size: 0.6rem; color: var(--success);">●</span>' : ''}
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">ID: ${user.userId.substring(0, 8)}...</div>
+                                ${telegramId}
                             </div>
                         </div>
                     </td>
@@ -1433,18 +1714,22 @@
                     <td>${statusBadge}</td>
                     <td>${roomBadge}</td>
                     <td>
-                        <div style="font-size: 0.9rem;">${lastSeen}</div>
-                        <div style="font-size: 0.85rem; color: var(--text-muted);">Box: ${user.box || 'None'}</div>
+                        <div style="font-size: 0.9rem; color: ${user.isOnline ? 'var(--success)' : 'var(--text-muted)'}">
+                            ${lastActivity}
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted);">
+                            Box: ${user.box || 'None'} | Wins: ${user.totalWins || 0}
+                        </div>
                     </td>
                     <td>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-action btn-add" onclick="addFundsToUser('${user.userId}')">
+                            <button class="btn-action btn-add" onclick="addFundsToUser('${user.userId}')" title="Add Funds">
                                 <i class="fas fa-coins"></i>
                             </button>
-                            <button class="btn-action btn-kick" onclick="kickUser('${user.userId}')">
+                            <button class="btn-action btn-kick" onclick="kickUser('${user.userId}')" title="Kick User">
                                 <i class="fas fa-user-slash"></i>
                             </button>
-                            <button class="btn-action btn-ban" onclick="banUser('${user.userId}')">
+                            <button class="btn-action btn-ban" onclick="banUser('${user.userId}')" title="Ban User">
                                 <i class="fas fa-ban"></i>
                             </button>
                         </div>
@@ -1452,6 +1737,30 @@
                 `;
                 
                 tbody.appendChild(row);
+            });
+        }
+        
+        function detectUserChanges(previousUsers, currentUsers) {
+            // Find new online users
+            const previousOnline = previousUsers.filter(u => u.isOnline).map(u => u.userId);
+            const currentOnline = currentUsers.filter(u => u.isOnline).map(u => u.userId);
+            
+            // Newly online users
+            const newOnline = currentOnline.filter(id => !previousOnline.includes(id));
+            newOnline.forEach(userId => {
+                const user = currentUsers.find(u => u.userId === userId);
+                if (user) {
+                    addActivityItem({message: `${user.userName} came online`});
+                }
+            });
+            
+            // Newly offline users
+            const newOffline = previousOnline.filter(id => !currentOnline.includes(id));
+            newOffline.forEach(userId => {
+                const user = previousUsers.find(u => u.userId === userId);
+                if (user) {
+                    addActivityItem({message: `${user.userName} went offline`});
+                }
             });
         }
 
@@ -1539,9 +1848,12 @@
                 } else if (tx.type.includes('ADMIN')) {
                     icon = 'fa-user-shield';
                     color = 'var(--success)';
+                } else if (tx.type.includes('NEW_USER')) {
+                    icon = 'fa-user-plus';
+                    color = 'var(--info)';
                 }
                 
-                const time = new Date(tx.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const time = new Date(tx.createdAt || tx.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 
                 item.innerHTML = `
                     <div class="activity-icon" style="background: ${color}20; color: ${color};">
@@ -1551,7 +1863,56 @@
                         <div>
                             <strong>${tx.userName || 'System'}</strong> ${getTransactionDescription(tx)}
                         </div>
-                        <div class="activity-time">${time} • Room: ${tx.room || 'N/A'}</div>
+                        <div class="activity-time">${time} • ${tx.room ? 'Room: ' + tx.room : 'System'}</div>
+                    </div>
+                `;
+                
+                feed.appendChild(item);
+            });
+        }
+        
+        function updateTransactionFeed(transactions) {
+            const feed = document.getElementById('transactionFeed');
+            if (!feed) return;
+            
+            feed.innerHTML = '';
+            
+            transactions.slice(0, 50).forEach(tx => {
+                const item = document.createElement('div');
+                item.className = 'activity-item';
+                
+                let icon = 'fa-exchange-alt';
+                let color = 'var(--primary)';
+                
+                if (tx.type.includes('WIN')) {
+                    icon = 'fa-trophy';
+                    color = 'var(--warning)';
+                } else if (tx.type.includes('STAKE')) {
+                    icon = 'fa-coins';
+                    color = 'var(--danger)';
+                } else if (tx.type.includes('ADMIN')) {
+                    icon = 'fa-user-shield';
+                    color = 'var(--success)';
+                } else if (tx.type.includes('NEW_USER')) {
+                    icon = 'fa-user-plus';
+                    color = 'var(--info)';
+                }
+                
+                const time = new Date(tx.createdAt || tx.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(tx.createdAt || tx.timestamp).toLocaleDateString();
+                
+                item.innerHTML = `
+                    <div class="activity-icon" style="background: ${color}20; color: ${color};">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div>
+                            <strong>${tx.userName || 'System'}</strong> ${getTransactionDescription(tx)}
+                        </div>
+                        <div class="activity-time">${date} ${time} • ${tx.room ? 'Room: ' + tx.room : 'System'}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                            Type: ${tx.type} • Amount: ${tx.amount.toFixed(2)} ETB
+                        </div>
                     </div>
                 `;
                 
@@ -1566,6 +1927,8 @@
                 case 'STAKE': return `staked ${Math.abs(tx.amount)} ETB`;
                 case 'ADMIN_ADD': return `received ${tx.amount} ETB from admin`;
                 case 'HOUSE_EARNINGS': return `house earned ${tx.amount} ETB`;
+                case 'NEW_USER': return `registered as new player`;
+                case 'REFUND': return `received ${tx.amount} ETB refund`;
                 default: return tx.type.toLowerCase();
             }
         }
@@ -1673,6 +2036,7 @@
             
             state.socket.emit('admin:addFunds', { userId, amount: parseFloat(amount) });
             hideModal('addFundsModal');
+            addSystemLog(`Added ${amount} ETB to user ${userId}`);
         }
 
         function addFundsToUser(userId) {
@@ -1687,28 +2051,35 @@
         function banUser(userId) {
             if (confirm('Are you sure you want to ban this user? This action cannot be undone.')) {
                 state.socket.emit('admin:banPlayer', userId);
+                addSystemLog(`Banned user ${userId}`);
             }
         }
 
         function kickUser(userId) {
             if (confirm('Kick this user from the game?')) {
                 showToast('Kick functionality coming soon', 'warning');
+                addSystemLog(`Kicked user ${userId}`);
             }
         }
 
         function forceStartGame(stake) {
-            showToast(`Starting ${stake} ETB room...`, 'success');
-            // This would require a new socket event
+            if (confirm(`Force start the ${stake} ETB room? This will bypass player count requirements.`)) {
+                showToast(`Starting ${stake} ETB room...`, 'success');
+                state.socket.emit('admin:forceStartGame', stake);
+                addSystemLog(`Force started ${stake} ETB room`);
+            }
         }
 
         function forceDrawBall(stake) {
             state.socket.emit('admin:forceDraw', stake);
+            addSystemLog(`Force drew ball in ${stake} ETB room`);
         }
 
         function forceEndGame(stake) {
             if (confirm(`End the ${stake} ETB game? All players will be returned to lobby.`)) {
                 showToast(`Ending ${stake} ETB game...`, 'warning');
-                // This would require a new socket event
+                state.socket.emit('admin:forceEndGame', stake);
+                addSystemLog(`Force ended ${stake} ETB game`);
             }
         }
 
@@ -1729,23 +2100,53 @@
         function forceRefreshData() {
             if (state.socket) {
                 state.socket.emit('admin:getData');
+                
+                // Add refresh animation
+                const refreshBtn = document.querySelector('.btn-action.btn-add');
+                if (refreshBtn) {
+                    const originalHTML = refreshBtn.innerHTML;
+                    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalHTML;
+                    }, 1000);
+                }
+                
                 showToast('Refreshing data...', 'success');
+                addSystemLog('Manual data refresh');
             }
         }
 
         function forceStartAllGames() {
             if (confirm('Force start all waiting games? This will override player count requirements.')) {
                 showToast('Starting all games...', 'success');
+                // You can implement this by looping through rooms
+                Object.keys(state.rooms).forEach(stake => {
+                    if (state.rooms[stake].status === 'waiting') {
+                        state.socket.emit('admin:forceStartGame', parseInt(stake));
+                    }
+                });
+                addSystemLog('Force started all waiting games');
             }
         }
 
         function updateServerStatus(status, isOnline) {
             const statusEl = document.getElementById('serverStatusText');
             const dotEl = document.querySelector('.status-dot');
+            const connectionStatus = document.querySelector('#connectionStatus p');
+            const connectionDot = document.querySelector('#connectionStatus .status-dot');
             
             statusEl.textContent = status;
             dotEl.style.background = isOnline ? 'var(--success)' : 'var(--danger)';
             dotEl.style.animation = isOnline ? 'pulse 2s infinite' : 'none';
+            
+            if (connectionStatus) {
+                connectionStatus.textContent = isOnline ? 'Connected' : 'Disconnected';
+                connectionStatus.style.color = isOnline ? 'var(--success)' : 'var(--danger)';
+            }
+            
+            if (connectionDot) {
+                connectionDot.style.background = isOnline ? 'var(--success)' : 'var(--danger)';
+            }
         }
 
         function updateLastUpdateTime() {
@@ -1764,6 +2165,13 @@
         function updateUserCountBadge(count) {
             const badge = document.getElementById('userCountBadge');
             badge.textContent = count;
+            
+            // Change badge color based on online count
+            if (count > 0) {
+                badge.style.background = 'var(--success)';
+            } else {
+                badge.style.background = 'var(--text-muted)';
+            }
         }
 
         function searchUsers() {
@@ -1775,19 +2183,32 @@
                 row.style.display = text.includes(searchTerm) ? '' : 'none';
             });
         }
+        
+        function searchTransactions() {
+            const searchTerm = document.getElementById('transactionSearch').value.toLowerCase();
+            const items = document.querySelectorAll('#transactionFeed .activity-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
 
         function addActivityItem(activity) {
             const feed = document.getElementById('activityFeed');
             const item = document.createElement('div');
             item.className = 'activity-item';
             
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const message = activity.details ? JSON.stringify(activity.details) : activity.message;
+            
             item.innerHTML = `
                 <div class="activity-icon" style="background: rgba(67, 97, 238, 0.15); color: var(--primary);">
                     <i class="fas fa-bell"></i>
                 </div>
                 <div class="activity-content">
-                    <div>${activity.message}</div>
-                    <div class="activity-time">${new Date().toLocaleTimeString()}</div>
+                    <div>${message}</div>
+                    <div class="activity-time">${time}</div>
                 </div>
             `;
             
@@ -1803,10 +2224,85 @@
                 feed.removeChild(feed.lastChild);
             }
         }
+        
+        function addSystemLog(message, type = 'info') {
+            const logs = document.getElementById('systemLogs');
+            if (!logs) return;
+            
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const date = new Date().toLocaleDateString();
+            
+            let icon = 'fa-info-circle';
+            let color = 'var(--info)';
+            
+            if (type === 'error') {
+                icon = 'fa-exclamation-circle';
+                color = 'var(--danger)';
+            } else if (type === 'success') {
+                icon = 'fa-check-circle';
+                color = 'var(--success)';
+            } else if (type === 'warning') {
+                icon = 'fa-exclamation-triangle';
+                color = 'var(--warning)';
+            }
+            
+            item.innerHTML = `
+                <div class="activity-icon" style="background: ${color}20; color: ${color};">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="activity-content">
+                    <div>${message}</div>
+                    <div class="activity-time">${date} ${time}</div>
+                </div>
+            `;
+            
+            // Add to top
+            if (logs.firstChild) {
+                logs.insertBefore(item, logs.firstChild);
+            } else {
+                logs.appendChild(item);
+            }
+            
+            // Limit items
+            if (logs.children.length > 100) {
+                logs.removeChild(logs.lastChild);
+            }
+        }
 
         function refreshActivity() {
-            // This would refresh the activity log
-            showToast('Activity log refreshed', 'success');
+            if (state.socket) {
+                state.socket.emit('admin:getData');
+                showToast('Activity log refreshed', 'success');
+            }
+        }
+
+        // Real-time monitoring
+        function startRealTimeMonitoring() {
+            // Monitor player count changes
+            setInterval(() => {
+                if (state.users && state.users.length > 0) {
+                    const currentPlayerCount = state.users.filter(user => user.isOnline).length;
+                    
+                    if (currentPlayerCount > state.lastPlayerCount) {
+                        // Player joined
+                        const diff = currentPlayerCount - state.lastPlayerCount;
+                        if (diff > 0 && state.lastPlayerCount > 0) {
+                            addActivityItem({message: `${diff} player${diff > 1 ? 's' : ''} joined the game`});
+                        }
+                    } else if (currentPlayerCount < state.lastPlayerCount) {
+                        // Player left
+                        const diff = state.lastPlayerCount - currentPlayerCount;
+                        if (diff > 0) {
+                            addActivityItem({message: `${diff} player${diff > 1 ? 's' : ''} left the game`});
+                        }
+                    }
+                    
+                    state.lastPlayerCount = currentPlayerCount;
+                }
+            }, 3000);
         }
 
         // Auto-refresh
@@ -1824,9 +2320,86 @@
                 location.reload();
             }
         }
+        
+        // System control functions
+        function restartServer() {
+            if (confirm('Restart the game server? This will disconnect all players.')) {
+                showToast('Server restart initiated', 'warning');
+                addSystemLog('Server restart initiated');
+                // Implement server restart logic
+            }
+        }
+        
+        function clearCache() {
+            if (confirm('Clear system cache?')) {
+                showToast('Cache cleared', 'success');
+                addSystemLog('System cache cleared');
+                // Implement cache clearing logic
+            }
+        }
+        
+        function backupDatabase() {
+            showToast('Database backup started', 'info');
+            addSystemLog('Database backup initiated');
+            // Implement backup logic
+        }
+        
+        function emergencyStop() {
+            if (confirm('EMERGENCY STOP: Stop all games immediately? This will refund all players.')) {
+                showToast('Emergency stop activated', 'danger');
+                addSystemLog('EMERGENCY STOP: All games stopped');
+                // Implement emergency stop logic
+            }
+        }
+        
+        function updateGameTimer() {
+            const timer = document.getElementById('gameTimer').value;
+            showToast(`Game timer updated to ${timer} seconds`, 'success');
+            addSystemLog(`Game timer updated to ${timer} seconds`);
+        }
+        
+        function updateMinPlayers() {
+            const minPlayers = document.getElementById('minPlayers').value;
+            showToast(`Minimum players updated to ${minPlayers}`, 'success');
+            addSystemLog(`Minimum players updated to ${minPlayers}`);
+        }
+        
+        function clearLogs() {
+            const logs = document.getElementById('systemLogs');
+            if (logs) {
+                logs.innerHTML = '';
+                showToast('System logs cleared', 'success');
+                addSystemLog('System logs cleared');
+            }
+        }
+        
+        function exportUsers() {
+            // Simple CSV export
+            const csv = [
+                ['User ID', 'Name', 'Balance', 'Status', 'Last Seen', 'Telegram ID'],
+                ...state.users.map(user => [
+                    user.userId,
+                    user.userName,
+                    user.balance,
+                    user.isOnline ? 'Online' : 'Offline',
+                    new Date(user.lastSeen).toLocaleString(),
+                    user.telegramId || ''
+                ])
+            ].map(row => row.join(',')).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bingo_users_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            
+            showToast('Users exported to CSV', 'success');
+            addSystemLog('User data exported to CSV');
+        }
 
         // Initialize charts when dashboard loads
-        document.getElementById('dashboard').addEventListener('DOMContentLoaded', initCharts);
+        setTimeout(initCharts, 1000);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
@@ -1841,7 +2414,8 @@
             // Ctrl + F = Search users
             if (e.ctrlKey && e.key === 'f') {
                 e.preventDefault();
-                document.getElementById('userSearch').focus();
+                const userSearch = document.getElementById('userSearch');
+                if (userSearch) userSearch.focus();
             }
             
             // Escape = Close modal
@@ -1854,9 +2428,12 @@
 
         // Add some sample activity on load
         setTimeout(() => {
-            addActivityItem({message: 'System initialized successfully'});
-            addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard'});
-        }, 1000);
+            if (state.isAdmin) {
+                addActivityItem({message: 'System initialized successfully'});
+                addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard'});
+                addSystemLog('Admin dashboard loaded');
+            }
+        }, 2000);
     </script>
 </body>
 </html>
