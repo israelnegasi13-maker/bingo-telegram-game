@@ -1,4 +1,4 @@
-// server.js - COMPLETE REAL-TIME FIXED VERSION
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const mongoose = require('mongoose');
+const fs = require('fs');
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo', {
@@ -33,7 +34,8 @@ const userSchema = new mongoose.Schema({
   joinedAt: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
-  sessionCount: { type: Number, default: 0 }
+  sessionCount: { type: Number, default: 0 },
+  telegramId: { type: String }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -87,7 +89,7 @@ const Stats = mongoose.model('Stats', statsSchema);
 const app = express();
 const server = http.createServer(app);
 
-// ========== FIXED SOCKET.IO CONFIGURATION ==========
+// ========== SOCKET.IO CONFIGURATION ==========
 const io = socketIo(server, {
   cors: {
     origin: "*",
@@ -123,6 +125,8 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
   res.header('Access-Control-Allow-Methods', '*');
+  res.header('Content-Security-Policy', "frame-ancestors 'self' https://*.telegram.org https://web.telegram.org");
+  res.header('X-Frame-Options', 'ALLOW-FROM https://*.telegram.org');
   next();
 });
 
@@ -191,7 +195,8 @@ async function getUser(userId, userName) {
         userId: userId,
         userName: userName || 'Guest',
         balance: CONFIG.INITIAL_BALANCE,
-        referralCode: generateReferralCode(userId)
+        referralCode: generateReferralCode(userId),
+        telegramId: userId
       });
       await user.save();
     } else {
@@ -368,6 +373,112 @@ function logActivity(type, details, adminSocketId = null) {
       socket.emit('admin:activity', activity);
     }
   });
+}
+
+// ========== GAME LOGIC FUNCTIONS ==========
+async function startGameTimer(room) {
+  if (roomTimers.has(room.stake)) {
+    clearInterval(roomTimers.get(room.stake));
+  }
+  
+  const timer = setInterval(async () => {
+    try {
+      const currentRoom = await Room.findById(room._id);
+      if (!currentRoom || currentRoom.status !== 'playing') {
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        return;
+      }
+      
+      if (currentRoom.ballsDrawn >= 75) {
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        return;
+      }
+      
+      let ball;
+      let letter;
+      do {
+        ball = Math.floor(Math.random() * 75) + 1;
+        letter = getBingoLetter(ball);
+      } while (currentRoom.calledNumbers.includes(ball));
+      
+      currentRoom.calledNumbers.push(ball);
+      currentRoom.currentBall = ball;
+      currentRoom.ballsDrawn += 1;
+      await currentRoom.save();
+      
+      const ballData = {
+        room: currentRoom.stake,
+        num: ball,
+        letter: letter
+      };
+      
+      // Emit to all players in room
+      currentRoom.players.forEach(userId => {
+        for (const [socketId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('ballDrawn', ballData);
+            }
+          }
+        }
+      });
+      
+      broadcastRoomStatus();
+      
+    } catch (error) {
+      console.error('Error in game timer:', error);
+      clearInterval(timer);
+      roomTimers.delete(room.stake);
+    }
+  }, CONFIG.GAME_TIMER * 1000);
+  
+  roomTimers.set(room.stake, timer);
+}
+
+// Check if a player has bingo
+function checkBingo(markedNumbers, grid) {
+  const patterns = [
+    // Rows
+    [0,1,2,3,4],
+    [5,6,7,8,9],
+    [10,11,12,13,14],
+    [15,16,17,18,19],
+    [20,21,22,23,24],
+    
+    // Columns
+    [0,5,10,15,20],
+    [1,6,11,16,21],
+    [2,7,12,17,22],
+    [3,8,13,18,23],
+    [4,9,14,19,24],
+    
+    // Diagonals
+    [0,6,12,18,24],
+    [4,8,12,16,20],
+    
+    // Four corners
+    [0,4,20,24]
+  ];
+  
+  for (const pattern of patterns) {
+    const isBingo = pattern.every(index => {
+      const cellValue = grid[index];
+      return markedNumbers.includes(cellValue) || cellValue === 'FREE';
+    });
+    
+    if (isBingo) {
+      return {
+        isBingo: true,
+        pattern: pattern,
+        isFourCorners: pattern.length === 4 && pattern[0] === 0 && pattern[1] === 4 && pattern[2] === 20 && pattern[3] === 24
+      };
+    }
+  }
+  
+  return { isBingo: false };
 }
 
 // ========== SOCKET.IO EVENT HANDLERS ==========
@@ -572,8 +683,155 @@ io.on('connection', (socket) => {
   });
   
   socket.on('claimBingo', async (data) => {
-    // Add your bingo claim logic here
-    console.log('Bingo claimed:', data);
+    try {
+      const { room, grid, marked } = data;
+      const userId = socketToUser.get(socket.id);
+      
+      if (!userId) {
+        socket.emit('error', 'Player not initialized');
+        return;
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      if (!user) {
+        socket.emit('error', 'User not found');
+        return;
+      }
+      
+      const roomData = await Room.findOne({ stake: parseInt(room), status: 'playing' });
+      if (!roomData) {
+        socket.emit('error', 'Game not found or not in progress');
+        return;
+      }
+      
+      if (!roomData.players.includes(userId)) {
+        socket.emit('error', 'You are not in this game');
+        return;
+      }
+      
+      // Check if bingo is valid
+      const bingoCheck = checkBingo(marked, grid);
+      if (!bingoCheck.isBingo) {
+        socket.emit('error', 'Invalid bingo claim');
+        return;
+      }
+      
+      const isFourCornersWin = bingoCheck.isFourCorners;
+      const commission = CONFIG.HOUSE_COMMISSION[room] || 0;
+      const contribution = room - commission;
+      const prizePool = contribution * roomData.players.length;
+      
+      // Calculate winnings
+      let prize = prizePool;
+      let bonus = 0;
+      
+      if (isFourCornersWin) {
+        bonus = CONFIG.FOUR_CORNERS_BONUS;
+        prize += bonus;
+      }
+      
+      // Update user balance
+      user.balance += prize;
+      user.totalWins = (user.totalWins || 0) + 1;
+      user.totalBingos = (user.totalBingos || 0) + 1;
+      user.currentRoom = null;
+      user.box = null;
+      await user.save();
+      
+      // Record transaction
+      const transaction = new Transaction({
+        type: isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN',
+        userId: userId,
+        userName: user.userName,
+        amount: prize,
+        room: room,
+        description: `Bingo win in ${room} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
+      });
+      await transaction.save();
+      
+      // Record house earnings
+      const houseEarnings = commission * roomData.players.length;
+      const houseTransaction = new Transaction({
+        type: 'HOUSE_EARNINGS',
+        userId: 'HOUSE',
+        userName: 'House',
+        amount: houseEarnings,
+        room: room,
+        description: `Commission from ${roomData.players.length} players in ${room} ETB room`
+      });
+      await houseTransaction.save();
+      
+      // Update room
+      roomData.status = 'ended';
+      roomData.endTime = new Date();
+      roomData.gameHistory.push({
+        timestamp: new Date(),
+        winner: userId,
+        winnerName: user.userName,
+        prize: prize,
+        players: roomData.players.length,
+        ballsDrawn: roomData.ballsDrawn,
+        isFourCorners: isFourCornersWin
+      });
+      await roomData.save();
+      
+      // Notify all players in the room
+      roomData.players.forEach(playerUserId => {
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === playerUserId) {
+            const s = io.sockets.sockets.get(sId);
+            if (s) {
+              if (uId === userId) {
+                // Winner
+                s.emit('gameOver', {
+                  room: room,
+                  winnerId: userId,
+                  winnerName: user.userName,
+                  prize: prize,
+                  bonus: bonus,
+                  isFourCornersWin: isFourCornersWin
+                });
+                s.emit('balanceUpdate', user.balance);
+              } else {
+                // Loser
+                s.emit('gameOver', {
+                  room: room,
+                  winnerId: userId,
+                  winnerName: user.userName,
+                  prize: prize,
+                  bonus: bonus,
+                  isFourCornersWin: isFourCornersWin
+                });
+                
+                // Reset their room status
+                User.findOneAndUpdate(
+                  { userId: uId },
+                  { 
+                    currentRoom: null,
+                    box: null,
+                    isOnline: true,
+                    lastSeen: new Date()
+                  }
+                ).catch(console.error);
+              }
+            }
+          }
+        }
+      });
+      
+      // Clear game timer
+      if (roomTimers.has(room)) {
+        clearInterval(roomTimers.get(room));
+        roomTimers.delete(room);
+      }
+      
+      broadcastRoomStatus();
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error in claimBingo:', error);
+      socket.emit('error', 'Server error processing bingo claim');
+    }
   });
   
   // ========== ADMIN EVENTS ==========
@@ -613,6 +871,17 @@ io.on('connection', (socket) => {
     const oldBalance = user.balance;
     user.balance += parseFloat(amount);
     await user.save();
+    
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'ADMIN_ADD',
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      admin: true,
+      description: `Admin added ${amount} ETB`
+    });
+    await transaction.save();
     
     // Notify player if online
     for (const [sId, uId] of socketToUser.entries()) {
@@ -674,6 +943,33 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('admin:banPlayer', async (userId) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      socket.emit('admin:error', 'User not found');
+      return;
+    }
+    
+    // Notify the user if online
+    for (const [sId, uId] of socketToUser.entries()) {
+      if (uId === userId) {
+        const playerSocket = io.sockets.sockets.get(sId);
+        if (playerSocket) {
+          playerSocket.emit('banned');
+          playerSocket.disconnect();
+        }
+      }
+    }
+    
+    socket.emit('admin:success', `Banned user ${user.userName}`);
+    updateAdminPanel();
+  });
+  
   socket.on('disconnect', () => {
     console.log(`❌ Socket.IO Disconnected: ${socket.id}`);
     connectedSockets.delete(socket.id);
@@ -702,69 +998,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ========== GAME TIMER FUNCTION ==========
-async function startGameTimer(room) {
-  if (roomTimers.has(room.stake)) {
-    clearInterval(roomTimers.get(room.stake));
-  }
-  
-  const timer = setInterval(async () => {
-    try {
-      const currentRoom = await Room.findById(room._id);
-      if (!currentRoom || currentRoom.status !== 'playing') {
-        clearInterval(timer);
-        roomTimers.delete(room.stake);
-        return;
-      }
-      
-      if (currentRoom.ballsDrawn >= 75) {
-        clearInterval(timer);
-        roomTimers.delete(room.stake);
-        return;
-      }
-      
-      let ball;
-      let letter;
-      do {
-        ball = Math.floor(Math.random() * 75) + 1;
-        letter = getBingoLetter(ball);
-      } while (currentRoom.calledNumbers.includes(ball));
-      
-      currentRoom.calledNumbers.push(ball);
-      currentRoom.currentBall = ball;
-      currentRoom.ballsDrawn += 1;
-      await currentRoom.save();
-      
-      const ballData = {
-        room: currentRoom.stake,
-        num: ball,
-        letter: letter
-      };
-      
-      // Emit to all players in room
-      currentRoom.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.emit('ballDrawn', ballData);
-            }
-          }
-        }
-      });
-      
-      broadcastRoomStatus();
-      
-    } catch (error) {
-      console.error('Error in game timer:', error);
-      clearInterval(timer);
-      roomTimers.delete(room.stake);
-    }
-  }, CONFIG.GAME_TIMER * 1000);
-  
-  roomTimers.set(room.stake, timer);
-}
-
 // ========== PERIODIC TASKS ==========
 setInterval(() => {
   broadcastRoomStatus();
@@ -776,7 +1009,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Bingo Elite Server</title>
+      <title>Bingo Elite Server - Telegram Mini App</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -795,8 +1028,8 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Server</h1>
-        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Socket.IO Active</p>
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Telegram Mini App</h1>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Ready for Telegram</p>
         
         <div class="status">
           <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
@@ -812,7 +1045,7 @@ app.get('/', (req, res) => {
           </div>
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB!</p>
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
-          <p style="color: #64748b;">Real-time updates: ✅ Active</p>
+          <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -823,17 +1056,18 @@ app.get('/', (req, res) => {
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
-            <a href="/socket-test" class="btn" style="background: #8b5cf6;" target="_blank">🔌 Socket Test</a>
+            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
           </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-          <h4>System Information</h4>
+          <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.0.0 (Real-Time Fixed) | Database: MongoDB Atlas<br>
+            Version: 2.0.0 (Telegram Ready) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
-            Room Stakes: ${CONFIG.ROOM_STAKES.join(', ')} ETB<br>
-            Game Timer: ${CONFIG.GAME_TIMER}s between balls
+            Telegram Integration: ✅ Ready<br>
+            Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
+            Bot Username: YourBingoBot_bot
           </p>
         </div>
       </div>
@@ -845,6 +1079,125 @@ app.get('/', (req, res) => {
           document.getElementById('playerCount').textContent = 'Connected';
         });
       </script>
+    </body>
+    </html>
+  `);
+});
+
+// Telegram Mini App entry point
+app.get('/telegram', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Bingo Elite - Telegram Mini App</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                background: #0f172a;
+                color: white;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .container {
+                padding: 20px;
+                max-width: 500px;
+            }
+            
+            .logo {
+                font-size: 3rem;
+                margin-bottom: 20px;
+                color: #fbbf24;
+            }
+            
+            .btn {
+                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 15px;
+                font-size: 1.2rem;
+                font-weight: bold;
+                cursor: pointer;
+                margin: 20px 0;
+                text-decoration: none;
+                display: inline-block;
+            }
+            
+            .btn:hover {
+                transform: scale(1.05);
+            }
+            
+            .info {
+                background: rgba(255,255,255,0.1);
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
+                font-size: 0.9rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">🎮</div>
+            <h1>Bingo Elite</h1>
+            <p>Play real-time Bingo with players worldwide on Telegram!</p>
+            
+            <div class="info">
+                <p><strong>💰 Win Real Money</strong></p>
+                <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
+                <p><strong>👥 Play with 100 players per room</strong></p>
+                <p><strong>🤖 Telegram Mini App Integrated</strong></p>
+            </div>
+            
+            <a href="/game" class="btn" id="playBtn">LAUNCH GAME</a>
+            
+            <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
+                <p>Powered by Telegram Mini Apps</p>
+                <p>Stakes: 10, 20, 50, 100 ETB</p>
+                <p>Minimum 2 players to start</p>
+            </div>
+        </div>
+        
+        <script>
+            // Initialize Telegram Web App
+            const tg = window.Telegram.WebApp;
+            
+            // Expand the app to full height
+            if (tg && tg.expand) {
+                tg.expand();
+                tg.setHeaderColor('#3b82f6');
+                tg.setBackgroundColor('#0f172a');
+            }
+            
+            // Get user info
+            const user = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+            
+            if (user) {
+                document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
+            }
+            
+            // Add haptic feedback
+            function vibrate() {
+                if (tg && tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+            }
+            
+            // Add click feedback
+            document.getElementById('playBtn').addEventListener('click', vibrate);
+        </script>
     </body>
     </html>
   `);
@@ -902,7 +1255,7 @@ app.get('/socket-test', (req, res) => {
           log.scrollTop = log.scrollHeight;
         }
         
-        // Configure Socket.IO with the same settings as game.html
+        // Configure Socket.IO
         const socket = io({
           reconnection: true,
           reconnectionAttempts: Infinity,
@@ -990,6 +1343,7 @@ app.get('/health', async (req, res) => {
     const connectedPlayers = Array.from(socketToUser.keys()).length;
     const activeGames = await Room.countDocuments({ status: 'playing' });
     const totalUsers = await User.countDocuments();
+    const rooms = await Room.countDocuments();
     
     res.json({
       status: 'ok',
@@ -998,10 +1352,70 @@ app.get('/health', async (req, res) => {
       connectedSockets: connectedSockets.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
+      totalRooms: rooms,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       memoryUsage: process.memoryUsage(),
-      nodeVersion: process.version
+      nodeVersion: process.version,
+      telegramReady: true,
+      serverUrl: process.env.SERVER_URL || 'Not set'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get user balance
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findOne({ userId: req.params.userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      userId: user.userId,
+      userName: user.userName,
+      balance: user.balance,
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to add funds (for admin)
+app.post('/api/add-funds', async (req, res) => {
+  try {
+    const { userId, amount, adminPassword } = req.body;
+    
+    if (adminPassword !== CONFIG.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.balance += parseFloat(amount);
+    await user.save();
+    
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'ADMIN_ADD',
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      admin: true,
+      description: `Admin added ${amount} ETB via API`
+    });
+    await transaction.save();
+    
+    res.json({
+      success: true,
+      message: `Added ${amount} ETB to ${user.userName}`,
+      newBalance: user.balance
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1013,18 +1427,20 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║                🚀 BINGO ELITE SERVER                ║
+║             🤖 BINGO ELITE - TELEGRAM READY         ║
 ╠══════════════════════════════════════════════════════╣
 ║  Port:          ${PORT.toString().padEnd(40)}║
 ║  Database:      MongoDB Atlas                       ║
 ║  Socket.IO:     ✅ REAL-TIME ENABLED               ║
+║  Telegram:      ✅ MINI APP READY                  ║
 ║  Admin Panel:   http://localhost:${PORT}/admin        ║
 ║  Game Client:   http://localhost:${PORT}/game         ║
-║  Socket Test:   http://localhost:${PORT}/socket-test  ║
+║  Telegram Entry: http://localhost:${PORT}/telegram     ║
 ╠══════════════════════════════════════════════════════╣
-║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'Not Set'} ║
-║  📡 WebSocket: ✅ Ready for real-time connections   ║
+║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
+║  📡 WebSocket: ✅ Ready for Telegram connections    ║
+║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready with real-time Socket.IO support
+✅ Server ready for Telegram Mini App integration
   `);
 });
