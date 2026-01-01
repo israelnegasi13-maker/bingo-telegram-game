@@ -34,7 +34,9 @@ const userSchema = new mongoose.Schema({
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
   sessionCount: { type: Number, default: 0 },
-  telegramId: { type: String }
+  telegramId: { type: String, unique: true, sparse: true },
+  telegramUsername: { type: String },
+  languageCode: { type: String, default: 'en' }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -195,7 +197,7 @@ async function getUser(userId, userName) {
         userName: userName || 'Guest',
         balance: CONFIG.INITIAL_BALANCE,
         referralCode: generateReferralCode(userId),
-        telegramId: userId
+        telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null
       });
       await user.save();
       
@@ -1172,7 +1174,7 @@ app.get('/', (req, res) => {
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
-            Bot Username: YourBingoBot_bot
+            Bot Username: @ethio_games1_bot
           </p>
         </div>
       </div>
@@ -1260,16 +1262,16 @@ app.get('/telegram', (req, res) => {
             <p>Play real-time Bingo with players worldwide on Telegram!</p>
             
             <div class="info">
-                <p><strong>💰 Win Real Money</strong></p>
+                <p><strong>💰 Win Real Money in ETB</strong></p>
                 <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
                 <p><strong>👥 Play with 100 players per room</strong></p>
                 <p><strong>🤖 Telegram Mini App Integrated</strong></p>
             </div>
             
-            <a href="/game" class="btn" id="playBtn">LAUNCH GAME</a>
+            <button class="btn" id="playBtn">LAUNCH GAME</button>
             
             <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
-                <p>Powered by Telegram Mini Apps</p>
+                <p>Bot: @ethio_games1_bot</p>
                 <p>Stakes: 10, 20, 50, 100 ETB</p>
                 <p>Minimum 2 players to start</p>
             </div>
@@ -1280,28 +1282,47 @@ app.get('/telegram', (req, res) => {
             const tg = window.Telegram.WebApp;
             
             // Expand the app to full height
-            if (tg && tg.expand) {
-                tg.expand();
-                tg.setHeaderColor('#3b82f6');
-                tg.setBackgroundColor('#0f172a');
-            }
+            tg.ready();
+            tg.expand();
             
-            // Get user info
-            const user = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+            // Set Telegram theme colors
+            tg.setHeaderColor('#3b82f6');
+            tg.setBackgroundColor('#0f172a');
+            
+            // Get user info from Telegram
+            const user = tg.initDataUnsafe?.user;
             
             if (user) {
                 document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
+                
+                // Store user info for game
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                }));
             }
             
-            // Add haptic feedback
-            function vibrate() {
+            // Launch game
+            document.getElementById('playBtn').addEventListener('click', function() {
+                // Add haptic feedback
                 if (tg && tg.HapticFeedback) {
                     tg.HapticFeedback.impactOccurred('light');
                 }
-            }
+                
+                // Redirect to game
+                window.location.href = '/game';
+            });
             
-            // Add click feedback
-            document.getElementById('playBtn').addEventListener('click', vibrate);
+            // Add Telegram Main Button if available
+            if (tg && tg.MainButton) {
+                tg.MainButton.setText('🎮 PLAY BINGO');
+                tg.MainButton.show();
+                tg.MainButton.onClick(function() {
+                    window.location.href = '/game';
+                });
+            }
         </script>
     </body>
     </html>
@@ -1465,6 +1486,7 @@ app.get('/health', async (req, res) => {
       memoryUsage: process.memoryUsage(),
       nodeVersion: process.version,
       telegramReady: true,
+      botUsername: '@ethio_games1_bot',
       serverUrl: 'https://bingo-telegram-game.onrender.com'
     });
   } catch (error) {
@@ -1484,7 +1506,8 @@ app.get('/api/user/:userId', async (req, res) => {
       userName: user.userName,
       balance: user.balance,
       isOnline: user.isOnline,
-      lastSeen: user.lastSeen
+      lastSeen: user.lastSeen,
+      telegramId: user.telegramId
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1529,6 +1552,205 @@ app.post('/api/add-funds', async (req, res) => {
   }
 });
 
+// ========== TELEGRAM BOT INTEGRATION ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
+
+// Simple Telegram webhook
+app.post('/telegram-webhook', express.json(), async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (message) {
+      const chatId = message.chat.id;
+      const text = message.text || '';
+      const userId = message.from.id.toString();
+      const userName = message.from.first_name || 'Player';
+      const username = message.from.username || '';
+      
+      if (text === '/start' || text === '/play') {
+        // Check if user exists, create if not
+        let user = await User.findOne({ telegramId: userId });
+        
+        if (!user) {
+          user = new User({
+            userId: `tg_${userId}`,
+            userName: userName,
+            telegramId: userId,
+            telegramUsername: username,
+            balance: 0.00,
+            referralCode: `TG${userId}`
+          });
+          await user.save();
+          
+          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+        }
+        
+        // Send welcome message with game button
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
+                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
+                  `🎯 *Features:*\n` +
+                  `• 10/20/50/100 ETB rooms\n` +
+                  `• Four Corners Bonus: 50 ETB\n` +
+                  `• Real-time multiplayer\n` +
+                  `• Telegram login\n\n` +
+                  `_Need funds? Contact admin_`,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                {
+                  text: '🎮 Play Bingo Now',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                }
+              ]]
+            }
+          })
+        });
+      }
+      else if (text === '/balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance : 0;
+        
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
+                  `🎮 Play: @ethio_games1_bot\n` +
+                  `👑 Admin: Contact for funds\n` +
+                  `🆔 Your ID: \`${userId}\``,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+      else if (text === '/help') {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Bingo Elite Help*\n\n` +
+                  `*Commands:*\n` +
+                  `/start - Start the bot\n` +
+                  `/play - Play game\n` +
+                  `/balance - Check balance\n` +
+                  `/help - This message\n\n` +
+                  `*How to Play:*\n` +
+                  `1. Click "Play Now"\n` +
+                  `2. Select room (10-100 ETB)\n` +
+                  `3. Choose ticket (1-100)\n` +
+                  `4. Mark numbers as called\n` +
+                  `5. Claim BINGO!\n\n` +
+                  `*Four Corners Bonus:* 50 ETB!\n\n` +
+                  `_Need help? Contact admin_`,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+    }
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Telegram webhook error:', error);
+    res.sendStatus(200);
+  }
+});
+
+// Setup endpoint for Telegram bot
+app.get('/setup-telegram', async (req, res) => {
+  try {
+    // Set webhook
+    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
+        drop_pending_updates: true
+      })
+    });
+    
+    const webhookResult = await webhookResponse.json();
+    
+    // Set menu button
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: '🎮 Play Bingo',
+          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+        }
+      })
+    });
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Telegram Bot Setup Complete</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 600px; margin: 0 auto; }
+          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
+          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
+          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ Telegram Bot Setup Complete!</h1>
+          <div class="success">✓ Webhook Configured</div>
+          <div class="success">✓ Menu Button Set</div>
+          
+          <div class="info-box">
+            <h3>Bot Information:</h3>
+            <p><strong>Bot:</strong> @ethio_games1_bot</p>
+            <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Admin Password:</strong> admin1234</p>
+          </div>
+          
+          <div>
+            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
+            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
+          </div>
+          
+          <div style="margin-top: 30px; text-align: left;">
+            <h4>Next Steps:</h4>
+            <ol>
+              <li>Open @ethio_games1_bot in Telegram</li>
+              <li>Click "Start"</li>
+              <li>Click menu button (bottom left)</li>
+              <li>Play Bingo!</li>
+            </ol>
+            
+            <h4>To Add Funds to Players:</h4>
+            <ol>
+              <li>Open Admin Panel (link above)</li>
+              <li>Login with password: admin1234</li>
+              <li>Find user by Telegram ID</li>
+              <li>Click "Add Funds" button</li>
+            </ol>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.send(`
+      <h1 style="color: #ef4444;">❌ Setup Error</h1>
+      <p>${error.message}</p>
+      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
+    `);
+  }
+});
+
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -1541,8 +1763,11 @@ server.listen(PORT, () => {
 ║  Game:         /game                                 ║
 ║  Admin:        /admin (password: admin1234)         ║
 ║  Telegram:     /telegram                             ║
+║  Bot Setup:    /setup-telegram                       ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
+║  🤖 Telegram Bot: @ethio_games1_bot                 ║
+║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}... ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ╚══════════════════════════════════════════════════════╝
@@ -1553,4 +1778,28 @@ server.listen(PORT, () => {
   setTimeout(() => {
     broadcastRoomStatus();
   }, 1000);
+  
+  // Setup Telegram bot after server starts
+  setTimeout(async () => {
+    try {
+      // Auto-setup Telegram webhook if token exists
+      if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
+        const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
+        
+        const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: webhookUrl,
+            drop_pending_updates: true
+          })
+        });
+        
+        const webhookResult = await webhookResponse.json();
+        console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
+      }
+    } catch (error) {
+      console.log('⚠️ Telegram auto-setup skipped or failed');
+    }
+  }, 3000);
 });
