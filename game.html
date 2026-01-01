@@ -862,8 +862,8 @@
         console.log('Running in browser mode (not Telegram)');
     }
 
-    // ⭐⭐ IMPORTANT FIX: Replace this with your Render server URL ⭐⭐
-    const SERVER_URL = "https://my-bingo-server.onrender.com";
+    // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
+    const SERVER_URL = "https://bingo-telegram-game.onrender.com";
     
     const socket = io(SERVER_URL, {
         reconnectionAttempts: 10,
@@ -913,6 +913,10 @@
     socket.on('disconnect', () => {
         state.isConnected = false;
         document.getElementById('reconnectOverlay').classList.add('active');
+    });
+
+    socket.on('connectionTest', (data) => {
+        console.log('Connection test received:', data);
     });
 
     socket.on('roomStatus', (roomData) => {
