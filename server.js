@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - WITH PHONE VERIFICATION
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED FOR MULTIPLE PLAYER TRACKING
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -7,7 +7,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const mongoose = require('mongoose');
-const axios = require('axios');
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo', {
@@ -23,7 +22,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo', {
 // MongoDB Models
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  phoneNumber: { type: String, unique: true, sparse: true },
   userName: { type: String, required: true },
   balance: { type: Number, default: 0.00 },
   referralCode: { type: String, unique: true },
@@ -39,17 +37,6 @@ const userSchema = new mongoose.Schema({
   telegramId: { type: String, unique: true, sparse: true },
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' }
-});
-
-const phoneVerificationSchema = new mongoose.Schema({
-  phoneNumber: { type: String, required: true, unique: true },
-  userId: { type: String, required: true, unique: true },
-  verified: { type: Boolean, default: false },
-  verificationCode: { type: String },
-  codeExpires: { type: Date },
-  verificationAttempts: { type: Number, default: 0 },
-  lastVerificationAttempt: { type: Date },
-  createdAt: { type: Date, default: Date.now }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -77,7 +64,6 @@ const transactionSchema = new mongoose.Schema({
   type: { type: String, required: true },
   userId: { type: String, required: true },
   userName: { type: String, required: true },
-  phoneNumber: { type: String },
   amount: { type: Number, required: true },
   room: { type: Number, default: null },
   admin: { type: Boolean, default: false },
@@ -97,7 +83,6 @@ const statsSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model('User', userSchema);
-const PhoneVerification = mongoose.model('PhoneVerification', phoneVerificationSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const Stats = mongoose.model('Stats', statsSchema);
@@ -134,7 +119,6 @@ app.use(helmet({
 }));
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Custom headers for WebSocket and Telegram
@@ -166,12 +150,7 @@ const CONFIG = {
   ROOM_STATUS_UPDATE_INTERVAL: 3000,
   MAX_TRANSACTIONS: 1000,
   AUTO_SAVE_INTERVAL: 60000,
-  SESSION_TIMEOUT: 86400000,
-  VERIFICATION_CODE_EXPIRY: 10, // minutes
-  MAX_VERIFICATION_ATTEMPTS: 5,
-  SMS_API_KEY: process.env.SMS_API_KEY || '',
-  SMS_API_URL: process.env.SMS_API_URL || '',
-  COUNTRY_CODE: process.env.COUNTRY_CODE || '+251'
+  SESSION_TIMEOUT: 86400000
 };
 
 const BINGO_LETTERS = {
@@ -188,243 +167,6 @@ let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
-
-// ========== PHONE VERIFICATION FUNCTIONS ==========
-function generateVerificationCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function normalizePhoneNumber(phoneNumber) {
-  // Remove any non-digit characters except leading +
-  let normalized = phoneNumber.replace(/\D/g, '');
-  
-  // If starts with country code, keep it
-  if (phoneNumber.startsWith('+')) {
-    normalized = '+' + normalized;
-  }
-  
-  // Ensure it has country code
-  if (!normalized.startsWith('+')) {
-    normalized = CONFIG.COUNTRY_CODE + normalized;
-  }
-  
-  return normalized;
-}
-
-async function sendVerificationCode(phoneNumber, code) {
-  try {
-    // In production, you would integrate with an SMS gateway
-    if (CONFIG.SMS_API_KEY && CONFIG.SMS_API_URL) {
-      const response = await axios.post(CONFIG.SMS_API_URL, {
-        api_key: CONFIG.SMS_API_KEY,
-        phone: phoneNumber,
-        message: `Your Bingo Elite verification code is: ${code}. Valid for 10 minutes.`
-      });
-      return response.data.success;
-    } else {
-      // Development mode - log to console
-      console.log(`📱 Verification code for ${phoneNumber}: ${code}`);
-      return true;
-    }
-  } catch (error) {
-    console.error('Error sending verification code:', error);
-    // In development, still return true to allow testing
-    console.log(`📱 (DEV) Verification code for ${phoneNumber}: ${code}`);
-    return true;
-  }
-}
-
-async function requestPhoneVerification(phoneNumber) {
-  try {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    
-    // Check if phone number is already registered and verified
-    const existingVerification = await PhoneVerification.findOne({ 
-      phoneNumber: normalizedPhone,
-      verified: true 
-    });
-    
-    if (existingVerification) {
-      return {
-        success: true,
-        message: 'Phone number already verified',
-        userId: existingVerification.userId,
-        alreadyVerified: true
-      };
-    }
-    
-    // Check rate limiting
-    const recentAttempt = await PhoneVerification.findOne({ 
-      phoneNumber: normalizedPhone,
-      lastVerificationAttempt: { 
-        $gt: new Date(Date.now() - 60 * 1000) // 1 minute ago
-      }
-    });
-    
-    if (recentAttempt) {
-      return {
-        success: false,
-        message: 'Please wait 1 minute before requesting another code'
-      };
-    }
-    
-    // Generate verification code
-    const verificationCode = generateVerificationCode();
-    const codeExpires = new Date(Date.now() + CONFIG.VERIFICATION_CODE_EXPIRY * 60 * 1000);
-    
-    // Generate user ID
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Update or create verification record
-    await PhoneVerification.findOneAndUpdate(
-      { phoneNumber: normalizedPhone },
-      {
-        userId,
-        verificationCode,
-        codeExpires,
-        verificationAttempts: 0,
-        lastVerificationAttempt: new Date(),
-        verified: false
-      },
-      { upsert: true, new: true }
-    );
-    
-    // Send SMS (in production)
-    const smsSent = await sendVerificationCode(normalizedPhone, verificationCode);
-    
-    if (!smsSent) {
-      return {
-        success: false,
-        message: 'Failed to send verification code'
-      };
-    }
-    
-    return {
-      success: true,
-      message: 'Verification code sent successfully',
-      userId,
-      alreadyVerified: false
-    };
-    
-  } catch (error) {
-    console.error('Error in requestPhoneVerification:', error);
-    return {
-      success: false,
-      message: 'Server error'
-    };
-  }
-}
-
-async function verifyPhoneCode(phoneNumber, code) {
-  try {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    
-    // Find verification record
-    const verification = await PhoneVerification.findOne({ 
-      phoneNumber: normalizedPhone 
-    });
-    
-    if (!verification) {
-      return {
-        success: false,
-        message: 'Phone number not found'
-      };
-    }
-    
-    // Check if code is expired
-    if (verification.codeExpires < new Date()) {
-      return {
-        success: false,
-        message: 'Verification code expired'
-      };
-    }
-    
-    // Check verification attempts
-    if (verification.verificationAttempts >= CONFIG.MAX_VERIFICATION_ATTEMPTS) {
-      return {
-        success: false,
-        message: 'Too many verification attempts'
-      };
-    }
-    
-    // Increment attempts
-    verification.verificationAttempts += 1;
-    verification.lastVerificationAttempt = new Date();
-    
-    // Verify code
-    if (verification.verificationCode !== code) {
-      await verification.save();
-      return {
-        success: false,
-        message: 'Invalid verification code'
-      };
-    }
-    
-    // Mark as verified
-    verification.verified = true;
-    await verification.save();
-    
-    return {
-      success: true,
-      message: 'Phone verified successfully',
-      userId: verification.userId
-    };
-    
-  } catch (error) {
-    console.error('Error in verifyPhoneCode:', error);
-    return {
-      success: false,
-      message: 'Server error'
-    };
-  }
-}
-
-async function getUserByPhone(phoneNumber, userName = null) {
-  try {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    
-    // Check if phone is verified
-    const verification = await PhoneVerification.findOne({ 
-      phoneNumber: normalizedPhone,
-      verified: true 
-    });
-    
-    if (!verification) {
-      return null;
-    }
-    
-    // Find or create user
-    let user = await User.findOne({ userId: verification.userId });
-    
-    if (!user) {
-      user = new User({
-        userId: verification.userId,
-        phoneNumber: normalizedPhone,
-        userName: userName || `Player ${normalizedPhone.substring(normalizedPhone.length - 4)}`,
-        balance: CONFIG.INITIAL_BALANCE,
-        referralCode: generateReferralCode(verification.userId)
-      });
-      await user.save();
-      
-      // Record first transaction
-      const transaction = new Transaction({
-        type: 'NEW_USER',
-        userId: verification.userId,
-        userName: user.userName,
-        phoneNumber: normalizedPhone,
-        amount: 0,
-        description: 'New user registered with phone'
-      });
-      await transaction.save();
-    }
-    
-    return user;
-    
-  } catch (error) {
-    console.error('Error in getUserByPhone:', error);
-    return null;
-  }
-}
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -445,39 +187,30 @@ function generateReferralCode(userId) {
   return code + userId.slice(-4);
 }
 
-async function getUser(identifier, userName, isPhone = false) {
+async function getUser(userId, userName) {
   try {
-    let user;
+    let user = await User.findOne({ userId: userId });
     
-    if (isPhone) {
-      user = await getUserByPhone(identifier, userName);
-    } else {
-      // Telegram or other identifier
-      user = await User.findOne({ userId: identifier });
+    if (!user) {
+      user = new User({
+        userId: userId,
+        userName: userName || 'Guest',
+        balance: CONFIG.INITIAL_BALANCE,
+        referralCode: generateReferralCode(userId),
+        telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null
+      });
+      await user.save();
       
-      if (!user) {
-        user = new User({
-          userId: identifier,
-          userName: userName || 'Guest',
-          balance: CONFIG.INITIAL_BALANCE,
-          referralCode: generateReferralCode(identifier),
-          telegramId: identifier.startsWith('tg_') ? identifier.replace('tg_', '') : null
-        });
-        await user.save();
-        
-        // Record first transaction
-        const transaction = new Transaction({
-          type: 'NEW_USER',
-          userId: identifier,
-          userName: userName || 'Guest',
-          amount: 0,
-          description: 'New user registered'
-        });
-        await transaction.save();
-      }
-    }
-    
-    if (user) {
+      // Record first transaction
+      const transaction = new Transaction({
+        type: 'NEW_USER',
+        userId: userId,
+        userName: userName || 'Guest',
+        amount: 0,
+        description: 'New user registered'
+      });
+      await transaction.save();
+    } else {
       user.lastSeen = new Date();
       user.sessionCount = (user.sessionCount || 0) + 1;
       user.isOnline = true;
@@ -517,7 +250,7 @@ async function getRoom(stake) {
   }
 }
 
-// ========== IMPROVED REAL-TIME TRACKING FUNCTIONS ==========
+// ========== FIXED REAL-TIME TRACKING FUNCTIONS ==========
 function getConnectedUsers() {
   const connectedUsers = [];
   
@@ -530,14 +263,13 @@ function getConnectedUsers() {
     }
   });
   
-  // Also check all connected sockets for users
+  // Also check all connected sockets for any users not in socketToUser
   connectedSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
-    if (socket && socket.connected && socket.handshake && socket.handshake.query) {
-      // Check if this socket has a userId in query params
-      const query = socket.handshake.query;
-      if (query.userId) {
-        connectedUsers.push(query.userId);
+    if (socket && socket.connected && socket.userId) {
+      // Check if socket has a userId property (set on connection)
+      if (!connectedUsers.includes(socket.userId)) {
+        connectedUsers.push(socket.userId);
       }
     }
   });
@@ -617,7 +349,6 @@ async function updateAdminPanel() {
       return {
         userId: user.userId,
         userName: user.userName,
-        phoneNumber: user.phoneNumber,
         balance: user.balance,
         currentRoom: user.currentRoom,
         box: user.box,
@@ -846,7 +577,6 @@ async function endGameWithNoWinner(room) {
           type: 'REFUND',
           userId: userId,
           userName: user.userName,
-          phoneNumber: user.phoneNumber,
           amount: room.stake,
           room: room.stake,
           description: `Game ended with no winner - stake refunded`
@@ -888,13 +618,14 @@ async function endGameWithNoWinner(room) {
 
 // ========== IMPROVED SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
-  console.log(`✅ Socket.IO Connected: ${socket.id}`);
+  console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
   connectedSockets.add(socket.id);
   
-  // Enhanced connection logging
+  // Enhanced connection tracking - store userId on socket if available in query
   const query = socket.handshake.query;
   if (query.userId) {
     console.log(`👤 User connected via query: ${query.userId}`);
+    socket.userId = query.userId; // Store userId on socket for tracking
   }
   
   // Send connection test immediately
@@ -902,8 +633,8 @@ io.on('connection', (socket) => {
     status: 'connected', 
     serverTime: new Date().toISOString(),
     socketId: socket.id,
-    server: 'Bingo Elite Phone Version',
-    version: '2.0'
+    server: 'Bingo Elite Telegram',
+    userId: query.userId || 'unknown'
   });
   
   // ========== ADMIN AUTHENTICATION ==========
@@ -952,7 +683,6 @@ io.on('connection', (socket) => {
       type: 'ADMIN_ADD',
       userId: userId,
       userName: user.userName,
-      phoneNumber: user.phoneNumber,
       amount: amount,
       admin: true,
       description: `Admin added ${amount} ETB`
@@ -1097,7 +827,6 @@ io.on('connection', (socket) => {
             type: 'REFUND',
             userId: userId,
             userName: user.userName,
-            phoneNumber: user.phoneNumber,
             amount: roomStake,
             room: roomStake,
             description: `Game force ended by admin - stake refunded`
@@ -1135,74 +864,25 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== PHONE VERIFICATION VIA SOCKET ==========
-  socket.on('phone:requestVerification', async (phoneNumber) => {
-    try {
-      const result = await requestPhoneVerification(phoneNumber);
-      socket.emit('phone:verificationSent', result);
-      
-      if (result.success) {
-        logActivity('PHONE_VERIFICATION_REQUESTED', { phoneNumber });
-      }
-    } catch (error) {
-      console.error('Error in phone verification request:', error);
-      socket.emit('phone:verificationSent', {
-        success: false,
-        message: 'Server error'
-      });
-    }
-  });
-  
-  socket.on('phone:verifyCode', async ({ phoneNumber, code }) => {
-    try {
-      const result = await verifyPhoneCode(phoneNumber, code);
-      socket.emit('phone:verificationResult', result);
-      
-      if (result.success) {
-        logActivity('PHONE_VERIFIED', { phoneNumber, userId: result.userId });
-      }
-    } catch (error) {
-      console.error('Error in phone code verification:', error);
-      socket.emit('phone:verificationResult', {
-        success: false,
-        message: 'Server error'
-      });
-    }
-  });
-  
-  // ========== PLAYER INITIALIZATION WITH PHONE ==========
+  // Player events - FIXED INIT FOR MULTIPLE PLAYER TRACKING
   socket.on('init', async (data) => {
     try {
-      const { userId, phoneNumber, userName, isPhone } = data;
+      const { userId, userName } = data;
       
-      console.log(`📱 User init: ${userName || phoneNumber} (${userId}) via socket ${socket.id}, isPhone: ${isPhone}`);
+      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
       
-      let user;
+      // Store userId on socket for tracking
+      socket.userId = userId;
       
-      if (isPhone && phoneNumber) {
-        // Verify phone is registered and verified
-        const verification = await PhoneVerification.findOne({ 
-          phoneNumber: normalizePhoneNumber(phoneNumber),
-          verified: true 
-        });
-        
-        if (!verification) {
-          socket.emit('error', 'Phone number not verified');
-          return;
-        }
-        
-        user = await getUserByPhone(phoneNumber, userName);
-      } else {
-        // Legacy support for Telegram users
-        user = await getUser(userId, userName, false);
-      }
+      const user = await getUser(userId, userName);
       
       if (user) {
-        socketToUser.set(socket.id, user.userId);
+        // Store in socketToUser map
+        socketToUser.set(socket.id, userId);
         
-        // Update user's lastSeen
+        // Also update user's lastSeen immediately
         await User.findOneAndUpdate(
-          { userId: user.userId },
+          { userId: userId },
           { 
             isOnline: true,
             lastSeen: new Date(),
@@ -1212,9 +892,8 @@ io.on('connection', (socket) => {
         
         socket.emit('balanceUpdate', user.balance);
         socket.emit('userData', {
-          userId: user.userId,
+          userId: userId,
           userName: user.userName,
-          phoneNumber: user.phoneNumber,
           balance: user.balance,
           referralCode: user.referralCode
         });
@@ -1222,18 +901,13 @@ io.on('connection', (socket) => {
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
         // Log the successful connection
-        console.log(`✅ User connected successfully: ${user.userName} (${user.userId})`);
+        console.log(`✅ User connected successfully: ${userName} (${userId})`);
         
         // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity('USER_CONNECTED', { 
-          userId: user.userId, 
-          userName: user.userName, 
-          phoneNumber: user.phoneNumber,
-          socketId: socket.id 
-        });
+        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
       } else {
         socket.emit('error', 'Failed to initialize user');
       }
@@ -1271,7 +945,7 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', async (data) => {
     try {
       const { room, box, userName } = data;
-      const userId = socketToUser.get(socket.id);
+      const userId = socketToUser.get(socket.id) || socket.userId;
       
       if (!userId) {
         socket.emit('error', 'Player not initialized');
@@ -1326,7 +1000,6 @@ io.on('connection', (socket) => {
         type: 'STAKE',
         userId: userId,
         userName: user.userName,
-        phoneNumber: user.phoneNumber,
         amount: -room,
         room: room,
         description: `Joined ${room} ETB room with ticket ${box}`
@@ -1405,13 +1078,7 @@ io.on('connection', (socket) => {
       broadcastRoomStatus();
       updateAdminPanel();
       
-      logActivity('ROOM_JOIN', { 
-        userId, 
-        userName: user.userName, 
-        phoneNumber: user.phoneNumber,
-        room, 
-        box 
-      });
+      logActivity('ROOM_JOIN', { userId, userName: user.userName, room, box });
       
     } catch (error) {
       console.error('Error joining room:', error);
@@ -1422,7 +1089,7 @@ io.on('connection', (socket) => {
   socket.on('claimBingo', async (data) => {
     try {
       const { room, grid, marked } = data;
-      const userId = socketToUser.get(socket.id);
+      const userId = socketToUser.get(socket.id) || socket.userId;
       
       if (!userId) {
         socket.emit('error', 'Player not initialized');
@@ -1481,7 +1148,6 @@ io.on('connection', (socket) => {
         type: transactionType,
         userId: userId,
         userName: user.userName,
-        phoneNumber: user.phoneNumber,
         amount: prize,
         room: room,
         description: `Bingo win in ${room} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
@@ -1494,7 +1160,6 @@ io.on('connection', (socket) => {
         type: 'HOUSE_EARNINGS',
         userId: 'HOUSE',
         userName: 'House',
-        phoneNumber: 'SYSTEM',
         amount: houseEarnings,
         room: room,
         description: `Commission from ${roomData.players.length} players in ${room} ETB room`
@@ -1571,7 +1236,6 @@ io.on('connection', (socket) => {
       logActivity('BINGO_WIN', { 
         userId, 
         userName: user.userName, 
-        phoneNumber: user.phoneNumber,
         room, 
         prize, 
         bonus, 
@@ -1585,7 +1249,7 @@ io.on('connection', (socket) => {
   });
   
   socket.on('player:activity', async (data) => {
-    const userId = socketToUser.get(socket.id);
+    const userId = socketToUser.get(socket.id) || socket.userId;
     if (userId) {
       try {
         await User.findOneAndUpdate(
@@ -1606,7 +1270,7 @@ io.on('connection', (socket) => {
     connectedSockets.delete(socket.id);
     adminSockets.delete(socket.id);
     
-    const userId = socketToUser.get(socket.id);
+    const userId = socketToUser.get(socket.id) || socket.userId;
     if (userId) {
       User.findOneAndUpdate(
         { userId: userId },
@@ -1652,19 +1316,41 @@ setInterval(() => {
   });
 }, 10000);
 
-// Clean up expired verification codes
-setInterval(async () => {
+// ========== CONNECTION CLEANUP FUNCTION ==========
+async function cleanupStaleConnections() {
+  console.log('🧹 Running connection cleanup...');
+  
+  const now = new Date();
+  const thirtySecondsAgo = new Date(now.getTime() - 30000);
+  
   try {
-    const expiredTime = new Date(Date.now() - CONFIG.VERIFICATION_CODE_EXPIRY * 60 * 1000);
-    await PhoneVerification.deleteMany({
-      verified: false,
-      codeExpires: { $lt: expiredTime }
+    // Update users who haven't been seen in 30 seconds
+    await User.updateMany(
+      { 
+        lastSeen: { $lt: thirtySecondsAgo },
+        isOnline: true 
+      },
+      { 
+        isOnline: false 
+      }
+    );
+    
+    // Clean up socketToUser map
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket || !socket.connected) {
+        socketToUser.delete(socketId);
+        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
+      }
     });
-    console.log('🧹 Cleaned up expired verification codes');
+    
   } catch (error) {
-    console.error('Error cleaning up verification codes:', error);
+    console.error('Error in cleanupStaleConnections:', error);
   }
-}, 300000); // Every 5 minutes
+}
+
+// Run cleanup every 30 seconds
+setInterval(cleanupStaleConnections, 30000);
 
 // ========== EXPRESS ROUTES ==========
 app.get('/', (req, res) => {
@@ -1672,7 +1358,7 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Bingo Elite - Phone Verification Version</title>
+      <title>Bingo Elite - Telegram Mini App</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -1691,8 +1377,8 @@ app.get('/', (req, res) => {
     </head>
     <body>
       <div class="container">
-        <h1 style="font-size: 3rem; margin-bottom: 20px;">📱 Bingo Elite Phone Version</h1>
-        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo with Phone Verification</p>
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Telegram Mini App</h1>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Ready for Telegram</p>
         
         <div class="status">
           <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
@@ -1702,36 +1388,40 @@ app.get('/', (req, res) => {
               <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
             </div>
             <div class="stat">
-              <div class="stat-label">Phone Users</div>
-              <div class="stat-value" style="color: #10b981;">✅ Active</div>
+              <div class="stat-label">Database Status</div>
+              <div class="stat-value" style="color: #10b981;">✅ Online</div>
             </div>
           </div>
-          <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">📱 Phone Verification Required to Play</p>
+          <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB!</p>
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
-          <p style="color: #10b981;">✅ Phone Verification System Ready</p>
+          <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
         </div>
         
         <div style="margin-top: 40px;">
           <h3>Access Points:</h3>
           <div>
             <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
-            <a href="/game" class="btn btn-game" target="_blank">📱 Game Client</a>
+            <a href="/game" class="btn btn-game" target="_blank">🎮 Game Client</a>
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
+            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
+          </div>
+          <div style="margin-top: 20px;">
             <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
+            <a href="/debug-users" class="btn" style="background: #f59e0b;" target="_blank">👥 Debug Users</a>
           </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-          <h4>Phone Verification Information</h4>
+          <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.0.0 (Phone Verification Required)<br>
-            Database: MongoDB Atlas<br>
+            Version: 2.0.0 (Telegram Ready) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
-            Phone Verification: ✅ Active<br>
-            Default Country Code: ${CONFIG.COUNTRY_CODE}<br>
-            Game Timer: ${CONFIG.GAME_TIMER}s between balls
+            SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
+            Telegram Integration: ✅ Ready<br>
+            Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
+            Bot Username: @ethio_games1_bot
           </p>
         </div>
       </div>
@@ -1748,82 +1438,269 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Phone verification API endpoints
-app.post('/api/request-verification', express.json(), async (req, res) => {
-  try {
-    const { phoneNumber } = req.body;
-    
-    if (!phoneNumber) {
-      return res.status(400).json({ error: 'Phone number required' });
-    }
-    
-    const result = await requestPhoneVerification(phoneNumber);
-    
-    if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        userId: result.userId,
-        alreadyVerified: result.alreadyVerified
-      });
-    } else {
-      res.status(400).json({ error: result.message });
-    }
-  } catch (error) {
-    console.error('Error in request-verification:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
+// Telegram Mini App entry point
+app.get('/telegram', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Bingo Elite - Telegram Mini App</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                background: #0f172a;
+                color: white;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .container {
+                padding: 20px;
+                max-width: 500px;
+            }
+            
+            .logo {
+                font-size: 3rem;
+                margin-bottom: 20px;
+                color: #fbbf24;
+            }
+            
+            .btn {
+                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 15px;
+                font-size: 1.2rem;
+                font-weight: bold;
+                cursor: pointer;
+                margin: 20px 0;
+                text-decoration: none;
+                display: inline-block;
+            }
+            
+            .btn:hover {
+                transform: scale(1.05);
+            }
+            
+            .info {
+                background: rgba(255,255,255,0.1);
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
+                font-size: 0.9rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">🎮</div>
+            <h1>Bingo Elite</h1>
+            <p>Play real-time Bingo with players worldwide on Telegram!</p>
+            
+            <div class="info">
+                <p><strong>💰 Win Real Money in ETB</strong></p>
+                <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
+                <p><strong>👥 Play with 100 players per room</strong></p>
+                <p><strong>🤖 Telegram Mini App Integrated</strong></p>
+            </div>
+            
+            <button class="btn" id="playBtn">LAUNCH GAME</button>
+            
+            <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
+                <p>Bot: @ethio_games1_bot</p>
+                <p>Stakes: 10, 20, 50, 100 ETB</p>
+                <p>Minimum 2 players to start</p>
+            </div>
+        </div>
+        
+        <script>
+            // Initialize Telegram Web App
+            const tg = window.Telegram.WebApp;
+            
+            // Expand the app to full height
+            tg.ready();
+            tg.expand();
+            
+            // Set Telegram theme colors
+            tg.setHeaderColor('#3b82f6');
+            tg.setBackgroundColor('#0f172a');
+            
+            // Get user info from Telegram
+            const user = tg.initDataUnsafe?.user;
+            
+            if (user) {
+                document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
+                
+                // Store user info for game
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                }));
+            }
+            
+            // Launch game
+            document.getElementById('playBtn').addEventListener('click', function() {
+                // Add haptic feedback
+                if (tg && tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+                
+                // Redirect to game
+                window.location.href = '/game';
+            });
+            
+            // Add Telegram Main Button if available
+            if (tg && tg.MainButton) {
+                tg.MainButton.setText('🎮 PLAY BINGO');
+                tg.MainButton.show();
+                tg.MainButton.onClick(function() {
+                    window.location.href = '/game';
+                });
+            }
+        </script>
+    </body>
+    </html>
+  `);
 });
 
-app.post('/api/verify-phone', express.json(), async (req, res) => {
-  try {
-    const { phoneNumber, code } = req.body;
-    
-    if (!phoneNumber || !code) {
-      return res.status(400).json({ error: 'Phone number and code required' });
-    }
-    
-    const result = await verifyPhoneCode(phoneNumber, code);
-    
-    if (result.success) {
-      res.json({
-        success: true,
-        message: result.message,
-        userId: result.userId
-      });
-    } else {
-      res.status(400).json({ error: result.message });
-    }
-  } catch (error) {
-    console.error('Error in verify-phone:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Check if phone is verified
-app.get('/api/check-phone/:phoneNumber', async (req, res) => {
-  try {
-    const normalizedPhone = normalizePhoneNumber(req.params.phoneNumber);
-    
-    const verification = await PhoneVerification.findOne({ 
-      phoneNumber: normalizedPhone,
-      verified: true 
-    });
-    
-    if (verification) {
-      const user = await User.findOne({ userId: verification.userId });
-      res.json({
-        verified: true,
-        userId: verification.userId,
-        userName: user ? user.userName : null,
-        balance: user ? user.balance : 0
-      });
-    } else {
-      res.json({ verified: false });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
-  }
+// Socket.IO connection test page
+app.get('/socket-test', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Socket.IO Connection Test</title>
+      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
+        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
+        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
+        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
+        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+      </style>
+    </head>
+    <body>
+      <h1>🔌 Socket.IO Connection Test</h1>
+      <div id="status" class="status disconnected">Connecting to server...</div>
+      
+      <h3>Test Actions:</h3>
+      <div>
+        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Connection
+        </button>
+        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test User Init
+        </button>
+        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Room Status
+        </button>
+      </div>
+      
+      <h3>Connection Log:</h3>
+      <div id="log" class="log"></div>
+      
+      <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message, type = 'info') {
+          const entry = document.createElement('div');
+          entry.className = 'log-entry ' + type;
+          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+          log.appendChild(entry);
+          log.scrollTop = log.scrollHeight;
+        }
+        
+        // Configure Socket.IO
+        const socket = io({
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000,
+          transports: ['websocket', 'polling'],
+          forceNew: true,
+          autoConnect: true
+        });
+        
+        socket.on('connect', () => {
+          status.className = 'status connected';
+          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
+          addLog('Connected to server with ID: ' + socket.id, 'success');
+        });
+        
+        socket.on('disconnect', (reason) => {
+          status.className = 'status disconnected';
+          status.textContent = '❌ Disconnected: ' + reason;
+          addLog('Disconnected: ' + reason, 'error');
+        });
+        
+        socket.on('connect_error', (error) => {
+          addLog('Connection error: ' + error.message, 'error');
+        });
+        
+        socket.on('connectionTest', (data) => {
+          addLog('Server connection test: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('connected', (data) => {
+          addLog('Server connected message: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('balanceUpdate', (data) => {
+          addLog('Balance update: ' + data, 'info');
+        });
+        
+        socket.on('roomStatus', (data) => {
+          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
+        });
+        
+        // Test functions
+        function testConnection() {
+          addLog('Testing connection...', 'info');
+          socket.emit('ping');
+        }
+        
+        function testInit() {
+          addLog('Testing user initialization...', 'info');
+          socket.emit('init', {
+            userId: 'test-' + Date.now(),
+            userName: 'Test Player'
+          });
+        }
+        
+        function testRoomStatus() {
+          addLog('Requesting room status...', 'info');
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+          });
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+          testConnection();
+        }, 1000);
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 app.get('/admin', (req, res) => {
@@ -1841,7 +1718,6 @@ app.get('/health', async (req, res) => {
     const totalUsers = await User.countDocuments();
     const rooms = await Room.countDocuments();
     const totalTransactions = await Transaction.countDocuments();
-    const phoneVerifications = await PhoneVerification.countDocuments({ verified: true });
     
     res.json({
       status: 'ok',
@@ -1850,7 +1726,6 @@ app.get('/health', async (req, res) => {
       connectedSockets: connectedSockets.size,
       socketToUser: socketToUser.size,
       totalUsers: totalUsers,
-      phoneUsers: phoneVerifications,
       activeGames: activeGames,
       totalRooms: rooms,
       totalTransactions: totalTransactions,
@@ -1858,7 +1733,8 @@ app.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       memoryUsage: process.memoryUsage(),
       nodeVersion: process.version,
-      phoneVerification: true,
+      telegramReady: true,
+      botUsername: '@ethio_games1_bot',
       serverUrl: 'https://bingo-telegram-game.onrender.com'
     });
   } catch (error) {
@@ -1875,7 +1751,6 @@ app.get('/api/user/:userId', async (req, res) => {
     }
     res.json({
       userId: user.userId,
-      phoneNumber: user.phoneNumber,
       userName: user.userName,
       balance: user.balance,
       isOnline: user.isOnline,
@@ -1909,7 +1784,6 @@ app.post('/api/add-funds', async (req, res) => {
       type: 'ADMIN_ADD',
       userId: userId,
       userName: user.userName,
-      phoneNumber: user.phoneNumber,
       amount: amount,
       admin: true,
       description: `Admin added ${amount} ETB via API`
@@ -1953,24 +1827,10 @@ app.get('/debug-connections', async (req, res) => {
     const socketToUserArray = Array.from(socketToUser.entries());
     const connectedSocketsArray = Array.from(connectedSockets);
     
-    // Get user details
-    const usersWithDetails = await Promise.all(
-      connectedUserIds.map(async userId => {
-        const user = await User.findOne({ userId });
-        return user ? {
-          userId: user.userId,
-          phoneNumber: user.phoneNumber,
-          userName: user.userName,
-          balance: user.balance,
-          isOnline: user.isOnline
-        } : { userId, phoneNumber: null, userName: 'Unknown' };
-      })
-    );
-    
     res.json({
       timestamp: new Date().toISOString(),
       totalConnectedUsers: connectedUserIds.length,
-      connectedUsers: usersWithDetails,
+      connectedUserIds: connectedUserIds,
       socketToUserCount: socketToUser.size,
       socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
       connectedSocketsCount: connectedSockets.size,
@@ -1979,7 +1839,7 @@ app.get('/debug-connections', async (req, res) => {
         return {
           socketId,
           connected: socket?.connected || false,
-          userId: socketToUser.get(socketId) || 'unknown',
+          userId: socketToUser.get(socketId) || socket?.userId || 'unknown',
           handshakeQuery: socket?.handshake?.query || {}
         };
       }),
@@ -1991,107 +1851,267 @@ app.get('/debug-connections', async (req, res) => {
   }
 });
 
-// Get all verified phone users
-app.get('/api/phone-users', async (req, res) => {
+// ========== DEBUG USERS ENDPOINT ==========
+app.get('/debug-users', async (req, res) => {
   try {
-    const users = await User.find({ phoneNumber: { $exists: true, $ne: null } })
-      .sort({ balance: -1 })
-      .limit(100);
+    const connectedUserIds = getConnectedUsers();
+    const allUsers = await User.find({}).limit(100);
     
-    res.json(users.map(user => ({
-      userId: user.userId,
-      phoneNumber: user.phoneNumber,
-      userName: user.userName,
-      balance: user.balance,
-      isOnline: user.isOnline,
-      lastSeen: user.lastSeen,
-      totalWagered: user.totalWagered,
-      totalWins: user.totalWins
-    })));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Test SMS sending
-app.get('/test-sms/:phoneNumber', async (req, res) => {
-  try {
-    const phoneNumber = req.params.phoneNumber;
-    const code = generateVerificationCode();
-    
-    const result = await sendVerificationCode(phoneNumber, code);
+    const userStatus = allUsers.map(user => {
+      const isOnline = connectedUserIds.includes(user.userId);
+      const lastSeenTime = new Date(user.lastSeen);
+      const now = new Date();
+      const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+      
+      return {
+        userId: user.userId,
+        userName: user.userName,
+        isOnline: isOnline,
+        lastSeen: user.lastSeen,
+        secondsSinceLastSeen: Math.floor(secondsSinceLastSeen),
+        currentRoom: user.currentRoom,
+        balance: user.balance,
+        socketId: Array.from(socketToUser.entries())
+          .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
+      };
+    });
     
     res.json({
-      success: result,
-      phoneNumber: phoneNumber,
-      code: code,
-      message: result ? 'SMS sent successfully' : 'Failed to send SMS'
+      timestamp: new Date().toISOString(),
+      totalConnectedUsers: connectedUserIds.length,
+      connectedUserIds: connectedUserIds,
+      socketToUserSize: socketToUser.size,
+      connectedSockets: connectedSockets.size,
+      allUsers: userStatus
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.json({ error: error.message });
   }
 });
 
-// ========== TELEGRAM BOT INTEGRATION (Optional) ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
+// ========== TELEGRAM BOT INTEGRATION ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
-if (TELEGRAM_TOKEN) {
-  // Simple Telegram webhook
-  app.post('/telegram-webhook', express.json(), async (req, res) => {
-    try {
-      const { message } = req.body;
+// Simple Telegram webhook
+app.post('/telegram-webhook', express.json(), async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (message) {
+      const chatId = message.chat.id;
+      const text = message.text || '';
+      const userId = message.from.id.toString();
+      const userName = message.from.first_name || 'Player';
+      const username = message.from.username || '';
       
-      if (message) {
-        const chatId = message.chat.id;
-        const text = message.text || '';
-        const userId = message.from.id.toString();
-        const userName = message.from.first_name || 'Player';
-        const username = message.from.username || '';
+      if (text === '/start' || text === '/play') {
+        // Check if user exists, create if not
+        let user = await User.findOne({ telegramId: userId });
         
-        if (text === '/start' || text === '/play') {
-          // For Telegram users, we can still support them but require phone verification
-          const responseText = `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
-                              `📱 *Phone Verification Required*\n` +
-                              `To play Bingo Elite, you need to verify your phone number.\n\n` +
-                              `Please visit: https://bingo-telegram-game.onrender.com/game\n\n` +
-                              `Enter your phone number to receive a verification code.`;
+        if (!user) {
+          user = new User({
+            userId: `tg_${userId}`,
+            userName: userName,
+            telegramId: userId,
+            telegramUsername: username,
+            balance: 0.00,
+            referralCode: `TG${userId}`
+          });
+          await user.save();
           
-          // In production, you would send this via Telegram API
-          console.log(`Telegram user ${userName} (@${username}) needs phone verification`);
+          console.log(`👤 New Telegram user: ${userName} (@${username})`);
         }
+        
+        // Send welcome message with game button
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
+                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
+                  `🎯 *Features:*\n` +
+                  `• 10/20/50/100 ETB rooms\n` +
+                  `• Four Corners Bonus: 50 ETB\n` +
+                  `• Real-time multiplayer\n` +
+                  `• Telegram login\n\n` +
+                  `_Need funds? Contact admin_`,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                {
+                  text: '🎮 Play Bingo Now',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                }
+              ]]
+            }
+          })
+        });
       }
-      
-      res.sendStatus(200);
-    } catch (error) {
-      console.error('Telegram webhook error:', error);
-      res.sendStatus(200);
+      else if (text === '/balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance : 0;
+        
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
+                  `🎮 Play: @ethio_games1_bot\n` +
+                  `👑 Admin: Contact for funds\n` +
+                  `🆔 Your ID: \`${userId}\``,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+      else if (text === '/help') {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Bingo Elite Help*\n\n` +
+                  `*Commands:*\n` +
+                  `/start - Start the bot\n` +
+                  `/play - Play game\n` +
+                  `/balance - Check balance\n` +
+                  `/help - This message\n\n` +
+                  `*How to Play:*\n` +
+                  `1. Click "Play Now"\n` +
+                  `2. Select room (10-100 ETB)\n` +
+                  `3. Choose ticket (1-100)\n` +
+                  `4. Mark numbers as called\n` +
+                  `5. Claim BINGO!\n\n` +
+                  `*Four Corners Bonus:* 50 ETB!\n\n` +
+                  `_Need help? Contact admin_`,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
     }
-  });
-}
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Telegram webhook error:', error);
+    res.sendStatus(200);
+  }
+});
+
+// Setup endpoint for Telegram bot
+app.get('/setup-telegram', async (req, res) => {
+  try {
+    // Set webhook
+    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
+        drop_pending_updates: true
+      })
+    });
+    
+    const webhookResult = await webhookResponse.json();
+    
+    // Set menu button
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: '🎮 Play Bingo',
+          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+        }
+      })
+    });
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Telegram Bot Setup Complete</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 600px; margin: 0 auto; }
+          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
+          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
+          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ Telegram Bot Setup Complete!</h1>
+          <div class="success">✓ Webhook Configured</div>
+          <div class="success">✓ Menu Button Set</div>
+          
+          <div class="info-box">
+            <h3>Bot Information:</h3>
+            <p><strong>Bot:</strong> @ethio_games1_bot</p>
+            <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Admin Password:</strong> admin1234</p>
+          </div>
+          
+          <div>
+            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
+            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
+          </div>
+          
+          <div style="margin-top: 30px; text-align: left;">
+            <h4>Next Steps:</h4>
+            <ol>
+              <li>Open @ethio_games1_bot in Telegram</li>
+              <li>Click "Start"</li>
+              <li>Click menu button (bottom left)</li>
+              <li>Play Bingo!</li>
+            </ol>
+            
+            <h4>To Add Funds to Players:</h4>
+            <ol>
+              <li>Open Admin Panel (link above)</li>
+              <li>Login with password: admin1234</li>
+              <li>Find user by Telegram ID</li>
+              <li>Click "Add Funds" button</li>
+            </ol>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.send(`
+      <h1 style="color: #ef4444;">❌ Setup Error</h1>
+      <p>${error.message}</p>
+      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
+    `);
+  }
+});
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║        📱 BINGO ELITE - PHONE VERIFICATION          ║
+║             🤖 BINGO ELITE - TELEGRAM READY         ║
 ╠══════════════════════════════════════════════════════╣
 ║  URL:          https://bingo-telegram-game.onrender.com ║
 ║  Port:         ${PORT}                                ║
 ║  Game:         /game                                 ║
 ║  Admin:        /admin (password: admin1234)         ║
-║  Phone API:    /api/request-verification            ║
-║  Health:       /health                              ║
-║  Real-Time:    /real-time-status                    ║
-║  Debug:        /debug-connections                   ║
+║  Telegram:     /telegram                             ║
+║  Bot Setup:    /setup-telegram                       ║
+║  Real-Time:    /real-time-status                     ║
+║  Debug:        /debug-connections                    ║
+║  Debug Users:  /debug-users                          ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
-║  📱 Phone Verification: ✅ Required               ║
-║  📡 WebSocket: ✅ Ready for phone connections     ║
+║  🤖 Telegram Bot: @ethio_games1_bot                 ║
+║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}... ║
+║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
-║  📞 Default Country: ${CONFIG.COUNTRY_CODE}                 ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready for PHONE-BASED player tracking
+✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
   
   // Initial broadcast
@@ -2099,14 +2119,27 @@ server.listen(PORT, () => {
     broadcastRoomStatus();
   }, 1000);
   
-  // Log startup stats
+  // Setup Telegram bot after server starts
   setTimeout(async () => {
     try {
-      const totalUsers = await User.countDocuments();
-      const phoneUsers = await PhoneVerification.countDocuments({ verified: true });
-      console.log(`📊 Startup Stats: ${totalUsers} total users, ${phoneUsers} verified phone users`);
+      // Auto-setup Telegram webhook if token exists
+      if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
+        const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
+        
+        const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: webhookUrl,
+            drop_pending_updates: true
+          })
+        });
+        
+        const webhookResult = await webhookResponse.json();
+        console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
+      }
     } catch (error) {
-      console.log('⚠️ Could not fetch startup stats');
+      console.log('⚠️ Telegram auto-setup skipped or failed');
     }
-  }, 2000);
+  }, 3000);
 });
