@@ -893,6 +893,47 @@
             margin-top: 2px;
             display: inline-block;
         }
+        
+        /* Socket Badge */
+        .socket-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .socket-single { background: rgba(100, 116, 139, 0.15); color: var(--text-muted); }
+        .socket-multiple { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        
+        /* Connection Status Indicator */
+        .connection-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+        
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .connection-active { background: var(--success); animation: pulse 2s infinite; }
+        .connection-inactive { background: var(--text-muted); }
+        
+        /* Multi-connection warning */
+        .multi-warning {
+            color: var(--warning);
+            font-size: 0.7rem;
+            margin-top: 3px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
     </style>
 </head>
 <body>
@@ -924,8 +965,8 @@
         <div class="sidebar" id="sidebar">
             <div class="logo">
                 <h2><i class="fas fa-crown"></i> Bingo Elite</h2>
-                <p>Admin Dashboard v2.0</p>
-                <p style="font-size: 0.7rem; color: var(--warning); margin-top: 5px;">Real-Time Tracking Active</p>
+                <p>Admin Dashboard v3.0</p>
+                <p style="font-size: 0.7rem; color: var(--warning); margin-top: 5px;">Multi-Socket Support</p>
             </div>
             
             <div class="nav">
@@ -974,6 +1015,9 @@
                     </div>
                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
                         <span id="activeConnections">0</span> active connections
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
+                        <span id="multiSocketUsers">0</span> users with multiple sockets
                     </div>
                 </div>
             </div>
@@ -1169,12 +1213,14 @@
                                 <option value="online">Online Only</option>
                                 <option value="offline">Offline Only</option>
                                 <option value="telegram">Telegram Users</option>
+                                <option value="multi">Multiple Sockets</option>
                             </select>
                         </div>
                         <div class="filter-group">
                             <label>Sort By</label>
                             <select class="filter-select" id="sortFilter" onchange="applyFilters()">
                                 <option value="online">Online Status</option>
+                                <option value="sockets">Socket Count</option>
                                 <option value="balance">Balance (High to Low)</option>
                                 <option value="name">Name (A-Z)</option>
                                 <option value="recent">Most Recent</option>
@@ -1195,6 +1241,7 @@
                                 <th>User</th>
                                 <th>Balance</th>
                                 <th>Status</th>
+                                <th>Sockets</th>
                                 <th>Room</th>
                                 <th>Activity</th>
                                 <th>Actions</th>
@@ -1466,10 +1513,10 @@
                                 <i class="fas fa-robot"></i>
                             </div>
                             <div class="stat-info">
-                                <h3>Telegram Users</h3>
-                                <div class="stat-value" id="debugTelegramUsers">0</div>
+                                <h3>Multi-Socket Users</h3>
+                                <div class="stat-value" id="debugMultiSocketUsers">0</div>
                                 <div class="stat-change">
-                                    <i class="fas fa-telegram"></i> Telegram connected
+                                    <i class="fas fa-mobile-alt"></i> Multiple devices
                                 </div>
                             </div>
                         </div>
@@ -1573,7 +1620,8 @@
             socket: null,
             lastPlayerCount: 0,
             debugInfo: {},
-            showUserDetails: false
+            showUserDetails: false,
+            multiSocketUsers: 0
         };
 
         // Initialize
@@ -1595,14 +1643,6 @@
             
             // Add initial system log
             addSystemLog('Admin panel initialized');
-            
-            // Add debug section to navigation
-            document.querySelector('.nav').innerHTML += `
-                <div class="nav-item" data-section="debug">
-                    <i class="fas fa-bug"></i>
-                    <span>Debug</span>
-                </div>
-            `;
             
             // Re-attach navigation event listeners
             attachNavListeners();
@@ -1726,9 +1766,11 @@
                 const onlineCount = data.filter(user => user.isOnline).length;
                 updateUserCountBadge(onlineCount);
                 
-                // Count Telegram users
-                const telegramCount = data.filter(user => user.telegramId).length;
-                document.getElementById('debugTelegramUsers').textContent = telegramCount;
+                // Count users with multiple sockets
+                const multiSocketCount = data.filter(user => (user.socketCount || 0) > 1).length;
+                state.multiSocketUsers = multiSocketCount;
+                document.getElementById('multiSocketUsers').textContent = multiSocketCount;
+                document.getElementById('debugMultiSocketUsers').textContent = multiSocketCount;
                 
                 // Update user count display
                 document.getElementById('userCountDisplay').textContent = `Showing ${state.filteredUsers.length} of ${state.users.length} users`;
@@ -1914,6 +1956,8 @@
                 filtered = filtered.filter(user => !user.isOnline);
             } else if (statusFilter === 'telegram') {
                 filtered = filtered.filter(user => user.telegramId);
+            } else if (statusFilter === 'multi') {
+                filtered = filtered.filter(user => (user.socketCount || 0) > 1);
             }
             
             // Apply search filter
@@ -1932,6 +1976,8 @@
                 filtered.sort((a, b) => a.userName.localeCompare(b.userName));
             } else if (sortFilter === 'recent') {
                 filtered.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+            } else if (sortFilter === 'sockets') {
+                filtered.sort((a, b) => (b.socketCount || 0) - (a.socketCount || 0));
             } else {
                 // Default: online status first
                 filtered.sort((a, b) => {
@@ -1964,7 +2010,7 @@
             if (state.filteredUsers.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                             <i class="fas fa-users-slash" style="font-size: 2rem; margin-bottom: 10px; display: block;"></i>
                             No users found matching your filters
                         </td>
@@ -1977,6 +2023,7 @@
                 const row = document.createElement('tr');
                 row.setAttribute('data-online', user.isOnline);
                 row.setAttribute('data-telegram', !!user.telegramId);
+                row.setAttribute('data-multi', (user.socketCount || 0) > 1);
                 
                 // Status badge with real-time indicator
                 let statusBadge = '';
@@ -2005,6 +2052,17 @@
                     }
                     statusBadge = `<span class="status-badge status-offline"><i class="fas fa-clock"></i> ${timeText}</span>`;
                 }
+                
+                // Socket badge
+                const socketCount = user.socketCount || 0;
+                const socketBadgeClass = socketCount > 1 ? 'socket-multiple' : 'socket-single';
+                const socketBadge = `
+                    <div class="socket-badge ${socketBadgeClass}">
+                        <i class="fas fa-plug"></i> ${socketCount}
+                        ${socketCount > 1 ? '<i class="fas fa-exclamation-circle"></i>' : ''}
+                    </div>
+                    ${socketCount > 1 ? '<div class="multi-warning"><i class="fas fa-mobile-alt"></i> Multiple devices</div>' : ''}
+                `;
                 
                 // Room badge
                 let roomBadge = '<span style="color: var(--text-muted);">Lobby</span>';
@@ -2067,6 +2125,7 @@
                         ${user.balance.toFixed(2)} ETB
                     </td>
                     <td>${statusBadge}</td>
+                    <td>${socketBadge}</td>
                     <td>${roomBadge}</td>
                     <td>
                         <div style="font-size: 0.9rem; color: ${user.isOnline ? 'var(--success)' : 'var(--text-muted)'}">
@@ -2087,6 +2146,7 @@
                             <button class="btn-action btn-ban" onclick="banUser('${user.userId}')" title="Ban User">
                                 <i class="fas fa-ban"></i>
                             </button>
+                            ${(user.socketCount || 0) > 1 ? '<button class="btn-action" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);" onclick="disconnectUser(\'' + user.userId + '\')" title="Disconnect All Sockets"><i class="fas fa-plug"></i></button>' : ''}
                         </div>
                     </td>
                 `;
@@ -2105,7 +2165,7 @@
             newOnline.forEach(userId => {
                 const user = currentUsers.find(u => u.userId === userId);
                 if (user) {
-                    addActivityItem({message: `${user.userName} came online`});
+                    addActivityItem({message: `${user.userName} came online (${user.socketCount || 1} sockets)`});
                 }
             });
             
@@ -2115,6 +2175,21 @@
                 const user = previousUsers.find(u => u.userId === userId);
                 if (user) {
                     addActivityItem({message: `${user.userName} went offline`});
+                }
+            });
+            
+            // Users with socket count changes
+            previousUsers.forEach(prevUser => {
+                const currentUser = currentUsers.find(u => u.userId === prevUser.userId);
+                if (currentUser) {
+                    const prevSockets = prevUser.socketCount || 0;
+                    const currSockets = currentUser.socketCount || 0;
+                    
+                    if (currSockets > prevSockets && currSockets > 1) {
+                        addActivityItem({message: `${currentUser.userName} now has ${currSockets} active sockets`});
+                    } else if (currSockets < prevSockets && prevSockets > 1) {
+                        addActivityItem({message: `${currentUser.userName} down to ${currSockets} sockets`});
+                    }
                 }
             });
         }
@@ -2412,8 +2487,16 @@
 
         function kickUser(userId) {
             if (confirm('Kick this user from the game?')) {
-                showToast('Kick functionality coming soon', 'warning');
+                state.socket.emit('admin:kickPlayer', userId);
                 addSystemLog(`Kicked user ${userId}`);
+            }
+        }
+        
+        function disconnectUser(userId) {
+            if (confirm('Disconnect all sockets for this user? They may reconnect automatically.')) {
+                state.socket.emit('admin:disconnectUser', userId);
+                addSystemLog(`Disconnected all sockets for user ${userId}`);
+                showToast(`Disconnected all sockets for user`, 'warning');
             }
         }
 
@@ -2678,7 +2761,7 @@
             document.getElementById('debugSockets').textContent = state.socket.connected ? 'Connected' : 'Disconnected';
             document.getElementById('debugMappedUsers').textContent = state.users.filter(u => u.isOnline).length;
             document.getElementById('debugAdmins').textContent = '1'; // Current admin session
-            document.getElementById('debugTelegramUsers').textContent = state.users.filter(u => u.telegramId).length;
+            document.getElementById('debugMultiSocketUsers').textContent = state.multiSocketUsers;
         }
         
         function fetchDebugConnections() {
@@ -2699,7 +2782,39 @@
             const debugOutput = document.getElementById('debugOutput');
             const debugModal = document.getElementById('debugConnectionsInfo');
             
-            const formattedData = JSON.stringify(data, null, 2);
+            // Format the data nicely
+            let formattedData = `=== CONNECTION DEBUG ===\n`;
+            formattedData += `Timestamp: ${new Date(data.timestamp).toLocaleString()}\n`;
+            formattedData += `Total Connected Users: ${data.totalConnectedUsers}\n`;
+            formattedData += `Connected Sockets: ${data.connectedSocketsCount}\n`;
+            formattedData += `Socket->User Mappings: ${data.socketToUserCount}\n`;
+            formattedData += `User->Sockets Mappings: ${data.userToSocketsCount}\n`;
+            formattedData += `Admin Sockets: ${data.adminSocketsCount}\n\n`;
+            
+            formattedData += `=== USER TO SOCKETS MAPPING ===\n`;
+            if (data.userToSockets && data.userToSockets.length > 0) {
+                data.userToSockets.forEach(mapping => {
+                    formattedData += `User: ${mapping.userId.substring(0, 15)}... (${mapping.socketCount} sockets)\n`;
+                    if (mapping.sockets && mapping.sockets.length > 0) {
+                        mapping.sockets.forEach(socketId => {
+                            formattedData += `  └─ ${socketId.substring(0, 10)}...\n`;
+                        });
+                    }
+                });
+            } else {
+                formattedData += `No user to sockets mappings found\n`;
+            }
+            
+            formattedData += `\n=== CONNECTED SOCKETS ===\n`;
+            if (data.connectedSockets && data.connectedSockets.length > 0) {
+                data.connectedSockets.slice(0, 20).forEach(socket => {
+                    const status = socket.connected ? '✅' : '❌';
+                    formattedData += `${status} ${socket.socketId.substring(0, 10)}... -> ${socket.userId || 'unknown'}\n`;
+                });
+                if (data.connectedSockets.length > 20) {
+                    formattedData += `... and ${data.connectedSockets.length - 20} more sockets\n`;
+                }
+            }
             
             if (debugOutput) {
                 debugOutput.textContent = formattedData;
@@ -2770,13 +2885,14 @@
         function exportUsers() {
             // Simple CSV export
             const csv = [
-                ['User ID', 'Name', 'Telegram ID', 'Balance', 'Status', 'Last Seen', 'Joined At', 'Total Wagered', 'Total Wins'],
+                ['User ID', 'Name', 'Telegram ID', 'Balance', 'Status', 'Socket Count', 'Last Seen', 'Joined At', 'Total Wagered', 'Total Wins'],
                 ...state.users.map(user => [
                     user.userId,
                     user.userName,
                     user.telegramId || '',
                     user.balance,
                     user.isOnline ? 'Online' : 'Offline',
+                    user.socketCount || 0,
                     new Date(user.lastSeen).toLocaleString(),
                     new Date(user.joinedAt).toLocaleDateString(),
                     user.totalWagered,
@@ -2833,8 +2949,8 @@
         setTimeout(() => {
             if (state.isAdmin) {
                 addActivityItem({message: 'System initialized successfully'});
-                addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard'});
-                addSystemLog('Admin dashboard loaded');
+                addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard v3.0'});
+                addSystemLog('Admin dashboard loaded with multi-socket support');
             }
         }, 2000);
     </script>
