@@ -200,6 +200,20 @@
             font-weight: 700;
         }
         
+        .player-count .prize-info {
+            margin-top: 4px;
+            font-size: 0.6rem;
+            line-height: 1.2;
+        }
+        
+        .player-count .base-prize {
+            color: var(--b-green);
+        }
+        
+        .player-count .bonus-prize {
+            color: var(--p-gold);
+        }
+        
         .room-full {
             position: absolute;
             top: 0;
@@ -617,6 +631,51 @@
             text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
         }
 
+        .prize-breakdown {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            font-size: 0.9rem;
+            text-align: left;
+            max-width: 300px;
+        }
+
+        .prize-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .prize-label {
+            color: #94a3b8;
+        }
+
+        .prize-value {
+            color: white;
+            font-weight: 700;
+        }
+
+        .prize-total {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 2px solid var(--p-gold);
+            font-size: 1.1rem;
+            font-weight: 900;
+        }
+
+        .prize-total .prize-label {
+            color: var(--p-gold);
+        }
+
+        .prize-total .prize-value {
+            color: var(--p-gold);
+        }
+
         .four-corners-badge {
             position: absolute;
             top: -5px;
@@ -849,6 +908,11 @@
                 top: 60px;
                 max-width: 300px;
             }
+            
+            .prize-breakdown {
+                padding: 10px;
+                font-size: 0.8rem;
+            }
         }
 
         /* Very small phones */
@@ -922,7 +986,23 @@
 
 <div id="winOverlay">
     <div class="game-status-title win-gradient">BINGO!</div>
-    <div id="winPrize" style="font-weight: 900; color: white; font-size: 1.8rem; margin: 10px 0; line-height: 1.4;">+0.00 ETB</div>
+    <div id="winPrize" style="font-weight: 900; color: white; font-size: 2.2rem; margin: 10px 0; line-height: 1.4;">+0.00 ETB</div>
+    
+    <div class="prize-breakdown" id="prizeBreakdown" style="display: none;">
+        <div class="prize-item">
+            <span class="prize-label">Base Prize:</span>
+            <span class="prize-value" id="basePrizeValue">0.00 ETB</span>
+        </div>
+        <div class="prize-item" id="bonusItem" style="display: none;">
+            <span class="prize-label">Four Corners Bonus:</span>
+            <span class="prize-value" id="bonusValue">+0.00 ETB</span>
+        </div>
+        <div class="prize-total">
+            <span class="prize-label">TOTAL WIN:</span>
+            <span class="prize-value" id="totalPrizeValue">0.00 ETB</span>
+        </div>
+    </div>
+    
     <div id="bonusMessage" class="bonus-message" style="display: none;"></div>
     <p style="color: #94a3b8; margin-top: 20px;">RETURNING TO LOBBY...</p>
 </div>
@@ -930,6 +1010,26 @@
 <div id="loseOverlay">
     <div class="game-status-title lose-gradient">GAME OVER</div>
     <div id="loseMessage" style="font-weight: 900; color: white; font-size: 1.2rem; margin: 10px 0; line-height: 1.4;">Someone else won!</div>
+    
+    <div class="prize-breakdown" id="losePrizeBreakdown" style="display: none;">
+        <div class="prize-item">
+            <span class="prize-label">Winner:</span>
+            <span class="prize-value" id="winnerName">Player</span>
+        </div>
+        <div class="prize-item">
+            <span class="prize-label">Total Won:</span>
+            <span class="prize-value" id="winnerTotal">0.00 ETB</span>
+        </div>
+        <div class="prize-item" id="loseBonusItem" style="display: none;">
+            <span class="prize-label">Four Corners Bonus:</span>
+            <span class="prize-value" id="loseBonusValue">+0.00 ETB</span>
+        </div>
+        <div class="prize-item">
+            <span class="prize-label">Players:</span>
+            <span class="prize-value" id="playersCount">0</span>
+        </div>
+    </div>
+    
     <div id="specialWinMessage" class="bonus-message" style="display: none;"></div>
     <p style="color: #94a3b8; margin-top: 20px;">RETURNING TO LOBBY...</p>
 </div>
@@ -959,25 +1059,49 @@
             <span class="stake-label">BRONZE</span>
             <span class="stake-val">10 ETB</span>
             <div class="room-status status-waiting" id="roomStatus10">WAITING</div>
-            <div class="player-count" id="roomPlayers10">0/100 players</div>
+            <div class="player-count" id="roomPlayers10">
+                <span class="count">0</span>/100 players
+                <div class="prize-info">
+                    <span class="base-prize" id="roomPrize10">Prize: 0 ETB</span><br>
+                    <span class="bonus-prize" id="roomPrizeBonus10">With Bonus: 0 ETB</span>
+                </div>
+            </div>
         </div>
         <div class="stake-btn" onclick="selectStake(20)">
             <span class="stake-label">SILVER</span>
             <span class="stake-val">20 ETB</span>
             <div class="room-status status-waiting" id="roomStatus20">WAITING</div>
-            <div class="player-count" id="roomPlayers20">0/100 players</div>
+            <div class="player-count" id="roomPlayers20">
+                <span class="count">0</span>/100 players
+                <div class="prize-info">
+                    <span class="base-prize" id="roomPrize20">Prize: 0 ETB</span><br>
+                    <span class="bonus-prize" id="roomPrizeBonus20">With Bonus: 0 ETB</span>
+                </div>
+            </div>
         </div>
         <div class="stake-btn" onclick="selectStake(50)">
             <span class="stake-label">GOLD</span>
             <span class="stake-val">50 ETB</span>
             <div class="room-status status-waiting" id="roomStatus50">WAITING</div>
-            <div class="player-count" id="roomPlayers50">0/100 players</div>
+            <div class="player-count" id="roomPlayers50">
+                <span class="count">0</span>/100 players
+                <div class="prize-info">
+                    <span class="base-prize" id="roomPrize50">Prize: 0 ETB</span><br>
+                    <span class="bonus-prize" id="roomPrizeBonus50">With Bonus: 0 ETB</span>
+                </div>
+            </div>
         </div>
         <div class="stake-btn" onclick="selectStake(100)">
             <span class="stake-label">ELITE</span>
             <span class="stake-val">100 ETB</span>
             <div class="room-status status-waiting" id="roomStatus100">WAITING</div>
-            <div class="player-count" id="roomPlayers100">0/100 players</div>
+            <div class="player-count" id="roomPlayers100">
+                <span class="count">0</span>/100 players
+                <div class="prize-info">
+                    <span class="base-prize" id="roomPrize100">Prize: 0 ETB</span><br>
+                    <span class="bonus-prize" id="roomPrizeBonus100">With Bonus: 0 ETB</span>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -1001,6 +1125,20 @@
         </div>
         <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
             Win with <strong>Four Corners</strong> pattern (B1, B5, O1, O5) and get <strong>+50 ETB BONUS</strong> from the house!
+        </p>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3); max-width: 300px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <div style="color: var(--b-blue); font-size: 1.5rem;">💰</div>
+            <div style="font-weight: 700; color: var(--b-blue);">HOW PRIZES WORK</div>
+        </div>
+        <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
+            <strong>10 ETB Room:</strong><br>
+            • You pay: 10 ETB<br>
+            • House commission: 2 ETB<br>
+            • Contribution to prize: 8 ETB<br>
+            • Prize = 8 ETB × number of players
         </p>
     </div>
 </div>
@@ -1389,8 +1527,10 @@
         for (const [stake, roomInfo] of Object.entries(state.roomStatuses)) {
             const statusElement = document.getElementById(`roomStatus${stake}`);
             const playersElement = document.getElementById(`roomPlayers${stake}`);
+            const prizeElement = document.getElementById(`roomPrize${stake}`);
+            const prizeBonusElement = document.getElementById(`roomPrizeBonus${stake}`);
             
-            if (statusElement && playersElement) {
+            if (statusElement && playersElement && prizeElement && prizeBonusElement) {
                 const status = roomInfo.status.toUpperCase();
                 statusElement.textContent = status;
                 statusElement.className = 'room-status';
@@ -1406,7 +1546,16 @@
                 }
                 
                 const playerCount = roomInfo.playerCount || 0;
-                playersElement.innerHTML = `<span class="count">${playerCount}</span>/100 players`;
+                const potentialPrize = roomInfo.potentialPrize || 0;
+                const withBonus = (potentialPrize + (roomInfo.fourCornersBonus || 0)).toFixed(0);
+                
+                playersElement.innerHTML = `
+                    <span class="count">${playerCount}</span>/100 players
+                    <div class="prize-info">
+                        <span class="base-prize" id="roomPrize${stake}">Prize: ${potentialPrize} ETB</span><br>
+                        <span class="bonus-prize" id="roomPrizeBonus${stake}">With Bonus: ${withBonus} ETB</span>
+                    </div>
+                `;
             }
         }
     }
@@ -1910,6 +2059,8 @@
         // Reset bonus messages
         document.getElementById('bonusMessage').style.display = 'none';
         document.getElementById('specialWinMessage').style.display = 'none';
+        document.getElementById('prizeBreakdown').style.display = 'none';
+        document.getElementById('losePrizeBreakdown').style.display = 'none';
         
         // Send activity update
         if (state.isConnected) {
@@ -2022,38 +2173,69 @@
             if(isWinner) {
                 const winOverlay = document.getElementById('winOverlay');
                 const bonusMessage = document.getElementById('bonusMessage');
+                const prizeBreakdown = document.getElementById('prizeBreakdown');
+                const basePrizeValue = document.getElementById('basePrizeValue');
+                const bonusValue = document.getElementById('bonusValue');
+                const totalPrizeValue = document.getElementById('totalPrizeValue');
+                const bonusItem = document.getElementById('bonusItem');
+                
+                // Update prize breakdown
+                basePrizeValue.textContent = d.basePrize.toFixed(2) + " ETB";
+                totalPrizeValue.textContent = d.prize.toFixed(2) + " ETB";
                 
                 if (d.isFourCornersWin) {
-                    // Display bonus breakdown for four corners win
-                    document.getElementById('winPrize').innerHTML = `
-                        +${(d.prize - d.bonus).toFixed(2)} ETB<br>
-                        +<span style="color: var(--p-gold);">${d.bonus} ETB Bonus!</span><br>
-                        <strong style="font-size: 2.2rem;">Total: ${d.prize.toFixed(2)} ETB</strong>
-                    `;
+                    bonusValue.textContent = "+" + d.bonus.toFixed(2) + " ETB";
+                    bonusItem.style.display = 'flex';
                     bonusMessage.textContent = "🎯 FOUR CORNERS BONUS AWARDED!";
                     bonusMessage.style.display = 'block';
                 } else {
-                    // Standard win
-                    document.getElementById('winPrize').textContent = `+${d.prize.toFixed(2)} ETB`;
+                    bonusItem.style.display = 'none';
                     bonusMessage.style.display = 'none';
                 }
+                
+                prizeBreakdown.style.display = 'block';
+                
+                // Update main prize display
+                document.getElementById('winPrize').innerHTML = `
+                    🏆 <strong style="font-size: 2.2rem;">${d.prize.toFixed(2)} ETB</strong>
+                `;
                 
                 winOverlay.classList.add('active');
                 setTimeout(resetToLobby, 5000);
             } else {
                 const loseOverlay = document.getElementById('loseOverlay');
                 const specialWinMessage = document.getElementById('specialWinMessage');
+                const losePrizeBreakdown = document.getElementById('losePrizeBreakdown');
+                const winnerName = document.getElementById('winnerName');
+                const winnerTotal = document.getElementById('winnerTotal');
+                const loseBonusValue = document.getElementById('loseBonusValue');
+                const playersCount = document.getElementById('playersCount');
+                const loseBonusItem = document.getElementById('loseBonusItem');
                 
                 let msg = d.winnerId === 'HOUSE' ? "House wins - no one claimed bingo!" : `${d.winnerName} claimed Bingo first!`;
-                
                 document.getElementById('loseMessage').textContent = msg;
                 
-                // Mention if it was a four corners win
-                if (d.isFourCornersWin && d.winnerId !== 'HOUSE') {
-                    specialWinMessage.textContent = `🎯 ${d.winnerName} won with FOUR CORNERS (+${d.bonus} ETB Bonus!)`;
-                    specialWinMessage.style.display = 'block';
+                // Update prize breakdown for loser
+                if (d.winnerId !== 'HOUSE') {
+                    winnerName.textContent = d.winnerName;
+                    winnerTotal.textContent = d.prize.toFixed(2) + " ETB";
+                    playersCount.textContent = d.playersCount;
+                    
+                    if (d.isFourCornersWin) {
+                        loseBonusValue.textContent = "+" + d.bonus.toFixed(2) + " ETB";
+                        loseBonusItem.style.display = 'flex';
+                        specialWinMessage.textContent = `🎯 ${d.winnerName} won with FOUR CORNERS (+${d.bonus} ETB Bonus!)`;
+                        specialWinMessage.style.display = 'block';
+                    } else {
+                        loseBonusItem.style.display = 'none';
+                        specialWinMessage.textContent = `💰 ${d.winnerName} won ${d.prize.toFixed(2)} ETB from ${d.playersCount} players`;
+                        specialWinMessage.style.display = 'block';
+                    }
+                    
+                    losePrizeBreakdown.style.display = 'block';
                 } else {
                     specialWinMessage.style.display = 'none';
+                    losePrizeBreakdown.style.display = 'none';
                 }
                 
                 loseOverlay.classList.add('active');
