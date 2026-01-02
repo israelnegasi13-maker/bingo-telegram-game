@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED FOR ADMIN LOGIN
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED FOR MULTI-SOCKET SUPPORT
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -162,11 +162,80 @@ const BINGO_LETTERS = {
 };
 
 // ========== GLOBAL STATE ==========
-let socketToUser = new Map();
+let socketToUser = new Map(); // socketId -> userId
+let userToSockets = new Map(); // userId -> Set of socketIds
 let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
+
+// ========== SOCKET MAPPING FUNCTIONS ==========
+function updateUserSocketMapping(socketId, userId) {
+  // Update socketToUser
+  socketToUser.set(socketId, userId);
+  
+  // Update userToSockets
+  if (!userToSockets.has(userId)) {
+    userToSockets.set(userId, new Set());
+  }
+  userToSockets.get(userId).add(socketId);
+  
+  console.log(`🔗 Socket mapping updated: ${socketId} -> ${userId}`);
+  console.log(`👤 User ${userId} now has ${userToSockets.get(userId).size} active sockets`);
+}
+
+function removeSocketMapping(socketId) {
+  const userId = socketToUser.get(socketId);
+  
+  if (userId) {
+    // Remove from userToSockets
+    const userSockets = userToSockets.get(userId);
+    if (userSockets) {
+      userSockets.delete(socketId);
+      console.log(`➖ Removed socket ${socketId} from user ${userId}`);
+      
+      // If no more sockets for this user, remove the entry
+      if (userSockets.size === 0) {
+        userToSockets.delete(userId);
+        console.log(`👋 User ${userId} has no more active sockets`);
+      }
+    }
+  }
+  
+  // Remove from socketToUser
+  socketToUser.delete(socketId);
+  connectedSockets.delete(socketId);
+  adminSockets.delete(socketId);
+}
+
+function isUserOnline(userId) {
+  const socketSet = userToSockets.get(userId);
+  if (!socketSet) return false;
+  
+  for (const socketId of socketSet) {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getSocketsForUser(userId) {
+  const sockets = [];
+  const socketSet = userToSockets.get(userId);
+  
+  if (socketSet) {
+    for (const socketId of socketSet) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && socket.connected) {
+        sockets.push(socket);
+      }
+    }
+  }
+  
+  return sockets;
+}
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -254,23 +323,30 @@ async function getRoom(stake) {
 function getConnectedUsers() {
   const connectedUsers = [];
   
-  // Get from socketToUser map (direct WebSocket connections)
-  socketToUser.forEach((userId, socketId) => {
-    // Check if socket is still connected
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket && socket.connected) {
+  // Get from userToSockets map
+  for (const [userId, socketSet] of userToSockets.entries()) {
+    let hasActiveSocket = false;
+    
+    // Check if any socket in the set is still connected
+    for (const socketId of socketSet) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && socket.connected) {
+        hasActiveSocket = true;
+        break;
+      }
+    }
+    
+    if (hasActiveSocket) {
       connectedUsers.push(userId);
     }
-  });
+  }
   
-  // Also check all connected sockets for Telegram users
-  // Some Telegram users might connect without being in socketToUser
+  // Also check all connected sockets for users not in userToSockets
   connectedSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket && socket.connected && socket.handshake && socket.handshake.query) {
-      // Check if this socket has a userId in query params
       const query = socket.handshake.query;
-      if (query.userId) {
+      if (query.userId && !connectedUsers.includes(query.userId)) {
         connectedUsers.push(query.userId);
       }
     }
@@ -329,15 +405,22 @@ async function updateAdminPanel() {
     const connectedUserIds = getConnectedUsers();
     
     const userArray = users.map(user => {
-      // Better online detection - check multiple sources
+      // Check if user has any active sockets
       let isOnline = false;
+      const socketSet = userToSockets.get(user.userId);
       
-      // Check socketToUser map
-      if (connectedUserIds.includes(user.userId)) {
-        isOnline = true;
+      if (socketSet) {
+        for (const socketId of socketSet) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket && socket.connected) {
+            isOnline = true;
+            break;
+          }
+        }
       }
+      
       // Also check if user has been active recently (within 30 seconds)
-      else if (user.lastSeen) {
+      if (!isOnline && user.lastSeen) {
         const lastSeenTime = new Date(user.lastSeen);
         const now = new Date();
         const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
@@ -359,7 +442,8 @@ async function updateAdminPanel() {
         totalWins: user.totalWins || 0,
         lastSeen: user.lastSeen,
         telegramId: user.telegramId || '',
-        joinedAt: user.joinedAt
+        joinedAt: user.joinedAt,
+        socketCount: socketSet?.size || 0
       };
     });
     
@@ -384,7 +468,7 @@ async function updateAdminPanel() {
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
         houseFee: houseFee,
-        players: room.players // Include player IDs
+        players: room.players
       };
     });
     
@@ -399,13 +483,17 @@ async function updateAdminPanel() {
     
     // Send to all admin sockets
     const adminData = {
-      totalPlayers: connectedPlayers, // Real-time connected players
+      totalPlayers: connectedPlayers,
       activeGames: activeGames,
       totalUsers: users.length,
       connectedSockets: connectedSocketsCount,
       houseBalance: houseBalance,
       timestamp: new Date().toISOString(),
-      serverUptime: process.uptime()
+      serverUptime: process.uptime(),
+      socketMappings: {
+        socketToUser: socketToUser.size,
+        userToSockets: userToSockets.size
+      }
     };
     
     adminSockets.forEach(socketId => {
@@ -495,17 +583,13 @@ async function startGameTimer(room) {
         letter: letter
       };
       
-      // Emit to all players in room
+      // Emit to all players in room (all their sockets)
       currentRoom.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.emit('ballDrawn', ballData);
-              socket.emit('enableBingo');
-            }
-          }
-        }
+        const userSockets = getSocketsForUser(userId);
+        userSockets.forEach(socket => {
+          socket.emit('ballDrawn', ballData);
+          socket.emit('enableBingo');
+        });
       });
       
       broadcastRoomStatus();
@@ -585,23 +669,19 @@ async function endGameWithNoWinner(room) {
         });
         await transaction.save();
         
-        // Notify player
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.emit('gameOver', {
-                room: room.stake,
-                winnerId: 'HOUSE',
-                winnerName: 'House',
-                prize: 0,
-                bonus: 0,
-                isFourCornersWin: false
-              });
-              socket.emit('balanceUpdate', user.balance);
-            }
-          }
-        }
+        // Notify player (all their sockets)
+        const userSockets = getSocketsForUser(userId);
+        userSockets.forEach(socket => {
+          socket.emit('gameOver', {
+            room: room.stake,
+            winnerId: 'HOUSE',
+            winnerName: 'House',
+            prize: 0,
+            bonus: 0,
+            isFourCornersWin: false
+          });
+          socket.emit('balanceUpdate', user.balance);
+        });
       }
     }
     
@@ -625,20 +705,26 @@ io.on('connection', (socket) => {
   
   // Enhanced connection logging
   const query = socket.handshake.query;
+  let connectionId = `unknown_${Date.now()}`;
+  
   if (query.userId) {
-    console.log(`👤 User connected via query: ${query.userId}`);
+    connectionId = query.userId;
+    console.log(`👤 User connected via query: ${query.userId} (socket: ${socket.id})`);
   }
+  
+  // Generate unique connection ID for testing
+  socket.uniqueConnectionId = connectionId + '_' + socket.id.substring(0, 8);
   
   // Send connection test immediately
   socket.emit('connectionTest', { 
     status: 'connected', 
     serverTime: new Date().toISOString(),
     socketId: socket.id,
-    server: 'Bingo Elite Telegram',
-    userId: query.userId || 'unknown'
+    uniqueId: socket.uniqueConnectionId,
+    userId: connectionId
   });
   
-  // ========== ADMIN AUTHENTICATION - FIXED ==========
+  // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', (password) => {
     console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
     
@@ -690,19 +776,15 @@ io.on('connection', (socket) => {
     });
     await transaction.save();
     
-    // Notify player if online
-    for (const [sId, uId] of socketToUser.entries()) {
-      if (uId === userId) {
-        const playerSocket = io.sockets.sockets.get(sId);
-        if (playerSocket) {
-          playerSocket.emit('balanceUpdate', user.balance);
-          playerSocket.emit('fundsAdded', {
-            amount: amount,
-            newBalance: user.balance
-          });
-        }
-      }
-    }
+    // Notify player if online (all their sockets)
+    const userSockets = getSocketsForUser(userId);
+    userSockets.forEach(playerSocket => {
+      playerSocket.emit('balanceUpdate', user.balance);
+      playerSocket.emit('fundsAdded', {
+        amount: amount,
+        newBalance: user.balance
+      });
+    });
     
     socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
     updateAdminPanel();
@@ -736,15 +818,12 @@ io.on('connection', (socket) => {
         letter: letter
       };
       
+      // Notify all players in room (all their sockets)
       room.players.forEach(userId => {
-        for (const [sId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              s.emit('ballDrawn', ballData);
-            }
-          }
-        }
+        const userSockets = getSocketsForUser(userId);
+        userSockets.forEach(s => {
+          s.emit('ballDrawn', ballData);
+        });
       });
       
       socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
@@ -766,16 +845,12 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Notify the user if online
-    for (const [sId, uId] of socketToUser.entries()) {
-      if (uId === userId) {
-        const playerSocket = io.sockets.sockets.get(sId);
-        if (playerSocket) {
-          playerSocket.emit('banned');
-          playerSocket.disconnect();
-        }
-      }
-    }
+    // Notify the user if online (all their sockets)
+    const userSockets = getSocketsForUser(userId);
+    userSockets.forEach(playerSocket => {
+      playerSocket.emit('banned');
+      playerSocket.disconnect();
+    });
     
     socket.emit('admin:success', `Banned user ${user.userName}`);
     updateAdminPanel();
@@ -834,23 +909,19 @@ io.on('connection', (socket) => {
           });
           await transaction.save();
           
-          // Notify player
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              const s = io.sockets.sockets.get(sId);
-              if (s) {
-                s.emit('gameOver', {
-                  room: roomStake,
-                  winnerId: 'ADMIN',
-                  winnerName: 'Admin',
-                  prize: 0,
-                  bonus: 0,
-                  isFourCornersWin: false
-                });
-                s.emit('balanceUpdate', user.balance);
-              }
-            }
-          }
+          // Notify player (all their sockets)
+          const userSockets = getSocketsForUser(userId);
+          userSockets.forEach(s => {
+            s.emit('gameOver', {
+              room: roomStake,
+              winnerId: 'ADMIN',
+              winnerName: 'Admin',
+              prize: 0,
+              bonus: 0,
+              isFourCornersWin: false
+            });
+            s.emit('balanceUpdate', user.balance);
+          });
         }
       }
       
@@ -870,16 +941,26 @@ io.on('connection', (socket) => {
     try {
       const { userId, userName } = data;
       
-      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
+      // Generate a more unique ID for testing/debugging
+      let uniqueUserId = userId;
       
-      const user = await getUser(userId, userName);
+      // If no proper userId provided (testing), create a unique one
+      if (!userId || userId === 'Guest' || userId.includes('undefined')) {
+        uniqueUserId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`🆔 Generated unique ID for testing: ${uniqueUserId}`);
+      }
+      
+      console.log(`📱 User init: ${userName} (${uniqueUserId}) via socket ${socket.id}`);
+      
+      const user = await getUser(uniqueUserId, userName);
       
       if (user) {
-        socketToUser.set(socket.id, userId);
+        // Update socket mappings
+        updateUserSocketMapping(socket.id, uniqueUserId);
         
-        // Also update user's lastSeen immediately
+        // Update user's lastSeen
         await User.findOneAndUpdate(
-          { userId: userId },
+          { userId: uniqueUserId },
           { 
             isOnline: true,
             lastSeen: new Date(),
@@ -889,22 +970,31 @@ io.on('connection', (socket) => {
         
         socket.emit('balanceUpdate', user.balance);
         socket.emit('userData', {
-          userId: userId,
+          userId: uniqueUserId,
           userName: user.userName,
           balance: user.balance,
-          referralCode: user.referralCode
+          referralCode: user.referralCode,
+          socketId: socket.id
         });
         
-        socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
+        socket.emit('connected', { 
+          message: 'Successfully connected to Bingo Elite',
+          userId: uniqueUserId,
+          socketId: socket.id
+        });
         
-        // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId})`);
+        console.log(`✅ User connected: ${userName} (${uniqueUserId}) via socket ${socket.id}`);
         
-        // Update admin panel with new connection IN REAL-TIME
+        // Update admin panel
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
+        logActivity('USER_CONNECTED', { 
+          userId: uniqueUserId, 
+          userName: userName, 
+          socketId: socket.id,
+          totalSocketsForUser: userToSockets.get(uniqueUserId)?.size || 0 
+        });
       } else {
         socket.emit('error', 'Failed to initialize user');
       }
@@ -1009,19 +1099,15 @@ io.on('connection', (socket) => {
       
       const playerCount = roomData.players.length;
       
-      // Update all players in room about lobby count
+      // Update all players in room about lobby count (all their sockets)
       roomData.players.forEach(playerUserId => {
-        for (const [sId, uId] of socketToUser.entries()) {
-          if (uId === playerUserId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              s.emit('lobbyUpdate', {
-                room: room,
-                count: playerCount
-              });
-            }
-          }
-        }
+        const userSockets = getSocketsForUser(playerUserId);
+        userSockets.forEach(s => {
+          s.emit('lobbyUpdate', {
+            room: room,
+            count: playerCount
+          });
+        });
       });
       
       if (playerCount >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
@@ -1038,17 +1124,13 @@ io.on('connection', (socket) => {
             }
             
             currentRoom.players.forEach(playerUserId => {
-              for (const [sId, uId] of socketToUser.entries()) {
-                if (uId === playerUserId) {
-                  const s = io.sockets.sockets.get(sId);
-                  if (s) {
-                    s.emit('gameCountdown', {
-                      room: room,
-                      timer: countdown
-                    });
-                  }
-                }
-              }
+              const userSockets = getSocketsForUser(playerUserId);
+              userSockets.forEach(s => {
+                s.emit('gameCountdown', {
+                  room: room,
+                  timer: countdown
+                });
+              });
             });
             
             countdown--;
@@ -1183,48 +1265,45 @@ io.on('connection', (socket) => {
         roomTimers.delete(room);
       }
       
-      // Notify all players in the room
+      // Notify all players in the room (all their sockets)
       roomData.players.forEach(playerUserId => {
-        for (const [sId, uId] of socketToUser.entries()) {
-          if (uId === playerUserId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              if (uId === userId) {
-                // Winner
-                s.emit('gameOver', {
-                  room: room,
-                  winnerId: userId,
-                  winnerName: user.userName,
-                  prize: prize,
-                  bonus: bonus,
-                  isFourCornersWin: isFourCornersWin
-                });
-                s.emit('balanceUpdate', user.balance);
-              } else {
-                // Loser
-                s.emit('gameOver', {
-                  room: room,
-                  winnerId: userId,
-                  winnerName: user.userName,
-                  prize: prize,
-                  bonus: bonus,
-                  isFourCornersWin: isFourCornersWin
-                });
-                
-                // Reset their room status
-                User.findOneAndUpdate(
-                  { userId: uId },
-                  { 
-                    currentRoom: null,
-                    box: null,
-                    isOnline: true,
-                    lastSeen: new Date()
-                  }
-                ).catch(console.error);
+        const userSockets = getSocketsForUser(playerUserId);
+        
+        userSockets.forEach(s => {
+          if (playerUserId === userId) {
+            // Winner
+            s.emit('gameOver', {
+              room: room,
+              winnerId: userId,
+              winnerName: user.userName,
+              prize: prize,
+              bonus: bonus,
+              isFourCornersWin: isFourCornersWin
+            });
+            s.emit('balanceUpdate', user.balance);
+          } else {
+            // Loser
+            s.emit('gameOver', {
+              room: room,
+              winnerId: userId,
+              winnerName: user.userName,
+              prize: prize,
+              bonus: bonus,
+              isFourCornersWin: isFourCornersWin
+            });
+            
+            // Reset their room status
+            User.findOneAndUpdate(
+              { userId: playerUserId },
+              { 
+                currentRoom: null,
+                box: null,
+                isOnline: true,
+                lastSeen: new Date()
               }
-            }
+            ).catch(console.error);
           }
-        }
+        });
       });
       
       broadcastRoomStatus();
@@ -1262,33 +1341,32 @@ io.on('connection', (socket) => {
     }
   });
   
-  socket.on('disconnect', () => {
-    console.log(`❌ Socket.IO Disconnected: ${socket.id}`);
-    connectedSockets.delete(socket.id);
-    adminSockets.delete(socket.id);
-    
+  // Heartbeat system
+  socket.on('heartbeat', (data) => {
     const userId = socketToUser.get(socket.id);
     if (userId) {
+      // Update user's last heartbeat
       User.findOneAndUpdate(
         { userId: userId },
-        { 
-          isOnline: false,
-          lastSeen: new Date() 
-        }
-      ).then(() => {
-        console.log(`👤 User went offline: ${userId}`);
-      }).catch(console.error);
-      
-      socketToUser.delete(socket.id);
+        { lastSeen: new Date() }
+      ).catch(console.error);
     }
-    
-    // Update admin panel on disconnect IN REAL-TIME
-    updateAdminPanel();
+    socket.emit('heartbeat_ack', { time: Date.now() });
   });
   
-  // Heartbeat for connection monitoring
-  socket.on('ping', () => {
-    socket.emit('pong', { time: Date.now() });
+  socket.on('disconnect', () => {
+    console.log(`❌ Socket.IO Disconnected: ${socket.id}`);
+    
+    // Remove socket mappings
+    removeSocketMapping(socket.id);
+    
+    // Update admin panel on disconnect
+    updateAdminPanel();
+    
+    logActivity('USER_DISCONNECTED', { 
+      socketId: socket.id,
+      userId: socketToUser.get(socket.id) || 'unknown'
+    });
   });
 });
 
@@ -1302,44 +1380,62 @@ setInterval(() => {
   updateAdminPanel();
 }, 2000);
 
-// Clean up disconnected sockets periodically
+// Heartbeat check
 setInterval(() => {
-  socketToUser.forEach((userId, socketId) => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (!socket || !socket.connected) {
-      socketToUser.delete(socketId);
-      console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
-    }
-  });
-}, 10000);
+  io.emit('heartbeat_check', { time: Date.now() });
+}, 30000);
 
 // ========== CONNECTION CLEANUP FUNCTION ==========
 async function cleanupStaleConnections() {
   console.log('🧹 Running connection cleanup...');
   
   const now = new Date();
-  const thirtySecondsAgo = new Date(now.getTime() - 30000);
+  const oneMinuteAgo = new Date(now.getTime() - 60000);
   
   try {
-    // Update users who haven't been seen in 30 seconds
+    // Clean up stale socket mappings
+    const staleSockets = [];
+    
+    // Check userToSockets for stale connections
+    for (const [userId, socketSet] of userToSockets.entries()) {
+      const activeSockets = new Set();
+      
+      // Check each socket
+      for (const socketId of socketSet) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (!socket || !socket.connected) {
+          staleSockets.push({ socketId, userId });
+        } else {
+          activeSockets.add(socketId);
+        }
+      }
+      
+      // Update the set
+      if (activeSockets.size === 0) {
+        userToSockets.delete(userId);
+      } else {
+        userToSockets.set(userId, activeSockets);
+      }
+    }
+    
+    // Remove stale sockets from other maps
+    staleSockets.forEach(({ socketId, userId }) => {
+      socketToUser.delete(socketId);
+      connectedSockets.delete(socketId);
+      adminSockets.delete(socketId);
+      console.log(`🧹 Removed stale socket: ${socketId} (user: ${userId})`);
+    });
+    
+    // Update users who haven't been seen in 1 minute
     await User.updateMany(
       { 
-        lastSeen: { $lt: thirtySecondsAgo },
+        lastSeen: { $lt: oneMinuteAgo },
         isOnline: true 
       },
       { 
         isOnline: false 
       }
     );
-    
-    // Clean up socketToUser map
-    socketToUser.forEach((userId, socketId) => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (!socket || !socket.connected) {
-        socketToUser.delete(socketId);
-        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
-      }
-    });
     
   } catch (error) {
     console.error('Error in cleanupStaleConnections:', error);
@@ -1382,7 +1478,7 @@ app.get('/', (req, res) => {
           <div class="stats-grid">
             <div class="stat">
               <div class="stat-label">Connected Players</div>
-              <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
+              <div class="stat-value" id="playerCount">${getConnectedUsers().length}</div>
             </div>
             <div class="stat">
               <div class="stat-label">Database Status</div>
@@ -1412,22 +1508,15 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.0.0 (Telegram Ready) | Database: MongoDB Atlas<br>
+            Version: 2.0.0 (Multi-Socket Support) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
+            Active Users: ${getConnectedUsers().length}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Bot Username: @ethio_games1_bot
           </p>
         </div>
       </div>
-      
-      <script>
-        // Real-time player count update
-        const socket = io();
-        socket.on('connect', () => {
-          document.getElementById('playerCount').textContent = 'Connected';
-        });
-      </script>
     </body>
     </html>
   `);
@@ -1676,7 +1765,7 @@ app.get('/socket-test', (req, res) => {
         function testInit() {
           addLog('Testing user initialization...', 'info');
           socket.emit('init', {
-            userId: 'test-' + Date.now(),
+            userId: 'test-' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
             userName: 'Test Player'
           });
         }
@@ -1720,6 +1809,7 @@ app.get('/health', async (req, res) => {
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSockets.size,
       socketToUser: socketToUser.size,
+      userToSockets: userToSockets.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
       totalRooms: rooms,
@@ -1730,7 +1820,14 @@ app.get('/health', async (req, res) => {
       nodeVersion: process.version,
       telegramReady: true,
       botUsername: '@ethio_games1_bot',
-      serverUrl: 'https://bingo-telegram-game.onrender.com'
+      serverUrl: 'https://bingo-telegram-game.onrender.com',
+      socketMappings: {
+        socketToUser: Array.from(socketToUser.entries()).slice(0, 5),
+        userToSockets: Array.from(userToSockets.entries()).map(([userId, sockets]) => ({
+          userId: userId,
+          socketCount: sockets.size
+        })).slice(0, 5)
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1748,7 +1845,8 @@ app.get('/api/user/:userId', async (req, res) => {
       userId: user.userId,
       userName: user.userName,
       balance: user.balance,
-      isOnline: user.isOnline,
+      isOnline: isUserOnline(user.userId),
+      socketCount: userToSockets.get(user.userId)?.size || 0,
       lastSeen: user.lastSeen,
       telegramId: user.telegramId
     });
@@ -1801,12 +1899,18 @@ app.get('/real-time-status', async (req, res) => {
     const connectedPlayers = getConnectedUsers().length;
     const connectedSocketsCount = connectedSockets.size;
     const socketToUserSize = socketToUser.size;
+    const userToSocketsSize = userToSockets.size;
     
     res.json({
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSocketsCount,
       socketToUserSize: socketToUserSize,
+      userToSocketsSize: userToSocketsSize,
       socketToUser: Array.from(socketToUser.entries()),
+      userToSockets: Array.from(userToSockets.entries()).map(([userId, sockets]) => ({
+        userId: userId,
+        sockets: Array.from(sockets)
+      })),
       adminSockets: Array.from(adminSockets),
       timestamp: new Date().toISOString()
     });
@@ -1828,6 +1932,12 @@ app.get('/debug-connections', async (req, res) => {
       connectedUserIds: connectedUserIds,
       socketToUserCount: socketToUser.size,
       socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
+      userToSocketsCount: userToSockets.size,
+      userToSockets: Array.from(userToSockets.entries()).map(([userId, socketSet]) => ({
+        userId,
+        socketCount: socketSet.size,
+        sockets: Array.from(socketSet)
+      })),
       connectedSocketsCount: connectedSockets.size,
       connectedSockets: connectedSocketsArray.map(socketId => {
         const socket = io.sockets.sockets.get(socketId);
@@ -1867,7 +1977,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         
         if (!user) {
           user = new User({
-            userId: `tg_${userId}`,
+            userId: `tg_${userId}_${Date.now().toString().slice(-6)}`,
             userName: userName,
             telegramId: userId,
             telegramUsername: username,
@@ -2050,7 +2160,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║             🤖 BINGO ELITE - TELEGRAM READY         ║
+║      🤖 BINGO ELITE - MULTI-SOCKET SUPPORT          ║
 ╠══════════════════════════════════════════════════════╣
 ║  URL:          https://bingo-telegram-game.onrender.com ║
 ║  Port:         ${PORT}                                ║
@@ -2064,10 +2174,10 @@ server.listen(PORT, () => {
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
 ║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}... ║
-║  📡 WebSocket: ✅ Ready for Telegram connections    ║
+║  📡 Multi-Socket: ✅ Support enabled                ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready for REAL-TIME tracking and Telegram Mini App
+✅ Server ready for MULTI-DEVICE connections and Telegram Mini App
   `);
   
   // Initial broadcast
