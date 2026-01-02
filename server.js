@@ -610,8 +610,11 @@ function checkBingo(markedNumbers, grid) {
 
 async function endGameWithNoWinner(room) {
   try {
+    // Store players list before clearing
+    const playersInRoom = [...room.players];
+    
     // Return funds to all players
-    for (const userId of room.players) {
+    for (const userId of playersInRoom) {
       const user = await User.findOne({ userId: userId });
       if (user) {
         user.balance += room.stake; // Return their stake
@@ -864,8 +867,11 @@ io.on('connection', (socket) => {
       // Clear game timer
       cleanupRoomTimer(roomStake);
       
+      // Store players list before clearing
+      const playersInRoom = [...room.players];
+      
       // Return funds to all players
-      for (const userId of room.players) {
+      for (const userId of playersInRoom) {
         const user = await User.findOne({ userId: userId });
         if (user) {
           user.balance += roomStake;
@@ -933,8 +939,11 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Store players list before clearing
+    const playersInRoom = [...room.players];
+    
     // Refund all players
-    for (const userId of room.players) {
+    for (const userId of playersInRoom) {
       const user = await User.findOne({ userId: userId });
       if (user) {
         user.balance += roomStake;
@@ -1334,7 +1343,11 @@ io.on('connection', (socket) => {
       });
       await houseTransaction.save();
       
-      // Update room - CLEAR ALL DATA
+      // Store players list BEFORE clearing
+      const playersInRoom = [...roomData.players];
+      const takenBoxesInRoom = [...roomData.takenBoxes];
+      
+      // Update room status - but DON'T clear players/takenBoxes yet
       roomData.status = 'ended';
       roomData.endTime = new Date();
       roomData.gameHistory.push({
@@ -1342,38 +1355,28 @@ io.on('connection', (socket) => {
         winner: userId,
         winnerName: user.userName,
         prize: prize,
-        players: roomData.players.length,
+        players: playersInRoom.length,
         ballsDrawn: roomData.ballsDrawn,
         isFourCorners: isFourCornersWin
       });
       
-      // Clear all players from room
-      for (const playerId of roomData.players) {
-        if (playerId !== userId) {
-          await User.findOneAndUpdate(
-            { userId: playerId },
-            { 
-              currentRoom: null,
-              box: null,
-              isOnline: true,
-              lastSeen: new Date()
-            }
-          );
-        }
-      }
-      
-      // CLEAR ROOM PLAYERS AND TAKEN BOXES
-      roomData.players = [];
-      roomData.takenBoxes = [];
-      await roomData.save();
-      
-      // Clear game timer
+      // Clear game timer FIRST
       cleanupRoomTimer(room);
       
-      // Notify all players in the room
-      roomData.gameHistory.forEach(history => {
+      // Update all other players and notify everyone
+      for (const playerId of playersInRoom) {
+        if (playerId !== userId) {
+          const losingUser = await User.findOne({ userId: playerId });
+          if (losingUser) {
+            losingUser.currentRoom = null;
+            losingUser.box = null;
+            await losingUser.save();
+          }
+        }
+        
+        // Notify each player
         for (const [sId, uId] of socketToUser.entries()) {
-          if (roomData.players.includes(uId) || uId === userId) {
+          if (uId === playerId) {
             const s = io.sockets.sockets.get(sId);
             if (s) {
               if (uId === userId) {
@@ -1403,9 +1406,14 @@ io.on('connection', (socket) => {
             }
           }
         }
-      });
+      }
       
-      // BROADCAST EMPTY BOXES
+      // NOW clear room data after all players have been notified
+      roomData.players = [];
+      roomData.takenBoxes = [];
+      await roomData.save();
+      
+      // BROADCAST EMPTY BOXES only after all players have been notified
       broadcastTakenBoxes(room, []);
       
       broadcastRoomStatus();
@@ -1633,6 +1641,18 @@ async function cleanupStaleRooms() {
       await Room.deleteOne({ _id: room._id });
     }
     
+    // Also clean up rooms with status 'playing' but no players for a while
+    const emptyPlayingRooms = await Room.find({
+      status: 'playing',
+      players: { $size: 0 }
+    });
+    
+    for (const room of emptyPlayingRooms) {
+      console.log(`🧹 Cleaning up empty playing room: ${room.stake} ETB`);
+      cleanupRoomTimer(room.stake);
+      await Room.deleteOne({ _id: room._id });
+    }
+    
   } catch (error) {
     console.error('Error in cleanupStaleRooms:', error);
   }
@@ -1641,7 +1661,7 @@ async function cleanupStaleRooms() {
 // Run every 5 minutes
 setInterval(cleanupStaleRooms, 300000);
 
-// ========== HEALTH CHECK FUNCTION - FIXED ==========
+// ========== HEALTH CHECK FUNCTION ==========
 setInterval(async () => {
   try {
     const now = Date.now();
@@ -1654,16 +1674,22 @@ setInterval(async () => {
         isOnline: true 
       },
       { 
-        isOnline: false
-        // DO NOT reset currentRoom or box here
+        isOnline: false,
+        currentRoom: null,
+        box: null
       }
     );
     
-    // REMOVED: The problematic code that was ending games prematurely
-    // Games should only end when:
-    // 1. Someone wins (handled in claimBingo)
-    // 2. 75 balls are drawn with no winner (handled in game timer)
-    // 3. Admin force ends (handled in admin function)
+    // Clean up rooms with no recent activity
+    const inactiveRooms = await Room.find({
+      status: 'playing',
+      lastBoxUpdate: { $lt: thirtySecondsAgo }
+    });
+    
+    for (const room of inactiveRooms) {
+      console.log(`⚠️ Cleaning up inactive room: ${room.stake} ETB`);
+      endGameWithNoWinner(room);
+    }
     
   } catch (error) {
     console.error('Error in health check:', error);
