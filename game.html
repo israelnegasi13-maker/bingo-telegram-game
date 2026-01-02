@@ -113,6 +113,24 @@
             50% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.8); }
             100% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.5); }
         }
+        @keyframes slideDown {
+            from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(0); opacity: 1; }
+            to { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+        }
+        @keyframes takenPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        @keyframes highlightPulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
 
         .stake-grid { 
             display: grid; 
@@ -214,15 +232,25 @@
             aspect-ratio: 1;
             background: #1e293b;
             border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 900; color: var(--b-blue);
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            font-weight: 900; 
+            color: var(--b-blue);
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
         
-        .box-number:hover:not(.taken) {
+        .box-number.available {
+            background: #1e293b;
+            transition: all 0.3s ease;
+        }
+        
+        .box-number.available:hover {
             background: rgba(59, 130, 246, 0.2);
-            transform: scale(1.05);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
         }
         
         .box-number.taken { 
@@ -230,6 +258,29 @@
             pointer-events: none; 
             background: rgba(239, 68, 68, 0.1);
             cursor: not-allowed;
+            animation: takenPulse 0.5s ease-out;
+        }
+        
+        .box-number.newly-taken {
+            animation: highlightPulse 1s 3;
+        }
+        
+        .box-number.taken::after {
+            content: "✗";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            color: #ef4444;
+            opacity: 0.5;
+        }
+        
+        .box-number.selected {
+            animation: pulse 0.5s infinite;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            transform: scale(1.1);
         }
 
         .header {
@@ -608,6 +659,123 @@
             animation: pulse 2s infinite;
         }
 
+        /* Real-time notification */
+        .notification {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            width: 90%;
+            max-width: 350px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        /* Availability indicator */
+        .availability-indicator {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            margin: 15px 0;
+            font-size: 0.8rem;
+            width: 100%;
+        }
+
+        .availability-indicator .available {
+            color: var(--b-green);
+            font-weight: 700;
+        }
+
+        .availability-indicator .taken {
+            color: var(--b-red);
+            font-weight: 700;
+        }
+
+        .live-indicator {
+            color: #10b981;
+            animation: pulse 1s infinite;
+        }
+
+        /* Box update alert */
+        #boxUpdateAlert {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            animation: slideDown 0.3s ease-out;
+        }
+
+        /* Confirm button */
+        #confirmBoxBtn {
+            grid-column: 1 / span 5;
+            margin-top: 15px;
+            padding: 12px;
+            background: linear-gradient(90deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 900;
+            font-size: 1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            transition: all 0.2s;
+        }
+
+        #confirmBoxBtn:active {
+            transform: scale(0.98);
+        }
+
+        /* Live box counter */
+        .live-box-counter {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            padding: 10px 15px;
+            font-size: 0.8rem;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .live-box-counter.active {
+            display: block;
+        }
+
+        .live-box-counter .count {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: var(--p-gold);
+            text-align: center;
+            display: block;
+        }
+
+        .live-box-counter .label {
+            color: #94a3b8;
+            font-size: 0.7rem;
+            text-align: center;
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
             .ball-display {
@@ -671,6 +839,16 @@
                 padding: 3px 8px;
                 font-size: 0.5rem;
             }
+            
+            .availability-indicator {
+                padding: 8px 12px;
+                font-size: 0.7rem;
+            }
+            
+            .notification {
+                top: 60px;
+                max-width: 300px;
+            }
         }
 
         /* Very small phones */
@@ -712,6 +890,12 @@
             .ball-number {
                 font-size: 1.5rem;
             }
+            
+            .availability-indicator {
+                flex-direction: column;
+                gap: 5px;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -723,6 +907,12 @@
 <div class="connection-status" id="connectionStatus">
     <div class="connection-dot" id="connectionDot"></div>
     <span id="connectionText">CONNECTING...</span>
+</div>
+
+<!-- Live Box Counter -->
+<div class="live-box-counter" id="liveBoxCounter">
+    <span class="count" id="liveBoxCount">0</span>
+    <span class="label">BOXES TAKEN</span>
 </div>
 
 <div id="reconnectOverlay">
@@ -816,10 +1006,34 @@
 </div>
 
 <div id="discoveryOverlay" class="step-overlay">
-    <h2 style="margin-bottom: 15px;">SELECT TICKET</h2>
-    <p style="color: #94a3b8; margin-bottom: 15px; font-size: 0.8rem;">Available tickets for <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span> room</p>
+    <h2 style="margin-bottom: 10px;">SELECT TICKET</h2>
+    <p style="color: #94a3b8; margin-bottom: 15px; font-size: 0.8rem;">
+        Available tickets for <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span> room
+    </p>
+    
+    <!-- Real-time counter -->
+    <div class="availability-indicator">
+        <div>
+            <span class="available" id="availableCount">100</span> boxes available
+        </div>
+        <div>
+            <span class="taken" id="takenCount">0</span> boxes taken
+        </div>
+        <div style="color: #94a3b8; font-size: 0.7rem;">
+            <span class="live-indicator" id="liveIndicator">●</span> LIVE
+        </div>
+    </div>
+    
     <div id="discoveryGrid" class="discovery-grid"></div>
-    <button onclick="toggleScreen('discoveryOverlay', 'stakeOverlay')" style="background: none; border: none; color: #475569; margin-top: 20px; font-weight: 900; padding: 10px 20px;">BACK TO ROOMS</button>
+    
+    <button onclick="leaveDiscovery()" style="background: none; border: none; color: #475569; margin-top: 20px; font-weight: 900; padding: 10px 20px;">
+        ← BACK TO ROOMS
+    </button>
+    
+    <!-- Real-time notification -->
+    <div id="boxUpdateAlert" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(59, 130, 246, 0.9); color: white; padding: 10px 20px; border-radius: 12px; font-size: 0.8rem; z-index: 1000; backdrop-filter: blur(10px);">
+        <span id="boxUpdateMessage">New box taken!</span>
+    </div>
 </div>
 
 <div id="waitOverlay" class="step-overlay">
@@ -829,6 +1043,9 @@
         <span id="playerCount" style="color: var(--p-gold);">1</span> PLAYERS IN ARENA
     </p>
     <div class="players-waiting" id="playersWaitingInfo">Minimum 2 players to start</div>
+    <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: var(--b-red); border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; border-radius: 12px; margin-top: 30px; font-weight: 700; font-size: 0.9rem;">
+        LEAVE LOBBY
+    </button>
 </div>
 
 <div class="header">
@@ -934,7 +1151,11 @@
         connectionAttempts: 0,
         lastActivityTime: Date.now(),
         socketId: null,
-        isInitialized: false
+        isInitialized: false,
+        lastBoxCount: 0,
+        previousTakenBoxes: [],
+        selectedBox: null,
+        roomSubscribed: false
     };
 
     // Update connection status UI
@@ -1015,6 +1236,36 @@
                 }
             });
         }
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info', duration = 3000) {
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        
+        let bgColor = 'rgba(59, 130, 246, 0.9)';
+        if (type === 'success') bgColor = 'rgba(16, 185, 129, 0.9)';
+        if (type === 'error') bgColor = 'rgba(239, 68, 68, 0.9)';
+        if (type === 'warning') bgColor = 'rgba(245, 158, 11, 0.9)';
+        
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; background: ${bgColor}; border-radius: 12px; color: white; font-weight: 600; font-size: 0.9rem; backdrop-filter: blur(10px);">
+                <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div>
+                <div>${message}</div>
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after duration
+        setTimeout(() => {
+            notification.style.animation = 'slideUp 0.3s ease-out';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, duration);
     }
 
     // Handle socket connection
@@ -1214,10 +1465,23 @@
         document.getElementById('selectedRoomStake').textContent = `${amt} ETB`;
         toggleScreen('stakeOverlay', 'discoveryOverlay');
         
+        // Reset box counter
+        state.lastBoxCount = 0;
+        state.previousTakenBoxes = [];
+        state.selectedBox = null;
+        
+        // Show live box counter
+        document.getElementById('liveBoxCounter').classList.add('active');
+        
         if(state.isConnected) {
+            // Subscribe to room updates
+            socket.emit('subscribeToRoom', { room: amt });
+            state.roomSubscribed = true;
+            
             socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
                 const boxes = Array.isArray(takenBoxes) ? takenBoxes : [];
                 renderBoxes(boxes);
+                updateBoxCounters(boxes);
             });
         }
         
@@ -1229,25 +1493,141 @@
         const grid = document.getElementById('discoveryGrid');
         grid.innerHTML = '';
         
+        // Add header showing taken count
+        const header = document.createElement('div');
+        header.style.gridColumn = '1 / span 5';
+        header.style.textAlign = 'center';
+        header.style.padding = '10px';
+        header.style.fontSize = '0.9rem';
+        header.style.color = '#94a3b8';
+        header.innerHTML = `Select your ticket number (1-100)`;
+        grid.appendChild(header);
+        
+        // Create boxes 1-100
         for(let i=1; i<=100; i++) {
             const b = document.createElement('div');
             const isTaken = taken.includes(i);
-            b.className = 'box-number' + (isTaken ? ' taken' : '');
+            
+            b.className = 'box-number' + (isTaken ? ' taken' : ' available');
             b.textContent = i;
+            b.dataset.number = i;
+            
+            // Add animation for newly taken boxes
+            if (isTaken) {
+                b.innerHTML = `<div>${i}</div><div style="font-size:0.6rem;margin-top:2px;">TAKEN</div>`;
+                
+                // Check if this box was recently taken (for animation)
+                if (!state.previousTakenBoxes || !state.previousTakenBoxes.includes(i)) {
+                    b.classList.add('newly-taken');
+                    setTimeout(() => {
+                        b.classList.remove('newly-taken');
+                    }, 3000);
+                }
+            }
             
             if(!isTaken) {
                 b.onclick = function() {
-                    joinLobby(i);
+                    selectBox(i);
                 };
             }
             
             grid.appendChild(b);
         }
+        
+        // Store previous taken boxes for animation detection
+        state.previousTakenBoxes = taken;
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
+    }
+    
+    function selectBox(boxNumber) {
+        const boxes = document.querySelectorAll('.box-number:not(.taken)');
+        boxes.forEach(box => {
+            box.classList.remove('selected');
+            box.style.background = '';
+        });
+        
+        const selectedBox = document.querySelector(`.box-number[data-number="${boxNumber}"]`);
+        if (selectedBox) {
+            selectedBox.classList.add('selected');
+            state.selectedBox = boxNumber;
+            
+            // Add confirmation button
+            const grid = document.getElementById('discoveryGrid');
+            let confirmBtn = document.getElementById('confirmBoxBtn');
+            
+            if (!confirmBtn) {
+                confirmBtn = document.createElement('button');
+                confirmBtn.id = 'confirmBoxBtn';
+                confirmBtn.textContent = `CONFIRM BOX ${boxNumber}`;
+                confirmBtn.style.gridColumn = '1 / span 5';
+                confirmBtn.style.marginTop = '15px';
+                confirmBtn.style.padding = '12px';
+                confirmBtn.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                confirmBtn.style.color = 'white';
+                confirmBtn.style.border = 'none';
+                confirmBtn.style.borderRadius = '12px';
+                confirmBtn.style.fontWeight = '900';
+                confirmBtn.style.fontSize = '1rem';
+                confirmBtn.style.cursor = 'pointer';
+                confirmBtn.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                
+                confirmBtn.onclick = function() {
+                    joinLobby(boxNumber);
+                    confirmBtn.remove();
+                };
+                
+                grid.appendChild(confirmBtn);
+            } else {
+                confirmBtn.textContent = `CONFIRM BOX ${boxNumber}`;
+                confirmBtn.onclick = function() {
+                    joinLobby(boxNumber);
+                    confirmBtn.remove();
+                };
+            }
+            
+            // Haptic feedback
+            try { tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+        }
+    }
+    
+    function updateBoxCounters(takenBoxes) {
+        const takenCount = takenBoxes.length;
+        const availableCount = 100 - takenCount;
+        
+        document.getElementById('availableCount').textContent = availableCount;
+        document.getElementById('takenCount').textContent = takenCount;
+        document.getElementById('liveBoxCount').textContent = takenCount;
+        
+        // Update live indicator
+        const liveIndicator = document.getElementById('liveIndicator');
+        if (state.isConnected) {
+            liveIndicator.style.color = '#10b981';
+        }
+        
+        // Show notification if new boxes were taken
+        if (takenCount > state.lastBoxCount) {
+            const newBoxes = takenCount - state.lastBoxCount;
+            if (newBoxes > 0 && state.lastBoxCount > 0) {
+                showNotification(`📦 ${newBoxes} new box${newBoxes > 1 ? 'es' : ''} taken!`, 'info', 2000);
+            }
+        }
+        
+        state.lastBoxCount = takenCount;
     }
 
     function joinLobby(box) {
+        // Clear any existing confirmation button
+        const confirmBtn = document.getElementById('confirmBoxBtn');
+        if (confirmBtn) confirmBtn.remove();
+        
         generateTraditionalBingoCard(box);
         toggleScreen('discoveryOverlay', 'waitOverlay');
+        
+        // Hide live box counter
+        document.getElementById('liveBoxCounter').classList.remove('active');
+        
         if(state.isConnected) {
             socket.emit('joinRoom', { 
                 room: state.stake, 
@@ -1256,11 +1636,43 @@
             });
             
             // Send activity update
-            socket.emit('player:activity', { action: 'joined_lobby', room: state.stake });
+            socket.emit('player:activity', { action: 'joined_lobby', room: state.stake, box: box });
         }
         
         // Update last activity
         state.lastActivityTime = Date.now();
+    }
+    
+    function leaveDiscovery() {
+        // Unsubscribe from room updates
+        if (state.isConnected && state.roomSubscribed) {
+            socket.emit('unsubscribeFromRoom', { room: state.stake });
+            state.roomSubscribed = false;
+        }
+        
+        // Hide live box counter
+        document.getElementById('liveBoxCounter').classList.remove('active');
+        
+        // Clear selected box
+        state.selectedBox = null;
+        
+        toggleScreen('discoveryOverlay', 'stakeOverlay');
+    }
+    
+    function leaveLobby() {
+        if(state.isConnected) {
+            socket.emit('player:leaveRoom', { 
+                action: 'left_lobby',
+                room: state.stake,
+                timestamp: Date.now()
+            });
+            
+            // Reset to lobby
+            toggleScreen('waitOverlay', 'stakeOverlay');
+            document.getElementById('roomDisplay').textContent = 'LOBBY';
+            
+            showNotification('Left lobby successfully', 'info', 2000);
+        }
     }
 
     // Generate traditional BINGO card
@@ -1469,6 +1881,15 @@
         state.calledNumbers.clear();
         state.markedNumbers = new Set(['FREE']);
         state.history = [];
+        state.lastBoxCount = 0;
+        state.previousTakenBoxes = [];
+        state.selectedBox = null;
+        
+        // Unsubscribe from room if subscribed
+        if (state.isConnected && state.roomSubscribed) {
+            socket.emit('unsubscribeFromRoom', { room: state.stake });
+            state.roomSubscribed = false;
+        }
         
         document.querySelectorAll('.step-overlay').forEach(s => s.classList.remove('active'));
         document.getElementById('winOverlay').classList.remove('active');
@@ -1482,6 +1903,9 @@
         document.getElementById('ballHistory').innerHTML = '';
         document.getElementById('mainGrid').innerHTML = '';
         document.getElementById('roomDisplay').textContent = 'LOBBY';
+        
+        // Hide live box counter
+        document.getElementById('liveBoxCounter').classList.remove('active');
         
         // Reset bonus messages
         document.getElementById('bonusMessage').style.display = 'none';
@@ -1570,7 +1994,7 @@
     });
 
     socket.on('boxTaken', () => {
-        alert('This ticket is already taken! Please select another.');
+        showNotification('This ticket is already taken! Please select another.', 'error', 3000);
         toggleScreen('waitOverlay', 'discoveryOverlay');
         
         // Update last activity
@@ -1642,8 +2066,10 @@
     });
 
     socket.on('banned', () => {
-        alert('You have been banned from the game.');
-        window.location.reload();
+        showNotification('You have been banned from the game.', 'error', 5000);
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
     });
 
     socket.on('balanceRefreshed', (balance) => {
@@ -1663,12 +2089,68 @@
     });
 
     socket.on('fundsAdded', (data) => {
-        alert(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`);
+        showNotification(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`, 'success', 5000);
         state.balance = parseFloat(data.newBalance);
         document.getElementById('balanceVal').textContent = data.newBalance.toFixed(2);
         
         // Update last activity
         state.lastActivityTime = Date.now();
+    });
+
+    // ========== REAL-TIME BOX UPDATES ==========
+    socket.on('boxesTakenUpdate', (data) => {
+        console.log('📦 Real-time box update received:', data);
+        
+        // If we're looking at this room's boxes
+        if (data.room === state.stake) {
+            // Update the discovery grid if visible
+            if (document.getElementById('discoveryOverlay').classList.contains('active')) {
+                renderBoxes(data.takenBoxes);
+                updateBoxCounters(data.takenBoxes);
+            }
+            
+            // Update live box counter
+            document.getElementById('liveBoxCount').textContent = data.takenBoxes.length;
+            
+            // Show notification for new box taken
+            if (data.newBox && data.playerName) {
+                // Don't show notification for our own selection
+                if (data.playerName !== state.userName) {
+                    showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 3000);
+                }
+            }
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    // Listen for when boxes are cleared (game ends)
+    socket.on('boxesCleared', (data) => {
+        if (data.room === state.stake) {
+            // Reset the discovery grid
+            if (document.getElementById('discoveryOverlay').classList.contains('active')) {
+                renderBoxes([]);
+                updateBoxCounters([]);
+            }
+            
+            // Reset counter
+            state.lastBoxCount = 0;
+            state.previousTakenBoxes = [];
+            
+            // Hide live box counter
+            document.getElementById('liveBoxCounter').classList.remove('active');
+            
+            showNotification('🎮 Room reset - all boxes are now available!', 'info', 3000);
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    socket.on('leftRoom', (data) => {
+        showNotification(data.message || 'Left room successfully', 'info', 2000);
+        resetToLobby();
     });
 
     // Activity monitoring to keep connection alive
@@ -1684,7 +2166,8 @@
                         action: 'heartbeat',
                         timestamp: now,
                         userId: state.userId,
-                        userName: state.userName
+                        userName: state.userName,
+                        room: state.stake
                     });
                 }
                 
