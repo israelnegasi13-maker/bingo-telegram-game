@@ -613,6 +613,9 @@ async function endGameWithNoWinner(room) {
     // Store players list before clearing
     const playersInRoom = [...room.players];
     
+    // Clear game timer FIRST
+    cleanupRoomTimer(room.stake);
+    
     // Return funds to all players
     for (const userId of playersInRoom) {
       const user = await User.findOne({ userId: userId });
@@ -644,10 +647,12 @@ async function endGameWithNoWinner(room) {
                 winnerName: 'House',
                 prize: 0,
                 bonus: 0,
-                isFourCornersWin: false
+                isFourCornersWin: false,
+                gameEnded: true,
+                reason: 'no_winner'
               });
               socket.emit('balanceUpdate', user.balance);
-              socket.emit('boxesCleared', { room: room.stake });
+              // DO NOT send boxesCleared here - let the client handle it from gameOver
             }
           }
         }
@@ -661,7 +666,7 @@ async function endGameWithNoWinner(room) {
     room.endTime = new Date();
     await room.save();
     
-    // BROADCAST EMPTY BOXES
+    // BROADCAST EMPTY BOXES (but NOT boxesCleared event)
     broadcastTakenBoxes(room.stake, []);
     
     broadcastRoomStatus();
@@ -900,10 +905,12 @@ io.on('connection', (socket) => {
                   winnerName: 'Admin',
                   prize: 0,
                   bonus: 0,
-                  isFourCornersWin: false
+                  isFourCornersWin: false,
+                  gameEnded: true,
+                  reason: 'admin_ended'
                 });
                 s.emit('balanceUpdate', user.balance);
-                s.emit('boxesCleared', { room: roomStake });
+                // DO NOT send boxesCleared - client handles from gameOver
               }
             }
           }
@@ -966,7 +973,8 @@ io.on('connection', (socket) => {
           if (uId === userId) {
             const s = io.sockets.sockets.get(sId);
             if (s) {
-              s.emit('boxesCleared', { room: roomStake });
+              // Send boxesCleared ONLY for admin clearing
+              s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
               s.emit('balanceUpdate', user.balance);
               s.emit('lobbyUpdate', { room: roomStake, count: 0 });
             }
@@ -1345,7 +1353,6 @@ io.on('connection', (socket) => {
       
       // Store players list BEFORE clearing
       const playersInRoom = [...roomData.players];
-      const takenBoxesInRoom = [...roomData.takenBoxes];
       
       // Update room status - but DON'T clear players/takenBoxes yet
       roomData.status = 'ended';
@@ -1387,22 +1394,29 @@ io.on('connection', (socket) => {
                   winnerName: user.userName,
                   prize: prize,
                   bonus: bonus,
-                  isFourCornersWin: isFourCornersWin
+                  isFourCornersWin: isFourCornersWin,
+                  gameEnded: true,
+                  reason: 'bingo_win'
                 });
                 s.emit('balanceUpdate', user.balance);
               } else {
                 // Loser
+                const losingUser = await User.findOne({ userId: playerId });
                 s.emit('gameOver', {
                   room: room,
                   winnerId: userId,
                   winnerName: user.userName,
                   prize: prize,
                   bonus: bonus,
-                  isFourCornersWin: isFourCornersWin
+                  isFourCornersWin: isFourCornersWin,
+                  gameEnded: true,
+                  reason: 'bingo_win'
                 });
+                if (losingUser) {
+                  s.emit('balanceUpdate', losingUser.balance);
+                }
               }
-              // Send boxes cleared notification
-              s.emit('boxesCleared', { room: room });
+              // DO NOT send boxesCleared - client handles from gameOver
             }
           }
         }
