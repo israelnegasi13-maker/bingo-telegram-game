@@ -1633,18 +1633,6 @@ async function cleanupStaleRooms() {
       await Room.deleteOne({ _id: room._id });
     }
     
-    // Also clean up rooms with status 'playing' but no players for a while
-    const emptyPlayingRooms = await Room.find({
-      status: 'playing',
-      players: { $size: 0 }
-    });
-    
-    for (const room of emptyPlayingRooms) {
-      console.log(`🧹 Cleaning up empty playing room: ${room.stake} ETB`);
-      cleanupRoomTimer(room.stake);
-      await Room.deleteOne({ _id: room._id });
-    }
-    
   } catch (error) {
     console.error('Error in cleanupStaleRooms:', error);
   }
@@ -1653,7 +1641,7 @@ async function cleanupStaleRooms() {
 // Run every 5 minutes
 setInterval(cleanupStaleRooms, 300000);
 
-// ========== HEALTH CHECK FUNCTION ==========
+// ========== HEALTH CHECK FUNCTION - FIXED ==========
 setInterval(async () => {
   try {
     const now = Date.now();
@@ -1666,22 +1654,16 @@ setInterval(async () => {
         isOnline: true 
       },
       { 
-        isOnline: false,
-        currentRoom: null,
-        box: null
+        isOnline: false
+        // DO NOT reset currentRoom or box here
       }
     );
     
-    // Clean up rooms with no recent activity
-    const inactiveRooms = await Room.find({
-      status: 'playing',
-      lastBoxUpdate: { $lt: thirtySecondsAgo }
-    });
-    
-    for (const room of inactiveRooms) {
-      console.log(`⚠️ Cleaning up inactive room: ${room.stake} ETB`);
-      endGameWithNoWinner(room);
-    }
+    // REMOVED: The problematic code that was ending games prematurely
+    // Games should only end when:
+    // 1. Someone wins (handled in claimBingo)
+    // 2. 75 balls are drawn with no winner (handled in game timer)
+    // 3. Admin force ends (handled in admin function)
     
   } catch (error) {
     console.error('Error in health check:', error);
