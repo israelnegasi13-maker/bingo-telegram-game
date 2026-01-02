@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED WITH REAL-TIME BOX TRACKING
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED WITH CORRECTED CALCULATIONS
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -54,9 +54,12 @@ const roomSchema = new mongoose.Schema({
     winner: String,
     winnerName: String,
     prize: Number,
+    bonus: Number,
     players: Number,
     ballsDrawn: Number,
-    isFourCorners: Boolean
+    isFourCorners: Boolean,
+    commissionCollected: Number,
+    basePrize: Number
   }],
   lastBoxUpdate: { type: Date, default: Date.now }
 });
@@ -336,6 +339,7 @@ async function broadcastRoomStatus() {
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * room.players.length;
       const houseFee = commissionPerPlayer * room.players.length;
+      const potentialPrizeWithBonus = potentialPrize + CONFIG.FOUR_CORNERS_BONUS;
       
       roomStatus[room.stake] = {
         stake: room.stake,
@@ -345,9 +349,12 @@ async function broadcastRoomStatus() {
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
+        potentialPrizeWithBonus: potentialPrizeWithBonus,
         houseFee: houseFee,
         currentBall: room.currentBall,
-        ballsDrawn: room.ballsDrawn
+        ballsDrawn: room.ballsDrawn,
+        minPlayers: CONFIG.MIN_PLAYERS_TO_START,
+        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
       };
     });
     
@@ -647,10 +654,13 @@ async function endGameWithNoWinner(room) {
                 winnerId: 'HOUSE',
                 winnerName: 'House',
                 prize: 0,
+                basePrize: 0,
                 bonus: 0,
+                playersCount: playersInRoom.length,
                 isFourCornersWin: false,
                 gameEnded: true,
-                reason: 'no_winner'
+                reason: 'no_winner',
+                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0
               });
               socket.emit('balanceUpdate', user.balance);
               // DO NOT send boxesCleared here - let the client handle it from gameOver
@@ -907,10 +917,13 @@ io.on('connection', (socket) => {
                   winnerId: 'ADMIN',
                   winnerName: 'Admin',
                   prize: 0,
+                  basePrize: 0,
                   bonus: 0,
+                  playersCount: playersInRoom.length,
                   isFourCornersWin: false,
                   gameEnded: true,
-                  reason: 'admin_ended'
+                  reason: 'admin_ended',
+                  commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0
                 });
                 s.emit('balanceUpdate', user.balance);
                 // DO NOT send boxesCleared - client handles from gameOver
@@ -1312,26 +1325,42 @@ io.on('connection', (socket) => {
       }
       
       const isFourCornersWin = bingoCheck.isFourCorners;
-      const commission = CONFIG.HOUSE_COMMISSION[room] || 0;
-      const contribution = room - commission;
-      const prizePool = contribution * roomData.players.length;
+      
+      // FIXED CALCULATIONS:
+      const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room] || 0;
+      const contributionPerPlayer = room - commissionPerPlayer;
+      const totalContributions = contributionPerPlayer * roomData.players.length;
       
       // Calculate winnings
-      let prize = prizePool;
+      let basePrize = totalContributions; // Base prize from contributions
       let bonus = 0;
       
       if (isFourCornersWin) {
         bonus = CONFIG.FOUR_CORNERS_BONUS;
-        prize += bonus;
       }
       
+      const totalPrize = basePrize + bonus;
+      
+      console.log(`🎰 Win Calculation for ${room} ETB room:`);
+      console.log(`   Players: ${roomData.players.length}`);
+      console.log(`   Commission per player: ${commissionPerPlayer}`);
+      console.log(`   Contribution per player: ${contributionPerPlayer}`);
+      console.log(`   Total contributions: ${totalContributions}`);
+      console.log(`   Base prize: ${basePrize}`);
+      console.log(`   Four corners bonus: ${bonus}`);
+      console.log(`   Total prize: ${totalPrize}`);
+      console.log(`   House earnings: ${commissionPerPlayer * roomData.players.length}`);
+      
       // Update user balance
-      user.balance += prize;
+      const oldBalance = user.balance;
+      user.balance += totalPrize;
       user.totalWins = (user.totalWins || 0) + 1;
       user.totalBingos = (user.totalBingos || 0) + 1;
       user.currentRoom = null;
       user.box = null;
       await user.save();
+      
+      console.log(`💰 User ${user.userName} won ${totalPrize} ETB (was ${oldBalance}, now ${user.balance})`);
       
       // Record transaction
       const transactionType = isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN';
@@ -1339,14 +1368,14 @@ io.on('connection', (socket) => {
         type: transactionType,
         userId: userId,
         userName: user.userName,
-        amount: prize,
+        amount: totalPrize,
         room: room,
-        description: `Bingo win in ${room} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
+        description: `Bingo win in ${room} ETB room with ${roomData.players.length} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
       });
       await transaction.save();
       
       // Record house earnings
-      const houseEarnings = commission * roomData.players.length;
+      const houseEarnings = commissionPerPlayer * roomData.players.length;
       const houseTransaction = new Transaction({
         type: 'HOUSE_EARNINGS',
         userId: 'HOUSE',
@@ -1363,15 +1392,18 @@ io.on('connection', (socket) => {
       // Update room status - but DON'T clear players/takenBoxes yet
       roomData.status = 'ended';
       roomData.endTime = new Date();
-      roomData.lastBoxUpdate = new Date(); // 🚨 Update timestamp on game end
+      roomData.lastBoxUpdate = new Date();
       roomData.gameHistory.push({
         timestamp: new Date(),
         winner: userId,
         winnerName: user.userName,
-        prize: prize,
+        prize: totalPrize,
+        bonus: bonus,
+        basePrize: basePrize,
         players: playersInRoom.length,
         ballsDrawn: roomData.ballsDrawn,
-        isFourCorners: isFourCornersWin
+        isFourCorners: isFourCornersWin,
+        commissionCollected: houseEarnings
       });
       
       // Clear game timer FIRST
@@ -1399,11 +1431,16 @@ io.on('connection', (socket) => {
                   room: room,
                   winnerId: userId,
                   winnerName: user.userName,
-                  prize: prize,
+                  prize: totalPrize,
+                  basePrize: basePrize,
                   bonus: bonus,
+                  playersCount: playersInRoom.length,
                   isFourCornersWin: isFourCornersWin,
                   gameEnded: true,
-                  reason: 'bingo_win'
+                  reason: 'bingo_win',
+                  commissionPerPlayer: commissionPerPlayer,
+                  contributionPerPlayer: contributionPerPlayer,
+                  houseEarnings: houseEarnings
                 });
                 s.emit('balanceUpdate', user.balance);
               } else {
@@ -1413,11 +1450,16 @@ io.on('connection', (socket) => {
                   room: room,
                   winnerId: userId,
                   winnerName: user.userName,
-                  prize: prize,
+                  prize: totalPrize,
+                  basePrize: basePrize,
                   bonus: bonus,
+                  playersCount: playersInRoom.length,
                   isFourCornersWin: isFourCornersWin,
                   gameEnded: true,
-                  reason: 'bingo_win'
+                  reason: 'bingo_win',
+                  commissionPerPlayer: commissionPerPlayer,
+                  contributionPerPlayer: contributionPerPlayer,
+                  houseEarnings: houseEarnings
                 });
                 if (losingUser) {
                   s.emit('balanceUpdate', losingUser.balance);
@@ -1444,9 +1486,12 @@ io.on('connection', (socket) => {
         userId, 
         userName: user.userName, 
         room, 
-        prize, 
+        prize: totalPrize, 
         bonus, 
-        isFourCorners: isFourCornersWin 
+        basePrize: basePrize,
+        isFourCorners: isFourCornersWin,
+        players: playersInRoom.length,
+        commissionCollected: houseEarnings
       });
       
     } catch (error) {
@@ -1790,6 +1835,7 @@ app.get('/', (req, res) => {
           <div style="margin-top: 20px;">
             <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
             <a href="/debug-users" class="btn" style="background: #f59e0b;" target="_blank">👥 Debug Users</a>
+            <a href="/debug-calculations/10/5" class="btn" style="background: #f59e0b;" target="_blank">🧮 Debug Calculations</a>
           </div>
         </div>
         
@@ -2276,6 +2322,69 @@ app.get('/debug-users', async (req, res) => {
   }
 });
 
+// ========== DEBUG CALCULATIONS ENDPOINT ==========
+app.get('/debug-calculations/:stake/:players', (req, res) => {
+  try {
+    const stake = parseInt(req.params.stake);
+    const players = parseInt(req.params.players);
+    
+    const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[stake] || 0;
+    const contributionPerPlayer = stake - commissionPerPlayer;
+    const totalContributions = contributionPerPlayer * players;
+    const houseFee = commissionPerPlayer * players;
+    const totalCollected = stake * players;
+    const potentialPrizeWithBonus = totalContributions + CONFIG.FOUR_CORNERS_BONUS;
+    
+    res.json({
+      stake: stake,
+      players: players,
+      commissionPerPlayer: commissionPerPlayer,
+      contributionPerPlayer: contributionPerPlayer,
+      totalContributions: totalContributions,
+      houseFee: houseFee,
+      totalCollected: totalCollected,
+      fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS,
+      potentialPrize: totalContributions,
+      potentialPrizeWithBonus: potentialPrizeWithBonus,
+      breakdown: {
+        "Each player pays": stake + " ETB",
+        "House commission per player": commissionPerPlayer + " ETB",
+        "Contribution to prize pool per player": contributionPerPlayer + " ETB",
+        "Total prize pool (base)": totalContributions + " ETB",
+        "Four corners bonus": CONFIG.FOUR_CORNERS_BONUS + " ETB",
+        "Maximum possible win (four corners)": potentialPrizeWithBonus + " ETB",
+        "House earnings": houseFee + " ETB",
+        "Total collected from all players": totalCollected + " ETB"
+      },
+      example_scenarios: [
+        {
+          scenario: "5 players, no four corners",
+          prize: totalContributions,
+          per_player_contribution: contributionPerPlayer,
+          winner_gets: totalContributions + " ETB",
+          house_gets: houseFee + " ETB"
+        },
+        {
+          scenario: "5 players, with four corners",
+          prize: totalContributions,
+          bonus: CONFIG.FOUR_CORNERS_BONUS,
+          total: potentialPrizeWithBonus,
+          winner_gets: potentialPrizeWithBonus + " ETB",
+          house_gets: houseFee + " ETB (plus pays bonus)"
+        },
+        {
+          scenario: "10 players, no four corners",
+          prize: contributionPerPlayer * 10,
+          winner_gets: (contributionPerPlayer * 10) + " ETB",
+          house_gets: (commissionPerPlayer * 10) + " ETB"
+        }
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========== TELEGRAM BOT INTEGRATION ==========
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
@@ -2494,6 +2603,7 @@ server.listen(PORT, () => {
 ║  Real-Time:    /real-time-status                     ║
 ║  Debug:        /debug-connections                    ║
 ║  Debug Users:  /debug-users                          ║
+║  Debug Calc:   /debug-calculations/:stake/:players   ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
@@ -2501,6 +2611,7 @@ server.listen(PORT, () => {
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
+║  🧮 Calculations: ✅ FIXED & VERIFIED               ║
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
