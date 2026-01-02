@@ -532,6 +532,7 @@ async function startGameTimer(room) {
       currentRoom.calledNumbers.push(ball);
       currentRoom.currentBall = ball;
       currentRoom.ballsDrawn += 1;
+      currentRoom.lastBoxUpdate = new Date(); // 🚨 CRITICAL: Update timestamp on each ball
       await currentRoom.save();
       
       const ballData = {
@@ -664,6 +665,7 @@ async function endGameWithNoWinner(room) {
     room.takenBoxes = [];
     room.status = 'ended';
     room.endTime = new Date();
+    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
     await room.save();
     
     // BROADCAST EMPTY BOXES (but NOT boxesCleared event)
@@ -788,6 +790,7 @@ io.on('connection', (socket) => {
       room.calledNumbers.push(ball);
       room.currentBall = ball;
       room.ballsDrawn += 1;
+      room.lastBoxUpdate = new Date(); // Update timestamp
       await room.save();
       
       const ballData = {
@@ -922,6 +925,7 @@ io.on('connection', (socket) => {
       room.takenBoxes = [];
       room.status = 'ended';
       room.endTime = new Date();
+      room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
       await room.save();
       
       // Broadcast empty boxes
@@ -987,6 +991,7 @@ io.on('connection', (socket) => {
     room.players = [];
     room.takenBoxes = [];
     room.status = 'waiting';
+    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
     await room.save();
     
     // Broadcast cleared boxes
@@ -1230,6 +1235,7 @@ io.on('connection', (socket) => {
               clearInterval(countdownInterval);
               currentRoom.status = 'playing';
               currentRoom.startTime = new Date();
+              currentRoom.lastBoxUpdate = new Date(); // 🚨 Update timestamp when game starts
               await currentRoom.save();
               startGameTimer(currentRoom);
             }
@@ -1357,6 +1363,7 @@ io.on('connection', (socket) => {
       // Update room status - but DON'T clear players/takenBoxes yet
       roomData.status = 'ended';
       roomData.endTime = new Date();
+      roomData.lastBoxUpdate = new Date(); // 🚨 Update timestamp on game end
       roomData.gameHistory.push({
         timestamp: new Date(),
         winner: userId,
@@ -1475,9 +1482,16 @@ io.on('connection', (socket) => {
       
       const room = await Room.findOne({ stake: user.currentRoom });
       if (room) {
+        // Prevent leaving if game is already playing
+        if (room.status === 'playing') {
+          socket.emit('error', 'Cannot leave room during active game!');
+          return;
+        }
+        
         // Remove user from room
         room.players = room.players.filter(id => id !== userId);
         room.takenBoxes = room.takenBoxes.filter(boxNum => boxNum !== user.box);
+        room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
         
         await room.save();
         
@@ -1536,21 +1550,26 @@ io.on('connection', (socket) => {
             Room.findOne({ stake: user.currentRoom })
               .then(room => {
                 if (room) {
-                  room.players = room.players.filter(id => id !== userId);
-                  room.takenBoxes = room.takenBoxes.filter(boxNum => boxNum !== user.box);
-                  room.save()
-                    .then(() => {
-                      // Broadcast updated boxes
-                      broadcastTakenBoxes(user.currentRoom, room.takenBoxes);
-                      console.log(`👤 User ${user.userName} disconnected from room ${room.stake}`);
-                    })
-                    .catch(console.error);
+                  // Don't remove from room if game is playing
+                  if (room.status !== 'playing') {
+                    room.players = room.players.filter(id => id !== userId);
+                    room.takenBoxes = room.takenBoxes.filter(boxNum => boxNum !== user.box);
+                    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
+                    room.save()
+                      .then(() => {
+                        // Broadcast updated boxes
+                        broadcastTakenBoxes(user.currentRoom, room.takenBoxes);
+                        console.log(`👤 User ${user.userName} disconnected from room ${room.stake}`);
+                      })
+                      .catch(console.error);
+                  } else {
+                    console.log(`⚠️ User ${user.userName} disconnected during gameplay, keeping in room`);
+                  }
                 }
               })
               .catch(console.error);
             
-            user.currentRoom = null;
-            user.box = null;
+            // Still update user status
             user.isOnline = false;
             user.lastSeen = new Date();
             user.save().catch(console.error);
@@ -1679,12 +1698,12 @@ setInterval(cleanupStaleRooms, 300000);
 setInterval(async () => {
   try {
     const now = Date.now();
-    const thirtySecondsAgo = new Date(now - 30000);
+    const fiveMinutesAgo = new Date(now - 300000); // Increased from 30 seconds to 5 minutes
     
     // Update users who haven't been active
     await User.updateMany(
       { 
-        lastSeen: { $lt: thirtySecondsAgo },
+        lastSeen: { $lt: fiveMinutesAgo },
         isOnline: true 
       },
       { 
@@ -1694,21 +1713,23 @@ setInterval(async () => {
       }
     );
     
-    // Clean up rooms with no recent activity
-    const inactiveRooms = await Room.find({
+    // Clean up ONLY abandoned rooms with no players
+    const abandonedRooms = await Room.find({
       status: 'playing',
-      lastBoxUpdate: { $lt: thirtySecondsAgo }
+      players: { $size: 0 }, // Only rooms with NO players
+      startTime: { $lt: fiveMinutesAgo } // And started more than 5 minutes ago
     });
     
-    for (const room of inactiveRooms) {
-      console.log(`⚠️ Cleaning up inactive room: ${room.stake} ETB`);
-      endGameWithNoWinner(room);
+    for (const room of abandonedRooms) {
+      console.log(`⚠️ Cleaning up abandoned room: ${room.stake} ETB`);
+      cleanupRoomTimer(room.stake);
+      await Room.deleteOne({ _id: room._id });
     }
     
   } catch (error) {
     console.error('Error in health check:', error);
   }
-}, 10000); // Run every 10 seconds
+}, 60000); // Run every 60 seconds instead of 10 seconds
 
 // ========== EXPRESS ROUTES ==========
 app.get('/', (req, res) => {
