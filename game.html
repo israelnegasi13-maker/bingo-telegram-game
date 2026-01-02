@@ -579,6 +579,35 @@
             animation: pulse 1s infinite;
         }
 
+        /* Connection status indicator */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 20px;
+            border: 1px solid var(--border-glass);
+            font-size: 0.6rem;
+            color: #94a3b8;
+        }
+
+        .connection-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .connection-dot.connected {
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
             .ball-display {
@@ -635,6 +664,13 @@
                 padding: 16px;
                 font-size: 1.1rem;
             }
+            
+            .connection-status {
+                top: 5px;
+                left: 5px;
+                padding: 3px 8px;
+                font-size: 0.5rem;
+            }
         }
 
         /* Very small phones */
@@ -682,6 +718,12 @@
 <body>
 
 <div class="mesh-bg"></div>
+
+<!-- Connection Status Indicator -->
+<div class="connection-status" id="connectionStatus">
+    <div class="connection-dot" id="connectionDot"></div>
+    <span id="connectionText">CONNECTING...</span>
+</div>
 
 <div id="reconnectOverlay">
     <div style="width: 40px; height: 40px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
@@ -870,7 +912,12 @@
         timeout: 10000,
         transports: ['websocket', 'polling'],
         forceNew: true,
-        autoConnect: true
+        autoConnect: true,
+        query: {
+            userId: 'pending', // Will be updated after init
+            source: 'telegram_game',
+            version: '2.0.0'
+        }
     });
 
     let state = {
@@ -882,46 +929,209 @@
         isConnected: false,
         balance: 0.00,
         userId: null,
-        roomStatuses: {}
+        userName: 'Guest',
+        roomStatuses: {},
+        connectionAttempts: 0,
+        lastActivityTime: Date.now(),
+        socketId: null,
+        isInitialized: false
     };
 
+    // Update connection status UI
+    function updateConnectionStatus(connected, message) {
+        const dot = document.getElementById('connectionDot');
+        const text = document.getElementById('connectionText');
+        
+        if (connected) {
+            dot.className = 'connection-dot connected';
+            text.textContent = 'CONNECTED';
+            text.style.color = '#10b981';
+        } else {
+            dot.className = 'connection-dot';
+            text.textContent = message || 'DISCONNECTED';
+            text.style.color = '#ef4444';
+        }
+    }
+
+    // Generate a unique user ID if not from Telegram
+    function generateUserId() {
+        const telegramUser = tg.initDataUnsafe?.user;
+        if (telegramUser && telegramUser.id) {
+            return `tg_${telegramUser.id}`;
+        }
+        
+        // Check localStorage for existing guest ID
+        let guestId = localStorage.getItem('bingo_guest_id');
+        if (!guestId) {
+            guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem('bingo_guest_id', guestId);
+        }
+        return guestId;
+    }
+
+    // Get user name
+    function getUserName() {
+        const telegramUser = tg.initDataUnsafe?.user;
+        if (telegramUser && telegramUser.first_name) {
+            return telegramUser.first_name;
+        }
+        
+        const savedName = localStorage.getItem('bingo_user_name');
+        if (savedName) return savedName;
+        
+        return `Player${Math.floor(Math.random() * 1000)}`;
+    }
+
+    // Save user info to localStorage
+    function saveUserInfo() {
+        if (state.userId && !state.userId.startsWith('tg_')) {
+            localStorage.setItem('bingo_guest_id', state.userId);
+        }
+        if (state.userName) {
+            localStorage.setItem('bingo_user_name', state.userName);
+        }
+    }
+
+    // Update socket query with actual user ID
+    function updateSocketQuery() {
+        if (state.userId) {
+            socket.io.opts.query.userId = state.userId;
+            console.log('Socket query updated with userId:', state.userId);
+        }
+    }
+
+    // Send initialization event to server
+    function sendInitEvent() {
+        if (state.isConnected && state.userId && !state.isInitialized) {
+            console.log('📤 Sending init event for user:', state.userName, 'ID:', state.userId);
+            
+            socket.emit('init', { 
+                userId: state.userId,
+                userName: state.userName 
+            }, (response) => {
+                if (response) {
+                    console.log('✅ Init response:', response);
+                    state.isInitialized = true;
+                }
+            });
+        }
+    }
+
+    // Handle socket connection
     socket.on('connect', () => {
+        console.log('✅ Socket connected:', socket.id);
         state.isConnected = true;
+        state.socketId = socket.id;
+        state.connectionAttempts = 0;
+        state.isInitialized = false;
+        
+        // Update UI
+        updateConnectionStatus(true, 'CONNECTED');
         document.getElementById('reconnectOverlay').classList.remove('active');
         document.getElementById('loadingOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
         
-        // Get user info from Telegram
-        const user = tg.initDataUnsafe?.user;
-        const userId = user?.id?.toString() || Date.now().toString();
-        const userName = user?.first_name || 'Guest';
+        // Get user info
+        state.userId = generateUserId();
+        state.userName = getUserName();
         
-        state.userId = userId;
-        document.getElementById('userIdDisplay').textContent = userId.substring(0, 8) + '...';
+        // Update displays
+        document.getElementById('userIdDisplay').textContent = state.userId.substring(0, 8) + '...';
+        document.getElementById('userDisplay').textContent = state.userName.toUpperCase();
         
-        socket.emit('init', { 
-            userId: userId,
-            userName: userName 
-        });
+        // Save user info
+        saveUserInfo();
         
-        // Update display with Telegram username
-        document.getElementById('userDisplay').textContent = userName.toUpperCase();
+        // Update socket query with actual user ID
+        updateSocketQuery();
         
-        console.log('Connected to server as:', userName);
+        // Send init event
+        sendInitEvent();
+        
+        console.log('Connected to server as:', state.userName, 'ID:', state.userId, 'Socket:', socket.id);
+        
+        // Start activity monitoring
+        startActivityMonitoring();
     });
 
-    socket.on('disconnect', () => {
+    // Handle socket disconnection
+    socket.on('disconnect', (reason) => {
+        console.log('❌ Socket disconnected:', reason);
         state.isConnected = false;
-        document.getElementById('reconnectOverlay').classList.add('active');
+        state.isInitialized = false;
+        
+        // Update UI
+        updateConnectionStatus(false, 'DISCONNECTED');
+        
+        // Show reconnect overlay
+        const reconnectOverlay = document.getElementById('reconnectOverlay');
+        reconnectOverlay.classList.add('active');
+        
+        // Update status text
+        const statusText = reconnectOverlay.querySelector('p');
+        if (statusText) {
+            statusText.textContent = `RECONNECTING... (${reason})`;
+        }
+        
+        // Increment connection attempts
+        state.connectionAttempts++;
+        
+        // Auto-reconnect after delay
+        const delay = Math.min(3000 * state.connectionAttempts, 10000);
+        setTimeout(() => {
+            if (!state.isConnected) {
+                console.log(`Attempting to reconnect (attempt ${state.connectionAttempts})...`);
+                updateConnectionStatus(false, 'RECONNECTING...');
+                socket.connect();
+            }
+        }, delay);
     });
 
+    // Handle connection errors
+    socket.on('connect_error', (error) => {
+        console.error('Connection error:', error.message);
+        updateConnectionStatus(false, 'CONNECTION ERROR');
+        document.getElementById('loadingText').textContent = `CONNECTION ERROR: ${error.message}`;
+        
+        // Try to reconnect
+        setTimeout(() => {
+            if (!state.isConnected) {
+                socket.connect();
+            }
+        }, 3000);
+    });
+
+    // Handle successful connection test
     socket.on('connectionTest', (data) => {
         console.log('Connection test received:', data);
+        updateConnectionStatus(true, 'CONNECTED');
+        document.getElementById('loadingText').textContent = "AUTHENTICATING...";
     });
 
+    // Handle server connected message
+    socket.on('connected', (data) => {
+        console.log('Server connected message:', data);
+        document.getElementById('loadingText').textContent = "LOADING GAME...";
+    });
+
+    // Handle user data from server
+    socket.on('userData', (data) => {
+        console.log('User data received:', data);
+        state.userId = data.userId || state.userId;
+        state.userName = data.userName || state.userName;
+        
+        document.getElementById('userDisplay').textContent = data.userName.toUpperCase();
+        document.getElementById('userIdDisplay').textContent = data.userId.substring(0, 8) + '...';
+        
+        // Save user info
+        saveUserInfo();
+    });
+
+    // Handle room status updates
     socket.on('roomStatus', (roomData) => {
         state.roomStatuses = roomData;
         updateRoomDisplay();
+        state.lastActivityTime = Date.now();
     });
 
     function updateRoomDisplay() {
@@ -950,6 +1160,7 @@
         }
     }
 
+    // Handle balance updates
     socket.on('balanceUpdate', (bal) => {
         state.balance = parseFloat(bal);
         const val = state.balance.toFixed(2);
@@ -964,6 +1175,9 @@
         } else {
             balancePill.classList.remove('zero-balance');
         }
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     function refreshBalance() {
@@ -979,6 +1193,9 @@
         setTimeout(() => {
             refreshBtn.classList.remove('spinning');
         }, 500);
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     function selectStake(amt) {
@@ -1003,6 +1220,9 @@
                 renderBoxes(boxes);
             });
         }
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     function renderBoxes(taken) {
@@ -1032,9 +1252,15 @@
             socket.emit('joinRoom', { 
                 room: state.stake, 
                 box: box, 
-                userName: tg.initDataUnsafe.user?.first_name || "Guest" 
+                userName: state.userName
             });
+            
+            // Send activity update
+            socket.emit('player:activity', { action: 'joined_lobby', room: state.stake });
         }
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     // Generate traditional BINGO card
@@ -1142,6 +1368,9 @@
             `;
             h.appendChild(hb);
         });
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     // Check for any winning pattern (including four corners)
@@ -1203,9 +1432,15 @@
                         }
                     }
                 }
+                
+                // Update last activity
+                state.lastActivityTime = Date.now();
             };
             target.appendChild(cell);
         });
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     function claimBingo() {
@@ -1215,6 +1450,9 @@
                 grid: state.grid, 
                 marked: Array.from(state.markedNumbers) 
             });
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
         }
     }
 
@@ -1248,6 +1486,14 @@
         // Reset bonus messages
         document.getElementById('bonusMessage').style.display = 'none';
         document.getElementById('specialWinMessage').style.display = 'none';
+        
+        // Send activity update
+        if (state.isConnected) {
+            socket.emit('player:activity', { action: 'returned_to_lobby' });
+        }
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     }
 
     socket.on('lobbyUpdate', (d) => {
@@ -1268,6 +1514,9 @@
                 info.textContent = "Need 1 more player to start";
                 info.style.color = '#94a3b8';
             }
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
         }
     });
 
@@ -1290,6 +1539,9 @@
                 document.getElementById('waitOverlay').classList.remove('active');
                 initGameBoard();
             }
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
         }
     });
 
@@ -1305,15 +1557,24 @@
         if (checkWinningPattern()) {
             document.getElementById('btnBingo').disabled = false;
         }
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     socket.on('joinedRoom', () => {
         console.log('Successfully joined room');
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     socket.on('boxTaken', () => {
         alert('This ticket is already taken! Please select another.');
         toggleScreen('waitOverlay', 'discoveryOverlay');
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     socket.on('insufficientFunds', () => {
@@ -1324,6 +1585,9 @@
             ov.classList.remove('active');
         }, 3000);
         toggleScreen('waitOverlay', 'stakeOverlay');
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     socket.on('gameOver', (d) => {
@@ -1371,6 +1635,9 @@
                 loseOverlay.classList.add('active');
                 setTimeout(resetToLobby, 4000);
             }
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
         }
     });
 
@@ -1390,28 +1657,89 @@
         setTimeout(() => {
             balancePill.style.animation = '';
         }, 500);
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
 
     socket.on('fundsAdded', (data) => {
         alert(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`);
         state.balance = parseFloat(data.newBalance);
         document.getElementById('balanceVal').textContent = data.newBalance.toFixed(2);
+        
+        // Update last activity
+        state.lastActivityTime = Date.now();
     });
+
+    // Activity monitoring to keep connection alive
+    function startActivityMonitoring() {
+        setInterval(() => {
+            if (state.isConnected) {
+                const now = Date.now();
+                const timeSinceLastActivity = now - state.lastActivityTime;
+                
+                // Send periodic activity ping if user is active (within last 30 seconds)
+                if (timeSinceLastActivity < 30000) {
+                    socket.emit('player:activity', { 
+                        action: 'heartbeat',
+                        timestamp: now,
+                        userId: state.userId,
+                        userName: state.userName
+                    });
+                }
+                
+                // Send ping every 15 seconds to keep connection alive
+                socket.emit('ping');
+                
+                // If not initialized, try to send init event again
+                if (!state.isInitialized && state.userId) {
+                    sendInitEvent();
+                }
+            }
+        }, 15000); // Every 15 seconds
+    }
 
     // Auto-reconnect on load
     window.onload = () => {
-        // Show Telegram username
-        const userName = (tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) 
-            ? tg.initDataUnsafe.user.first_name 
-            : "PLAYER";
-        document.getElementById('userDisplay').textContent = userName.toUpperCase();
+        // Show user name immediately
+        state.userName = getUserName();
+        document.getElementById('userDisplay').textContent = state.userName.toUpperCase();
+        
+        // Generate user ID immediately
+        state.userId = generateUserId();
+        document.getElementById('userIdDisplay').textContent = state.userId.substring(0, 8) + '...';
+        
+        // Update socket query with user ID
+        updateSocketQuery();
         
         // Auto-connect after a short delay
         setTimeout(() => {
             if (!state.isConnected) {
+                document.getElementById('loadingText').textContent = "CONNECTING TO SERVER...";
+                updateConnectionStatus(false, 'CONNECTING...');
                 socket.connect();
             }
         }, 1000);
+        
+        // Add click event listeners for activity tracking
+        document.addEventListener('click', () => {
+            state.lastActivityTime = Date.now();
+        });
+        
+        document.addEventListener('touchstart', () => {
+            state.lastActivityTime = Date.now();
+        });
+        
+        // Handle visibility change (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.isConnected) {
+                // Tab became visible, send activity
+                state.lastActivityTime = Date.now();
+                if (state.isConnected) {
+                    socket.emit('player:activity', { action: 'tab_visible' });
+                }
+            }
+        });
     };
 </script>
 </body>
