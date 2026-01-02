@@ -173,6 +173,12 @@
             margin-top: 5px;
         }
 
+        .logo p.small {
+            font-size: 0.7rem;
+            color: var(--warning);
+            margin-top: 5px;
+        }
+
         .nav {
             padding: 0 20px;
         }
@@ -934,6 +940,74 @@
             align-items: center;
             gap: 3px;
         }
+        
+        /* User info display in modal */
+        .user-info-display {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .user-info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .user-info-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        
+        .user-info-value {
+            font-weight: 600;
+        }
+        
+        .user-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .user-status-online {
+            background: rgba(6, 214, 160, 0.15);
+            color: var(--success);
+        }
+        
+        .user-status-offline {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--text-muted);
+        }
+        
+        .user-status-playing {
+            background: rgba(255, 209, 102, 0.15);
+            color: var(--warning);
+        }
+        
+        /* Quick amount buttons */
+        .quick-amounts {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .quick-amounts .btn-action {
+            width: 100%;
+            text-align: center;
+        }
+        
+        /* Datalist styling */
+        datalist option {
+            padding: 5px;
+            background: var(--dark-card);
+            color: var(--text);
+        }
     </style>
 </head>
 <body>
@@ -966,7 +1040,7 @@
             <div class="logo">
                 <h2><i class="fas fa-crown"></i> Bingo Elite</h2>
                 <p>Admin Dashboard v3.0</p>
-                <p style="font-size: 0.7rem; color: var(--warning); margin-top: 5px;">Multi-Socket Support</p>
+                <p class="small">Multi-Socket Support</p>
             </div>
             
             <div class="nav">
@@ -1547,17 +1621,40 @@
             </div>
             
             <div class="form-group">
-                <label>User ID</label>
-                <input type="text" id="fundsUserId" placeholder="Enter user ID from Telegram">
-                <small style="color: var(--text-muted); font-size: 0.85rem;">Format: tg_123456789 or regular user ID</small>
+                <label>Select User</label>
+                <input list="fundsUserList" id="fundsUserId" placeholder="Type to search users..." autocomplete="off">
+                <datalist id="fundsUserList">
+                    <!-- Options will be populated by JavaScript -->
+                </datalist>
+                <small style="color: var(--text-muted); font-size: 0.85rem;">
+                    You can search by name or user ID. Online users are marked with 🟢
+                </small>
+                <div id="userInfo" class="user-info-display">
+                    <div class="user-info-row">
+                        <span class="user-info-label">Name:</span>
+                        <span id="selectedUserName" class="user-info-value">-</span>
+                    </div>
+                    <div class="user-info-row">
+                        <span class="user-info-label">Balance:</span>
+                        <span id="selectedUserBalance" class="user-info-value" style="color: var(--warning);">-</span>
+                    </div>
+                    <div class="user-info-row">
+                        <span class="user-info-label">Status:</span>
+                        <span id="selectedUserStatus" class="user-info-value">-</span>
+                    </div>
+                    <div class="user-info-row">
+                        <span class="user-info-label">User ID:</span>
+                        <span id="selectedUserId" class="user-info-value" style="font-size: 0.8rem; font-family: monospace;">-</span>
+                    </div>
+                </div>
             </div>
             
             <div class="form-group">
                 <label>Amount (ETB)</label>
-                <input type="number" id="fundsAmount" placeholder="Enter amount">
+                <input type="number" id="fundsAmount" placeholder="Enter amount" step="0.01" min="0.01">
             </div>
             
-            <div class="quick-amounts" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px;">
+            <div class="quick-amounts">
                 <button class="btn-action btn-add" onclick="setAmount(10)">+10</button>
                 <button class="btn-action btn-add" onclick="setAmount(50)">+50</button>
                 <button class="btn-action btn-add" onclick="setAmount(100)">+100</button>
@@ -1646,6 +1743,9 @@
             
             // Re-attach navigation event listeners
             attachNavListeners();
+            
+            // Setup user info display
+            setupUserInfoDisplay();
         });
         
         function attachNavListeners() {
@@ -1759,11 +1859,28 @@
             state.socket.on('admin:players', (data) => {
                 const previousUsers = [...state.users];
                 state.users = data;
+                
+                // FIX: Update the datalist for add funds modal
+                updateUserDatalist(data);
+                
                 applyFilters();
                 updateUsersTable();
                 
                 // Count online users
-                const onlineCount = data.filter(user => user.isOnline).length;
+                const onlineCount = data.filter(user => {
+                    // Check if user has any socket connection
+                    if (user.isOnline) return true;
+                    
+                    // Also check if they were active recently (within 30 seconds)
+                    if (user.lastSeen) {
+                        const lastSeenTime = new Date(user.lastSeen);
+                        const now = new Date();
+                        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+                        return secondsSinceLastSeen < 30; // Consider active if seen in last 30 seconds
+                    }
+                    return false;
+                }).length;
+                
                 updateUserCountBadge(onlineCount);
                 
                 // Count users with multiple sockets
@@ -1874,41 +1991,6 @@
             overlay.classList.toggle('active');
         }
 
-        // Navigation
-        function setupNavigation() {
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    const section = this.dataset.section;
-                    
-                    // Update active nav item
-                    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-                    this.classList.add('active');
-                    
-                    // Update page title
-                    const titleMap = {
-                        'overview': 'Dashboard Overview',
-                        'users': 'User Management',
-                        'rooms': 'Game Rooms',
-                        'transactions': 'Transactions',
-                        'analytics': 'Analytics',
-                        'controls': 'System Controls',
-                        'logs': 'Activity Log',
-                        'debug': 'Debug Information'
-                    };
-                    document.getElementById('pageTitle').textContent = titleMap[section] || 'Dashboard';
-                    
-                    // Show section
-                    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-                    document.getElementById(`${section}Section`).classList.add('active');
-                    
-                    // Close sidebar on mobile
-                    if (window.innerWidth < 992) {
-                        toggleSidebar();
-                    }
-                });
-            });
-        }
-
         // Data Update Functions
         function updateStats(data) {
             document.getElementById('totalUsers').textContent = data.totalUsers || 0;
@@ -1940,6 +2022,85 @@
                 onlineStatus.className = 'stat-change';
                 onlineStatus.innerHTML = '<i class="fas fa-circle"></i> No players online';
             }
+        }
+        
+        // NEW FUNCTION: Update the datalist for add funds modal
+        function updateUserDatalist(users) {
+            const fundsDatalist = document.getElementById('fundsUserList');
+            if (!fundsDatalist) return;
+            
+            fundsDatalist.innerHTML = '';
+            
+            // Sort: online users first, then by name
+            const sortedUsers = [...users].sort((a, b) => {
+                // Online users first
+                if (a.isOnline && !b.isOnline) return -1;
+                if (!a.isOnline && b.isOnline) return 1;
+                
+                // Then by name
+                return a.userName.localeCompare(b.userName);
+            });
+            
+            // Add all users to the add funds datalist
+            sortedUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.userId;
+                
+                // Show user name and status
+                let statusText = user.isOnline ? '🟢 Online' : '🔴 Offline';
+                if (user.currentRoom) {
+                    statusText = `🎮 Playing (${user.currentRoom} ETB)`;
+                }
+                
+                option.textContent = `${user.userName} - ${statusText} (${user.userId}) - Balance: ${user.balance.toFixed(2)} ETB`;
+                fundsDatalist.appendChild(option);
+            });
+        }
+        
+        // NEW FUNCTION: Setup user info display in add funds modal
+        function setupUserInfoDisplay() {
+            const fundsInput = document.getElementById('fundsUserId');
+            const userInfo = document.getElementById('userInfo');
+            
+            if (!fundsInput || !userInfo) return;
+            
+            fundsInput.addEventListener('input', function() {
+                const userId = this.value.trim();
+                
+                if (!userId) {
+                    userInfo.style.display = 'none';
+                    return;
+                }
+                
+                // Try to find the user
+                const user = state.users.find(u => 
+                    u.userId === userId || 
+                    u.userName.toLowerCase().includes(userId.toLowerCase()) ||
+                    userId.includes(u.userId)
+                );
+                
+                if (user) {
+                    document.getElementById('selectedUserName').textContent = user.userName;
+                    document.getElementById('selectedUserBalance').textContent = `${user.balance.toFixed(2)} ETB`;
+                    document.getElementById('selectedUserId').textContent = user.userId;
+                    
+                    let statusText = '';
+                    if (user.isOnline) {
+                        if (user.currentRoom) {
+                            statusText = `<span class="user-status-playing">🎮 Playing (${user.currentRoom} ETB room)</span>`;
+                        } else {
+                            statusText = `<span class="user-status-online">🟢 Online</span>`;
+                        }
+                    } else {
+                        statusText = `<span class="user-status-offline">🔴 Offline</span>`;
+                    }
+                    document.getElementById('selectedUserStatus').innerHTML = statusText;
+                    
+                    userInfo.style.display = 'block';
+                } else {
+                    userInfo.style.display = 'none';
+                }
+            });
         }
         
         function applyFilters() {
@@ -2137,7 +2298,7 @@
                     </td>
                     <td>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn-action btn-add" onclick="addFundsToUser('${user.userId}')" title="Add Funds">
+                            <button class="btn-action btn-add" onclick="addFundsToUser('${user.userId}', '${user.userName}')" title="Add Funds">
                                 <i class="fas fa-coins"></i>
                             </button>
                             <button class="btn-action btn-kick" onclick="kickUser('${user.userId}')" title="Kick User">
@@ -2464,14 +2625,29 @@
                 return;
             }
             
+            // Check if user exists in current user list
+            const userExists = state.users.some(user => user.userId === userId);
+            if (!userExists) {
+                showToast(`Warning: User ${userId} not found in active users list. They may be offline.`, 'warning');
+            }
+            
             state.socket.emit('admin:addFunds', { userId, amount: parseFloat(amount) });
             hideModal('addFundsModal');
             addSystemLog(`Added ${amount} ETB to user ${userId}`);
         }
 
-        function addFundsToUser(userId) {
+        function addFundsToUser(userId, userName = '') {
             document.getElementById('fundsUserId').value = userId;
+            
+            // Trigger the input event to show user info
+            const event = new Event('input');
+            document.getElementById('fundsUserId').dispatchEvent(event);
+            
             showModal('addFundsModal');
+            
+            if (userName) {
+                showToast(`Selected user: ${userName}`, 'info');
+            }
         }
 
         function setAmount(amount) {
@@ -2788,7 +2964,6 @@
             formattedData += `Total Connected Users: ${data.totalConnectedUsers}\n`;
             formattedData += `Connected Sockets: ${data.connectedSocketsCount}\n`;
             formattedData += `Socket->User Mappings: ${data.socketToUserCount}\n`;
-            formattedData += `User->Sockets Mappings: ${data.userToSocketsCount}\n`;
             formattedData += `Admin Sockets: ${data.adminSocketsCount}\n\n`;
             
             formattedData += `=== USER TO SOCKETS MAPPING ===\n`;
@@ -2942,6 +3117,12 @@
             if (e.ctrlKey && e.key === 'd') {
                 e.preventDefault();
                 openDebugConnections();
+            }
+            
+            // Ctrl + A = Add funds
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                showAddFundsModal();
             }
         });
 
