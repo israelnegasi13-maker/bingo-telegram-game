@@ -965,6 +965,32 @@
                 text-align: center;
             }
         }
+
+        /* Online status indicator */
+        .online-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.6rem;
+            color: #94a3b8;
+        }
+
+        .online-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .online-count {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .total-count {
+            color: #64748b;
+        }
     </style>
 </head>
 <body>
@@ -1056,7 +1082,7 @@
     </div>
 
     <h1 style="color: var(--p-gold); font-size: 2rem; font-weight: 900; margin-bottom: 30px;">BINGO ELITE</h1>
-    <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">Select a room to join. Game starts when 2 players join!</p>
+    <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">Select a room to join. Game starts when 2 online players join!</p>
     
     <div class="stake-grid">
         <div class="stake-btn" onclick="selectStake(10)">
@@ -1129,6 +1155,11 @@
             Win with <strong>Four Corners</strong> pattern (B1, B5, O1, O5) and get <strong>+50 ETB BONUS</strong> from the house!
         </p>
     </div>
+
+    <div class="online-indicator" style="margin-top: 20px;">
+        <div class="online-dot"></div>
+        <span>Only <span class="online-count" id="globalOnlineCount">0</span> online players counted</span>
+    </div>
 </div>
 
 <div id="discoveryOverlay" class="step-overlay">
@@ -1149,6 +1180,11 @@
             <span class="live-indicator" id="liveIndicator">●</span> LIVE
         </div>
     </div>
+
+    <div class="online-indicator" style="margin: 10px 0;">
+        <div class="online-dot"></div>
+        <span>Countdown starts with <span class="online-count">2</span> online players</span>
+    </div>
     
     <div id="discoveryGrid" class="discovery-grid"></div>
     
@@ -1166,9 +1202,15 @@
     <div class="timer-display" id="waitTimer">30</div>
     <h2 id="lobbyStatus" style="font-size: 1rem;">WAITING FOR PLAYERS...</h2>
     <p style="margin-top: 10px; font-weight: 900; color: #64748b;">
-        <span id="playerCount" style="color: var(--p-gold);">1</span> PLAYERS IN ARENA
+        <span id="playerCount" style="color: var(--p-gold);">1</span> ONLINE PLAYERS IN ARENA
     </p>
-    <div class="players-waiting" id="playersWaitingInfo">Minimum 2 players to start</div>
+    <div class="players-waiting" id="playersWaitingInfo">Minimum 2 online players to start</div>
+    
+    <div class="online-indicator" style="margin-top: 20px;">
+        <div class="online-dot"></div>
+        <span>Only online players are counted</span>
+    </div>
+    
     <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: var(--b-red); border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; border-radius: 12px; margin-top: 30px; font-weight: 700; font-size: 0.9rem;">
         LEAVE LOBBY
     </button>
@@ -1259,7 +1301,7 @@
         query: {
             userId: 'pending', // Will be updated after init
             source: 'telegram_game',
-            version: '2.0.0'
+            version: '2.1.0'
         }
     });
 
@@ -1281,7 +1323,9 @@
         lastBoxCount: 0,
         previousTakenBoxes: [],
         selectedBox: null,
-        roomSubscribed: false
+        roomSubscribed: false,
+        onlinePlayersCount: 0,
+        totalPlayersCount: 0
     };
 
     // Update connection status UI
@@ -1509,6 +1553,16 @@
         state.roomStatuses = roomData;
         updateRoomDisplay();
         state.lastActivityTime = Date.now();
+        
+        // Calculate total online players across all rooms
+        let totalOnline = 0;
+        Object.values(roomData).forEach(room => {
+            totalOnline += room.playerCount || 0;
+        });
+        state.onlinePlayersCount = totalOnline;
+        
+        // Update global online counter
+        document.getElementById('globalOnlineCount').textContent = totalOnline;
     });
 
     function updateRoomDisplay() {
@@ -1533,15 +1587,21 @@
                 }
                 
                 const playerCount = roomInfo.playerCount || 0;
+                const totalPlayers = roomInfo.totalPlayers || playerCount;
                 const potentialPrize = roomInfo.potentialPrize || 0;
                 
-                // REMOVED: Only show base prize, not "with bonus"
+                // Show online players count with total in parentheses
                 playersElement.innerHTML = `
                     <span class="count">${playerCount}</span>/100 players
                     <div class="prize-info">
                         <span class="base-prize" id="roomPrize${stake}">Prize: ${potentialPrize} ETB</span>
                     </div>
                 `;
+                
+                // Add online indicator tooltip
+                if (totalPlayers > playerCount) {
+                    playersElement.innerHTML += `<div style="font-size: 0.6rem; color: #64748b; margin-top: 2px;">(${totalPlayers} total players)</div>`;
+                }
             }
         }
     }
@@ -2019,6 +2079,8 @@
         state.lastBoxCount = 0;
         state.previousTakenBoxes = [];
         state.selectedBox = null;
+        state.onlinePlayersCount = 0;
+        state.totalPlayersCount = 0;
         
         // Unsubscribe from room if subscribed
         if (state.isConnected && state.roomSubscribed) {
@@ -2067,12 +2129,12 @@
             if (playerCount >= 2) {
                 status.textContent = "STARTING IN 30 SECONDS!";
                 status.style.color = 'var(--b-green)';
-                info.textContent = `${playerCount} players waiting - Starting soon!`;
+                info.textContent = `${playerCount} online players waiting - Starting soon!`;
                 info.style.color = 'var(--b-green)';
             } else {
-                status.textContent = "WAITING FOR PLAYERS...";
+                status.textContent = "WAITING FOR ONLINE PLAYERS...";
                 status.style.color = 'white';
-                info.textContent = "Need 1 more player to start";
+                info.textContent = "Need 1 more online player to start";
                 info.style.color = '#94a3b8';
             }
             
@@ -2081,9 +2143,32 @@
         }
     });
 
+    // Updated gameCountdown event handler
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
+            
+            // Handle countdown reset (timer = 0)
+            if (d.timer === 0) {
+                timerElement.textContent = "0";
+                timerElement.style.color = '#64748b';
+                timerElement.style.animation = '';
+                
+                // Don't hide the wait overlay immediately - let game start or show message
+                setTimeout(() => {
+                    // Check if we're still in the waiting overlay
+                    if (document.getElementById('waitOverlay').classList.contains('active')) {
+                        document.getElementById('lobbyStatus').textContent = "WAITING FOR MORE PLAYERS...";
+                        document.getElementById('lobbyStatus').style.color = '#f59e0b';
+                        document.getElementById('playersWaitingInfo').textContent = "Countdown stopped - need more online players";
+                        document.getElementById('playersWaitingInfo').style.color = '#f59e0b';
+                    }
+                }, 500);
+                
+                return;
+            }
+            
+            // Normal countdown
             timerElement.textContent = d.timer;
             
             if (d.timer <= 5) {
@@ -2096,9 +2181,13 @@
                 timerElement.style.animation = '';
             }
             
-            if(d.timer <= 0) {
-                document.getElementById('waitOverlay').classList.remove('active');
-                initGameBoard();
+            // When countdown reaches 0, hide waiting overlay and start game
+            if(d.timer === 0) {
+                // Small delay to show "0" before starting
+                setTimeout(() => {
+                    document.getElementById('waitOverlay').classList.remove('active');
+                    initGameBoard();
+                }, 1000);
             }
             
             // Update last activity
@@ -2319,6 +2408,38 @@
     socket.on('leftRoom', (data) => {
         showNotification(data.message || 'Left room successfully', 'info', 2000);
         resetToLobby();
+    });
+
+    // Handle countdown stopped or reset by server
+    socket.on('countdownStopped', (data) => {
+        if (data.room === state.stake) {
+            console.log('Countdown stopped by server:', data.reason);
+            
+            // Update UI to show countdown stopped
+            const timerElement = document.getElementById('waitTimer');
+            const statusElement = document.getElementById('lobbyStatus');
+            const infoElement = document.getElementById('playersWaitingInfo');
+            
+            timerElement.textContent = "0";
+            timerElement.style.color = '#f59e0b';
+            timerElement.style.animation = '';
+            
+            if (data.reason === 'not_enough_players') {
+                statusElement.textContent = "NEED MORE ONLINE PLAYERS";
+                statusElement.style.color = '#f59e0b';
+                infoElement.textContent = "Countdown stopped - need 2 online players";
+                infoElement.style.color = '#f59e0b';
+                
+                showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
+            } else if (data.reason === 'player_left') {
+                statusElement.textContent = "PLAYER LEFT - COUNTDOWN STOPPED";
+                statusElement.style.color = '#ef4444';
+                infoElement.textContent = "Countdown stopped - need 2 online players";
+                infoElement.style.color = '#ef4444';
+                
+                showNotification('⚠️ Countdown stopped - player left the room', 'warning', 3000);
+            }
+        }
     });
 
     // Activity monitoring to keep connection alive
