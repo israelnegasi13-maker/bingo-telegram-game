@@ -1673,7 +1673,13 @@
             socket.emit('subscribeToRoom', { room: amt });
             state.roomSubscribed = true;
             
+            // Request taken boxes with debugging
+            console.log(`📤 Requesting taken boxes for room ${amt}...`);
             socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
+                console.log(`📦 Received taken boxes for room ${amt}:`, takenBoxes);
+                console.log(`📦 Box count: ${takenBoxes.length}, Is array: ${Array.isArray(takenBoxes)}`);
+                
+                // Ensure we have an array
                 const boxes = Array.isArray(takenBoxes) ? takenBoxes : [];
                 renderBoxes(boxes);
                 updateBoxCounters(boxes);
@@ -2357,9 +2363,12 @@
     // ========== REAL-TIME BOX UPDATES ==========
     socket.on('boxesTakenUpdate', (data) => {
         console.log('📦 Real-time box update received:', data);
+        console.log(`📦 Room: ${data.room}, Taken boxes: ${data.takenBoxes.length}, Current stake: ${state.stake}`);
         
         // If we're looking at this room's boxes
         if (data.room === state.stake) {
+            console.log(`📦 Updating display for room ${state.stake} with ${data.takenBoxes.length} boxes`);
+            
             // Update the discovery grid if visible
             if (document.getElementById('discoveryOverlay').classList.contains('active')) {
                 renderBoxes(data.takenBoxes);
@@ -2384,7 +2393,10 @@
 
     // Listen for when boxes are cleared (game ends)
     socket.on('boxesCleared', (data) => {
+        console.log('📦 Boxes cleared event received:', data);
         if (data.room === state.stake) {
+            console.log(`📦 Clearing boxes for room ${state.stake}`);
+            
             // Reset the discovery grid
             if (document.getElementById('discoveryOverlay').classList.contains('active')) {
                 renderBoxes([]);
