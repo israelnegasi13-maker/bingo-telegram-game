@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED WITH AGGRESSIVE OFFLINE PLAYER CLEANUP
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - AGGRESSIVE OFFLINE PLAYER CLEANUP
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -167,15 +167,12 @@ const BINGO_LETTERS = {
 };
 
 // ========== GLOBAL STATE ==========
-let socketToUser = new Map(); // socket.id -> userId
+let socketToUser = new Map();
 let adminSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
-
-// 🚨 NEW: Track last seen timestamps for each user
-let userLastSeen = new Map(); // userId -> timestamp
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
 async function broadcastTakenBoxes(roomStake, newBox = null, playerName = null) {
@@ -185,8 +182,8 @@ async function broadcastTakenBoxes(roomStake, newBox = null, playerName = null) 
     
     const updateData = {
       room: roomStake,
-      takenBoxes: room.takenBoxes, // Send ALL taken boxes
-      playerCount: room.players.length, // Send ALL players
+      takenBoxes: room.takenBoxes,
+      playerCount: room.players.length,
       timestamp: Date.now()
     };
     
@@ -261,6 +258,7 @@ async function getUser(userId, userName) {
       });
       await user.save();
       
+      // Record first transaction
       const transaction = new Transaction({
         type: 'NEW_USER',
         userId: userId,
@@ -280,9 +278,6 @@ async function getUser(userId, userName) {
       
       await user.save();
     }
-    
-    // Update last seen timestamp
-    userLastSeen.set(userId, Date.now());
     
     return user;
   } catch (error) {
@@ -330,16 +325,18 @@ function getConnectedUsers() {
   connectedSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket && socket.connected && socket.userId) {
+      // Check if socket has a userId property (set on connection)
       if (!connectedUsers.includes(socket.userId)) {
         connectedUsers.push(socket.userId);
       }
     }
   });
   
+  // Remove duplicates
   return [...new Set(connectedUsers)];
 }
 
-// 🚨 UPDATED: Function to get online players in a specific room
+// 🚨 FIXED: Function to get online players in a specific room
 async function getOnlinePlayersInRoom(roomStake) {
   try {
     const room = await Room.findOne({ stake: roomStake });
@@ -348,13 +345,13 @@ async function getOnlinePlayersInRoom(roomStake) {
     const onlinePlayers = [];
     const connectedUserIds = getConnectedUsers();
     
-    // Check each player in room
-    room.players.forEach(playerId => {
-      // Player is online if they have an active socket
+    // Check each player in room against socket connections
+    for (const playerId of room.players) {
+      // Player is online if they have an active socket connection
       if (connectedUserIds.includes(playerId)) {
         onlinePlayers.push(playerId);
       }
-    });
+    }
     
     return onlinePlayers;
   } catch (error) {
@@ -363,35 +360,49 @@ async function getOnlinePlayersInRoom(roomStake) {
   }
 }
 
-// 🚨 NEW: Function to remove offline players from ALL rooms
-async function removeOfflinePlayersFromRoom(roomStake) {
+// 🚨 NEW: Function to remove ALL offline players from ALL rooms
+async function removeAllOfflinePlayersFromAllRooms() {
   try {
-    const room = await Room.findOne({ stake: roomStake });
-    if (!room) return;
-    
+    console.log('🧹 Running aggressive offline player cleanup...');
+    const rooms = await Room.find({ status: { $in: ['waiting', 'starting'] } });
     const connectedUserIds = getConnectedUsers();
-    const originalPlayerCount = room.players.length;
     
-    // Filter out offline players
-    room.players = room.players.filter(playerId => connectedUserIds.includes(playerId));
-    
-    // Remove boxes of offline players
-    const newTakenBoxes = [];
-    for (const playerId of room.players) {
-      const user = await User.findOne({ userId: playerId });
-      if (user && user.box) {
-        newTakenBoxes.push(user.box);
+    for (const room of rooms) {
+      const originalPlayerCount = room.players.length;
+      
+      // Filter out offline players
+      room.players = room.players.filter(playerId => connectedUserIds.includes(playerId));
+      
+      // Remove boxes of offline players
+      const newTakenBoxes = [];
+      for (const playerId of room.players) {
+        const user = await User.findOne({ userId: playerId });
+        if (user && user.box) {
+          newTakenBoxes.push(user.box);
+        }
+      }
+      room.takenBoxes = newTakenBoxes;
+      
+      if (originalPlayerCount !== room.players.length) {
+        console.log(`🧹 Removed ${originalPlayerCount - room.players.length} offline players from room ${room.stake}`);
+        await room.save();
+        
+        // Also update user records
+        for (const playerId of room.players) {
+          const user = await User.findOne({ userId: playerId });
+          if (user && user.currentRoom === room.stake) {
+            user.isOnline = true;
+            user.lastSeen = new Date();
+            await user.save();
+          }
+        }
+        
+        // Broadcast updated boxes
+        broadcastTakenBoxes(room.stake);
       }
     }
-    room.takenBoxes = newTakenBoxes;
-    
-    if (originalPlayerCount !== room.players.length) {
-      console.log(`🧹 Removed ${originalPlayerCount - room.players.length} offline players from room ${roomStake}`);
-      await room.save();
-      broadcastTakenBoxes(roomStake);
-    }
   } catch (error) {
-    console.error('Error removing offline players from room:', error);
+    console.error('Error removing offline players from all rooms:', error);
   }
 }
 
@@ -405,7 +416,7 @@ async function broadcastRoomStatus() {
       // 🚨 FIXED: Get ONLY online players
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
       
-      // 🚨 CRITICAL: If no online players, clear the room entirely
+      // 🚨 CRITICAL: If no online players, clear the room entirely (except if playing)
       if (onlinePlayers.length === 0 && room.status !== 'playing') {
         console.log(`🧹 Clearing room ${room.stake} because no online players`);
         room.players = [];
@@ -514,12 +525,15 @@ async function updateAdminPanel() {
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
+    // Get real-time connected sockets count
+    const connectedSocketsCount = connectedSockets.size;
+    
     // Send to all admin sockets
     const adminData = {
       totalPlayers: connectedPlayers,
       activeGames: activeGames,
       totalUsers: users.length,
-      connectedSockets: connectedSockets.size,
+      connectedSockets: connectedSocketsCount,
       houseBalance: houseBalance,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime()
@@ -532,6 +546,7 @@ async function updateAdminPanel() {
         socket.emit('admin:players', userArray);
         socket.emit('admin:rooms', roomsData);
         
+        // Send recent transactions
         Transaction.find().sort({ createdAt: -1 }).limit(50)
           .then(transactions => {
             socket.emit('admin:transactions', transactions);
@@ -561,6 +576,7 @@ function logActivity(type, details, adminSocketId = null) {
     activityLog = activityLog.slice(0, 200);
   }
   
+  // Send to admin panels
   adminSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
@@ -587,6 +603,7 @@ async function startGameTimer(room) {
       if (currentRoom.ballsDrawn >= 75) {
         clearInterval(timer);
         roomTimers.delete(room.stake);
+        // Game timeout - no one won
         endGameWithNoWinner(currentRoom);
         return;
       }
@@ -601,7 +618,7 @@ async function startGameTimer(room) {
       currentRoom.calledNumbers.push(ball);
       currentRoom.currentBall = ball;
       currentRoom.ballsDrawn += 1;
-      currentRoom.lastBoxUpdate = new Date();
+      currentRoom.lastBoxUpdate = new Date(); // 🚨 CRITICAL: Update timestamp on each ball
       await currentRoom.save();
       
       const ballData = {
@@ -610,6 +627,7 @@ async function startGameTimer(room) {
         letter: letter
       };
       
+      // Emit to all players in room
       currentRoom.players.forEach(userId => {
         for (const [socketId, uId] of socketToUser.entries()) {
           if (uId === userId) {
@@ -634,23 +652,28 @@ async function startGameTimer(room) {
   roomTimers.set(room.stake, timer);
 }
 
+// Check if a player has bingo
 function checkBingo(markedNumbers, grid) {
   const patterns = [
+    // Rows
     [0,1,2,3,4],
     [5,6,7,8,9],
     [10,11,12,13,14],
     [15,16,17,18,19],
     [20,21,22,23,24],
     
+    // Columns
     [0,5,10,15,20],
     [1,6,11,16,21],
     [2,7,12,17,22],
     [3,8,13,18,23],
     [4,9,14,19,24],
     
+    // Diagonals
     [0,6,12,18,24],
     [4,8,12,16,20],
     
+    // Four corners
     [0,4,20,24]
   ];
   
@@ -674,18 +697,22 @@ function checkBingo(markedNumbers, grid) {
 
 async function endGameWithNoWinner(room) {
   try {
+    // Store players list before clearing
     const playersInRoom = [...room.players];
     
+    // Clear game timer FIRST
     cleanupRoomTimer(room.stake);
     
+    // Return funds to all players
     for (const userId of playersInRoom) {
       const user = await User.findOne({ userId: userId });
       if (user) {
-        user.balance += room.stake;
+        user.balance += room.stake; // Return their stake
         user.currentRoom = null;
         user.box = null;
         await user.save();
         
+        // Record transaction
         const transaction = new Transaction({
           type: 'REFUND',
           userId: userId,
@@ -696,6 +723,7 @@ async function endGameWithNoWinner(room) {
         });
         await transaction.save();
         
+        // Notify player
         for (const [socketId, uId] of socketToUser.entries()) {
           if (uId === userId) {
             const socket = io.sockets.sockets.get(socketId);
@@ -714,20 +742,24 @@ async function endGameWithNoWinner(room) {
                 commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0
               });
               socket.emit('balanceUpdate', user.balance);
+              // DO NOT send boxesCleared here - let the client handle it from gameOver
             }
           }
         }
       }
     }
     
+    // Update room - CLEAR ALL DATA
     room.players = [];
     room.takenBoxes = [];
     room.status = 'ended';
     room.endTime = new Date();
-    room.lastBoxUpdate = new Date();
+    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
     await room.save();
     
+    // BROADCAST EMPTY BOXES (but NOT boxesCleared event)
     broadcastTakenBoxes(room.stake);
+    
     broadcastRoomStatus();
     updateAdminPanel();
     
@@ -748,6 +780,7 @@ function stopCountdownForRoom(roomStake) {
 
 async function startCountdownForRoom(room) {
   try {
+    // Stop any existing countdown first
     stopCountdownForRoom(room.stake);
     
     room.status = 'starting';
@@ -759,6 +792,7 @@ async function startCountdownForRoom(room) {
     
     const countdownInterval = setInterval(async () => {
       try {
+        // Get fresh room data
         const currentRoom = await Room.findById(room._id);
         if (!currentRoom || currentRoom.status !== 'starting') {
           console.log(`Countdown stopped: Room ${room.stake} status changed`);
@@ -766,17 +800,22 @@ async function startCountdownForRoom(room) {
           return;
         }
         
+        // Get online players count
         const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
         
+        // Check if we still have enough ONLINE players
         if (onlinePlayers.length < CONFIG.MIN_PLAYERS_TO_START) {
           console.log(`Countdown stopped: Not enough online players (${onlinePlayers.length}/${CONFIG.MIN_PLAYERS_TO_START})`);
           
+          // Reset room status
           currentRoom.status = 'waiting';
           currentRoom.countdownStartTime = null;
           await currentRoom.save();
           
+          // Stop countdown
           stopCountdownForRoom(room.stake);
           
+          // Notify remaining players
           onlinePlayers.forEach(userId => {
             for (const [socketId, uId] of socketToUser.entries()) {
               if (uId === userId) {
@@ -799,6 +838,7 @@ async function startCountdownForRoom(room) {
           return;
         }
         
+        // Send countdown to ONLINE players only
         onlinePlayers.forEach(userId => {
           for (const [socketId, uId] of socketToUser.entries()) {
             if (uId === userId) {
@@ -815,12 +855,15 @@ async function startCountdownForRoom(room) {
         
         countdown--;
         
+        // Countdown finished
         if (countdown < 0) {
           clearInterval(countdownInterval);
           roomTimers.delete(countdownKey);
           
+          // Final check: do we still have enough ONLINE players?
           const finalOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
           if (finalOnlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START) {
+            // Start the game
             currentRoom.status = 'playing';
             currentRoom.startTime = new Date();
             currentRoom.lastBoxUpdate = new Date();
@@ -830,6 +873,7 @@ async function startCountdownForRoom(room) {
             console.log(`🎮 Game started for room ${room.stake} with ${finalOnlinePlayers.length} online players`);
             startGameTimer(currentRoom);
             
+            // Notify players game started
             finalOnlinePlayers.forEach(userId => {
               for (const [socketId, uId] of socketToUser.entries()) {
                 if (uId === userId) {
@@ -844,12 +888,14 @@ async function startCountdownForRoom(room) {
               }
             });
           } else {
+            // Not enough players, reset to waiting
             currentRoom.status = 'waiting';
             currentRoom.countdownStartTime = null;
             await currentRoom.save();
             
             console.log(`⚠️ Game start aborted for room ${room.stake}: not enough online players when countdown finished`);
             
+            // Notify remaining players
             finalOnlinePlayers.forEach(userId => {
               for (const [socketId, uId] of socketToUser.entries()) {
                 if (uId === userId) {
@@ -882,30 +928,19 @@ async function startCountdownForRoom(room) {
   }
 }
 
-// 🚨 NEW: Aggressive cleanup of all rooms
-async function cleanupAllRoomsOfOfflinePlayers() {
-  try {
-    const rooms = await Room.find({ status: { $in: ['waiting', 'starting'] } });
-    
-    for (const room of rooms) {
-      await removeOfflinePlayersFromRoom(room.stake);
-    }
-  } catch (error) {
-    console.error('Error cleaning up offline players from all rooms:', error);
-  }
-}
-
 // ========== IMPROVED SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
   connectedSockets.add(socket.id);
   
+  // Enhanced connection tracking - store userId on socket if available in query
   const query = socket.handshake.query;
   if (query.userId) {
     console.log(`👤 User connected via query: ${query.userId}`);
-    socket.userId = query.userId;
+    socket.userId = query.userId; // Store userId on socket for tracking
   }
   
+  // Send connection test immediately
   socket.emit('connectionTest', { 
     status: 'connected', 
     serverTime: new Date().toISOString(),
@@ -955,6 +990,7 @@ io.on('connection', (socket) => {
     user.balance += parseFloat(amount);
     await user.save();
     
+    // Record transaction
     const transaction = new Transaction({
       type: 'ADMIN_ADD',
       userId: userId,
@@ -965,6 +1001,7 @@ io.on('connection', (socket) => {
     });
     await transaction.save();
     
+    // Notify player if online
     for (const [sId, uId] of socketToUser.entries()) {
       if (uId === userId) {
         const playerSocket = io.sockets.sockets.get(sId);
@@ -1002,7 +1039,7 @@ io.on('connection', (socket) => {
       room.calledNumbers.push(ball);
       room.currentBall = ball;
       room.ballsDrawn += 1;
-      room.lastBoxUpdate = new Date();
+      room.lastBoxUpdate = new Date(); // Update timestamp
       await room.save();
       
       const ballData = {
@@ -1041,6 +1078,7 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Notify the user if online
     for (const [sId, uId] of socketToUser.entries()) {
       if (uId === userId) {
         const playerSocket = io.sockets.sockets.get(sId);
@@ -1083,10 +1121,13 @@ io.on('connection', (socket) => {
     
     const room = await Room.findOne({ stake: parseInt(roomStake) });
     if (room) {
+      // Clear game timer
       cleanupRoomTimer(roomStake);
       
+      // Store players list before clearing
       const playersInRoom = [...room.players];
       
+      // Return funds to all players
       for (const userId of playersInRoom) {
         const user = await User.findOne({ userId: userId });
         if (user) {
@@ -1105,6 +1146,7 @@ io.on('connection', (socket) => {
           });
           await transaction.save();
           
+          // Notify player
           for (const [sId, uId] of socketToUser.entries()) {
             if (uId === userId) {
               const s = io.sockets.sockets.get(sId);
@@ -1123,20 +1165,24 @@ io.on('connection', (socket) => {
                   commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0
                 });
                 s.emit('balanceUpdate', user.balance);
+                // DO NOT send boxesCleared - client handles from gameOver
               }
             }
           }
         }
       }
       
+      // Clear room data
       room.players = [];
       room.takenBoxes = [];
       room.status = 'ended';
       room.endTime = new Date();
-      room.lastBoxUpdate = new Date();
+      room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
       await room.save();
       
+      // Broadcast empty boxes
       broadcastTakenBoxes(roomStake);
+      
       socket.emit('admin:success', `Force ended ${roomStake} ETB game`);
       broadcastRoomStatus();
       
@@ -1156,8 +1202,10 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Store players list before clearing
     const playersInRoom = [...room.players];
     
+    // Refund all players
     for (const userId of playersInRoom) {
       const user = await User.findOne({ userId: userId });
       if (user) {
@@ -1176,10 +1224,12 @@ io.on('connection', (socket) => {
         });
         await transaction.save();
         
+        // Notify player
         for (const [sId, uId] of socketToUser.entries()) {
           if (uId === userId) {
             const s = io.sockets.sockets.get(sId);
             if (s) {
+              // Send boxesCleared ONLY for admin clearing
               s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
               s.emit('balanceUpdate', user.balance);
               s.emit('lobbyUpdate', { room: roomStake, count: 0 });
@@ -1189,32 +1239,37 @@ io.on('connection', (socket) => {
       }
     }
     
+    // Clear room
     room.players = [];
     room.takenBoxes = [];
     room.status = 'waiting';
-    room.lastBoxUpdate = new Date();
+    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
     await room.save();
     
+    // Broadcast cleared boxes
     broadcastTakenBoxes(roomStake);
     socket.emit('admin:success', `Cleared all boxes in ${roomStake} ETB room`);
     
     logActivity('ADMIN_CLEAR_BOXES', { adminSocket: socket.id, roomStake }, socket.id);
   });
   
-  // Player events
+  // Player events - FIXED INIT FOR MULTIPLE PLAYER TRACKING
   socket.on('init', async (data) => {
     try {
       const { userId, userName } = data;
       
       console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
       
+      // Store userId on socket for tracking
       socket.userId = userId;
       
       const user = await getUser(userId, userName);
       
       if (user) {
+        // Store in socketToUser map
         socketToUser.set(socket.id, userId);
         
+        // Also update user's lastSeen immediately
         await User.findOneAndUpdate(
           { userId: userId },
           { 
@@ -1234,8 +1289,10 @@ io.on('connection', (socket) => {
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
         
+        // Log the successful connection
         console.log(`✅ User connected successfully: ${userName} (${userId})`);
         
+        // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
@@ -1260,7 +1317,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // 🚨 FIXED: Only show boxes from current room state
+  // 🚨 FIXED: Only get taken boxes from current room state
   socket.on('getTakenBoxes', async ({ room }, callback) => {
     try {
       const roomData = await Room.findOne({ 
@@ -1662,9 +1719,6 @@ io.on('connection', (socket) => {
           { lastSeen: new Date() }
         );
         
-        // Update last seen timestamp
-        userLastSeen.set(userId, Date.now());
-        
         updateAdminPanel();
       } catch (error) {
         console.error('Error updating player activity:', error);
@@ -1758,21 +1812,24 @@ io.on('connection', (socket) => {
     connectedSockets.delete(socket.id);
     adminSockets.delete(socket.id);
     
+    // Remove from room subscriptions
     roomSubscriptions.forEach((sockets, room) => {
       sockets.delete(socket.id);
     });
     
     const userId = socketToUser.get(socket.id) || socket.userId;
     if (userId) {
+      // Remove player from room if they were in one
       User.findOne({ userId: userId })
         .then(async user => {
           if (user && user.currentRoom) {
             const room = await Room.findOne({ stake: user.currentRoom });
             if (room) {
+              // Don't remove from room if game is playing
               if (room.status !== 'playing') {
                 room.players = room.players.filter(id => id !== userId);
                 room.takenBoxes = room.takenBoxes.filter(boxNum => boxNum !== user.box);
-                room.lastBoxUpdate = new Date();
+                room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
                 
                 const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
                 if (room.status === 'starting' && onlinePlayers.length < CONFIG.MIN_PLAYERS_TO_START) {
@@ -1784,6 +1841,7 @@ io.on('connection', (socket) => {
                 
                 await room.save();
                 
+                // Broadcast updated boxes
                 broadcastTakenBoxes(user.currentRoom);
                 console.log(`👤 User ${user.userName} disconnected from room ${room.stake}`);
               } else {
@@ -1791,10 +1849,12 @@ io.on('connection', (socket) => {
               }
             }
             
+            // Still update user status
             user.isOnline = false;
             user.lastSeen = new Date();
             await user.save();
           } else {
+            // Just update last seen
             await User.findOneAndUpdate(
               { userId: userId },
               { 
@@ -1830,12 +1890,12 @@ setInterval(() => {
   updateAdminPanel();
 }, 2000);
 
-// 🚨 CRITICAL: Clean up ALL rooms of offline players every 10 seconds
+// 🚨 CRITICAL: Aggressive cleanup of ALL offline players from ALL rooms every 5 seconds
 setInterval(() => {
-  cleanupAllRoomsOfOfflinePlayers();
-}, 10000);
+  removeAllOfflinePlayersFromAllRooms();
+}, 5000);
 
-// Clean up disconnected sockets
+// Clean up disconnected sockets periodically
 setInterval(() => {
   socketToUser.forEach((userId, socketId) => {
     const socket = io.sockets.sockets.get(socketId);
@@ -1846,7 +1906,7 @@ setInterval(() => {
   });
 }, 10000);
 
-// Clean up stale connections
+// ========== CONNECTION CLEANUP FUNCTION ==========
 async function cleanupStaleConnections() {
   console.log('🧹 Running connection cleanup...');
   
@@ -1854,6 +1914,7 @@ async function cleanupStaleConnections() {
   const thirtySecondsAgo = new Date(now.getTime() - 30000);
   
   try {
+    // Update users who haven't been seen in 30 seconds
     await User.updateMany(
       { 
         lastSeen: { $lt: thirtySecondsAgo },
@@ -1864,6 +1925,7 @@ async function cleanupStaleConnections() {
       }
     );
     
+    // Clean up socketToUser map
     socketToUser.forEach((userId, socketId) => {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
@@ -1877,9 +1939,10 @@ async function cleanupStaleConnections() {
   }
 }
 
+// Run cleanup every 30 seconds
 setInterval(cleanupStaleConnections, 30000);
 
-// Clean up stuck countdowns
+// ========== CLEANUP STUCK COUNTDOWNS ==========
 async function cleanupStuckCountdowns() {
   try {
     const now = new Date();
@@ -1888,15 +1951,19 @@ async function cleanupStuckCountdowns() {
     for (const room of rooms) {
       if (room.countdownStartTime) {
         const timeSinceStart = now - new Date(room.countdownStartTime);
+        // If countdown has been "starting" for more than 45 seconds (should be 30), something's wrong
         if (timeSinceStart > 45000) {
           console.log(`⚠️ Cleaning up stuck countdown for room ${room.stake} (${timeSinceStart/1000}s)`);
           
+          // Stop countdown
           stopCountdownForRoom(room.stake);
           
+          // Reset room status
           room.status = 'waiting';
           room.countdownStartTime = null;
           await room.save();
           
+          // Get online players and notify them
           const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
           onlinePlayers.forEach(userId => {
             for (const [socketId, uId] of socketToUser.entries()) {
@@ -1925,9 +1992,10 @@ async function cleanupStuckCountdowns() {
   }
 }
 
+// Run every 10 seconds
 setInterval(cleanupStuckCountdowns, 10000);
 
-// Clean up stale rooms
+// ========== ROOM CLEANUP FUNCTION ==========
 async function cleanupStaleRooms() {
   try {
     const oneHourAgo = new Date(Date.now() - 3600000);
@@ -1942,6 +2010,7 @@ async function cleanupStaleRooms() {
       await Room.deleteOne({ _id: room._id });
     }
     
+    // Also clean up rooms with status 'playing' but no players for a while
     const emptyPlayingRooms = await Room.find({
       status: 'playing',
       players: { $size: 0 }
@@ -1958,14 +2027,16 @@ async function cleanupStaleRooms() {
   }
 }
 
+// Run every 5 minutes
 setInterval(cleanupStaleRooms, 300000);
 
-// Health check
+// ========== HEALTH CHECK FUNCTION ==========
 setInterval(async () => {
   try {
     const now = Date.now();
-    const fiveMinutesAgo = new Date(now - 300000);
+    const fiveMinutesAgo = new Date(now - 300000); // Increased from 30 seconds to 5 minutes
     
+    // Update users who haven't been active
     await User.updateMany(
       { 
         lastSeen: { $lt: fiveMinutesAgo },
@@ -1978,10 +2049,11 @@ setInterval(async () => {
       }
     );
     
+    // Clean up ONLY abandoned rooms with no players
     const abandonedRooms = await Room.find({
       status: 'playing',
-      players: { $size: 0 },
-      startTime: { $lt: fiveMinutesAgo }
+      players: { $size: 0 }, // Only rooms with NO players
+      startTime: { $lt: fiveMinutesAgo } // And started more than 5 minutes ago
     });
     
     for (const room of abandonedRooms) {
@@ -1993,11 +2065,869 @@ setInterval(async () => {
   } catch (error) {
     console.error('Error in health check:', error);
   }
-}, 60000);
+}, 60000); // Run every 60 seconds instead of 10 seconds
 
 // ========== EXPRESS ROUTES ==========
-// ... (keep all your existing Express routes exactly as they were)
-// The routes remain unchanged from your previous version
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Bingo Elite - Telegram Mini App</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .status { padding: 30px; background: #1e293b; border-radius: 20px; margin: 30px auto; border: 1px solid #334155; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 30px 0; }
+        .stat { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; }
+        .stat-value { font-size: 2.5rem; font-weight: 900; margin: 10px 0; }
+        .stat-label { font-size: 0.9rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .btn { display: inline-block; padding: 15px 30px; margin: 10px; background: #3b82f6; color: white; text-decoration: none; border-radius: 12px; font-weight: bold; transition: all 0.3s; }
+        .btn:hover { background: #2563eb; transform: translateY(-2px); }
+        .btn-admin { background: #ef4444; }
+        .btn-admin:hover { background: #dc2626; }
+        .btn-game { background: #10b981; }
+        .btn-game:hover { background: #059669; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Telegram Mini App</h1>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Ready for Telegram</p>
+        
+        <div class="status">
+          <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
+          <div class="stats-grid">
+            <div class="stat">
+              <div class="stat-label">Connected Players</div>
+              <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Database Status</div>
+              <div class="stat-value" style="color: #10b981;">✅ Online</div>
+            </div>
+          </div>
+          <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB!</p>
+          <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
+          <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
+          <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
+          <p style="color: #10b981; margin-top: 10px;">🚨 AGGRESSIVE OFFLINE PLAYER CLEANUP: ✅ ACTIVE</p>
+          <p style="color: #ef4444; font-weight: bold;">⚠️ Rooms cleared every 5 seconds when no online players</p>
+          <p style="color: #10b981;">✅ Players removed immediately on disconnect</p>
+        </div>
+        
+        <div style="margin-top: 40px;">
+          <h3>Access Points:</h3>
+          <div>
+            <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
+            <a href="/game" class="btn btn-game" target="_blank">🎮 Game Client</a>
+          </div>
+          <div style="margin-top: 20px;">
+            <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
+            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
+          </div>
+          <div style="margin-top: 20px;">
+            <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
+            <a href="/debug-users" class="btn" style="background: #f59e0b;" target="_blank">👥 Debug Users</a>
+            <a href="/debug-calculations/10/5" class="btn" style="background: #f59e0b;" target="_blank">🧮 Debug Calculations</a>
+          </div>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+          <h4>Telegram Mini App Information</h4>
+          <p style="color: #94a3b8; font-size: 0.9rem;">
+            Version: 2.3.0 (AGGRESSIVE OFFLINE CLEANUP) | Database: MongoDB Atlas<br>
+            Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
+            SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
+            Telegram Integration: ✅ Ready<br>
+            Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
+            Bot Username: @ethio_games1_bot<br>
+            Real-time Box Updates: ✅ ACTIVE<br>
+            🚨 AGGRESSIVE FIXES:<br>
+            ✅ Players removed IMMEDIATELY on disconnect<br>
+            ✅ All rooms cleaned every 5 seconds<br>
+            ✅ Rooms cleared when no online players<br>
+            ✅ Offline players cannot appear in room counts
+          </p>
+        </div>
+      </div>
+      
+      <script>
+        // Real-time player count update
+        const socket = io();
+        socket.on('connect', () => {
+          document.getElementById('playerCount').textContent = 'Connected';
+        });
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Telegram Mini App entry point
+app.get('/telegram', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Bingo Elite - Telegram Mini App</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                background: #0f172a;
+                color: white;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .container {
+                padding: 20px;
+                max-width: 500px;
+            }
+            
+            .logo {
+                font-size: 3rem;
+                margin-bottom: 20px;
+                color: #fbbf24;
+            }
+            
+            .btn {
+                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 15px;
+                font-size: 1.2rem;
+                font-weight: bold;
+                cursor: pointer;
+                margin: 20px 0;
+                text-decoration: none;
+                display: inline-block;
+            }
+            
+            .btn:hover {
+                transform: scale(1.05);
+            }
+            
+            .info {
+                background: rgba(255,255,255,0.1);
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
+                font-size: 0.9rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">🎮</div>
+            <h1>Bingo Elite</h1>
+            <p>Play real-time Bingo with players worldwide on Telegram!</p>
+            
+            <div class="info">
+                <p><strong>💰 Win Real Money in ETB</strong></p>
+                <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
+                <p><strong>👥 Play with 100 players per room</strong></p>
+                <p><strong>📦 Real-time Box Tracking</strong></p>
+                <p><strong>🚨 AGGRESSIVE OFFLINE PLAYER CLEANUP</strong></p>
+                <p><strong>✅ FIXED: Offline players NEVER shown</strong></p>
+                <p><strong>✅ FIXED: Rooms clear instantly on disconnect</strong></p>
+                <p><strong>✅ FIXED: Only real online players counted</strong></p>
+            </div>
+            
+            <button class="btn" id="playBtn">LAUNCH GAME</button>
+            
+            <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
+                <p>Bot: @ethio_games1_bot</p>
+                <p>Stakes: 10, 20, 50, 100 ETB</p>
+                <p>Minimum 2 online players to start</p>
+                <p>Version: 2.3.0 (Aggressive Cleanup)</p>
+            </div>
+        </div>
+        
+        <script>
+            // Initialize Telegram Web App
+            const tg = window.Telegram.WebApp;
+            
+            // Expand the app to full height
+            tg.ready();
+            tg.expand();
+            
+            // Set Telegram theme colors
+            tg.setHeaderColor('#3b82f6');
+            tg.setBackgroundColor('#0f172a');
+            
+            // Get user info from Telegram
+            const user = tg.initDataUnsafe?.user;
+            
+            if (user) {
+                document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
+                
+                // Store user info for game
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                }));
+            }
+            
+            // Launch game
+            document.getElementById('playBtn').addEventListener('click', function() {
+                // Add haptic feedback
+                if (tg && tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+                
+                // Redirect to game
+                window.location.href = '/game';
+            });
+            
+            // Add Telegram Main Button if available
+            if (tg && tg.MainButton) {
+                tg.MainButton.setText('🎮 PLAY BINGO');
+                tg.MainButton.show();
+                tg.MainButton.onClick(function() {
+                    window.location.href = '/game';
+                });
+            }
+        </script>
+    </body>
+    </html>
+  `);
+});
+
+// Socket.IO connection test page
+app.get('/socket-test', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Socket.IO Connection Test</title>
+      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
+        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
+        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
+        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
+        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+      </style>
+    </head>
+    <body>
+      <h1>🔌 Socket.IO Connection Test</h1>
+      <div id="status" class="status disconnected">Connecting to server...</div>
+      
+      <h3>Test Actions:</h3>
+      <div>
+        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Connection
+        </button>
+        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test User Init
+        </button>
+        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Room Status
+        </button>
+      </div>
+      
+      <h3>Connection Log:</h3>
+      <div id="log" class="log"></div>
+      
+      <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        
+        function addLog(message, type = 'info') {
+          const entry = document.createElement('div');
+          entry.className = 'log-entry ' + type;
+          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+          log.appendChild(entry);
+          log.scrollTop = log.scrollHeight;
+        }
+        
+        // Configure Socket.IO
+        const socket = io({
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          timeout: 20000,
+          transports: ['websocket', 'polling'],
+          forceNew: true,
+          autoConnect: true
+        });
+        
+        socket.on('connect', () => {
+          status.className = 'status connected';
+          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
+          addLog('Connected to server with ID: ' + socket.id, 'success');
+        });
+        
+        socket.on('disconnect', (reason) => {
+          status.className = 'status disconnected';
+          status.textContent = '❌ Disconnected: ' + reason;
+          addLog('Disconnected: ' + reason, 'error');
+        });
+        
+        socket.on('connect_error', (error) => {
+          addLog('Connection error: ' + error.message, 'error');
+        });
+        
+        socket.on('connectionTest', (data) => {
+          addLog('Server connection test: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('connected', (data) => {
+          addLog('Server connected message: ' + JSON.stringify(data), 'success');
+        });
+        
+        socket.on('balanceUpdate', (data) => {
+          addLog('Balance update: ' + data, 'info');
+        });
+        
+        socket.on('roomStatus', (data) => {
+          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
+          for (const [stake, room] of Object.entries(data)) {
+            addLog(\`Room \${stake}: \${room.playerCount} online players, \${room.takenBoxes} boxes taken\`, 'info');
+          }
+        });
+        
+        socket.on('boxesTakenUpdate', (data) => {
+          addLog(\`Boxes update: \${data.takenBoxes.length} boxes taken in room \${data.room}\`, 'info');
+        });
+        
+        // Test functions
+        function testConnection() {
+          addLog('Testing connection...', 'info');
+          socket.emit('ping');
+        }
+        
+        function testInit() {
+          addLog('Testing user initialization...', 'info');
+          socket.emit('init', {
+            userId: 'test-' + Date.now(),
+            userName: 'Test Player'
+          });
+        }
+        
+        function testRoomStatus() {
+          addLog('Requesting room status...', 'info');
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+          });
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+          testConnection();
+        }, 1000);
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/game', (req, res) => {
+  res.sendFile(path.join(__dirname, 'game.html'));
+});
+
+app.get('/health', async (req, res) => {
+  try {
+    const connectedPlayers = getConnectedUsers().length;
+    const activeGames = await Room.countDocuments({ status: 'playing' });
+    const totalUsers = await User.countDocuments();
+    const rooms = await Room.countDocuments();
+    const totalTransactions = await Transaction.countDocuments();
+    
+    // Get rooms with countdown status
+    const startingRooms = await Room.find({ status: 'starting' });
+    const roomDetails = await Promise.all(startingRooms.map(async (room) => {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      return {
+        stake: room.stake,
+        onlinePlayers: onlinePlayers.length,
+        totalPlayers: room.players.length,
+        countdownStartTime: room.countdownStartTime
+      };
+    }));
+    
+    // Get online boxes count
+    const onlineBoxesCount = {};
+    for (const room of await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } })) {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const onlineBoxes = [];
+      for (const playerId of onlinePlayers) {
+        const user = await User.findOne({ userId: playerId });
+        if (user && user.box) onlineBoxes.push(user.box);
+      }
+      onlineBoxesCount[room.stake] = onlineBoxes.length;
+    }
+    
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      connectedPlayers: connectedPlayers,
+      connectedSockets: connectedSockets.size,
+      socketToUser: socketToUser.size,
+      totalUsers: totalUsers,
+      activeGames: activeGames,
+      startingRooms: roomDetails,
+      onlineBoxesCount: onlineBoxesCount,
+      totalRooms: rooms,
+      totalTransactions: totalTransactions,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      memoryUsage: process.memoryUsage(),
+      nodeVersion: process.version,
+      telegramReady: true,
+      botUsername: '@ethio_games1_bot',
+      serverUrl: 'https://bingo-telegram-game.onrender.com',
+      realTimeBoxUpdates: 'active',
+      aggressiveCleanup: 'active',
+      fixedIssues: ['offline_players_never_shown', 'rooms_clear_instantly', 'online_only_counting']
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get user balance
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findOne({ userId: req.params.userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      userId: user.userId,
+      userName: user.userName,
+      balance: user.balance,
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen,
+      telegramId: user.telegramId
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to add funds (for admin)
+app.post('/api/add-funds', async (req, res) => {
+  try {
+    const { userId, amount, adminPassword } = req.body;
+    
+    if (adminPassword !== CONFIG.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    user.balance += parseFloat(amount);
+    await user.save();
+    
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'ADMIN_ADD',
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      admin: true,
+      description: `Admin added ${amount} ETB via API`
+    });
+    await transaction.save();
+    
+    res.json({
+      success: true,
+      message: `Added ${amount} ETB to ${user.userName}`,
+      newBalance: user.balance
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Real-time tracking test endpoint
+app.get('/real-time-status', async (req, res) => {
+  try {
+    const connectedPlayers = getConnectedUsers().length;
+    const connectedSocketsCount = connectedSockets.size;
+    const socketToUserSize = socketToUser.size;
+    
+    res.json({
+      connectedPlayers: connectedPlayers,
+      connectedSockets: connectedSocketsCount,
+      socketToUserSize: socketToUserSize,
+      socketToUser: Array.from(socketToUser.entries()),
+      adminSockets: Array.from(adminSockets),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+// ========== DEBUG CONNECTION ENDPOINT ==========
+app.get('/debug-connections', async (req, res) => {
+  try {
+    const connectedUserIds = getConnectedUsers();
+    const socketToUserArray = Array.from(socketToUser.entries());
+    const connectedSocketsArray = Array.from(connectedSockets);
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalConnectedUsers: connectedUserIds.length,
+      connectedUserIds: connectedUserIds,
+      socketToUserCount: socketToUser.size,
+      socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
+      connectedSocketsCount: connectedSockets.size,
+      connectedSockets: connectedSocketsArray.map(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        return {
+          socketId,
+          connected: socket?.connected || false,
+          userId: socketToUser.get(socketId) || socket?.userId || 'unknown',
+          handshakeQuery: socket?.handshake?.query || {}
+        };
+      }),
+      adminSocketsCount: adminSockets.size,
+      adminSockets: Array.from(adminSockets)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== DEBUG USERS ENDPOINT ==========
+app.get('/debug-users', async (req, res) => {
+  try {
+    const connectedUserIds = getConnectedUsers();
+    const allUsers = await User.find({}).limit(100);
+    
+    const userStatus = allUsers.map(user => {
+      const isOnline = connectedUserIds.includes(user.userId);
+      const lastSeenTime = new Date(user.lastSeen);
+      const now = new Date();
+      const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+      
+      return {
+        userId: user.userId,
+        userName: user.userName,
+        isOnline: isOnline,
+        lastSeen: user.lastSeen,
+        secondsSinceLastSeen: Math.floor(secondsSinceLastSeen),
+        currentRoom: user.currentRoom,
+        box: user.box,
+        balance: user.balance,
+        socketId: Array.from(socketToUser.entries())
+          .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
+      };
+    });
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalConnectedUsers: connectedUserIds.length,
+      connectedUserIds: connectedUserIds,
+      socketToUserSize: socketToUser.size,
+      connectedSockets: connectedSockets.size,
+      allUsers: userStatus
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+// ========== DEBUG CALCULATIONS ENDPOINT ==========
+app.get('/debug-calculations/:stake/:players', (req, res) => {
+  try {
+    const stake = parseInt(req.params.stake);
+    const players = parseInt(req.params.players);
+    
+    const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[stake] || 0;
+    const contributionPerPlayer = stake - commissionPerPlayer;
+    const totalContributions = contributionPerPlayer * players;
+    const houseFee = commissionPerPlayer * players;
+    const totalCollected = stake * players;
+    const potentialPrizeWithBonus = totalContributions + CONFIG.FOUR_CORNERS_BONUS;
+    
+    res.json({
+      stake: stake,
+      players: players,
+      commissionPerPlayer: commissionPerPlayer,
+      contributionPerPlayer: contributionPerPlayer,
+      totalContributions: totalContributions,
+      houseFee: houseFee,
+      totalCollected: totalCollected,
+      fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS,
+      potentialPrize: totalContributions,
+      potentialPrizeWithBonus: potentialPrizeWithBonus,
+      breakdown: {
+        "Each player pays": stake + " ETB",
+        "House commission per player": commissionPerPlayer + " ETB",
+        "Contribution to prize pool per player": contributionPerPlayer + " ETB",
+        "Total prize pool (base)": totalContributions + " ETB",
+        "Four corners bonus": CONFIG.FOUR_CORNERS_BONUS + " ETB",
+        "Maximum possible win (four corners)": potentialPrizeWithBonus + " ETB",
+        "House earnings": houseFee + " ETB",
+        "Total collected from all players": totalCollected + " ETB"
+      },
+      example_scenarios: [
+        {
+          scenario: "5 players, no four corners",
+          prize: totalContributions,
+          per_player_contribution: contributionPerPlayer,
+          winner_gets: totalContributions + " ETB",
+          house_gets: houseFee + " ETB"
+        },
+        {
+          scenario: "5 players, with four corners",
+          prize: totalContributions,
+          bonus: CONFIG.FOUR_CORNERS_BONUS,
+          total: potentialPrizeWithBonus,
+          winner_gets: potentialPrizeWithBonus + " ETB",
+          house_gets: houseFee + " ETB (plus pays bonus)"
+        },
+        {
+          scenario: "10 players, no four corners",
+          prize: contributionPerPlayer * 10,
+          winner_gets: (contributionPerPlayer * 10) + " ETB",
+          house_gets: (commissionPerPlayer * 10) + " ETB"
+        }
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== TELEGRAM BOT INTEGRATION ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
+
+// Simple Telegram webhook
+app.post('/telegram-webhook', express.json(), async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (message) {
+      const chatId = message.chat.id;
+      const text = message.text || '';
+      const userId = message.from.id.toString();
+      const userName = message.from.first_name || 'Player';
+      const username = message.from.username || '';
+      
+      if (text === '/start' || text === '/play') {
+        // Check if user exists, create if not
+        let user = await User.findOne({ telegramId: userId });
+        
+        if (!user) {
+          user = new User({
+            userId: `tg_${userId}`,
+            userName: userName,
+            telegramId: userId,
+            telegramUsername: username,
+            balance: 0.00,
+            referralCode: `TG${userId}`
+          });
+          await user.save();
+          
+          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+        }
+        
+        // Send welcome message with game button
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
+                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
+                  `🎯 *Features:*\n` +
+                  `• 10/20/50/100 ETB rooms\n` +
+                  `• Four Corners Bonus: 50 ETB\n` +
+                  `• Real-time multiplayer\n` +
+                  `• Real-time box tracking\n` +
+                  `• Telegram login\n\n` +
+                  `🚨 *AGGRESSIVE OFFLINE PLAYER CLEANUP:*\n` +
+                  `✅ Offline players NEVER shown\n` +
+                  `✅ Rooms clear instantly on disconnect\n` +
+                  `✅ Only real online players counted\n\n` +
+                  `_Need funds? Contact admin_`,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                {
+                  text: '🎮 Play Bingo Now',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                }
+              ]]
+            }
+          })
+        });
+      }
+      else if (text === '/balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance : 0;
+        
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
+                  `🎮 Play: @ethio_games1_bot\n` +
+                  `👑 Admin: Contact for funds\n` +
+                  `🆔 Your ID: \`${userId}\``,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+      else if (text === '/help') {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: `🎮 *Bingo Elite Help*\n\n` +
+                  `*Commands:*\n` +
+                  `/start - Start the bot\n` +
+                  `/play - Play game\n` +
+                  `/balance - Check balance\n` +
+                  `/help - This message\n\n` +
+                  `*How to Play:*\n` +
+                  `1. Click "Play Now"\n` +
+                  `2. Select room (10-100 ETB)\n` +
+                  `3. Choose ticket (1-100) - See ONLY online players!\n` +
+                  `4. Mark numbers as called\n` +
+                  `5. Claim BINGO!\n\n` +
+                  `*Four Corners Bonus:* 50 ETB!\n` +
+                  `*Aggressive Cleanup:* Offline players removed instantly\n` +
+                  `*Fixed Issues:* ✅ No ghost players, ✅ Accurate room counts\n\n` +
+                  `_Need help? Contact admin_`,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+    }
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Telegram webhook error:', error);
+    res.sendStatus(200);
+  }
+});
+
+// Setup endpoint for Telegram bot
+app.get('/setup-telegram', async (req, res) => {
+  try {
+    // Set webhook
+    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
+        drop_pending_updates: true
+      })
+    });
+    
+    const webhookResult = await webhookResponse.json();
+    
+    // Set menu button
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: '🎮 Play Bingo',
+          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+        }
+      })
+    });
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Telegram Bot Setup Complete</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 600px; margin: 0 auto; }
+          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
+          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
+          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ Telegram Bot Setup Complete!</h1>
+          <div class="success">✓ Webhook Configured</div>
+          <div class="success">✓ Menu Button Set</div>
+          
+          <div class="info-box">
+            <h3>Bot Information:</h3>
+            <p><strong>Bot:</strong> @ethio_games1_bot</p>
+            <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Admin Password:</strong> admin1234</p>
+            <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
+            <p><strong>Aggressive Cleanup:</strong> Offline players removed instantly</p>
+            <p><strong>Fixed Issues:</strong> ✅ No ghost players, ✅ Accurate online counts</p>
+          </div>
+          
+          <div>
+            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
+            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
+          </div>
+          
+          <div style="margin-top: 30px; text-align: left;">
+            <h4>Next Steps:</h4>
+            <ol>
+              <li>Open @ethio_games1_bot in Telegram</li>
+              <li>Click "Start"</li>
+              <li>Click menu button (bottom left)</li>
+              <li>Play Bingo with accurate online player counts!</li>
+            </ol>
+            
+            <h4>To Add Funds to Players:</h4>
+            <ol>
+              <li>Open Admin Panel (link above)</li>
+              <li>Login with password: admin1234</li>
+              <li>Find user by Telegram ID</li>
+              <li>Click "Add Funds" button</li>
+            </ol>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.send(`
+      <h1 style="color: #ef4444;">❌ Setup Error</h1>
+      <p>${error.message}</p>
+      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
+    `);
+  }
+});
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
@@ -2019,24 +2949,28 @@ server.listen(PORT, () => {
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
+║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}... ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
-║  🚨 AGGRESSIVE FIXES APPLIED:                       ║
-║     ✅ Players IMMEDIATELY removed on disconnect    ║
+║  🚨 AGGRESSIVE OFFLINE PLAYER CLEANUP:              ║
+║     ✅ Players removed IMMEDIATELY on disconnect    ║
+║     ✅ All rooms cleaned every 5 seconds            ║
 ║     ✅ Rooms cleared when no online players         ║
-║     ✅ All rooms cleaned every 10 seconds           ║
+║     ✅ Offline players CANNOT appear in rooms       ║
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
   
+  // Initial broadcast
   setTimeout(() => {
     broadcastRoomStatus();
   }, 1000);
   
+  // Setup Telegram bot after server starts
   setTimeout(async () => {
     try {
-      const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
+      // Auto-setup Telegram webhook if token exists
       if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
         const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
         
