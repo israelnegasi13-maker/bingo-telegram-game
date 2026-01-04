@@ -1823,6 +1823,7 @@
         const confirmBtn = document.getElementById('confirmBoxBtn');
         if (confirmBtn) confirmBtn.remove();
         
+        // ⭐⭐ FIXED: Generate BINGO card with truly random numbers
         generateTraditionalBingoCard(box);
         toggleScreen('discoveryOverlay', 'waitOverlay');
         
@@ -1872,19 +1873,24 @@
             toggleScreen('waitOverlay', 'stakeOverlay');
             document.getElementById('roomDisplay').textContent = 'LOBBY';
             
+            // ⭐⭐ FIXED: Reset timer display
+            document.getElementById('waitTimer').textContent = "30";
+            document.getElementById('waitTimer').style.color = '#64748b';
+            document.getElementById('lobbyStatus').textContent = "WAITING FOR PLAYERS...";
+            
             showNotification('Left lobby successfully', 'info', 2000);
         }
     }
 
-    // Generate traditional BINGO card
+    // ⭐⭐ FIXED: Generate BINGO card with truly random numbers in each column
     function generateTraditionalBingoCard(seed) {
         const letters = ['B', 'I', 'N', 'G', 'O'];
         const ranges = {
-            'B': { min: 1, max: 15 },
-            'I': { min: 16, max: 30 },
-            'N': { min: 31, max: 45 },
-            'G': { min: 46, max: 60 },
-            'O': { min: 61, max: 75 }
+            'B': { min: 1, max: 15, count: 15 },
+            'I': { min: 16, max: 30, count: 15 },
+            'N': { min: 31, max: 45, count: 15 },
+            'G': { min: 46, max: 60, count: 15 },
+            'O': { min: 61, max: 75, count: 15 }
         };
         
         function seededRandom(s) {
@@ -1903,36 +1909,63 @@
         const random = seededRandom(seed * 777);
         state.grid = [];
         
-        // Generate numbers for each column
-        for (let col = 0; col < 5; col++) {
-            const letter = letters[col];
+        // Create arrays of all possible numbers for each column
+        const availableNumbers = {};
+        
+        // Initialize available numbers for each column
+        for (const letter of letters) {
             const range = ranges[letter];
-            let numbersInColumn = [];
-            
-            // Generate 5 unique numbers for this column
-            for (let i = 0; i < 5; i++) {
-                let num;
-                do {
-                    num = Math.floor(random() * (range.max - range.min + 1)) + range.min;
-                } while (numbersInColumn.includes(num));
-                numbersInColumn.push(num);
+            availableNumbers[letter] = [];
+            for (let i = range.min; i <= range.max; i++) {
+                availableNumbers[letter].push(i);
             }
             
-            // Sort numbers in column
-            numbersInColumn.sort((a, b) => a - b);
-            
-            // Add to grid
-            for (let row = 0; row < 5; row++) {
+            // Shuffle the array for randomness
+            for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
+                const j = Math.floor(random() * (i + 1));
+                [availableNumbers[letter][i], availableNumbers[letter][j]] = [availableNumbers[letter][j], availableNumbers[letter][i]];
+            }
+        }
+        
+        // Generate the card (5x5 grid)
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 5; col++) {
                 const index = row * 5 + col;
+                const letter = letters[col];
+                
+                // Free space in the center (N column, 3rd row)
                 if (col === 2 && row === 2) {
-                    state.grid[index] = 'FREE'; // Center is FREE
+                    state.grid[index] = 'FREE';
+                    continue;
+                }
+                
+                // Get available numbers for this column
+                const available = availableNumbers[letter];
+                
+                if (available.length > 0) {
+                    // Pick the next number from available numbers
+                    const selectedNumber = available.shift();
+                    
+                    // Assign to grid
+                    state.grid[index] = selectedNumber;
                 } else {
-                    state.grid[index] = numbersInColumn[row];
+                    // Fallback: if somehow no numbers left, generate random within range
+                    const range = ranges[letter];
+                    state.grid[index] = Math.floor(random() * (range.max - range.min + 1)) + range.min;
                 }
             }
         }
         
-        console.log('Generated BINGO card:', state.grid);
+        // Verify we have correct distribution
+        console.log('Generated BINGO card with random numbers:');
+        for (let col = 0; col < 5; col++) {
+            const columnNumbers = [];
+            for (let row = 0; row < 5; row++) {
+                const index = row * 5 + col;
+                columnNumbers.push(state.grid[index]);
+            }
+            console.log(`${letters[col]}: ${columnNumbers.join(', ')}`);
+        }
     }
 
     // Get BINGO letter for a number
@@ -2015,6 +2048,7 @@
         return false;
     }
 
+    // ⭐⭐ FIXED: Initialize game board with color-coded numbers and four corners badges
     function initGameBoard() {
         const target = document.getElementById('mainGrid');
         target.innerHTML = '';
@@ -2028,11 +2062,33 @@
             cell.className = 'cell' + (isFree ? ' free' : '');
             if (isCorner) {
                 cell.classList.add('corner');
+                
+                // Add four corners badge
+                const badge = document.createElement('div');
+                badge.className = 'four-corners-badge';
+                badge.textContent = '4C';
+                cell.appendChild(badge);
             }
             
             cell.textContent = isFree ? 'FREE' : val;
             cell.dataset.index = index;
             cell.dataset.value = val;
+            
+            // Color code based on BINGO letter
+            if (!isFree) {
+                const num = parseInt(val);
+                if (num >= 1 && num <= 15) {
+                    cell.style.color = 'var(--b-blue)'; // B
+                } else if (num >= 16 && num <= 30) {
+                    cell.style.color = 'var(--b-purple)'; // I
+                } else if (num >= 31 && num <= 45) {
+                    cell.style.color = 'var(--b-green)'; // N
+                } else if (num >= 46 && num <= 60) {
+                    cell.style.color = 'var(--b-yellow)'; // G
+                } else if (num >= 61 && num <= 75) {
+                    cell.style.color = 'var(--b-red)'; // O
+                }
+            }
             
             cell.onclick = () => {
                 if (state.calledNumbers.has(val) || isFree) {
@@ -2125,6 +2181,7 @@
         state.lastActivityTime = Date.now();
     }
 
+    // ⭐⭐ FIXED: lobbyUpdate event handler - Correct player count logic
     socket.on('lobbyUpdate', (d) => {
         if(d.room === state.stake) {
             const playerCount = d.count;
@@ -2132,15 +2189,16 @@
             const status = document.getElementById('lobbyStatus');
             const info = document.getElementById('playersWaitingInfo');
             
+            // FIXED: Correct player count logic
             if (playerCount >= 2) {
-                status.textContent = "STARTING IN 30 SECONDS!";
+                status.textContent = "GAME STARTING IN 30 SECONDS!";
                 status.style.color = 'var(--b-green)';
-                info.textContent = `${playerCount} online players waiting - Starting soon!`;
+                info.innerHTML = `✅ <span style="color: var(--b-green);">${playerCount} online players</span> - Game will start when timer reaches 0`;
                 info.style.color = 'var(--b-green)';
             } else {
-                status.textContent = "WAITING FOR ONLINE PLAYERS...";
+                status.textContent = "WAITING FOR PLAYERS...";
                 status.style.color = 'white';
-                info.textContent = "Need 1 more online player to start";
+                info.innerHTML = `Need <span style="color: var(--p-gold);">${2 - playerCount}</span> more online player${(2 - playerCount) === 1 ? '' : 's'} to start`;
                 info.style.color = '#94a3b8';
             }
             
@@ -2149,33 +2207,35 @@
         }
     });
 
-    // Updated gameCountdown event handler
+    // ⭐⭐ FIXED: gameCountdown event handler - Timer doesn't reset when players leave
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
             // Handle countdown reset (timer = 0)
             if (d.timer === 0) {
-                timerElement.textContent = "0";
+                timerElement.textContent = "30";
                 timerElement.style.color = '#64748b';
                 timerElement.style.animation = '';
                 
-                // Don't hide the wait overlay immediately - let game start or show message
-                setTimeout(() => {
-                    // Check if we're still in the waiting overlay
-                    if (document.getElementById('waitOverlay').classList.contains('active')) {
-                        document.getElementById('lobbyStatus').textContent = "WAITING FOR MORE PLAYERS...";
-                        document.getElementById('lobbyStatus').style.color = '#f59e0b';
-                        document.getElementById('playersWaitingInfo').textContent = "Countdown stopped - need more online players";
-                        document.getElementById('playersWaitingInfo').style.color = '#f59e0b';
-                    }
-                }, 500);
+                // FIXED: Update status when timer resets
+                document.getElementById('lobbyStatus').textContent = "WAITING FOR PLAYERS...";
+                document.getElementById('lobbyStatus').style.color = 'white';
+                
+                // Update player count from server
+                if (state.isConnected) {
+                    socket.emit('getRoomInfo', { room: state.stake });
+                }
                 
                 return;
             }
             
             // Normal countdown
             timerElement.textContent = d.timer;
+            
+            // FIXED: Update status during countdown
+            document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
+            document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
             
             if (d.timer <= 5) {
                 timerElement.style.color = '#ef4444';
@@ -2432,7 +2492,7 @@
             const statusElement = document.getElementById('lobbyStatus');
             const infoElement = document.getElementById('playersWaitingInfo');
             
-            timerElement.textContent = "0";
+            timerElement.textContent = "30";
             timerElement.style.color = '#f59e0b';
             timerElement.style.animation = '';
             
