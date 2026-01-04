@@ -774,7 +774,7 @@ async function startCountdownForRoom(room) {
           // Stop countdown
           stopCountdownForRoom(room.stake);
           
-          // Notify online players
+          // Notify remaining players
           onlinePlayers.forEach(userId => {
             for (const [socketId, uId] of socketToUser.entries()) {
               if (uId === userId) {
@@ -1276,12 +1276,21 @@ io.on('connection', (socket) => {
     }
   });
   
+  // FIXED: Only get taken boxes from ACTIVE rooms (waiting/starting/playing)
   socket.on('getTakenBoxes', async ({ room }, callback) => {
     try {
-      const roomData = await Room.findOne({ stake: parseInt(room) });
+      // FIXED: Only get taken boxes for ACTIVE rooms (not ended ones)
+      const roomData = await Room.findOne({ 
+        stake: parseInt(room), 
+        status: { $in: ['waiting', 'starting', 'playing'] }  // Only active rooms
+      });
+      
       if (roomData) {
+        console.log(`📦 Getting taken boxes for active room ${room}: ${roomData.takenBoxes.length} boxes`);
         callback(roomData.takenBoxes || []);
       } else {
+        // No active room exists, return empty array
+        console.log(`📦 No active room for ${room}, returning empty boxes`);
         callback([]);
       }
     } catch (error) {
@@ -1290,6 +1299,7 @@ io.on('connection', (socket) => {
     }
   });
   
+  // FIXED: Only subscribe to ACTIVE rooms
   socket.on('subscribeToRoom', (data) => {
     const userId = socketToUser.get(socket.id) || socket.userId;
     if (userId && data.room) {
@@ -1301,14 +1311,25 @@ io.on('connection', (socket) => {
       }
       roomSubscriptions.get(data.room).add(socket.id);
       
-      // Send current taken boxes immediately
-      Room.findOne({ stake: data.room })
+      // Send current taken boxes immediately - ONLY from ACTIVE room
+      Room.findOne({ 
+        stake: data.room, 
+        status: { $in: ['waiting', 'starting', 'playing'] }  // Only active rooms
+      })
         .then(room => {
           if (room) {
             socket.emit('boxesTakenUpdate', {
               room: data.room,
               takenBoxes: room.takenBoxes || [],
               playerCount: room.players.length,
+              timestamp: Date.now()
+            });
+          } else {
+            // No active room, send empty boxes
+            socket.emit('boxesTakenUpdate', {
+              room: data.room,
+              takenBoxes: [],
+              playerCount: 0,
               timestamp: Date.now()
             });
           }
@@ -1345,9 +1366,25 @@ io.on('connection', (socket) => {
         return;
       }
       
-      const roomData = await getRoom(room);
+      // FIXED: Only get ACTIVE rooms
+      const roomData = await Room.findOne({ 
+        stake: room, 
+        status: { $in: ['waiting', 'starting', 'playing'] } 
+      });
+      
       if (!roomData) {
-        socket.emit('error', 'Invalid room');
+        // Create a new active room if none exists
+        const newRoom = new Room({
+          stake: room,
+          players: [],
+          takenBoxes: [],
+          status: 'waiting',
+          lastBoxUpdate: new Date()
+        });
+        await newRoom.save();
+        
+        // Use the new room
+        joinRoomWithData(user, newRoom, box, socket, room, userName);
         return;
       }
       
@@ -1370,86 +1407,91 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Update user balance and room info
-      user.balance -= room;
-      user.totalWagered = (user.totalWagered || 0) + room;
-      user.currentRoom = room;
-      user.box = box;
-      await user.save();
-      
-      // Record transaction
-      const transaction = new Transaction({
-        type: 'STAKE',
-        userId: userId,
-        userName: user.userName,
-        amount: -room,
-        room: room,
-        description: `Joined ${room} ETB room with ticket ${box}`
-      });
-      await transaction.save();
-      
-      // Update room
-      roomData.players.push(userId);
-      roomData.takenBoxes.push(box);
-      roomData.lastBoxUpdate = new Date();
-      
-      const onlinePlayers = await getOnlinePlayersInRoom(room);
-      
-      // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
-      broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
-      
-      // Update all ONLINE players in room about lobby count
-      onlinePlayers.forEach(playerUserId => {
-        for (const [sId, uId] of socketToUser.entries()) {
-          if (uId === playerUserId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              s.emit('lobbyUpdate', {
-                room: room,
-                count: onlinePlayers.length
-              });
-            }
-          }
-        }
-      });
-      
-      // Check if we have enough ONLINE players to start countdown
-      if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
-        // Start countdown
-        await startCountdownForRoom(roomData);
-      }
-      
-      await roomData.save();
-      socket.emit('joinedRoom');
-      socket.emit('balanceUpdate', user.balance);
-      
-      // Send personal confirmation
-      socket.emit('boxesTakenUpdate', {
-        room: room,
-        takenBoxes: roomData.takenBoxes,
-        personalBox: box,
-        message: `You selected box ${box}! Waiting for players...`
-      });
-      
-      // Broadcast updates
-      broadcastRoomStatus();
-      updateAdminPanel();
-      
-      logActivity('BOX_TAKEN', { 
-        userId, 
-        userName: user.userName, 
-        room, 
-        box,
-        takenBoxes: roomData.takenBoxes.length,
-        playerCount: roomData.players.length,
-        onlinePlayers: onlinePlayers.length
-      });
+      joinRoomWithData(user, roomData, box, socket, room, userName);
       
     } catch (error) {
       console.error('Error joining room:', error);
       socket.emit('error', 'Server error while joining room');
     }
   });
+  
+  // Helper function for joining room
+  async function joinRoomWithData(user, roomData, box, socket, room, userName) {
+    // Update user balance and room info
+    user.balance -= room;
+    user.totalWagered = (user.totalWagered || 0) + room;
+    user.currentRoom = room;
+    user.box = box;
+    await user.save();
+    
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'STAKE',
+      userId: user.userId,
+      userName: user.userName,
+      amount: -room,
+      room: room,
+      description: `Joined ${room} ETB room with ticket ${box}`
+    });
+    await transaction.save();
+    
+    // Update room
+    roomData.players.push(user.userId);
+    roomData.takenBoxes.push(box);
+    roomData.lastBoxUpdate = new Date();
+    
+    const onlinePlayers = await getOnlinePlayersInRoom(room);
+    
+    // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
+    broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
+    
+    // Update all ONLINE players in room about lobby count
+    onlinePlayers.forEach(playerUserId => {
+      for (const [sId, uId] of socketToUser.entries()) {
+        if (uId === playerUserId) {
+          const s = io.sockets.sockets.get(sId);
+          if (s) {
+            s.emit('lobbyUpdate', {
+              room: room,
+              count: onlinePlayers.length
+            });
+          }
+        }
+      }
+    });
+    
+    // Check if we have enough ONLINE players to start countdown
+    if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
+      // Start countdown
+      await startCountdownForRoom(roomData);
+    }
+    
+    await roomData.save();
+    socket.emit('joinedRoom');
+    socket.emit('balanceUpdate', user.balance);
+    
+    // Send personal confirmation
+    socket.emit('boxesTakenUpdate', {
+      room: room,
+      takenBoxes: roomData.takenBoxes,
+      personalBox: box,
+      message: `You selected box ${box}! Waiting for players...`
+    });
+    
+    // Broadcast updates
+    broadcastRoomStatus();
+    updateAdminPanel();
+    
+    logActivity('BOX_TAKEN', { 
+      userId: user.userId, 
+      userName: user.userName, 
+      room, 
+      box,
+      takenBoxes: roomData.takenBoxes.length,
+      playerCount: roomData.players.length,
+      onlinePlayers: onlinePlayers.length
+    });
+  }
   
   socket.on('claimBingo', async (data) => {
     try {
