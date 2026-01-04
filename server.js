@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - UPDATED WITH CORRECTED CALCULATIONS
+// server.js - BINGO ELITE - TELEGRAM MINI APP VERSION - FIXED ONLINE PLAYER COUNTING
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -175,39 +175,54 @@ let connectedSockets = new Set();
 let roomSubscriptions = new Map(); // Track which sockets are watching which rooms
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
-function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
-  const updateData = {
-    room: roomStake,
-    takenBoxes: takenBoxes,
-    playerCount: takenBoxes.length,
-    timestamp: Date.now()
-  };
-  
-  if (newBox && playerName) {
-    updateData.newBox = newBox;
-    updateData.playerName = playerName;
-    updateData.message = `${playerName} selected box ${newBox}!`;
-  }
-  
-  // Broadcast to all connected sockets
-  io.emit('boxesTakenUpdate', updateData);
-  
-  // Also update all admin panels
-  adminSockets.forEach(socketId => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-      socket.emit('admin:boxesUpdate', {
-        room: roomStake,
-        takenBoxes: takenBoxes,
-        playerCount: takenBoxes.length,
-        timestamp: new Date().toISOString(),
-        newBox: newBox,
-        playerName: playerName
-      });
+async function broadcastTakenBoxes(roomStake, newBox = null, playerName = null) {
+  try {
+    // 🚨 FIXED: Get ONLY boxes taken by online players
+    const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
+    const onlineBoxes = [];
+    
+    for (const playerId of onlinePlayers) {
+      const user = await User.findOne({ userId: playerId });
+      if (user && user.box) {
+        onlineBoxes.push(user.box);
+      }
     }
-  });
-  
-  console.log(`📦 Real-time box update for room ${roomStake}: ${takenBoxes.length} boxes taken${newBox ? `, new box ${newBox} by ${playerName}` : ''}`);
+    
+    const updateData = {
+      room: roomStake,
+      takenBoxes: onlineBoxes, // 🚨 FIXED: Only online boxes
+      playerCount: onlinePlayers.length,
+      timestamp: Date.now()
+    };
+    
+    if (newBox && playerName) {
+      updateData.newBox = newBox;
+      updateData.playerName = playerName;
+      updateData.message = `${playerName} selected box ${newBox}!`;
+    }
+    
+    // Broadcast to all connected sockets
+    io.emit('boxesTakenUpdate', updateData);
+    
+    // Also update all admin panels
+    adminSockets.forEach(socketId => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('admin:boxesUpdate', {
+          room: roomStake,
+          takenBoxes: onlineBoxes,
+          playerCount: onlinePlayers.length,
+          timestamp: new Date().toISOString(),
+          newBox: newBox,
+          playerName: playerName
+        });
+      }
+    });
+    
+    console.log(`📦 Real-time box update for room ${roomStake}: ${onlineBoxes.length} boxes taken (online only)${newBox ? `, new box ${newBox} by ${playerName}` : ''}`);
+  } catch (error) {
+    console.error('Error in broadcastTakenBoxes:', error);
+  }
 }
 
 function cleanupRoomTimer(stake) {
@@ -329,30 +344,34 @@ function getConnectedUsers() {
   return [...new Set(connectedUsers)];
 }
 
-// Function to get online players in a specific room
+// 🚨 FIXED: Function to get online players in a specific room
 async function getOnlinePlayersInRoom(roomStake) {
   try {
     const room = await Room.findOne({ stake: roomStake });
     if (!room) return [];
     
+    // 🚨 FIXED: Only return players that are currently connected via sockets
     const onlinePlayers = [];
-    const connectedUserIds = getConnectedUsers();
     
-    room.players.forEach(playerId => {
-      // Check if player is in connected users
-      if (connectedUserIds.includes(playerId)) {
-        // Also verify they have an active socket
-        for (const [socketId, userId] of socketToUser.entries()) {
-          if (userId === playerId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket && socket.connected) {
-              onlinePlayers.push(playerId);
-              break;
-            }
+    // Check each player in room against socket connections
+    for (const playerId of room.players) {
+      // Check if player has an active socket connection
+      let isOnline = false;
+      
+      for (const [socketId, userId] of socketToUser.entries()) {
+        if (userId === playerId) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket && socket.connected) {
+            isOnline = true;
+            break;
           }
         }
       }
-    });
+      
+      if (isOnline) {
+        onlinePlayers.push(playerId);
+      }
+    }
     
     return onlinePlayers;
   } catch (error) {
@@ -368,7 +387,18 @@ async function broadcastRoomStatus() {
     const roomStatus = {};
     
     for (const room of rooms) {
+      // 🚨 FIXED: Get ONLY online players
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      
+      // 🚨 FIXED: Get boxes taken by ONLY online players
+      const onlineBoxes = [];
+      for (const playerId of onlinePlayers) {
+        const user = await User.findOne({ userId: playerId });
+        if (user && user.box) {
+          onlineBoxes.push(user.box);
+        }
+      }
+      
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * onlinePlayers.length;
@@ -380,7 +410,7 @@ async function broadcastRoomStatus() {
         playerCount: onlinePlayers.length, // Use online players count
         totalPlayers: room.players.length, // Total players (including offline)
         status: room.status,
-        takenBoxes: room.takenBoxes.length,
+        takenBoxes: onlineBoxes.length, // 🚨 FIXED: Only online boxes
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
@@ -416,24 +446,8 @@ async function updateAdminPanel() {
     const connectedUserIds = getConnectedUsers();
     
     const userArray = users.map(user => {
-      // Better online detection - check multiple sources
-      let isOnline = false;
-      
-      // Check socketToUser map
-      if (connectedUserIds.includes(user.userId)) {
-        isOnline = true;
-      }
-      // Also check if user has been active recently (within 30 seconds)
-      else if (user.lastSeen) {
-        const lastSeenTime = new Date(user.lastSeen);
-        const now = new Date();
-        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
-        
-        // If user was active in last 30 seconds, consider them online
-        if (secondsSinceLastSeen < 30) {
-          isOnline = true;
-        }
-      }
+      // Better online detection - check socket connections
+      const isOnline = connectedUserIds.includes(user.userId);
       
       return {
         userId: user.userId,
@@ -455,7 +469,18 @@ async function updateAdminPanel() {
     const rooms = await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
     
     for (const room of rooms) {
+      // 🚨 FIXED: Get ONLY online players for this room
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      
+      // 🚨 FIXED: Get boxes taken by ONLY online players
+      const onlineBoxes = [];
+      for (const playerId of onlinePlayers) {
+        const user = await User.findOne({ userId: playerId });
+        if (user && user.box) {
+          onlineBoxes.push(user.box);
+        }
+      }
+      
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * onlinePlayers.length;
@@ -465,7 +490,7 @@ async function updateAdminPanel() {
         stake: room.stake,
         playerCount: onlinePlayers.length,
         totalPlayers: room.players.length,
-        takenBoxes: room.takenBoxes,
+        takenBoxes: onlineBoxes, // 🚨 FIXED: Only online boxes
         status: room.status,
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
@@ -473,8 +498,8 @@ async function updateAdminPanel() {
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
         houseFee: houseFee,
-        players: room.players, // Include player IDs
-        onlinePlayers: onlinePlayers // Online player IDs
+        players: room.players, // Include all player IDs
+        onlinePlayers: onlinePlayers // Online player IDs only
       };
     }
     
@@ -717,7 +742,7 @@ async function endGameWithNoWinner(room) {
     await room.save();
     
     // BROADCAST EMPTY BOXES (but NOT boxesCleared event)
-    broadcastTakenBoxes(room.stake, []);
+    broadcastTakenBoxes(room.stake);
     
     broadcastRoomStatus();
     updateAdminPanel();
@@ -884,6 +909,45 @@ async function startCountdownForRoom(room) {
     
   } catch (error) {
     console.error('Error starting countdown:', error);
+  }
+}
+
+// 🚨 NEW: Clean up offline players from rooms
+async function cleanupOfflinePlayersFromRooms() {
+  try {
+    const rooms = await Room.find({ status: { $in: ['waiting', 'starting'] } });
+    
+    for (const room of rooms) {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const offlinePlayers = room.players.filter(playerId => !onlinePlayers.includes(playerId));
+      
+      if (offlinePlayers.length > 0) {
+        console.log(`🧹 Cleaning up ${offlinePlayers.length} offline players from room ${room.stake}`);
+        
+        // Remove offline players
+        room.players = onlinePlayers;
+        
+        // Remove their boxes
+        for (const playerId of offlinePlayers) {
+          const user = await User.findOne({ userId: playerId });
+          if (user && user.box) {
+            room.takenBoxes = room.takenBoxes.filter(box => box !== user.box);
+            
+            // Reset user's room and box
+            user.currentRoom = null;
+            user.box = null;
+            await user.save();
+          }
+        }
+        
+        await room.save();
+        
+        // Broadcast updated boxes
+        broadcastTakenBoxes(room.stake);
+      }
+    }
+  } catch (error) {
+    console.error('Error cleaning up offline players:', error);
   }
 }
 
@@ -1140,7 +1204,7 @@ io.on('connection', (socket) => {
       await room.save();
       
       // Broadcast empty boxes
-      broadcastTakenBoxes(roomStake, []);
+      broadcastTakenBoxes(roomStake);
       
       socket.emit('admin:success', `Force ended ${roomStake} ETB game`);
       broadcastRoomStatus();
@@ -1206,7 +1270,7 @@ io.on('connection', (socket) => {
     await room.save();
     
     // Broadcast cleared boxes
-    broadcastTakenBoxes(roomStake, []);
+    broadcastTakenBoxes(roomStake);
     socket.emit('admin:success', `Cleared all boxes in ${roomStake} ETB room`);
     
     logActivity('ADMIN_CLEAR_BOXES', { adminSocket: socket.id, roomStake }, socket.id);
@@ -1276,18 +1340,28 @@ io.on('connection', (socket) => {
     }
   });
   
-  // FIXED: Only get taken boxes from ACTIVE rooms (waiting/starting/playing)
+  // 🚨 FIXED: Only get taken boxes from ONLINE players
   socket.on('getTakenBoxes', async ({ room }, callback) => {
     try {
-      // FIXED: Only get taken boxes for ACTIVE rooms (not ended ones)
       const roomData = await Room.findOne({ 
         stake: parseInt(room), 
         status: { $in: ['waiting', 'starting', 'playing'] }  // Only active rooms
       });
       
       if (roomData) {
-        console.log(`📦 Getting taken boxes for active room ${room}: ${roomData.takenBoxes.length} boxes`);
-        callback(roomData.takenBoxes || []);
+        // 🚨 FIXED: Get ONLY boxes taken by online players
+        const onlinePlayers = await getOnlinePlayersInRoom(room);
+        const onlineBoxes = [];
+        
+        for (const playerId of onlinePlayers) {
+          const user = await User.findOne({ userId: playerId });
+          if (user && user.box) {
+            onlineBoxes.push(user.box);
+          }
+        }
+        
+        console.log(`📦 Getting taken boxes for room ${room}: ${onlineBoxes.length} boxes (online only)`);
+        callback(onlineBoxes);
       } else {
         // No active room exists, return empty array
         console.log(`📦 No active room for ${room}, returning empty boxes`);
@@ -1299,7 +1373,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // FIXED: Only subscribe to ACTIVE rooms
   socket.on('subscribeToRoom', (data) => {
     const userId = socketToUser.get(socket.id) || socket.userId;
     if (userId && data.room) {
@@ -1311,17 +1384,28 @@ io.on('connection', (socket) => {
       }
       roomSubscriptions.get(data.room).add(socket.id);
       
-      // Send current taken boxes immediately - ONLY from ACTIVE room
+      // Send current taken boxes immediately - ONLY from ONLINE players
       Room.findOne({ 
         stake: data.room, 
         status: { $in: ['waiting', 'starting', 'playing'] }  // Only active rooms
       })
-        .then(room => {
+        .then(async (room) => {
           if (room) {
+            // 🚨 FIXED: Get ONLY boxes taken by online players
+            const onlinePlayers = await getOnlinePlayersInRoom(data.room);
+            const onlineBoxes = [];
+            
+            for (const playerId of onlinePlayers) {
+              const user = await User.findOne({ userId: playerId });
+              if (user && user.box) {
+                onlineBoxes.push(user.box);
+              }
+            }
+            
             socket.emit('boxesTakenUpdate', {
               room: data.room,
-              takenBoxes: room.takenBoxes || [],
-              playerCount: room.players.length,
+              takenBoxes: onlineBoxes,
+              playerCount: onlinePlayers.length,
               timestamp: Date.now()
             });
           } else {
@@ -1443,7 +1527,7 @@ io.on('connection', (socket) => {
     const onlinePlayers = await getOnlinePlayersInRoom(room);
     
     // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
-    broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
+    broadcastTakenBoxes(room, box, user.userName);
     
     // Update all ONLINE players in room about lobby count
     onlinePlayers.forEach(playerUserId => {
@@ -1680,7 +1764,7 @@ io.on('connection', (socket) => {
       await roomData.save();
       
       // BROADCAST EMPTY BOXES only after all players have been notified
-      broadcastTakenBoxes(room, []);
+      broadcastTakenBoxes(room);
       
       broadcastRoomStatus();
       updateAdminPanel();
@@ -1773,7 +1857,7 @@ io.on('connection', (socket) => {
         await room.save();
         
         // ✅ BROADCAST UPDATED BOXES
-        broadcastTakenBoxes(user.currentRoom, room.takenBoxes);
+        broadcastTakenBoxes(user.currentRoom);
         
         // Reset user
         user.currentRoom = null;
@@ -1846,7 +1930,7 @@ io.on('connection', (socket) => {
                 await room.save();
                 
                 // Broadcast updated boxes
-                broadcastTakenBoxes(user.currentRoom, room.takenBoxes);
+                broadcastTakenBoxes(user.currentRoom);
                 console.log(`👤 User ${user.userName} disconnected from room ${room.stake}`);
               } else {
                 console.log(`⚠️ User ${user.userName} disconnected during gameplay, keeping in room`);
@@ -1942,6 +2026,11 @@ async function cleanupStaleConnections() {
 
 // Run cleanup every 30 seconds
 setInterval(cleanupStaleConnections, 30000);
+
+// 🚨 NEW: Clean up offline players from rooms every 30 seconds
+setInterval(() => {
+  cleanupOfflinePlayersFromRooms();
+}, 30000);
 
 // ========== CLEANUP STUCK COUNTDOWNS ==========
 async function cleanupStuckCountdowns() {
@@ -2112,8 +2201,9 @@ app.get('/', (req, res) => {
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
-          <p style="color: #10b981; margin-top: 10px;">🔄 Fixed: Only online players counted in waiting room</p>
-          <p style="color: #10b981;">⏱️ Fixed: Countdown no longer gets stuck</p>
+          <p style="color: #10b981; margin-top: 10px;">🔄 FIXED: Only online players counted in waiting room</p>
+          <p style="color: #ef4444; font-weight: bold;">🚨 CRITICAL FIX: Rooms now show ONLY online players and their boxes</p>
+          <p style="color: #10b981;">⏱️ Fixed: Countdown only starts with online players</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -2130,20 +2220,25 @@ app.get('/', (req, res) => {
             <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
             <a href="/debug-users" class="btn" style="background: #f59e0b;" target="_blank">👥 Debug Users</a>
             <a href="/debug-calculations/10/5" class="btn" style="background: #f59e0b;" target="_blank">🧮 Debug Calculations</a>
+            <a href="/test-online-counting" class="btn" style="background: #10b981;" target="_blank">✅ Test Online Counting</a>
           </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.1.0 (Fixed Online Tracking) | Database: MongoDB Atlas<br>
+            Version: 2.2.0 (FIXED Online Player Counting) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
-            Fixed Issues: ✅ Only online players counted, ✅ Countdown doesn't get stuck
+            🚨 CRITICAL FIXES:<br>
+            ✅ Only online players counted in rooms<br>
+            ✅ Only boxes taken by online players shown<br>
+            ✅ Countdown only starts with online players<br>
+            ✅ Offline players automatically cleaned up
           </p>
         </div>
       </div>
@@ -2154,6 +2249,97 @@ app.get('/', (req, res) => {
         socket.on('connect', () => {
           document.getElementById('playerCount').textContent = 'Connected';
         });
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Test endpoint for online player counting
+app.get('/test-online-counting', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Test Online Player Counting</title>
+      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: #0f172a; color: #f8fafc; }
+        .test-section { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #334155; }
+        .result { padding: 10px; margin: 10px 0; border-radius: 8px; background: rgba(255,255,255,0.05); }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        button { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px; }
+        button:hover { background: #2563eb; }
+      </style>
+    </head>
+    <body>
+      <h1>🧪 Test Online Player Counting</h1>
+      <p>This tests the FIXED online player counting system</p>
+      
+      <div class="test-section">
+        <h3>Test 1: Get Connected Users</h3>
+        <button onclick="testConnectedUsers()">Test Connected Users</button>
+        <div id="test1Result" class="result"></div>
+      </div>
+      
+      <div class="test-section">
+        <h3>Test 2: Get Online Players in Room 10</h3>
+        <button onclick="testOnlinePlayersInRoom()">Test Room 10 Online Players</button>
+        <div id="test2Result" class="result"></div>
+      </div>
+      
+      <div class="test-section">
+        <h3>Test 3: Get Taken Boxes (Online Only)</h3>
+        <button onclick="testTakenBoxes()">Test Taken Boxes (Online Only)</button>
+        <div id="test3Result" class="result"></div>
+      </div>
+      
+      <script>
+        const socket = io();
+        
+        function testConnectedUsers() {
+          socket.emit('ping');
+          fetch('/debug-connections')
+            .then(r => r.json())
+            .then(data => {
+              document.getElementById('test1Result').innerHTML = \`
+                <div class="success">✅ Connected Users: \${data.totalConnectedUsers}</div>
+                <div>SocketToUser: \${data.socketToUserCount}</div>
+                <div>Connected Sockets: \${data.connectedSocketsCount}</div>
+                <div>User IDs: \${data.connectedUserIds.join(', ') || 'None'}</div>
+              \`;
+            });
+        }
+        
+        function testOnlinePlayersInRoom() {
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            fetch('/debug-users')
+              .then(r => r.json())
+              .then(data => {
+                document.getElementById('test2Result').innerHTML = \`
+                  <div class="success">✅ Online Players in Room 10: \${boxes.length}</div>
+                  <div>Total Users in DB: \${data.allUsers.length}</div>
+                  <div>Online Users: \${data.allUsers.filter(u => u.isOnline).length}</div>
+                  <div>Total Connected: \${data.totalConnectedUsers}</div>
+                \`;
+              });
+          });
+        }
+        
+        function testTakenBoxes() {
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            document.getElementById('test3Result').innerHTML = \`
+              <div class="success">✅ Boxes taken by ONLINE players only: \${boxes.length}</div>
+              <div>Boxes: \${boxes.join(', ') || 'None'}</div>
+              <div class="info">Note: This should be 0 when no players are online</div>
+            \`;
+          });
+        }
+        
+        // Auto-run first test
+        setTimeout(testConnectedUsers, 1000);
       </script>
     </body>
     </html>
@@ -2234,10 +2420,10 @@ app.get('/telegram', (req, res) => {
                 <p><strong>💰 Win Real Money in ETB</strong></p>
                 <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
                 <p><strong>👥 Play with 100 players per room</strong></p>
-                <p><strong>📦 Real-time Box Tracking</strong></p>
-                <p><strong>🤖 Telegram Mini App Integrated</strong></p>
-                <p><strong>✅ Fixed: Only online players counted</strong></p>
-                <p><strong>✅ Fixed: Countdown works correctly</strong></p>
+                <p><strong>📦 Real-time Box Tracking (ONLINE PLAYERS ONLY)</strong></p>
+                <p><strong>✅ FIXED: Only online players counted</strong></p>
+                <p><strong>✅ FIXED: Rooms clear when players disconnect</strong></p>
+                <p><strong>✅ FIXED: Countdown works correctly</strong></p>
             </div>
             
             <button class="btn" id="playBtn">LAUNCH GAME</button>
@@ -2246,6 +2432,7 @@ app.get('/telegram', (req, res) => {
                 <p>Bot: @ethio_games1_bot</p>
                 <p>Stakes: 10, 20, 50, 100 ETB</p>
                 <p>Minimum 2 online players to start</p>
+                <p>Version: 2.2.0 (Fixed Online Counting)</p>
             </div>
         </div>
         
@@ -2336,6 +2523,9 @@ app.get('/socket-test', (req, res) => {
         <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
           Test Room Status
         </button>
+        <button onclick="testOnlineBoxes()" style="padding: 10px 20px; margin: 5px; background: #f59e0b; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Online Boxes
+        </button>
       </div>
       
       <h3>Connection Log:</h3>
@@ -2395,10 +2585,13 @@ app.get('/socket-test', (req, res) => {
         
         socket.on('roomStatus', (data) => {
           addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
+          for (const [stake, room] of Object.entries(data)) {
+            addLog(\`Room \${stake}: \${room.playerCount} online players, \${room.takenBoxes} boxes taken\`, 'info');
+          }
         });
         
         socket.on('boxesTakenUpdate', (data) => {
-          addLog('Boxes update: ' + data.takenBoxes.length + ' boxes taken in room ' + data.room, 'info');
+          addLog(\`Boxes update: \${data.takenBoxes.length} boxes taken in room \${data.room} (online players only)\`, 'info');
         });
         
         // Test functions
@@ -2418,13 +2611,21 @@ app.get('/socket-test', (req, res) => {
         function testRoomStatus() {
           addLog('Requesting room status...', 'info');
           socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
-            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+            addLog('Taken boxes for room 10 (ONLINE ONLY): ' + boxes.length + ' boxes', 'info');
+          });
+        }
+        
+        function testOnlineBoxes() {
+          addLog('Testing online-only box counting...', 'info');
+          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
+            addLog(\`Result: \${boxes.length} boxes taken by ONLINE players only\`, boxes.length === 0 ? 'success' : 'info');
           });
         }
         
         // Auto-test on load
         setTimeout(() => {
           testConnection();
+          setTimeout(testOnlineBoxes, 2000);
         }, 1000);
       </script>
     </body>
@@ -2460,6 +2661,18 @@ app.get('/health', async (req, res) => {
       };
     }));
     
+    // Get online boxes count
+    const onlineBoxesCount = {};
+    for (const room of await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } })) {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const onlineBoxes = [];
+      for (const playerId of onlinePlayers) {
+        const user = await User.findOne({ userId: playerId });
+        if (user && user.box) onlineBoxes.push(user.box);
+      }
+      onlineBoxesCount[room.stake] = onlineBoxes.length;
+    }
+    
     res.json({
       status: 'ok',
       database: 'connected',
@@ -2469,6 +2682,7 @@ app.get('/health', async (req, res) => {
       totalUsers: totalUsers,
       activeGames: activeGames,
       startingRooms: roomDetails,
+      onlineBoxesCount: onlineBoxesCount,
       totalRooms: rooms,
       totalTransactions: totalTransactions,
       uptime: process.uptime(),
@@ -2479,7 +2693,7 @@ app.get('/health', async (req, res) => {
       botUsername: '@ethio_games1_bot',
       serverUrl: 'https://bingo-telegram-game.onrender.com',
       realTimeBoxUpdates: 'active',
-      fixedIssues: ['online_player_counting', 'countdown_stuck']
+      fixedIssues: ['online_player_counting', 'countdown_stuck', 'offline_players_cleaned']
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2614,6 +2828,7 @@ app.get('/debug-users', async (req, res) => {
         lastSeen: user.lastSeen,
         secondsSinceLastSeen: Math.floor(secondsSinceLastSeen),
         currentRoom: user.currentRoom,
+        box: user.box,
         balance: user.balance,
         socketId: Array.from(socketToUser.entries())
           .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
@@ -2741,8 +2956,10 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• 10/20/50/100 ETB rooms\n` +
                   `• Four Corners Bonus: 50 ETB\n` +
                   `• Real-time multiplayer\n` +
-                  `• Real-time box tracking\n` +
+                  `• Real-time box tracking (ONLINE PLAYERS ONLY)\n` +
                   `• Telegram login\n\n` +
+                  `✅ *FIXED:* Only online players counted now!\n` +
+                  `✅ *FIXED:* Rooms clear when players disconnect\n\n` +
                   `_Need funds? Contact admin_`,
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2788,12 +3005,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*How to Play:*\n` +
                   `1. Click "Play Now"\n` +
                   `2. Select room (10-100 ETB)\n` +
-                  `3. Choose ticket (1-100) - See taken boxes in real-time!\n` +
+                  `3. Choose ticket (1-100) - See taken boxes by ONLINE PLAYERS only!\n` +
                   `4. Mark numbers as called\n` +
                   `5. Claim BINGO!\n\n` +
                   `*Four Corners Bonus:* 50 ETB!\n` +
-                  `*Real-time Box Tracking:* See which boxes are taken instantly!\n` +
-                  `*Fixed Issues:* Only online players counted, countdown works correctly\n\n` +
+                  `*Real-time Box Tracking:* See which boxes are taken by ONLINE PLAYERS instantly!\n` +
+                  `*Fixed Issues:* ✅ Only online players counted, ✅ Rooms clear on disconnect\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -2861,8 +3078,8 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
-            <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Only online players counted, Countdown doesn't get stuck</p>
+            <p><strong>Real-time Features:</strong> Box tracking (ONLINE PLAYERS ONLY), Live updates</p>
+            <p><strong>Fixed Issues:</strong> ✅ Only online players counted, ✅ Rooms clear on disconnect</p>
           </div>
           
           <div>
@@ -2876,7 +3093,7 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Open @ethio_games1_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
-              <li>Play Bingo with real-time box tracking!</li>
+              <li>Play Bingo with real-time box tracking (ONLINE PLAYERS ONLY)!</li>
             </ol>
             
             <h4>To Add Funds to Players:</h4>
@@ -2917,6 +3134,7 @@ server.listen(PORT, () => {
 ║  Debug:        /debug-connections                    ║
 ║  Debug Users:  /debug-users                          ║
 ║  Debug Calc:   /debug-calculations/:stake/:players   ║
+║  Test Online:  /test-online-counting                 ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
@@ -2924,9 +3142,11 @@ server.listen(PORT, () => {
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
-║  🧮 Calculations: ✅ FIXED & VERIFIED               ║
-║  🚀 Fixes: ✅ Only online players counted           ║
-║         ✅ Countdown doesn't get stuck             ║
+║  🚨 CRITICAL FIXES APPLIED:                         ║
+║     ✅ Only online players counted                  ║
+║     ✅ Only boxes taken by online players shown     ║
+║     ✅ Offline players automatically cleaned up     ║
+║     ✅ Countdown only starts with online players    ║
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
