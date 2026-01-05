@@ -1291,7 +1291,7 @@
         query: {
             userId: 'pending', // Will be updated after init
             source: 'telegram_game',
-            version: '2.4.0'
+            version: '2.5.0'
         }
     });
 
@@ -1327,6 +1327,8 @@
             dot.className = 'connection-dot connected';
             text.textContent = 'CONNECTED';
             text.style.color = '#10b981';
+            // Hide loading overlay
+            document.getElementById('loadingOverlay').classList.remove('active');
         } else {
             dot.className = 'connection-dot';
             text.textContent = message || 'DISCONNECTED';
@@ -1833,6 +1835,11 @@
             
             // Send activity update
             socket.emit('player:activity', { action: 'joined_lobby', room: state.stake, box: box });
+            
+            // Request room info after joining
+            setTimeout(() => {
+                socket.emit('getRoomInfo', { room: state.stake });
+            }, 500);
         }
         
         // Update last activity
@@ -1998,7 +2005,7 @@
         void ballDisplay.offsetWidth; // Trigger reflow
         
         // Apply new animation with longer duration
-        ballDisplay.style.animation = 'ballPop 0.6s ease-out';
+        ballDisplay.style.animation = 'ballPop 0.8s ease-out';
 
         // Add to history
         state.history.unshift({ num, letter });
@@ -2035,6 +2042,7 @@
                 if (checkWinningPattern()) {
                     document.getElementById('btnBingo').disabled = false;
                     console.log(`🎯 BINGO POSSIBLE! Button enabled`);
+                    showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                 }
             }
         }
@@ -2142,6 +2150,7 @@
                         } catch(e){}
                         if(checkWinningPattern()) {
                             document.getElementById('btnBingo').disabled = false;
+                            showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                         }
                     }
                 }
@@ -2218,6 +2227,15 @@
         // Hide live box counter
         document.getElementById('liveBoxCounter').classList.remove('active');
         
+        // Reset timer display
+        document.getElementById('waitTimer').textContent = "30";
+        document.getElementById('waitTimer').style.color = '#64748b';
+        document.getElementById('waitTimer').style.animation = '';
+        document.getElementById('lobbyStatus').textContent = "WAITING FOR PLAYERS...";
+        document.getElementById('lobbyStatus').style.color = 'white';
+        document.getElementById('playersWaitingInfo').textContent = "Minimum 2 online players to start";
+        document.getElementById('playersWaitingInfo').style.color = '#94a3b8';
+        
         // Reset bonus messages
         document.getElementById('bonusMessage').style.display = 'none';
         document.getElementById('specialWinMessage').style.display = 'none';
@@ -2268,10 +2286,9 @@
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
-            // Normal countdown
+            // Update timer
             timerElement.textContent = d.timer;
             
-            // FIXED: Update status during countdown
             if (d.timer > 0) {
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
                 document.getElementById('lobbyStatus').style.color = '#10b981';
@@ -2286,14 +2303,14 @@
                     timerElement.style.animation = '';
                 }
             } else {
-                // When countdown reaches 0, hide waiting overlay and start game
+                // Timer reached 0 - game should start
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING NOW!";
                 document.getElementById('lobbyStatus').style.color = '#10b981';
                 timerElement.style.color = '#ef4444';
                 timerElement.style.animation = 'pulse 0.5s infinite';
                 
-                // Show notification
-                showNotification('🎮 Game starting! Balls will be drawn every 3 seconds', 'success', 3000);
+                // Show notification that game is starting
+                showNotification('🎮 Game starting now!', 'success', 2000);
             }
             
             // Update last activity
@@ -2303,12 +2320,12 @@
 
     // ⭐⭐ FIXED: Game started event handler - NOW WORKING
     socket.on('gameStarted', (d) => {
-        console.log('🎮 Game started event received from server:', d);
+        console.log('🎮 Game started event received:', d);
         
         if(d.room === state.stake) {
             console.log(`✅ Game started in our room ${state.stake}`);
             
-            // Hide waiting overlay immediately
+            // Hide waiting overlay
             document.getElementById('waitOverlay').classList.remove('active');
             
             // Initialize game board
@@ -2328,6 +2345,59 @@
                     tg.HapticFeedback.impactOccurred('heavy'); 
                 }
             } catch(e){}
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    // ⭐⭐ ADDED: Countdown stopped event handler
+    socket.on('countdownStopped', (data) => {
+        if (data.room === state.stake) {
+            console.log('Countdown stopped:', data.reason);
+            
+            // Update UI
+            const timerElement = document.getElementById('waitTimer');
+            const statusElement = document.getElementById('lobbyStatus');
+            const infoElement = document.getElementById('playersWaitingInfo');
+            
+            timerElement.textContent = "30";
+            timerElement.style.color = '#f59e0b';
+            timerElement.style.animation = '';
+            
+            if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
+                statusElement.textContent = "NEED MORE ONLINE PLAYERS";
+                statusElement.style.color = '#f59e0b';
+                infoElement.textContent = "Countdown stopped - need 2 online players";
+                infoElement.style.color = '#f59e0b';
+                
+                showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
+            }
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    // ⭐⭐ ADDED: Admin force start event handler
+    socket.on('admin:forceStartGame', (data) => {
+        if (data.room === state.stake) {
+            console.log('🎮 Admin force starting game');
+            document.getElementById('waitOverlay').classList.remove('active');
+            initGameBoard();
+            showNotification('🎮 Game starting now by admin!', 'success', 3000);
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    // ⭐⭐ ADDED: Admin force end event handler
+    socket.on('admin:forceEndGame', (data) => {
+        if (data.room === state.stake) {
+            console.log('🎮 Admin force ending game');
+            resetToLobby();
+            showNotification('⚠️ Game ended by admin', 'warning', 3000);
             
             // Update last activity
             state.lastActivityTime = Date.now();
@@ -2563,38 +2633,7 @@
         resetToLobby();
     });
 
-    // Handle countdown stopped or reset by server
-    socket.on('countdownStopped', (data) => {
-        if (data.room === state.stake) {
-            console.log('Countdown stopped by server:', data.reason);
-            
-            // Update UI to show countdown stopped
-            const timerElement = document.getElementById('waitTimer');
-            const statusElement = document.getElementById('lobbyStatus');
-            const infoElement = document.getElementById('playersWaitingInfo');
-            
-            timerElement.textContent = "30";
-            timerElement.style.color = '#f59e0b';
-            timerElement.style.animation = '';
-            
-            if (data.reason === 'not_enough_players') {
-                statusElement.textContent = "NEED MORE ONLINE PLAYERS";
-                statusElement.style.color = '#f59e0b';
-                infoElement.textContent = "Countdown stopped - need 2 online players";
-                infoElement.style.color = '#f59e0b';
-                
-                showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
-            } else if (data.reason === 'player_left') {
-                statusElement.textContent = "PLAYER LEFT - COUNTDOWN STOPPED";
-                statusElement.style.color = '#ef4444';
-                infoElement.textContent = "Countdown stopped - need 2 online players";
-                infoElement.style.color = '#ef4444';
-                
-                showNotification('⚠️ Countdown stopped - player left the room', 'warning', 3000);
-            }
-        }
-    });
-
+    // ========== ACTIVITY MONITORING ==========
     // Activity monitoring to keep connection alive
     function startActivityMonitoring() {
         setInterval(() => {
