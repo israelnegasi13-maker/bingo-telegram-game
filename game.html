@@ -1301,7 +1301,7 @@
         query: {
             userId: 'pending', // Will be updated after init
             source: 'telegram_game',
-            version: '2.1.0'
+            version: '2.2.0'
         }
     });
 
@@ -2207,57 +2207,70 @@
         }
     });
 
-    // ⭐⭐ FIXED: gameCountdown event handler - Timer doesn't reset when players leave
+    // ⭐⭐ FIXED: gameCountdown event handler - Timer continues when players leave
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
-            
-            // Handle countdown reset (timer = 0)
-            if (d.timer === 0) {
-                timerElement.textContent = "30";
-                timerElement.style.color = '#64748b';
-                timerElement.style.animation = '';
-                
-                // FIXED: Update status when timer resets
-                document.getElementById('lobbyStatus').textContent = "WAITING FOR PLAYERS...";
-                document.getElementById('lobbyStatus').style.color = 'white';
-                
-                // Update player count from server
-                if (state.isConnected) {
-                    socket.emit('getRoomInfo', { room: state.stake });
-                }
-                
-                return;
-            }
             
             // Normal countdown
             timerElement.textContent = d.timer;
             
             // FIXED: Update status during countdown
-            document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
-            document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
-            
-            if (d.timer <= 5) {
+            if (d.timer > 0) {
+                document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
+                document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
+                
+                if (d.timer <= 5) {
+                    timerElement.style.color = '#ef4444';
+                    timerElement.style.animation = 'pulse 0.5s infinite';
+                } else if (d.timer <= 10) {
+                    timerElement.style.color = '#f59e0b';
+                } else {
+                    timerElement.style.color = '#3b82f6';
+                    timerElement.style.animation = '';
+                }
+            } else {
+                // When countdown reaches 0, hide waiting overlay and start game
+                document.getElementById('lobbyStatus').textContent = "GAME STARTING NOW!";
+                document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
                 timerElement.style.color = '#ef4444';
                 timerElement.style.animation = 'pulse 0.5s infinite';
-            } else if (d.timer <= 10) {
-                timerElement.style.color = '#f59e0b';
-            } else {
-                timerElement.style.color = '#3b82f6';
-                timerElement.style.animation = '';
-            }
-            
-            // When countdown reaches 0, hide waiting overlay and start game
-            if(d.timer === 0) {
+                
                 // Small delay to show "0" before starting
                 setTimeout(() => {
                     document.getElementById('waitOverlay').classList.remove('active');
                     initGameBoard();
-                }, 1000);
+                    // Notify server game started for this player
+                    socket.emit('game:started', { room: state.stake });
+                }, 500);
             }
             
             // Update last activity
             state.lastActivityTime = Date.now();
+        }
+    });
+
+    // Handle game started event from server
+    socket.on('gameStarted', (d) => {
+        if(d.room === state.stake) {
+            console.log('🎮 Game started event received from server');
+            
+            // Hide waiting overlay immediately
+            document.getElementById('waitOverlay').classList.remove('active');
+            
+            // Initialize game board
+            initGameBoard();
+            
+            // Reset timer display
+            document.getElementById('waitTimer').textContent = "30";
+            document.getElementById('waitTimer').style.color = '#64748b';
+            document.getElementById('waitTimer').style.animation = '';
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
+            
+            // Haptic feedback for game start
+            try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
         }
     });
 
