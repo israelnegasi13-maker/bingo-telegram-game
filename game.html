@@ -1136,8 +1136,6 @@
         <div class="letter-info"><div class="letter-dot"></div> O: 61-75</div>
     </div>
     
-    <!-- REMOVED: The "How prizes work" section has been removed -->
-    
     <div style="margin-top: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.3); max-width: 300px;">
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
             <div style="color: var(--p-gold); font-size: 1.5rem;">🎯</div>
@@ -1293,7 +1291,7 @@
         query: {
             userId: 'pending', // Will be updated after init
             source: 'telegram_game',
-            version: '2.2.0'
+            version: '2.4.0'
         }
     });
 
@@ -1974,8 +1972,10 @@
         return '';
     }
 
-    // ⭐⭐ FIXED: Improved ball popping animation
+    // ⭐⭐ FIXED: Improved ball popping animation - NOW WORKING PROPERLY
     function triggerNewBall(num, letter) {
+        console.log(`🎱 Triggering ball animation for ${letter}-${num}`);
+        
         try { 
             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                 tg.HapticFeedback.impactOccurred('medium'); 
@@ -2017,36 +2017,85 @@
             h.appendChild(hb);
         });
         
+        // Add to called numbers
+        state.calledNumbers.add(num);
+        
+        // Check if this number is on our grid and mark it
+        if (state.grid.includes(num)) {
+            console.log(`✅ Number ${num} is on your grid!`);
+            
+            // Find and mark the cell
+            const index = state.grid.indexOf(num);
+            const cell = document.querySelector(`.cell[data-index="${index}"]`);
+            if (cell && !cell.classList.contains('marked')) {
+                cell.classList.add('marked');
+                state.markedNumbers.add(num.toString());
+                
+                // Check for win
+                if (checkWinningPattern()) {
+                    document.getElementById('btnBingo').disabled = false;
+                    console.log(`🎯 BINGO POSSIBLE! Button enabled`);
+                }
+            }
+        }
+        
         // Update last activity
         state.lastActivityTime = Date.now();
     }
 
-    // Check for any winning pattern (including four corners)
+    // ⭐⭐ FIXED: Check for any winning pattern (including four corners)
     function checkWinningPattern() {
         const grid = state.grid;
         const marked = state.markedNumbers;
-        const isM = (idx) => marked.has(grid[idx]);
+        const isM = (idx) => marked.has(grid[idx].toString()) || grid[idx] === 'FREE';
         
-        // Check four corners first
+        console.log('🔍 Checking winning pattern...');
+        console.log('Marked numbers:', Array.from(marked));
+        console.log('Grid:', grid);
+        
+        // Check four corners first (B1, B5, O1, O5)
         const fourCorners = isM(0) && isM(4) && isM(20) && isM(24);
+        console.log('Four corners check:', fourCorners);
+        console.log('Corners:', grid[0], grid[4], grid[20], grid[24]);
         
         // Check rows
         for(let i=0; i<5; i++) {
-            if(isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4)) return true;
+            const rowBingo = isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4);
+            if (rowBingo) {
+                console.log(`✅ Row ${i+1} BINGO!`);
+                return true;
+            }
         }
         
         // Check columns
         for(let i=0; i<5; i++) {
-            if(isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20)) return true;
+            const colBingo = isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20);
+            if (colBingo) {
+                console.log(`✅ Column ${i+1} BINGO!`);
+                return true;
+            }
         }
         
         // Check diagonals
-        if(isM(0) && isM(6) && isM(12) && isM(18) && isM(24)) return true;
-        if(isM(4) && isM(8) && isM(12) && isM(16) && isM(20)) return true;
+        const diag1 = isM(0) && isM(6) && isM(12) && isM(18) && isM(24);
+        const diag2 = isM(4) && isM(8) && isM(12) && isM(16) && isM(20);
+        
+        if (diag1) {
+            console.log('✅ Diagonal 1 BINGO!');
+            return true;
+        }
+        if (diag2) {
+            console.log('✅ Diagonal 2 BINGO!');
+            return true;
+        }
         
         // Check four corners
-        if (fourCorners) return true;
+        if (fourCorners) {
+            console.log('✅ Four Corners BINGO!');
+            return true;
+        }
         
+        console.log('❌ No winning pattern yet');
         return false;
     }
 
@@ -2085,7 +2134,7 @@
                 if (state.calledNumbers.has(val) || isFree) {
                     if(!cell.classList.contains('marked')) {
                         cell.classList.add('marked');
-                        state.markedNumbers.add(val);
+                        state.markedNumbers.add(val.toString());
                         try { 
                             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                                 tg.HapticFeedback.impactOccurred('light'); 
@@ -2103,17 +2152,25 @@
             target.appendChild(cell);
         });
         
+        console.log('✅ Game board initialized');
+        console.log('Grid:', state.grid);
+        console.log('Called numbers:', Array.from(state.calledNumbers));
+        
         // Update last activity
         state.lastActivityTime = Date.now();
     }
 
     function claimBingo() {
         if(state.isConnected && !document.getElementById('btnBingo').disabled) {
+            console.log('🎯 Claiming BINGO!');
             socket.emit('claimBingo', { 
                 room: state.stake, 
                 grid: state.grid, 
                 marked: Array.from(state.markedNumbers) 
             });
+            
+            // Disable button to prevent multiple clicks
+            document.getElementById('btnBingo').disabled = true;
             
             // Update last activity
             state.lastActivityTime = Date.now();
@@ -2178,6 +2235,8 @@
 
     // ⭐⭐ FIXED: lobbyUpdate event handler - Correct player count logic
     socket.on('lobbyUpdate', (d) => {
+        console.log('👥 Lobby update:', d);
+        
         if(d.room === state.stake) {
             const playerCount = d.count;
             document.getElementById('playerCount').textContent = playerCount;
@@ -2204,6 +2263,8 @@
 
     // ⭐⭐ FIXED: gameCountdown event handler - Timer continues when players leave
     socket.on('gameCountdown', (d) => {
+        console.log('⏱️ Game countdown event:', d);
+        
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
@@ -2231,13 +2292,8 @@
                 timerElement.style.color = '#ef4444';
                 timerElement.style.animation = 'pulse 0.5s infinite';
                 
-                // Small delay to show "0" before starting
-                setTimeout(() => {
-                    document.getElementById('waitOverlay').classList.remove('active');
-                    initGameBoard();
-                    // Notify server game started for this player
-                    socket.emit('game:started', { room: state.stake });
-                }, 500);
+                // Show notification
+                showNotification('🎮 Game starting! Balls will be drawn every 3 seconds', 'success', 3000);
             }
             
             // Update last activity
@@ -2245,10 +2301,12 @@
         }
     });
 
-    // Handle game started event from server
+    // ⭐⭐ FIXED: Game started event handler - NOW WORKING
     socket.on('gameStarted', (d) => {
+        console.log('🎮 Game started event received from server:', d);
+        
         if(d.room === state.stake) {
-            console.log('🎮 Game started event received from server');
+            console.log(`✅ Game started in our room ${state.stake}`);
             
             // Hide waiting overlay immediately
             document.getElementById('waitOverlay').classList.remove('active');
@@ -2261,8 +2319,8 @@
             document.getElementById('waitTimer').style.color = '#64748b';
             document.getElementById('waitTimer').style.animation = '';
             
-            // Update last activity
-            state.lastActivityTime = Date.now();
+            // Show notification
+            showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
             
             // Haptic feedback for game start
             try { 
@@ -2270,20 +2328,29 @@
                     tg.HapticFeedback.impactOccurred('heavy'); 
                 }
             } catch(e){}
+            
+            // Update last activity
+            state.lastActivityTime = Date.now();
         }
     });
 
-    // Updated ball drawn event
+    // ⭐⭐ FIXED: Ball drawn event handler - NOW WORKING
     socket.on('ballDrawn', (d) => {
+        console.log('🎱 Ball drawn event received:', d);
+        
         if(d.room === state.stake) {
-            state.calledNumbers.add(d.num);
+            console.log(`✅ Ball ${d.letter}-${d.num} drawn for our room`);
             triggerNewBall(d.num, d.letter);
+        } else {
+            console.log(`❌ Ball drawn for different room ${d.room}, our room is ${state.stake}`);
         }
     });
 
     socket.on('enableBingo', () => {
+        console.log('✅ Enable BINGO event received');
         if (checkWinningPattern()) {
             document.getElementById('btnBingo').disabled = false;
+            showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
         }
         
         // Update last activity
@@ -2319,6 +2386,8 @@
     });
 
     socket.on('gameOver', (d) => {
+        console.log('🎮 Game over event:', d);
+        
         if(d.room === state.stake) {
             const isWinner = d.winnerId === state.userId;
             document.getElementById('btnBingo').disabled = true;
