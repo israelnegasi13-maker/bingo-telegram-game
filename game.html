@@ -10,11 +10,9 @@
     
     <style>
         :root {
-            --b-blue: #3b82f6;
-            --b-purple: #8b5cf6;
-            --b-green: #10b981;
-            --b-yellow: #f59e0b;
-            --b-red: #ef4444;
+            --main-color: #3b82f6;  /* Single blue color for everything */
+            --main-dark: #1d4ed8;
+            --main-light: #60a5fa;
             --p-gold: #fbbf24;
             --bg-dark: #020617;
             --card-glass: rgba(30, 41, 59, 0.75);
@@ -50,7 +48,7 @@
             z-index: -1;
             background: 
                 radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0, transparent 50%);
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
         }
 
         #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay {
@@ -101,6 +99,7 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes ballPop { 
             0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
         }
         @keyframes pulse { 
@@ -167,7 +166,7 @@
         
         .status-waiting {
             background: rgba(59, 130, 246, 0.2);
-            color: var(--b-blue);
+            color: var(--main-color);
             border: 1px solid rgba(59, 130, 246, 0.4);
         }
         
@@ -179,13 +178,13 @@
         
         .status-playing {
             background: rgba(16, 185, 129, 0.2);
-            color: var(--b-green);
+            color: #10b981;
             border: 1px solid rgba(16, 185, 129, 0.4);
         }
         
         .status-ended {
             background: rgba(239, 68, 68, 0.2);
-            color: var(--b-red);
+            color: #ef4444;
             border: 1px solid rgba(239, 68, 68, 0.4);
         }
         
@@ -207,7 +206,7 @@
         }
         
         .player-count .base-prize {
-            color: var(--b-green);
+            color: #10b981;
         }
         
         .room-full {
@@ -223,7 +222,7 @@
             border-radius: 20px;
             font-size: 0.8rem;
             font-weight: 700;
-            color: var(--b-red);
+            color: #ef4444;
         }
 
         .discovery-grid {
@@ -246,7 +245,7 @@
             align-items: center; 
             justify-content: center;
             font-weight: 900; 
-            color: var(--b-blue);
+            color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
@@ -288,7 +287,7 @@
         
         .box-number.selected {
             animation: pulse 0.5s infinite;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            background: linear-gradient(135deg, var(--main-color), #60a5fa);
             color: white;
             transform: scale(1.1);
         }
@@ -335,7 +334,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--b-blue);
+            color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -384,6 +383,7 @@
             height: 25px; /* Increased from 20px */
             width: 100%;
             text-align: center;
+            color: var(--main-color) !important; /* SINGLE COLOR */
         }
 
         /* Adjusted number position for bigger ball */
@@ -392,12 +392,10 @@
             margin-top: 20px; /* Increased from 15px */
         }
 
-        /* Color the ball based on letter */
-        .ball-B .ball-letter { color: var(--b-blue); }
-        .ball-I .ball-letter { color: var(--b-purple); }
-        .ball-N .ball-letter { color: var(--b-green); }
-        .ball-G .ball-letter { color: var(--b-yellow); }
-        .ball-O .ball-letter { color: var(--b-red); }
+        /* SINGLE COLOR THEME: All balls use main color */
+        .ball-display .ball-letter {
+            color: var(--main-color) !important;
+        }
 
         /* MAKING RECENT CALLED NUMBERS LOWER AND BIGGER - Adjusted history strip */
         .history-strip {
@@ -440,6 +438,7 @@
             font-size: 0.55rem; /* Increased from 0.45rem */
             font-weight: 900;
             line-height: 1;
+            color: var(--main-color) !important; /* SINGLE COLOR */
         }
 
         /* Making history number bigger */
@@ -449,12 +448,10 @@
             line-height: 1;
         }
 
-        /* Color coding for history balls */
-        .history-ball[data-letter="B"] .history-letter { color: var(--b-blue); }
-        .history-ball[data-letter="I"] .history-letter { color: var(--b-purple); }
-        .history-ball[data-letter="N"] .history-letter { color: var(--b-green); }
-        .history-ball[data-letter="G"] .history-letter { color: var(--b-yellow); }
-        .history-ball[data-letter="O"] .history-letter { color: var(--b-red); }
+        /* SINGLE COLOR THEME: All history balls use main color */
+        .history-ball .history-letter {
+            color: var(--main-color) !important;
+        }
 
         /* Bingo Grid with Letters */
         .bingo-container {
@@ -482,13 +479,13 @@
             justify-content: center;
             font-weight: 900; 
             font-size: 1.2rem;
+            color: var(--main-color) !important; /* SINGLE COLOR */
         }
 
-        .letter-B { color: var(--b-blue); }
-        .letter-I { color: var(--b-purple); }
-        .letter-N { color: var(--b-green); }
-        .letter-G { color: var(--b-yellow); }
-        .letter-O { color: var(--b-red); }
+        /* SINGLE COLOR THEME: All letters use main color */
+        .bingo-letter-cell {
+            color: var(--main-color) !important;
+        }
 
         .bingo-grid {
             display: grid;
@@ -506,7 +503,7 @@
             justify-content: center;
             font-weight: 900; 
             font-size: 1rem;
-            color: #64748b;
+            color: var(--main-color) !important; /* SINGLE COLOR */
             cursor: pointer;
             position: relative;
             transition: all 0.2s;
@@ -517,7 +514,7 @@
         }
 
         .cell.marked {
-            background: linear-gradient(135deg, var(--b-blue), var(--b-purple));
+            background: linear-gradient(135deg, var(--main-color), #60a5fa);
             color: white !important;
             border: none;
             box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
@@ -556,10 +553,10 @@
         }
 
         .btn-bingo {
-            background: linear-gradient(90deg, var(--b-green), #059669);
+            background: linear-gradient(90deg, var(--main-color), #1d4ed8);
             color: white; padding: 18px; border-radius: 16px;
             font-weight: 900; font-size: 1.2rem; width: 100%; border: none;
-            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
             transition: 0.2s;
             margin-bottom: 20px;
         }
@@ -594,7 +591,7 @@
         }
 
         .players-waiting span {
-            color: var(--b-green);
+            color: #10b981;
             font-weight: 700;
         }
 
@@ -618,13 +615,8 @@
             width: 10px;
             height: 10px;
             border-radius: 50%;
+            background: var(--main-color) !important; /* SINGLE COLOR */
         }
-
-        .letter-dot.B { background: var(--b-blue); }
-        .letter-dot.I { background: var(--b-purple); }
-        .letter-dot.N { background: var(--b-green); }
-        .letter-dot.G { background: var(--b-yellow); }
-        .letter-dot.O { background: var(--b-red); }
 
         /* Special win styles */
         .bonus-message {
@@ -748,12 +740,12 @@
         }
 
         .availability-indicator .available {
-            color: var(--b-green);
+            color: #10b981;
             font-weight: 700;
         }
 
         .availability-indicator .taken {
-            color: var(--b-red);
+            color: #ef4444;
             font-weight: 700;
         }
 
@@ -784,14 +776,14 @@
             grid-column: 1 / span 5;
             margin-top: 15px;
             padding: 12px;
-            background: linear-gradient(90deg, #10b981, #059669);
+            background: linear-gradient(90deg, var(--main-color), #1d4ed8);
             color: white;
             border: none;
             border-radius: 12px;
             font-weight: 900;
             font-size: 1rem;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
             transition: all 0.2s;
         }
 
@@ -1072,8 +1064,8 @@
 </div>
 
 <div id="loadingOverlay" class="active">
-    <div style="width: 50px; height: 50px; border: 4px solid var(--b-blue); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p id="loadingText" style="margin-top: 20px; font-weight: 900; color: var(--b-blue); font-size: 0.8rem; letter-spacing: 2px;">CONNECTING TO SERVER...</p>
+    <div style="width: 50px; height: 50px; border: 4px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p id="loadingText" style="margin-top: 20px; font-weight: 900; color: var(--main-color); font-size: 0.8rem; letter-spacing: 2px;">CONNECTING TO SERVER...</p>
 </div>
 
 <div id="stakeOverlay" class="step-overlay">
@@ -1137,11 +1129,11 @@
     </p>
     
     <div class="bingo-info">
-        <div class="letter-info"><div class="letter-dot B"></div> B: 1-15</div>
-        <div class="letter-info"><div class="letter-dot I"></div> I: 16-30</div>
-        <div class="letter-info"><div class="letter-dot N"></div> N: 31-45</div>
-        <div class="letter-info"><div class="letter-dot G"></div> G: 46-60</div>
-        <div class="letter-info"><div class="letter-dot O"></div> O: 61-75</div>
+        <div class="letter-info"><div class="letter-dot"></div> B: 1-15</div>
+        <div class="letter-info"><div class="letter-dot"></div> I: 16-30</div>
+        <div class="letter-info"><div class="letter-dot"></div> N: 31-45</div>
+        <div class="letter-info"><div class="letter-dot"></div> G: 46-60</div>
+        <div class="letter-info"><div class="letter-dot"></div> O: 61-75</div>
     </div>
     
     <!-- REMOVED: The "How prizes work" section has been removed -->
@@ -1211,7 +1203,7 @@
         <span>Only online players are counted</span>
     </div>
     
-    <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: var(--b-red); border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; border-radius: 12px; margin-top: 30px; font-weight: 700; font-size: 0.9rem;">
+    <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; border-radius: 12px; margin-top: 30px; font-weight: 700; font-size: 0.9rem;">
         LEAVE LOBBY
     </button>
 </div>
@@ -1243,11 +1235,11 @@
 <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px;">
     <div class="bingo-container">
         <div class="bingo-header">
-            <div class="bingo-letter-cell letter-B">B</div>
-            <div class="bingo-letter-cell letter-I">I</div>
-            <div class="bingo-letter-cell letter-N">N</div>
-            <div class="bingo-letter-cell letter-G">G</div>
-            <div class="bingo-letter-cell letter-O">O</div>
+            <div class="bingo-letter-cell">B</div>
+            <div class="bingo-letter-cell">I</div>
+            <div class="bingo-letter-cell">N</div>
+            <div class="bingo-letter-cell">G</div>
+            <div class="bingo-letter-cell">O</div>
         </div>
         <div id="mainGrid" class="bingo-grid"></div>
     </div>
@@ -1765,14 +1757,14 @@
                 confirmBtn.style.gridColumn = '1 / span 5';
                 confirmBtn.style.marginTop = '15px';
                 confirmBtn.style.padding = '12px';
-                confirmBtn.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                confirmBtn.style.background = 'linear-gradient(90deg, #3b82f6, #1d4ed8)';
                 confirmBtn.style.color = 'white';
                 confirmBtn.style.border = 'none';
                 confirmBtn.style.borderRadius = '12px';
                 confirmBtn.style.fontWeight = '900';
                 confirmBtn.style.fontSize = '1rem';
                 confirmBtn.style.cursor = 'pointer';
-                confirmBtn.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                confirmBtn.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
                 
                 confirmBtn.onclick = function() {
                     joinLobby(boxNumber);
@@ -1789,7 +1781,11 @@
             }
             
             // Haptic feedback
-            try { tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+            try { 
+                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                    tg.HapticFeedback.impactOccurred('light'); 
+                }
+            } catch(e){}
         }
     }
     
@@ -1978,8 +1974,13 @@
         return '';
     }
 
+    // ⭐⭐ FIXED: Improved ball popping animation
     function triggerNewBall(num, letter) {
-        try { tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
+        try { 
+            if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                tg.HapticFeedback.impactOccurred('medium'); 
+            }
+        } catch(e){}
         
         const ballDisplay = document.getElementById('lastBall');
         const ballLetter = document.getElementById('ballLetter');
@@ -1989,14 +1990,15 @@
         ballLetter.textContent = letter;
         ballNumber.textContent = num;
         
-        // Set color class based on letter
-        ballDisplay.className = 'ball-display';
-        ballDisplay.classList.add(`ball-${letter}`);
+        // ⭐⭐ SINGLE COLOR THEME: Set color to main color
+        ballLetter.style.color = 'var(--main-color)';
         
-        // Animation
+        // Reset animation
         ballDisplay.style.animation = 'none';
-        void ballDisplay.offsetWidth;
-        ballDisplay.style.animation = 'ballPop 0.4s ease-out';
+        void ballDisplay.offsetWidth; // Trigger reflow
+        
+        // Apply new animation with longer duration
+        ballDisplay.style.animation = 'ballPop 0.6s ease-out';
 
         // Add to history
         state.history.unshift({ num, letter });
@@ -2048,7 +2050,7 @@
         return false;
     }
 
-    // ⭐⭐ FIXED: Initialize game board with color-coded numbers and four corners badges
+    // ⭐⭐ FIXED: Initialize game board with single color theme
     function initGameBoard() {
         const target = document.getElementById('mainGrid');
         target.innerHTML = '';
@@ -2074,20 +2076,9 @@
             cell.dataset.index = index;
             cell.dataset.value = val;
             
-            // Color code based on BINGO letter
+            // ⭐⭐ SINGLE COLOR THEME: All numbers use main color
             if (!isFree) {
-                const num = parseInt(val);
-                if (num >= 1 && num <= 15) {
-                    cell.style.color = 'var(--b-blue)'; // B
-                } else if (num >= 16 && num <= 30) {
-                    cell.style.color = 'var(--b-purple)'; // I
-                } else if (num >= 31 && num <= 45) {
-                    cell.style.color = 'var(--b-green)'; // N
-                } else if (num >= 46 && num <= 60) {
-                    cell.style.color = 'var(--b-yellow)'; // G
-                } else if (num >= 61 && num <= 75) {
-                    cell.style.color = 'var(--b-red)'; // O
-                }
+                cell.style.color = 'var(--main-color)';
             }
             
             cell.onclick = () => {
@@ -2095,7 +2086,11 @@
                     if(!cell.classList.contains('marked')) {
                         cell.classList.add('marked');
                         state.markedNumbers.add(val);
-                        try { tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+                        try { 
+                            if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                                tg.HapticFeedback.impactOccurred('light'); 
+                            }
+                        } catch(e){}
                         if(checkWinningPattern()) {
                             document.getElementById('btnBingo').disabled = false;
                         }
@@ -2158,7 +2153,7 @@
         document.getElementById('btnBingo').disabled = true;
         document.getElementById('ballLetter').textContent = '--';
         document.getElementById('ballNumber').textContent = '--';
-        document.getElementById('lastBall').className = 'ball-display';
+        document.getElementById('ballLetter').style.color = 'var(--main-color)';
         document.getElementById('ballHistory').innerHTML = '';
         document.getElementById('mainGrid').innerHTML = '';
         document.getElementById('roomDisplay').textContent = 'LOBBY';
@@ -2192,9 +2187,9 @@
             // FIXED: Correct player count logic
             if (playerCount >= 2) {
                 status.textContent = "GAME STARTING IN 30 SECONDS!";
-                status.style.color = 'var(--b-green)';
-                info.innerHTML = `✅ <span style="color: var(--b-green);">${playerCount} online players</span> - Game will start when timer reaches 0`;
-                info.style.color = 'var(--b-green)';
+                status.style.color = '#10b981';
+                info.innerHTML = `✅ <span style="color: #10b981;">${playerCount} online players</span> - Game will start when timer reaches 0`;
+                info.style.color = '#10b981';
             } else {
                 status.textContent = "WAITING FOR PLAYERS...";
                 status.style.color = 'white';
@@ -2218,7 +2213,7 @@
             // FIXED: Update status during countdown
             if (d.timer > 0) {
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
-                document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
+                document.getElementById('lobbyStatus').style.color = '#10b981';
                 
                 if (d.timer <= 5) {
                     timerElement.style.color = '#ef4444';
@@ -2232,7 +2227,7 @@
             } else {
                 // When countdown reaches 0, hide waiting overlay and start game
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING NOW!";
-                document.getElementById('lobbyStatus').style.color = 'var(--b-green)';
+                document.getElementById('lobbyStatus').style.color = '#10b981';
                 timerElement.style.color = '#ef4444';
                 timerElement.style.animation = 'pulse 0.5s infinite';
                 
@@ -2270,7 +2265,11 @@
             state.lastActivityTime = Date.now();
             
             // Haptic feedback for game start
-            try { tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
+            try { 
+                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                    tg.HapticFeedback.impactOccurred('heavy'); 
+                }
+            } catch(e){}
         }
     });
 
