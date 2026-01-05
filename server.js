@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP - FIXED COUNTDOWN ISSUE
+// server.js - BINGO ELITE - TELEGRAM MINI APP - FIXED COUNTDOWN AND SINGLE COLOR THEME
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -156,14 +156,6 @@ const CONFIG = {
   MAX_TRANSACTIONS: 1000,
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000
-};
-
-const BINGO_LETTERS = {
-  'B': { min: 1, max: 15, color: '#3b82f6' },
-  'I': { min: 16, max: 30, color: '#8b5cf6' },
-  'N': { min: 31, max: 45, color: '#10b981' },
-  'G': { min: 46, max: 60, color: '#f59e0b' },
-  'O': { min: 61, max: 75, color: '#ef4444' }
 };
 
 // ========== GLOBAL STATE ==========
