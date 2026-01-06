@@ -144,7 +144,7 @@ const CONFIG = {
   ROOM_STAKES: [10, 20, 50, 100],
   MAX_PLAYERS_PER_ROOM: 100,
   GAME_TIMER: 3,
-  MIN_PLAYERS_TO_START: 2,
+  MIN_PLAYERS_TO_START: 1, // ⭐⭐ CHANGED FROM 2 TO 1
   HOUSE_COMMISSION: {
     10: 2,
     20: 4,
@@ -1578,9 +1578,9 @@ io.on('connection', (socket) => {
         }
       });
       
-      // ⭐⭐ FIXED: Start countdown if we have at least 2 online players
+      // ⭐⭐ FIXED: Start countdown if we have at least 1 online player
       if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
-        console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online players!`);
+        console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online player(s)!`);
         await startCountdownForRoom(roomData);
       } else {
         console.log(`⏸️ NOT starting countdown:`);
@@ -1625,7 +1625,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ✅ FIXED CLAIM BINGO LOGIC ==========
+  // ========== ✅ FIXED CLAIM BINGO LOGIC - PROPERLY ENDS GAME AND AWARDS MONEY ==========
   socket.on('claimBingo', async (data) => {
     try {
       const { room, grid, marked } = data;
@@ -1678,7 +1678,7 @@ io.on('connection', (socket) => {
       
       const totalPrize = basePrize + bonus;
       
-      console.log(`🎰 FIXED Win Calculation for ${room} ETB room:`);
+      console.log(`🎰 WIN CALCULATION for ${room} ETB room:`);
       console.log(`   Total players: ${totalPlayers}`);
       console.log(`   Stake per player: ${room} ETB`);
       console.log(`   Commission per player: ${commissionPerPlayer} ETB`);
@@ -1726,7 +1726,10 @@ io.on('connection', (socket) => {
       // Store players list BEFORE clearing
       const playersInRoom = [...roomData.players];
       
-      // Update room status - but DON'T clear players/takenBoxes yet
+      // ⭐⭐ FIXED: Clear game timer FIRST
+      cleanupRoomTimer(room);
+      
+      // Update room status
       roomData.status = 'ended';
       roomData.endTime = new Date();
       roomData.lastBoxUpdate = new Date();
@@ -1743,8 +1746,17 @@ io.on('connection', (socket) => {
         commissionCollected: houseEarnings
       });
       
-      // Clear game timer FIRST
-      cleanupRoomTimer(room);
+      // ✅ CRITICAL FIX: Now clear room data
+      roomData.players = [];
+      roomData.takenBoxes = [];
+      roomData.status = 'waiting'; // ✅ Reset to waiting for new game
+      roomData.calledNumbers = [];
+      roomData.currentBall = null;
+      roomData.ballsDrawn = 0;
+      roomData.startTime = null;
+      roomData.endTime = new Date();
+      roomData.lastBoxUpdate = new Date();
+      await roomData.save();
       
       // Update all other players and notify everyone
       for (const playerId of playersInRoom) {
@@ -1806,18 +1818,6 @@ io.on('connection', (socket) => {
           }
         }
       }
-      
-      // ✅ NOW clear room data after all players have been notified
-      roomData.players = [];
-      roomData.takenBoxes = [];
-      roomData.status = 'waiting'; // ✅ Reset to waiting for new game
-      roomData.calledNumbers = [];
-      roomData.currentBall = null;
-      roomData.ballsDrawn = 0;
-      roomData.startTime = null;
-      roomData.endTime = new Date();
-      roomData.lastBoxUpdate = new Date();
-      await roomData.save();
       
       // ✅ BROADCAST EMPTY BOXES and send boxesCleared event
       broadcastTakenBoxes(room, []);
@@ -2395,7 +2395,7 @@ app.get('/', (req, res) => {
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
           <p style="color: #10b981; margin-top: 10px;">🔄 FIXED: Timer doesn't reset when players leave</p>
-          <p style="color: #10b981;">⏱️ FIXED: Game starts even with 1 player if countdown began with 2</p>
+          <p style="color: #10b981;">⏱️ FIXED: Game starts even with 1 player</p>
           <p style="color: #10b981;">🧹 FIXED: Boxes cleared after game ends</p>
           <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
           <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
@@ -2427,7 +2427,7 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.6.0 (FULLY FIXED - Connection Tracking Issues Resolved) | Database: MongoDB Atlas<br>
+            Version: 2.6.1 (FULLY FIXED) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
@@ -2438,8 +2438,9 @@ app.get('/', (req, res) => {
             ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
             ✅ Balls drawn correctly, ✅ BINGO checking working<br>
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
-            ✅✅ GAME STARTS WITH ANY PLAYERS REMAINING AT COUNTDOWN 0<br>
-            ✅✅ CONNECTION TRACKING FIXED - Game starts properly now!
+            ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
+            ✅✅ CONNECTION TRACKING FIXED - Game starts properly now!<br>
+            ✅✅ CLAIM BINGO NOW ENDS GAME AND AWARDS MONEY
           </p>
         </div>
       </div>
@@ -2533,13 +2534,13 @@ app.get('/telegram', (req, res) => {
                 <p><strong>📦 Real-time Box Tracking</strong></p>
                 <p><strong>🤖 Telegram Mini App Integrated</strong></p>
                 <p><strong>✅ FIXED: Timer doesn't reset when players leave</strong></p>
-                <p><strong>✅ FIXED: Game continues with 1 player</strong></p>
+                <p><strong>✅ FIXED: Game starts with 1 player after 30 seconds</strong></p>
                 <p><strong>✅ FIXED: Random BINGO card numbers</strong></p>
                 <p><strong>✅ FIXED: Game timer and ball drawing issues resolved</strong></p>
                 <p><strong>✅ FIXED: 30-second countdown now working</strong></p>
                 <p><strong>✅ FIXED: Balls pop every 3 seconds</strong></p>
-                <p><strong>✅✅ FIXED: Game starts properly when 2 players join!</strong></p>
-                <p><strong>🚀 NEW: Connection tracking fixed - countdown works correctly</strong></p>
+                <p><strong>✅✅ FIXED: Claim Bingo ends game and awards money</strong></p>
+                <p><strong>🚀 NEW: Game starts with 1 player after 30 seconds!</strong></p>
             </div>
             
             <button class="btn" id="playBtn">LAUNCH GAME</button>
@@ -2547,9 +2548,8 @@ app.get('/telegram', (req, res) => {
             <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
                 <p>Bot: @ethio_games1_bot</p>
                 <p>Stakes: 10, 20, 50, 100 ETB</p>
-                <p>Minimum 2 online players to start countdown</p>
+                <p>Game starts with 1 player after 30 seconds</p>
                 <p>Timer continues even if players leave</p>
-                <p>Game starts with any players remaining at countdown 0</p>
                 <p>Balls drawn every 3 seconds</p>
             </div>
         </div>
@@ -2792,7 +2792,10 @@ app.get('/health', async (req, res) => {
       boxClearing: 'enabled',
       gameTimer: CONFIG.GAME_TIMER + ' seconds',
       countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
+      minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       fixedIssues: [
+        'claim_bingo_ends_game_and_awards_money',
+        'game_starts_with_1_player_after_30_seconds',
         'connection_tracking_fixed',
         'game_timer_fixed', 
         'ball_drawing_working', 
@@ -3158,10 +3161,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Real-time multiplayer\n` +
                   `• Real-time box tracking\n` +
                   `• Telegram login\n` +
-                  `• Game starts automatically when 2 players join\n` +
+                  `• Game starts automatically when 1 player joins\n` +
                   `• Timer continues even if players leave\n` +
                   `• Random BINGO card numbers\n` +
-                  `• ✅ Fixed: Connection tracking issues resolved\n` +
+                  `• ✅ Fixed: Claim Bingo ends game and awards money\n` +
+                  `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
                   `• ✅ Fixed: Game starts properly now!\n\n` +
                   `_Need funds? Contact admin_`,
             parse_mode: 'Markdown',
@@ -3209,16 +3213,17 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `1. Click "Play Now"\n` +
                   `2. Select room (10-100 ETB)\n` +
                   `3. Choose ticket (1-100) - See taken boxes in real-time!\n` +
-                  `4. Wait for 2 players (30-second countdown starts)\n` +
+                  `4. Game starts after 30 seconds with 1 player\n` +
                   `5. Timer continues even if players leave\n` +
                   `6. Mark numbers as called\n` +
-                  `7. Claim BINGO!\n\n` +
+                  `7. Claim BINGO! - Game ends and you get your money!\n\n` +
                   `*Four Corners Bonus:* 50 ETB!\n` +
                   `*Real-time Box Tracking:* See which boxes are taken instantly!\n` +
-                  `*Auto Start:* Game starts when 2 online players join\n` +
+                  `*Auto Start:* Game starts when 1 online player joins\n` +
                   `*Timer Doesn't Reset:* Game continues even if players leave\n` +
                   `*Random BINGO Cards:* Each card has unique random numbers\n` +
-                  `*✅ Fixed:* Connection tracking issues resolved - Game starts properly now!\n\n` +
+                  `*✅ Fixed:* Claim Bingo ends game and awards money\n` +
+                  `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -3287,12 +3292,12 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Connection tracking fixed, Game starts properly when 2 players join</p>
+            <p><strong>Fixed Issues:</strong> Claim Bingo ends game and awards money, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
             <p><strong>✅ Balls pop every 3 seconds</strong></p>
             <p><strong>✅ Countdown continues when players leave</strong></p>
-            <p><strong>✅ Game starts with any players at countdown 0</strong></p>
-            <p><strong>✅✅ CONNECTION TRACKING FIXED - Game starts properly!</strong></p>
+            <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
+            <p><strong>✅✅ CLAIM BINGO ENDS GAME AND AWARDS MONEY</strong></p>
           </div>
           
           <div>
@@ -3363,8 +3368,8 @@ server.listen(PORT, () => {
 ║         ✅✅ 30-SECOND COUNTDOWN NOW WORKING        ║
 ║         ✅✅ BALLS POP EVERY 3 SECONDS WORKING      ║
 ║         ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE ║
-║         ✅✅ GAME STARTS WITH ANY PLAYERS AT 0      ║
-║         ✅✅✅ CONNECTION TRACKING FIXED - GAME STARTS PROPERLY!
+║         ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS ║
+║         ✅✅✅ CLAIM BINGO ENDS GAME AND AWARDS MONEY ║
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
