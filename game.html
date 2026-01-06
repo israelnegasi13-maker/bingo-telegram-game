@@ -2016,10 +2016,11 @@
         return '';
     }
 
-    // ⭐⭐ FIXED: Improved ball popping animation - NOW WORKING PROPERLY
+    // ✅ FIXED: No automatic marking - players must click numbers themselves
     function triggerNewBall(num, letter) {
-        console.log(`🎱 Triggering ball animation for ${letter}-${num}`);
+        console.log(`🎱 Ball drawn: ${letter}-${num} - Players must click manually`);
         
+        // Haptic feedback for new ball
         try { 
             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                 tg.HapticFeedback.impactOccurred('medium'); 
@@ -2034,7 +2035,7 @@
         ballLetter.textContent = letter;
         ballNumber.textContent = num;
         
-        // ⭐⭐ SINGLE COLOR THEME: Set color to main color
+        // SINGLE COLOR THEME: Set color to main color
         ballLetter.style.color = 'var(--main-color)';
         
         // Reset animation
@@ -2061,27 +2062,15 @@
             h.appendChild(hb);
         });
         
-        // Add to called numbers
+        // ✅ ADD to called numbers but DO NOT automatically mark
         state.calledNumbers.add(num);
         
-        // Check if this number is on our grid and mark it
+        // ✅ NOTICE: Number is available to mark, but player must click it
+        console.log(`📌 Number ${letter}-${num} added to called numbers. Player must click to mark.`);
+        
+        // Show notification that player can mark this number
         if (state.grid.includes(num)) {
-            console.log(`✅ Number ${num} is on your grid!`);
-            
-            // Find and mark the cell
-            const index = state.grid.indexOf(num);
-            const cell = document.querySelector(`.cell[data-index="${index}"]`);
-            if (cell && !cell.classList.contains('marked')) {
-                cell.classList.add('marked');
-                state.markedNumbers.add(num.toString());
-                
-                // Check for win
-                if (checkWinningPattern()) {
-                    document.getElementById('btnBingo').disabled = false;
-                    console.log(`🎯 BINGO POSSIBLE! Button enabled`);
-                    showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-                }
-            }
+            showNotification(`📌 ${letter}-${num} is on your card! Tap to mark.`, 'info', 3000);
         }
         
         // Update last activity
@@ -2175,21 +2164,37 @@
                 cell.style.color = 'var(--main-color)';
             }
             
+            // ✅ FIXED: Only allow marking if number has been called or is FREE space
             cell.onclick = () => {
+                // Only allow marking if number has been called OR it's FREE space
                 if (state.calledNumbers.has(val) || isFree) {
                     if(!cell.classList.contains('marked')) {
                         cell.classList.add('marked');
                         state.markedNumbers.add(val.toString());
+                        
+                        // Haptic feedback
                         try { 
                             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                                 tg.HapticFeedback.impactOccurred('light'); 
                             }
                         } catch(e){}
+                        
+                        // Check for win
                         if(checkWinningPattern()) {
                             document.getElementById('btnBingo').disabled = false;
                             showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
+                        } else {
+                            // Show feedback for marking
+                            showNotification(`✅ Marked ${val}`, 'success', 1000);
                         }
+                    } else {
+                        // Already marked - unmark if needed
+                        cell.classList.remove('marked');
+                        state.markedNumbers.delete(val.toString());
                     }
+                } else {
+                    // Number hasn't been called yet
+                    showNotification(`❌ ${val} hasn't been called yet!`, 'error', 2000);
                 }
                 
                 // Update last activity
