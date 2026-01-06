@@ -1074,7 +1074,7 @@
     </div>
 
     <h1 style="color: var(--p-gold); font-size: 2rem; font-weight: 900; margin-bottom: 30px;">BINGO ELITE</h1>
-    <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">Select a room to join. Game starts when 2 online players join!</p>
+    <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">Select a room to join. Game starts when 1 online player joins!</p>
     
     <div class="stake-grid">
         <div class="stake-btn" onclick="selectStake(10)">
@@ -1173,7 +1173,7 @@
 
     <div class="online-indicator" style="margin: 10px 0;">
         <div class="online-dot"></div>
-        <span>Countdown starts with <span class="online-count">2</span> online players</span>
+        <span>Countdown starts with <span class="online-count">1</span> online player</span>
     </div>
     
     <div id="discoveryGrid" class="discovery-grid"></div>
@@ -1194,7 +1194,7 @@
     <p style="margin-top: 10px; font-weight: 900; color: #64748b;">
         <span id="playerCount" style="color: var(--p-gold);">1</span> ONLINE PLAYERS IN ARENA
     </p>
-    <div class="players-waiting" id="playersWaitingInfo">Minimum 2 online players to start</div>
+    <div class="players-waiting" id="playersWaitingInfo">Game starts with 1 online player after 30 seconds</div>
     
     <div class="online-indicator" style="margin-top: 20px;">
         <div class="online-dot"></div>
@@ -1291,7 +1291,7 @@
         query: {
             userId: 'pending', // Will be updated after init
             source: 'telegram_game',
-            version: '2.6.0'
+            version: '2.6.1'
         }
     });
 
@@ -2065,13 +2065,8 @@
         // ✅ ADD to called numbers but DO NOT automatically mark
         state.calledNumbers.add(num);
         
-        // ✅ NOTICE: Number is available to mark, but player must click it
+        // ✅ FIXED: REMOVED "Mark number X" notification
         console.log(`📌 Number ${letter}-${num} added to called numbers. Player must click to mark.`);
-        
-        // Show notification that player can mark this number
-        if (state.grid.includes(num)) {
-            showNotification(`📌 ${letter}-${num} is on your card! Tap to mark.`, 'info', 3000);
-        }
         
         // Update last activity
         state.lastActivityTime = Date.now();
@@ -2275,7 +2270,7 @@
         document.getElementById('waitTimer').style.animation = '';
         document.getElementById('lobbyStatus').textContent = "WAITING FOR PLAYERS...";
         document.getElementById('lobbyStatus').style.color = 'white';
-        document.getElementById('playersWaitingInfo').textContent = "Minimum 2 online players to start";
+        document.getElementById('playersWaitingInfo').textContent = "Game starts with 1 online player after 30 seconds";
         document.getElementById('playersWaitingInfo').style.color = '#94a3b8';
         
         // Reset bonus messages
@@ -2293,7 +2288,7 @@
         state.lastActivityTime = Date.now();
     }
 
-    // ⭐⭐ FIXED: lobbyUpdate event handler - Correct player count logic
+    // ⭐⭐ FIXED: lobbyUpdate event handler - Game starts with 1 player
     socket.on('lobbyUpdate', (d) => {
         console.log('👥 Lobby update:', d);
         
@@ -2303,16 +2298,16 @@
             const status = document.getElementById('lobbyStatus');
             const info = document.getElementById('playersWaitingInfo');
             
-            // FIXED: Correct player count logic
-            if (playerCount >= 2) {
+            // FIXED: Game starts with 1 player
+            if (playerCount >= 1) {
                 status.textContent = "GAME STARTING IN 30 SECONDS!";
                 status.style.color = '#10b981';
-                info.innerHTML = `✅ <span style="color: #10b981;">${playerCount} online players</span> - Game will start when timer reaches 0`;
+                info.innerHTML = `✅ <span style="color: #10b981;">${playerCount} online player${playerCount > 1 ? 's' : ''}</span> - Game will start when timer reaches 0`;
                 info.style.color = '#10b981';
             } else {
                 status.textContent = "WAITING FOR PLAYERS...";
                 status.style.color = 'white';
-                info.innerHTML = `Need <span style="color: var(--p-gold);">${2 - playerCount}</span> more online player${(2 - playerCount) === 1 ? '' : 's'} to start`;
+                info.innerHTML = `Need at least 1 player to start`;
                 info.style.color = '#94a3b8';
             }
             
@@ -2377,7 +2372,7 @@
             if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
                 statusElement.textContent = "NEED MORE ONLINE PLAYERS";
                 statusElement.style.color = '#f59e0b';
-                infoElement.textContent = "Countdown stopped - need 2 online players";
+                infoElement.textContent = "Countdown stopped - need 1 online player";
                 infoElement.style.color = '#f59e0b';
                 
                 showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
