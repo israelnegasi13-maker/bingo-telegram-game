@@ -2206,13 +2206,32 @@
         state.lastActivityTime = Date.now();
     }
 
+    // ⭐⭐ FIXED: claimBingo function - Sends claim properly
     function claimBingo() {
         if(state.isConnected && !document.getElementById('btnBingo').disabled) {
             console.log('🎯 Claiming BINGO!');
+            
+            // Get marked numbers from DOM
+            const markedNumbers = Array.from(state.markedNumbers);
+            
             socket.emit('claimBingo', { 
                 room: state.stake, 
                 grid: state.grid, 
-                marked: Array.from(state.markedNumbers) 
+                marked: markedNumbers 
+            }, (response) => {
+                // This callback handles the server response
+                if (response && response.success) {
+                    console.log('✅ BINGO claim accepted by server');
+                    // Show immediate feedback
+                    showNotification('🎉 BINGO claim sent! Checking...', 'success', 2000);
+                } else {
+                    console.log('❌ BINGO claim rejected:', response?.message);
+                    showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
+                    // Re-enable button if claim was rejected
+                    setTimeout(() => {
+                        document.getElementById('btnBingo').disabled = false;
+                    }, 1000);
+                }
             });
             
             // Disable button to prevent multiple clicks
@@ -2231,6 +2250,9 @@
     }
 
     function resetToLobby() {
+        console.log('🔄 Resetting to lobby...');
+        
+        // Reset game state
         state.stake = 0;
         state.grid = [];
         state.calledNumbers.clear();
@@ -2248,11 +2270,14 @@
             state.roomSubscribed = false;
         }
         
+        // Hide all overlays except stake overlay
         document.querySelectorAll('.step-overlay').forEach(s => s.classList.remove('active'));
         document.getElementById('winOverlay').classList.remove('active');
         document.getElementById('loseOverlay').classList.remove('active');
         document.getElementById('insufficientOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
+        
+        // Reset UI elements
         document.getElementById('btnBingo').disabled = true;
         document.getElementById('ballLetter').textContent = '--';
         document.getElementById('ballNumber').textContent = '--';
@@ -2279,13 +2304,21 @@
         document.getElementById('prizeBreakdown').style.display = 'none';
         document.getElementById('losePrizeBreakdown').style.display = 'none';
         
+        // Update room status display
+        updateRoomDisplay();
+        
         // Send activity update
         if (state.isConnected) {
             socket.emit('player:activity', { action: 'returned_to_lobby' });
         }
         
+        // Refresh balance
+        refreshBalance();
+        
         // Update last activity
         state.lastActivityTime = Date.now();
+        
+        console.log('✅ Lobby reset complete');
     }
 
     // ⭐⭐ FIXED: lobbyUpdate event handler - Game starts with 1 player
@@ -2492,14 +2525,20 @@
         state.lastActivityTime = Date.now();
     });
 
+    // ⭐⭐ FIXED: gameOver event handler - Properly handles game end
     socket.on('gameOver', (d) => {
-        console.log('🎮 Game over event:', d);
+        console.log('🎮 Game over event received:', d);
         
+        // Check if this game over is for our current room
         if(d.room === state.stake) {
             const isWinner = d.winnerId === state.userId;
+            console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
+            
+            // Disable BINGO button
             document.getElementById('btnBingo').disabled = true;
 
             if(isWinner) {
+                // WE WON!
                 const winOverlay = document.getElementById('winOverlay');
                 const bonusMessage = document.getElementById('bonusMessage');
                 const prizeBreakdown = document.getElementById('prizeBreakdown');
@@ -2509,10 +2548,10 @@
                 const bonusItem = document.getElementById('bonusItem');
                 
                 // Update prize breakdown
-                basePrizeValue.textContent = d.basePrize.toFixed(2) + " ETB";
+                basePrizeValue.textContent = (d.basePrize || d.prize).toFixed(2) + " ETB";
                 totalPrizeValue.textContent = d.prize.toFixed(2) + " ETB";
                 
-                if (d.isFourCornersWin) {
+                if (d.isFourCornersWin && d.bonus) {
                     bonusValue.textContent = "+" + d.bonus.toFixed(2) + " ETB";
                     bonusItem.style.display = 'flex';
                     bonusMessage.textContent = "🎯 FOUR CORNERS BONUS AWARDED!";
@@ -2530,8 +2569,21 @@
                 `;
                 
                 winOverlay.classList.add('active');
-                setTimeout(resetToLobby, 5000);
+                
+                // Haptic feedback for win
+                try { 
+                    if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                        tg.HapticFeedback.impactOccurred('heavy'); 
+                    }
+                } catch(e){}
+                
+                // Return to lobby after 5 seconds
+                setTimeout(() => {
+                    winOverlay.classList.remove('active');
+                    resetToLobby();
+                }, 5000);
             } else {
+                // WE LOST
                 const loseOverlay = document.getElementById('loseOverlay');
                 const specialWinMessage = document.getElementById('specialWinMessage');
                 const losePrizeBreakdown = document.getElementById('losePrizeBreakdown');
@@ -2541,23 +2593,32 @@
                 const playersCount = document.getElementById('playersCount');
                 const loseBonusItem = document.getElementById('loseBonusItem');
                 
-                let msg = d.winnerId === 'HOUSE' ? "House wins - no one claimed bingo!" : `${d.winnerName} claimed Bingo first!`;
+                // Determine message based on winner
+                let msg = "";
+                if (d.winnerId === 'HOUSE') {
+                    msg = "Game ended - no winner!";
+                } else if (d.winnerId === 'ADMIN') {
+                    msg = "Game ended by admin!";
+                } else {
+                    msg = `${d.winnerName} claimed Bingo first!`;
+                }
+                
                 document.getElementById('loseMessage').textContent = msg;
                 
-                // Update prize breakdown for loser
-                if (d.winnerId !== 'HOUSE') {
-                    winnerName.textContent = d.winnerName;
+                // Update prize breakdown for loser (only if there's a real winner)
+                if (d.winnerId && d.winnerId !== 'HOUSE' && d.winnerId !== 'ADMIN') {
+                    winnerName.textContent = d.winnerName || "Another player";
                     winnerTotal.textContent = d.prize.toFixed(2) + " ETB";
-                    playersCount.textContent = d.playersCount;
+                    playersCount.textContent = d.playersCount || 0;
                     
-                    if (d.isFourCornersWin) {
+                    if (d.isFourCornersWin && d.bonus) {
                         loseBonusValue.textContent = "+" + d.bonus.toFixed(2) + " ETB";
                         loseBonusItem.style.display = 'flex';
                         specialWinMessage.textContent = `🎯 ${d.winnerName} won with FOUR CORNERS (+${d.bonus} ETB Bonus!)`;
                         specialWinMessage.style.display = 'block';
                     } else {
                         loseBonusItem.style.display = 'none';
-                        specialWinMessage.textContent = `💰 ${d.winnerName} won ${d.prize.toFixed(2)} ETB from ${d.playersCount} players`;
+                        specialWinMessage.textContent = `💰 ${d.winnerName} won ${d.prize.toFixed(2)} ETB`;
                         specialWinMessage.style.display = 'block';
                     }
                     
@@ -2568,7 +2629,12 @@
                 }
                 
                 loseOverlay.classList.add('active');
-                setTimeout(resetToLobby, 4000);
+                
+                // Return to lobby after 4 seconds
+                setTimeout(() => {
+                    loseOverlay.classList.remove('active');
+                    resetToLobby();
+                }, 4000);
             }
             
             // Update last activity
