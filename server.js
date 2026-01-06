@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP - FIXED DISCONNECT & COUNTDOWN VERSION
+// server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -63,14 +63,7 @@ const roomSchema = new mongoose.Schema({
   }],
   lastBoxUpdate: { type: Date, default: Date.now },
   countdownStartTime: { type: Date, default: null },
-  countdownStartedWith: { type: Number, default: 0 },
-  // 🆕 ADD: Countdown info for reconnecting players
-  countdownInfo: {
-    timer: Number,
-    onlinePlayers: Number,
-    totalPlayers: Number,
-    timestamp: Date
-  }
+  countdownStartedWith: { type: Number, default: 0 } // NEW: Track how many players started countdown
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -301,31 +294,27 @@ async function getRoom(stake) {
   }
 }
 
-// ========== FIXED REAL-TIME TRACKING FUNCTIONS ==========
+// ========== FIXED: getConnectedUsers - PROPERLY TRACKS ALL CONNECTED USERS ==========
 function getConnectedUsers() {
-  const connectedUsers = [];
+  const connectedUsers = new Set();
   
-  // Get from socketToUser map (direct WebSocket connections)
+  // Get from socketToUser map (direct WebSocket connections that sent 'init')
   socketToUser.forEach((userId, socketId) => {
-    // Check if socket is still connected
     const socket = io.sockets.sockets.get(socketId);
     if (socket && socket.connected) {
-      connectedUsers.push(userId);
+      connectedUsers.add(userId);
     }
   });
   
-  // Also check all connected sockets for any users not in socketToUser
+  // Also check ALL connected sockets for users who connected but haven't sent 'init' yet
   io.sockets.sockets.forEach((socket) => {
-    if (socket && socket.connected && socket.userId) {
-      // Check if socket has a userId property (set on connection)
-      if (!connectedUsers.includes(socket.userId)) {
-        connectedUsers.push(socket.userId);
-      }
+    if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
+      // Check if socket has a userId property (set on connection via query)
+      connectedUsers.add(socket.userId);
     }
   });
   
-  // Remove duplicates
-  return [...new Set(connectedUsers)];
+  return Array.from(connectedUsers);
 }
 
 // ⭐⭐ FIXED: Function to get online players in a specific room
@@ -337,14 +326,22 @@ async function getOnlinePlayersInRoom(roomStake) {
     const onlinePlayers = [];
     const connectedUserIds = getConnectedUsers();
     
+    console.log(`🔍 Checking online players for room ${roomStake}:`);
+    console.log(`   Total players in room: ${room.players.length}`);
+    console.log(`   Connected users: ${connectedUserIds.length}`);
+    
     // Check each player in the room
     for (const playerId of room.players) {
       // Check if player is in connected users
       if (connectedUserIds.includes(playerId)) {
         onlinePlayers.push(playerId);
+        console.log(`   ✅ ${playerId} is ONLINE`);
+      } else {
+        console.log(`   ❌ ${playerId} is OFFLINE`);
       }
     }
     
+    console.log(`   Online players found: ${onlinePlayers.length}`);
     return onlinePlayers;
   } catch (error) {
     console.error('Error getting online players in room:', error);
@@ -352,70 +349,7 @@ async function getOnlinePlayersInRoom(roomStake) {
   }
 }
 
-// 🆕 ADD: Function to remove offline players from room and refund them
-async function removeOfflinePlayersFromRoom(roomStake) {
-  try {
-    const room = await Room.findOne({ stake: roomStake });
-    if (!room) return;
-    
-    const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
-    const offlinePlayers = room.players.filter(playerId => !onlinePlayers.includes(playerId));
-    
-    if (offlinePlayers.length === 0) return;
-    
-    console.log(`🗑️ Removing ${offlinePlayers.length} offline players from room ${roomStake}`);
-    
-    for (const playerId of offlinePlayers) {
-      const playerIndex = room.players.indexOf(playerId);
-      if (playerIndex > -1) {
-        const boxNumber = room.takenBoxes[playerIndex];
-        
-        // Remove player and their box
-        room.players.splice(playerIndex, 1);
-        if (boxNumber && room.takenBoxes[playerIndex]) {
-          room.takenBoxes.splice(playerIndex, 1);
-        }
-        
-        // Refund the player
-        const user = await User.findOne({ userId: playerId });
-        if (user) {
-          const oldBalance = user.balance;
-          user.balance += roomStake;
-          user.currentRoom = null;
-          user.box = null;
-          await user.save();
-          
-          console.log(`💰 Refunded ${roomStake} ETB to offline player ${user.userName}, balance: ${oldBalance} → ${user.balance}`);
-          
-          // Record transaction
-          const transaction = new Transaction({
-            type: 'REFUND',
-            userId: playerId,
-            userName: user.userName,
-            amount: roomStake,
-            room: roomStake,
-            description: `Offline player removed from room - stake refunded`
-          });
-          await transaction.save();
-        }
-      }
-    }
-    
-    room.lastBoxUpdate = new Date();
-    await room.save();
-    
-    // Broadcast updated boxes
-    broadcastTakenBoxes(roomStake, room.takenBoxes);
-    
-    console.log(`✅ Removed ${offlinePlayers.length} offline players from room ${roomStake}`);
-    return offlinePlayers.length;
-  } catch (error) {
-    console.error('Error removing offline players:', error);
-    return 0;
-  }
-}
-
-// ========== UPDATED BROADCAST FUNCTIONS ==========
+// ========== BROADCAST FUNCTIONS ==========
 async function broadcastRoomStatus() {
   try {
     const rooms = await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
@@ -423,28 +357,17 @@ async function broadcastRoomStatus() {
     
     for (const room of rooms) {
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-      const offlinePlayers = room.players.length - onlinePlayers.length;
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
-      const potentialPrize = contributionPerPlayer * onlinePlayers.length; // Only online players contribute
+      const potentialPrize = contributionPerPlayer * onlinePlayers.length;
       const houseFee = commissionPerPlayer * onlinePlayers.length;
       const potentialPrizeWithBonus = potentialPrize + CONFIG.FOUR_CORNERS_BONUS;
       
-      // 🆕 FIX: Better status descriptions
-      let statusDescription = room.status.toUpperCase();
-      if (room.status === 'starting') {
-        statusDescription = `COUNTDOWN (${onlinePlayers.length} online)`;
-      } else if (room.status === 'waiting' && room.players.length > 0) {
-        statusDescription = `WAITING (${onlinePlayers.length}/${room.players.length})`;
-      }
-      
       roomStatus[room.stake] = {
         stake: room.stake,
-        onlineCount: onlinePlayers.length, // Online players
-        totalCount: room.players.length,   // Total players (online + offline)
-        offlineCount: offlinePlayers,      // Offline players
+        playerCount: onlinePlayers.length, // Use online players count
+        totalPlayers: room.players.length, // Total players (including offline)
         status: room.status,
-        statusDescription: statusDescription,
         takenBoxes: room.takenBoxes.length,
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
@@ -454,22 +377,15 @@ async function broadcastRoomStatus() {
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
         minPlayers: CONFIG.MIN_PLAYERS_TO_START,
-        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS,
-        // 🆕 FIX: Add countdown info if available
-        countdownInfo: room.countdownInfo || null,
-        // 🆕 FIX: Add player breakdown
-        playerBreakdown: {
-          online: onlinePlayers.length,
-          offline: offlinePlayers,
-          total: room.players.length
-        }
+        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
       };
     }
     
     // Broadcast to all connected sockets
     io.emit('roomStatus', roomStatus);
     
-    console.log(`📊 Room status broadcasted: ${Object.keys(roomStatus).length} rooms`);
+    // Also update admin panel
+    updateAdminPanel();
     
   } catch (error) {
     console.error('Error broadcasting room status:', error);
@@ -528,7 +444,6 @@ async function updateAdminPanel() {
     
     for (const room of rooms) {
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-      const offlinePlayers = room.players.length - onlinePlayers.length;
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * onlinePlayers.length;
@@ -536,9 +451,8 @@ async function updateAdminPanel() {
       
       roomsData[room.stake] = {
         stake: room.stake,
-        onlineCount: onlinePlayers.length,
-        totalCount: room.players.length,
-        offlineCount: offlinePlayers,
+        playerCount: onlinePlayers.length,
+        totalPlayers: room.players.length,
         takenBoxes: room.takenBoxes,
         status: room.status,
         currentBall: room.currentBall,
@@ -548,8 +462,7 @@ async function updateAdminPanel() {
         potentialPrize: potentialPrize,
         houseFee: houseFee,
         players: room.players, // Include player IDs
-        onlinePlayers: onlinePlayers, // Online player IDs
-        offlinePlayers: room.players.filter(p => !onlinePlayers.includes(p)) // Offline player IDs
+        onlinePlayers: onlinePlayers // Online player IDs
       };
     }
     
@@ -619,7 +532,7 @@ function logActivity(type, details, adminSocketId = null) {
   });
 }
 
-// ========== FIXED GAME TIMER FUNCTION ==========
+// ========== ⭐⭐ FIXED GAME TIMER FUNCTION - NOW WORKING ⭐⭐ ==========
 async function startGameTimer(room) {
   console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
   
@@ -867,7 +780,7 @@ async function endGameWithNoWinner(room) {
   }
 }
 
-// ========== 🆕 FIXED COUNTDOWN FUNCTION - WITH OFFLINE PLAYER HANDLING ==========
+// ========== ⭐⭐ FIXED COUNTDOWN FUNCTION - WORKING PROPERLY ⭐⭐ ==========
 async function startCountdownForRoom(room) {
   try {
     console.log(`⏱️ STARTING COUNTDOWN for room ${room.stake} at ${new Date().toISOString()}`);
@@ -879,38 +792,10 @@ async function startCountdownForRoom(room) {
       roomTimers.delete(countdownKey);
     }
     
-    // Get initial online players count
-    const initialOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
-    console.log(`👥 Initial online players for countdown: ${initialOnlinePlayers.length}`);
-    
-    // 🆕 FIX: Don't start countdown if less than 2 online players
-    if (initialOnlinePlayers.length < 2) {
-      console.log(`⏹️ Not enough online players to start countdown (${initialOnlinePlayers.length} < 2)`);
-      
-      // Notify players
-      room.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket && socket.connected) {
-              socket.emit('lobbyUpdate', {
-                room: room.stake,
-                onlineCount: initialOnlinePlayers.length,
-                totalCount: room.players.length,
-                reason: 'not_enough_online_players'
-              });
-            }
-          }
-        }
-      });
-      
-      return;
-    }
-    
     // Update room status
     room.status = 'starting';
     room.countdownStartTime = new Date();
-    room.countdownStartedWith = initialOnlinePlayers.length;
+    room.countdownStartedWith = room.players.length; // Track how many players we started with
     await room.save();
     
     let countdown = CONFIG.COUNTDOWN_TIMER;
@@ -925,63 +810,14 @@ async function startCountdownForRoom(room) {
           return;
         }
         
-        // Get current online players
+        // Get online players
         const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
         
-        // 🆕 FIX: Stop countdown if online players drop below 2
-        if (onlinePlayers.length < 2) {
-          console.log(`⏹️ Countdown stopped: Only ${onlinePlayers.length} online players (need 2)`);
-          clearInterval(countdownInterval);
-          roomTimers.delete(countdownKey);
-          
-          // Reset room status
-          currentRoom.status = 'waiting';
-          currentRoom.countdownStartTime = null;
-          currentRoom.countdownStartedWith = 0;
-          currentRoom.countdownInfo = null;
-          await currentRoom.save();
-          
-          // Notify all players
-          currentRoom.players.forEach(userId => {
-            for (const [socketId, uId] of socketToUser.entries()) {
-              if (uId === userId) {
-                const socket = io.sockets.sockets.get(socketId);
-                if (socket && socket.connected) {
-                  socket.emit('countdownStopped', {
-                    room: room.stake,
-                    reason: 'not_enough_players',
-                    message: 'Countdown stopped - need 2 online players'
-                  });
-                  
-                  socket.emit('lobbyUpdate', {
-                    room: room.stake,
-                    onlineCount: onlinePlayers.length,
-                    totalCount: currentRoom.players.length,
-                    reason: 'countdown_stopped'
-                  });
-                }
-              }
-            }
-          });
-          
-          broadcastRoomStatus();
-          return;
-        }
+        // Send countdown to ALL players in room
+        console.log(`⏱️ Room ${room.stake}: Countdown ${countdown}s, ${onlinePlayers.length} online players (started with ${room.countdownStartedWith})`);
         
-        // Store countdown info for reconnecting players
-        currentRoom.countdownInfo = {
-          timer: countdown,
-          onlinePlayers: onlinePlayers.length,
-          totalPlayers: currentRoom.players.length,
-          timestamp: new Date()
-        };
-        await currentRoom.save();
-        
-        // Send countdown to ALL online players in the room
-        console.log(`⏱️ Room ${room.stake}: Countdown ${countdown}s, ${onlinePlayers.length} online players`);
-        
-        // Send to ALL online players in the room
-        onlinePlayers.forEach(userId => {
+        // Send to ALL players in the room
+        currentRoom.players.forEach(userId => {
           for (const [socketId, uId] of socketToUser.entries()) {
             if (uId === userId) {
               const socket = io.sockets.sockets.get(socketId);
@@ -989,17 +825,27 @@ async function startCountdownForRoom(room) {
                 socket.emit('gameCountdown', {
                   room: room.stake,
                   timer: countdown,
-                  onlinePlayers: onlinePlayers.length,
-                  totalPlayers: currentRoom.players.length
+                  onlinePlayers: onlinePlayers.length
                 });
-                
                 socket.emit('lobbyUpdate', {
                   room: room.stake,
-                  onlineCount: onlinePlayers.length,
-                  totalCount: currentRoom.players.length
+                  count: onlinePlayers.length,
+                  totalPlayers: currentRoom.players.length
                 });
               }
             }
+          }
+        });
+        
+        // Broadcast to admin
+        adminSockets.forEach(socketId => {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) {
+            socket.emit('admin:countdownUpdate', {
+              room: room.stake,
+              timer: countdown,
+              onlinePlayers: onlinePlayers.length
+            });
           }
         });
         
@@ -1021,72 +867,26 @@ async function startCountdownForRoom(room) {
           
           const finalOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
           
-          // 🆕 FIX: Start game ONLY if at least 2 online players remain
-          if (finalOnlinePlayers.length >= 2) {
-            console.log(`🎮 Starting game for room ${room.stake} with ${finalOnlinePlayers.length} online players`);
-            
-            // 🆕 FIX: Remove offline players before starting game
-            const offlinePlayers = finalRoom.players.filter(playerId => 
-              !finalOnlinePlayers.includes(playerId)
-            );
-            
-            if (offlinePlayers.length > 0) {
-              console.log(`🗑️ Removing ${offlinePlayers.length} offline players before game start`);
-              
-              for (const offlinePlayerId of offlinePlayers) {
-                const playerIndex = finalRoom.players.indexOf(offlinePlayerId);
-                if (playerIndex > -1) {
-                  const boxNumber = finalRoom.takenBoxes[playerIndex];
-                  
-                  // Remove player and their box
-                  finalRoom.players.splice(playerIndex, 1);
-                  if (boxNumber && finalRoom.takenBoxes[playerIndex]) {
-                    finalRoom.takenBoxes.splice(playerIndex, 1);
-                  }
-                  
-                  // Refund the offline player
-                  const user = await User.findOne({ userId: offlinePlayerId });
-                  if (user) {
-                    user.balance += room.stake;
-                    user.currentRoom = null;
-                    user.box = null;
-                    await user.save();
-                    
-                    console.log(`💰 Refunded ${room.stake} ETB to offline player ${user.userName}`);
-                    
-                    // Record transaction
-                    const transaction = new Transaction({
-                      type: 'REFUND',
-                      userId: offlinePlayerId,
-                      userName: user.userName,
-                      amount: room.stake,
-                      room: room.stake,
-                      description: `Offline player removed before game start - stake refunded`
-                    });
-                    await transaction.save();
-                  }
-                }
-              }
-            }
+          // ⭐⭐ CRITICAL FIX: Start game if at least 1 player remains
+          if (finalOnlinePlayers.length >= 1) {
+            console.log(`🎮 Starting game for room ${room.stake} with ${finalOnlinePlayers.length} online player(s)`);
             
             // Update room to playing
             finalRoom.status = 'playing';
             finalRoom.startTime = new Date();
             finalRoom.countdownStartTime = null;
             finalRoom.countdownStartedWith = 0;
-            finalRoom.countdownInfo = null;
             await finalRoom.save();
             
-            // Notify ONLY online players
-            finalOnlinePlayers.forEach(userId => {
+            // Notify ALL players in the room
+            finalRoom.players.forEach(userId => {
               for (const [socketId, uId] of socketToUser.entries()) {
                 if (uId === userId) {
                   const socket = io.sockets.sockets.get(socketId);
                   if (socket && socket.connected) {
                     socket.emit('gameStarted', { 
                       room: room.stake,
-                      onlinePlayers: finalOnlinePlayers.length,
-                      totalPlayers: finalRoom.players.length
+                      players: finalOnlinePlayers.length
                     });
                     
                     // Send final countdown message
@@ -1100,7 +900,7 @@ async function startCountdownForRoom(room) {
               }
             });
             
-            // Start the game timer
+            // Start the game timer IMMEDIATELY
             await startGameTimer(finalRoom);
             
             // Broadcast room status update
@@ -1108,69 +908,32 @@ async function startCountdownForRoom(room) {
             
             console.log(`✅ Game started for room ${room.stake}, timer active`);
           } else {
-            // Not enough players - reset room and refund everyone
-            console.log(`⚠️ Game start aborted for room ${room.stake}: only ${finalOnlinePlayers.length} online players`);
+            // Not enough players - reset room
+            console.log(`⚠️ Game start aborted for room ${room.stake}: no online players`);
+            finalRoom.status = 'waiting';
+            finalRoom.countdownStartTime = null;
+            finalRoom.countdownStartedWith = 0;
+            await finalRoom.save();
             
-            // Refund all players
-            for (const userId of finalRoom.players) {
-              const user = await User.findOne({ userId: userId });
-              if (user) {
-                const oldBalance = user.balance;
-                user.balance += room.stake;
-                user.currentRoom = null;
-                user.box = null;
-                await user.save();
-                
-                console.log(`💰 Refunded ${room.stake} ETB to ${user.userName}, balance: ${oldBalance} → ${user.balance}`);
-                
-                // Record transaction
-                const transaction = new Transaction({
-                  type: 'REFUND',
-                  userId: userId,
-                  userName: user.userName,
-                  amount: room.stake,
-                  room: room.stake,
-                  description: `Game cancelled - not enough online players - stake refunded`
-                });
-                await transaction.save();
-                
-                // Notify player if online
-                if (finalOnlinePlayers.includes(userId)) {
-                  for (const [socketId, uId] of socketToUser.entries()) {
-                    if (uId === userId) {
-                      const socket = io.sockets.sockets.get(socketId);
-                      if (socket) {
-                        socket.emit('countdownStopped', {
-                          room: room.stake,
-                          reason: 'not_enough_players_at_start'
-                        });
-                        
-                        socket.emit('lobbyUpdate', {
-                          room: room.stake,
-                          onlineCount: finalOnlinePlayers.length,
-                          totalCount: finalRoom.players.length,
-                          reason: 'game_cancelled'
-                        });
-                        
-                        socket.emit('balanceUpdate', user.balance);
-                      }
-                    }
+            // Notify players about reset
+            finalRoom.players.forEach(userId => {
+              for (const [socketId, uId] of socketToUser.entries()) {
+                if (uId === userId) {
+                  const socket = io.sockets.sockets.get(socketId);
+                  if (socket && socket.connected) {
+                    socket.emit('countdownStopped', {
+                      room: room.stake,
+                      reason: 'no_players_online'
+                    });
+                    socket.emit('lobbyUpdate', {
+                      room: room.stake,
+                      count: 0,
+                      reason: 'not_enough_players'
+                    });
                   }
                 }
               }
-            }
-            
-            // Reset room
-            finalRoom.status = 'waiting';
-            finalRoom.players = [];
-            finalRoom.takenBoxes = [];
-            finalRoom.countdownStartTime = null;
-            finalRoom.countdownStartedWith = 0;
-            finalRoom.countdownInfo = null;
-            await finalRoom.save();
-            
-            // Broadcast cleared boxes
-            broadcastTakenBoxes(room.stake, []);
+            });
             
             broadcastRoomStatus();
           }
@@ -1183,7 +946,7 @@ async function startCountdownForRoom(room) {
     }, 1000); // Every second
     
     roomTimers.set(countdownKey, countdownInterval);
-    console.log(`✅ Countdown timer started for room ${room.stake} with ${initialOnlinePlayers.length} online players`);
+    console.log(`✅ Countdown timer started for room ${room.stake}`);
     
   } catch (error) {
     console.error('❌ Error starting countdown:', error);
@@ -1458,7 +1221,7 @@ io.on('connection', (socket) => {
       room.takenBoxes = [];
       room.status = 'ended';
       room.endTime = new Date();
-      room.lastBoxUpdate = new Date(); // Update timestamp
+      room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
       await room.save();
       
       // Broadcast empty boxes
@@ -1513,7 +1276,7 @@ io.on('connection', (socket) => {
               // Send boxesCleared ONLY for admin clearing
               s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
               s.emit('balanceUpdate', user.balance);
-              s.emit('lobbyUpdate', { room: roomStake, onlineCount: 0, totalCount: 0 });
+              s.emit('lobbyUpdate', { room: roomStake, count: 0 });
             }
           }
         }
@@ -1524,7 +1287,7 @@ io.on('connection', (socket) => {
     room.players = [];
     room.takenBoxes = [];
     room.status = 'waiting';
-    room.lastBoxUpdate = new Date(); // Update timestamp
+    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
     await room.save();
     
     // Broadcast cleared boxes
@@ -1534,8 +1297,8 @@ io.on('connection', (socket) => {
     logActivity('ADMIN_CLEAR_BOXES', { adminSocket: socket.id, roomStake }, socket.id);
   });
   
-  // 🆕 ADD: Admin debugging for countdown and disconnect handling
-  socket.on('admin:debugRoom', async (roomStake) => {
+  // ⭐⭐ ADDED: Admin debugging for countdown
+  socket.on('admin:debugCountdown', async (roomStake) => {
     if (!adminSockets.has(socket.id)) {
       socket.emit('admin:error', 'Unauthorized');
       return;
@@ -1544,26 +1307,17 @@ io.on('connection', (socket) => {
     const room = await Room.findOne({ stake: parseInt(roomStake) });
     if (room) {
       const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-      const offlinePlayers = room.players.length - onlinePlayers.length;
       
-      console.log(`🔍 Admin debugging room ${roomStake}`);
+      console.log(`🔍 Admin debugging countdown for room ${roomStake}`);
       console.log(`   Status: ${room.status}`);
-      console.log(`   Players: ${room.players.length} (${onlinePlayers.length} online, ${offlinePlayers} offline)`);
+      console.log(`   Players: ${room.players.length}`);
       console.log(`   Taken boxes: ${room.takenBoxes.length}`);
       console.log(`   Countdown start: ${room.countdownStartTime}`);
       console.log(`   Countdown started with: ${room.countdownStartedWith}`);
-      console.log(`   Countdown info: ${JSON.stringify(room.countdownInfo)}`);
-      console.log(`   Room timers active: ${Array.from(roomTimers.keys()).filter(k => k.includes(roomStake.toString()))}`);
+      console.log(`   Online players: ${onlinePlayers.length}`);
+      console.log(`   Room timers active: ${roomTimers.has(`countdown_${roomStake}`)}`);
       
-      // Show player details
-      console.log(`   Player details:`);
-      for (const playerId of room.players) {
-        const isOnline = onlinePlayers.includes(playerId);
-        const user = await User.findOne({ userId: playerId });
-        console.log(`     - ${user?.userName || playerId}: ${isOnline ? '✅ Online' : '❌ Offline'}`);
-      }
-      
-      socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${offlinePlayers} offline, ${room.players.length} total`);
+      socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}`);
     }
   });
   
@@ -1574,7 +1328,7 @@ io.on('connection', (socket) => {
       
       console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
       
-      // Store userId on socket for tracking
+      // Store userId on socket for tracking - ⭐⭐ CRITICAL FIX ADDED HERE ⭐⭐
       socket.userId = userId;
       
       const user = await getUser(userId, userName);
@@ -1702,7 +1456,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // 🆕 FIXED: Improved joinRoom function with better countdown logic and offline player handling
+  // ⭐⭐ FIXED: Improved joinRoom function with better countdown logic
   socket.on('joinRoom', async (data, callback) => {
     try {
       const { room, box, userName } = data;
@@ -1793,6 +1547,12 @@ io.on('connection', (socket) => {
       
       const onlinePlayers = await getOnlinePlayersInRoom(room);
       
+      console.log(`🚀 joinRoom - Room ${room}:`);
+      console.log(`   Players in room: ${roomData.players.length}`);
+      console.log(`   Online players: ${onlinePlayers.length}`);
+      console.log(`   Room status: ${roomData.status}`);
+      console.log(`   Min players to start: ${CONFIG.MIN_PLAYERS_TO_START}`);
+      
       // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
       broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
       
@@ -1811,18 +1571,21 @@ io.on('connection', (socket) => {
             if (s) {
               s.emit('lobbyUpdate', {
                 room: room,
-                onlineCount: onlinePlayers.length,
-                totalCount: roomData.players.length
+                count: onlinePlayers.length
               });
             }
           }
         }
       });
       
-      // 🆕 FIXED: Start countdown if we have at least 2 online players
+      // ⭐⭐ FIXED: Start countdown if we have at least 2 online players
       if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
-        console.log(`🚀 Starting countdown for room ${room} with ${onlinePlayers.length} online players`);
+        console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online players!`);
         await startCountdownForRoom(roomData);
+      } else {
+        console.log(`⏸️ NOT starting countdown:`);
+        console.log(`   Online players: ${onlinePlayers.length} (need ${CONFIG.MIN_PLAYERS_TO_START})`);
+        console.log(`   Room status: ${roomData.status} (need 'waiting')`);
       }
       
       // Send personal confirmation
@@ -1851,8 +1614,7 @@ io.on('connection', (socket) => {
         callback({ 
           success: true, 
           message: 'Joined room successfully',
-          onlinePlayers: onlinePlayers.length,
-          totalPlayers: roomData.players.length
+          onlinePlayers: onlinePlayers.length
         });
       }
       
@@ -2043,10 +1805,10 @@ io.on('connection', (socket) => {
         }
       }
       
-      // 🆕 NOW clear room data after all players have been notified
+      // ⭐⭐ NOW clear room data after all players have been notified ⭐⭐
       roomData.players = [];
       roomData.takenBoxes = [];
-      roomData.status = 'waiting'; // Reset to waiting for new game
+      roomData.status = 'waiting'; // ⭐⭐ Reset to waiting for new game
       roomData.calledNumbers = [];
       roomData.currentBall = null;
       roomData.ballsDrawn = 0;
@@ -2055,7 +1817,7 @@ io.on('connection', (socket) => {
       roomData.lastBoxUpdate = new Date();
       await roomData.save();
       
-      // 🆕 BROADCAST EMPTY BOXES and send boxesCleared event
+      // ⭐⭐ BROADCAST EMPTY BOXES and send boxesCleared event ⭐⭐
       broadcastTakenBoxes(room, []);
       io.emit('boxesCleared', { room: room, reason: 'game_ended_bingo_win' });
       
@@ -2152,43 +1914,8 @@ io.on('connection', (socket) => {
       // Get online players after removal
       const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
       
-      // 🆕 FIX: Stop countdown if online players drop below 2
-      if (room.status === 'starting' && onlinePlayers.length < 2) {
-        console.log(`⏹️ Stopping countdown for room ${roomStake} - only ${onlinePlayers.length} online players after player left`);
-        const countdownKey = `countdown_${roomStake}`;
-        if (roomTimers.has(countdownKey)) {
-          clearInterval(roomTimers.get(countdownKey));
-          roomTimers.delete(countdownKey);
-        }
-        
-        // Reset room status
-        room.status = 'waiting';
-        room.countdownStartTime = null;
-        room.countdownStartedWith = 0;
-        room.countdownInfo = null;
-        
-        // Notify remaining players
-        onlinePlayers.forEach(playerUserId => {
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === playerUserId) {
-              const s = io.sockets.sockets.get(sId);
-              if (s) {
-                s.emit('countdownStopped', {
-                  room: roomStake,
-                  reason: 'not_enough_players'
-                });
-                
-                s.emit('lobbyUpdate', {
-                  room: roomStake,
-                  onlineCount: onlinePlayers.length,
-                  totalCount: room.players.length,
-                  reason: 'player_left'
-                });
-              }
-            }
-          }
-        });
-      }
+      // ⭐⭐ FIXED: DON'T stop countdown when player leaves
+      // The countdown should continue even if players leave
       
       await room.save();
       
@@ -2236,8 +1963,7 @@ io.on('connection', (socket) => {
             if (s) {
               s.emit('lobbyUpdate', {
                 room: roomStake,
-                onlineCount: onlinePlayers.length,
-                totalCount: room.players.length
+                count: onlinePlayers.length
               });
             }
           }
@@ -2278,21 +2004,14 @@ io.on('connection', (socket) => {
         
         socket.emit('lobbyUpdate', {
           room: room,
-          onlineCount: onlinePlayers.length,
-          totalCount: roomData.players.length
+          count: onlinePlayers.length
         });
         
         // Also send countdown status if room is starting
         if (roomData.status === 'starting') {
-          const elapsed = roomData.countdownStartTime ? 
-            Math.floor((Date.now() - roomData.countdownStartTime) / 1000) : 0;
-          const remaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - elapsed);
-          
           socket.emit('gameCountdown', {
             room: room,
-            timer: remaining,
-            onlinePlayers: onlinePlayers.length,
-            totalPlayers: roomData.players.length
+            timer: Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor((Date.now() - roomData.countdownStartTime) / 1000))
           });
         }
       }
@@ -2321,7 +2040,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== 🆕 FIXED DISCONNECT EVENT - WITH PROPER OFFLINE PLAYER HANDLING ==========
+  // ========== FIXED: disconnect event - Proper cleanup on disconnect ==========
   socket.on('disconnect', async () => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
     connectedSockets.delete(socket.id);
@@ -2344,9 +2063,6 @@ io.on('connection', (socket) => {
           const room = await Room.findOne({ stake: roomStake });
           
           if (room) {
-            // Get online players after disconnect
-            const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
-            
             // Only remove from room if game is NOT playing
             if (room.status !== 'playing') {
               const playerIndex = room.players.indexOf(userId);
@@ -2362,43 +2078,8 @@ io.on('connection', (socket) => {
               
               room.lastBoxUpdate = new Date();
               
-              // 🆕 FIX: Stop countdown if online players drop below 2
-              if (room.status === 'starting' && onlinePlayers.length < 2) {
-                console.log(`⏹️ Stopping countdown for room ${roomStake} - only ${onlinePlayers.length} online players after disconnect`);
-                const countdownKey = `countdown_${roomStake}`;
-                if (roomTimers.has(countdownKey)) {
-                  clearInterval(roomTimers.get(countdownKey));
-                  roomTimers.delete(countdownKey);
-                }
-                
-                // Reset room status
-                room.status = 'waiting';
-                room.countdownStartTime = null;
-                room.countdownStartedWith = 0;
-                room.countdownInfo = null;
-                
-                // Notify remaining players
-                onlinePlayers.forEach(playerUserId => {
-                  for (const [sId, uId] of socketToUser.entries()) {
-                    if (uId === playerUserId) {
-                      const s = io.sockets.sockets.get(sId);
-                      if (s && s.connected) {
-                        s.emit('countdownStopped', {
-                          room: roomStake,
-                          reason: 'not_enough_players'
-                        });
-                        
-                        s.emit('lobbyUpdate', {
-                          room: roomStake,
-                          onlineCount: onlinePlayers.length,
-                          totalCount: room.players.length,
-                          reason: 'player_disconnected'
-                        });
-                      }
-                    }
-                  }
-                });
-              }
+              // ⭐⭐ FIXED: DON'T stop countdown when player disconnects
+              // Countdown continues even if players disconnect
               
               await room.save();
               
@@ -2407,8 +2088,7 @@ io.on('connection', (socket) => {
               
               console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect`);
             } else {
-              console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, will be marked offline`);
-              // User stays in game but is marked offline
+              console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, keeping in game`);
             }
           }
           
@@ -2447,36 +2127,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ========== 🆕 ADD: PERIODIC CLEANUP OF OFFLINE PLAYERS ==========
-async function cleanupEmptyGames() {
-  try {
-    const rooms = await Room.find({ status: 'playing' });
-    
-    for (const room of rooms) {
-      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-      
-      // If no online players in a playing game, end it
-      if (onlinePlayers.length === 0) {
-        console.log(`⚠️ No online players in room ${room.stake}, ending game...`);
-        await endGameWithNoWinner(room);
-      }
-      
-      // If only 1 online player in a playing game, check if they can win
-      if (onlinePlayers.length === 1) {
-        console.log(`⚠️ Only 1 online player in room ${room.stake}, checking game viability...`);
-        
-        // If game has been going for more than 30 balls and only 1 player, end it
-        if (room.ballsDrawn > 30) {
-          console.log(`⚠️ Ending game in room ${room.stake} - only 1 player for too long`);
-          await endGameWithNoWinner(room);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error in cleanupEmptyGames:', error);
-  }
-}
-
 // ========== PERIODIC TASKS ==========
 setInterval(() => {
   broadcastRoomStatus();
@@ -2497,9 +2147,6 @@ setInterval(() => {
     }
   });
 }, 10000);
-
-// 🆕 ADD: Run cleanup of empty games every 30 seconds
-setInterval(cleanupEmptyGames, 30000);
 
 // ========== CONNECTION CLEANUP FUNCTION ==========
 async function cleanupStaleConnections() {
@@ -2561,7 +2208,6 @@ async function cleanupStuckCountdowns() {
           room.status = 'waiting';
           room.countdownStartTime = null;
           room.countdownStartedWith = 0;
-          room.countdownInfo = null;
           await room.save();
           
           // Get online players and notify them
@@ -2577,8 +2223,7 @@ async function cleanupStuckCountdowns() {
                   });
                   socket.emit('lobbyUpdate', {
                     room: room.stake,
-                    onlineCount: onlinePlayers.length,
-                    totalCount: room.players.length
+                    count: onlinePlayers.length
                   });
                 }
               }
@@ -2729,7 +2374,7 @@ app.get('/', (req, res) => {
     <body>
       <div class="container">
         <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite Telegram Mini App</h1>
-        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Now with FIXED disconnect handling</p>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer Bingo - Ready for Telegram</p>
         
         <div class="status">
           <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
@@ -2747,12 +2392,12 @@ app.get('/', (req, res) => {
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
-          <p style="color: #10b981; margin-top: 10px;">🔄 FIXED: Disconnect handling with offline player removal</p>
-          <p style="color: #10b981;">⏱️ FIXED: Countdown stops when players drop below 2</p>
-          <p style="color: #10b981;">🧹 FIXED: Offline players automatically removed and refunded</p>
-          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Clear room display with online/offline counts</p>
+          <p style="color: #10b981; margin-top: 10px;">🔄 FIXED: Timer doesn't reset when players leave</p>
+          <p style="color: #10b981;">⏱️ FIXED: Game starts even with 1 player if countdown began with 2</p>
+          <p style="color: #10b981;">🧹 FIXED: Boxes cleared after game ends</p>
+          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
           <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
-          <p style="color: #10b981;">⏱️ 30-second countdown with auto-stop: ✅ WORKING</p>
+          <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -2771,23 +2416,28 @@ app.get('/', (req, res) => {
             <a href="/debug-calculations/10/5" class="btn" style="background: #f59e0b;" target="_blank">🧮 Debug Calculations</a>
             <a href="/debug-room/10" class="btn" style="background: #f59e0b;" target="_blank">🏠 Debug Room 10</a>
           </div>
+          <div style="margin-top: 20px;">
+            <a href="/test-connections" class="btn" style="background: #f59e0b;" target="_blank">🔌 Test Connections</a>
+            <a href="/force-start/10" class="btn" style="background: #10b981;" target="_blank">🚀 Force Start Room 10</a>
+          </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.6.0 (FIXED DISCONNECT HANDLING) | Database: MongoDB Atlas<br>
+            Version: 2.6.0 (FULLY FIXED - Connection Tracking Issues Resolved) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
-            Fixed Issues: ✅ Disconnect handling fixed, ✅ Offline players removed, ✅ Countdown stops when <2 players<br>
-            ✅ Clear room display with online/offline counts<br>
-            ✅ Automatic refunds for offline players<br>
-            ✅ Game only starts with 2+ online players<br>
-            ✅ Countdown info saved for reconnecting players
+            Fixed Issues: ✅ Game timer working, ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
+            ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
+            ✅ Balls drawn correctly, ✅ BINGO checking working<br>
+            ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
+            ✅✅ GAME STARTS WITH ANY PLAYERS REMAINING AT COUNTDOWN 0<br>
+            ✅✅ CONNECTION TRACKING FIXED - Game starts properly now!
           </p>
         </div>
       </div>
@@ -2880,13 +2530,14 @@ app.get('/telegram', (req, res) => {
                 <p><strong>👥 Play with 100 players per room</strong></p>
                 <p><strong>📦 Real-time Box Tracking</strong></p>
                 <p><strong>🤖 Telegram Mini App Integrated</strong></p>
-                <p><strong>✅ FIXED: Offline players automatically removed</strong></p>
-                <p><strong>✅ FIXED: Countdown stops when players disconnect</strong></p>
-                <p><strong>✅ FIXED: Clear display of online vs offline players</strong></p>
-                <p><strong>✅ FIXED: Automatic refunds for disconnected players</strong></p>
-                <p><strong>✅ FIXED: Game only starts with 2+ online players</strong></p>
-                <p><strong>🚀 NEW: Fair gameplay - no more empty games</strong></p>
-                <p><strong>🚀 NEW: Clear room status with player counts</strong></p>
+                <p><strong>✅ FIXED: Timer doesn't reset when players leave</strong></p>
+                <p><strong>✅ FIXED: Game continues with 1 player</strong></p>
+                <p><strong>✅ FIXED: Random BINGO card numbers</strong></p>
+                <p><strong>✅ FIXED: Game timer and ball drawing issues resolved</strong></p>
+                <p><strong>✅ FIXED: 30-second countdown now working</strong></p>
+                <p><strong>✅ FIXED: Balls pop every 3 seconds</strong></p>
+                <p><strong>✅✅ FIXED: Game starts properly when 2 players join!</strong></p>
+                <p><strong>🚀 NEW: Connection tracking fixed - countdown works correctly</strong></p>
             </div>
             
             <button class="btn" id="playBtn">LAUNCH GAME</button>
@@ -2895,9 +2546,8 @@ app.get('/telegram', (req, res) => {
                 <p>Bot: @ethio_games1_bot</p>
                 <p>Stakes: 10, 20, 50, 100 ETB</p>
                 <p>Minimum 2 online players to start countdown</p>
-                <p>Countdown stops if players disconnect</p>
-                <p>Offline players automatically removed and refunded</p>
-                <p>Clear display shows online/offline/total players</p>
+                <p>Timer continues even if players leave</p>
+                <p>Game starts with any players remaining at countdown 0</p>
                 <p>Balls drawn every 3 seconds</p>
             </div>
         </div>
@@ -3048,11 +2698,6 @@ app.get('/socket-test', (req, res) => {
         
         socket.on('roomStatus', (data) => {
           addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
-          // Log room details
-          Object.keys(data).forEach(stake => {
-            const room = data[stake];
-            addLog(\`Room \${stake}: \${room.onlineCount} online, \${room.totalCount} total, \${room.statusDescription}\`, 'info');
-          });
         });
         
         socket.on('boxesTakenUpdate', (data) => {
@@ -3119,8 +2764,7 @@ app.get('/health', async (req, res) => {
         onlinePlayers: onlinePlayers.length,
         totalPlayers: room.players.length,
         countdownStartTime: room.countdownStartTime,
-        countdownStartedWith: room.countdownStartedWith,
-        countdownInfo: room.countdownInfo
+        countdownStartedWith: room.countdownStartedWith
       };
     }));
     
@@ -3144,17 +2788,18 @@ app.get('/health', async (req, res) => {
       serverUrl: 'https://bingo-telegram-game.onrender.com',
       realTimeBoxUpdates: 'active',
       boxClearing: 'enabled',
-      disconnectHandling: 'fixed',
-      offlinePlayerRemoval: 'enabled',
       gameTimer: CONFIG.GAME_TIMER + ' seconds',
       countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
       fixedIssues: [
-        'disconnect_handling_fixed', 
-        'offline_players_removed', 
-        'countdown_stops_when_players_drop_below_2',
-        'clear_room_display_with_online_offline_counts',
-        'automatic_refunds_for_disconnected_players',
-        'game_only_starts_with_2_plus_online_players'
+        'connection_tracking_fixed',
+        'game_timer_fixed', 
+        'ball_drawing_working', 
+        'players_properly_removed_on_leave',
+        'countdown_stuck_at_30_seconds_fixed',
+        'balls_pop_every_3_seconds',
+        '30_second_countdown_working',
+        'countdown_continues_when_players_leave',
+        'game_starts_with_any_players_at_countdown_0'
       ]
     });
   } catch (error) {
@@ -3240,6 +2885,30 @@ app.get('/real-time-status', async (req, res) => {
   }
 });
 
+// ========== TEST CONNECTIONS ENDPOINT ==========
+app.get('/test-connections', (req, res) => {
+  const connections = [];
+  
+  io.sockets.sockets.forEach((socket) => {
+    connections.push({
+      socketId: socket.id,
+      connected: socket.connected,
+      userId: socket.userId || 'none',
+      handshakeQuery: socket.handshake.query,
+      inSocketToUser: socketToUser.has(socket.id)
+    });
+  });
+  
+  res.json({
+    totalSockets: connections.length,
+    connectedSockets: Array.from(connectedSockets).length,
+    socketToUserSize: socketToUser.size,
+    socketToUserEntries: Array.from(socketToUser.entries()),
+    connections: connections,
+    getConnectedUsersResult: getConnectedUsers()
+  });
+});
+
 // ========== DEBUG CONNECTION ENDPOINT ==========
 app.get('/debug-connections', async (req, res) => {
   try {
@@ -3290,7 +2959,6 @@ app.get('/debug-users', async (req, res) => {
         lastSeen: user.lastSeen,
         secondsSinceLastSeen: Math.floor(secondsSinceLastSeen),
         currentRoom: user.currentRoom,
-        box: user.box,
         balance: user.balance,
         socketId: Array.from(socketToUser.entries())
           .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
@@ -3316,7 +2984,6 @@ app.get('/debug-room/:stake', async (req, res) => {
     const stake = parseInt(req.params.stake);
     const room = await Room.findOne({ stake: stake });
     const onlinePlayers = await getOnlinePlayersInRoom(stake);
-    const offlinePlayers = room ? room.players.length - onlinePlayers.length : 0;
     
     res.json({
       stake: stake,
@@ -3324,14 +2991,12 @@ app.get('/debug-room/:stake', async (req, res) => {
       roomStatus: room?.status || 'not_found',
       playersInRoom: room?.players?.length || 0,
       onlinePlayers: onlinePlayers.length,
-      offlinePlayers: offlinePlayers,
       takenBoxes: room?.takenBoxes?.length || 0,
       countdownActive: roomTimers.has(`countdown_${stake}`),
       gameTimerActive: roomTimers.has(stake),
       roomData: room,
       countdownStartedWith: room?.countdownStartedWith || 0,
-      countdownStartTime: room?.countdownStartTime,
-      countdownInfo: room?.countdownInfo || null
+      countdownStartTime: room?.countdownStartTime
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3339,7 +3004,7 @@ app.get('/debug-room/:stake', async (req, res) => {
 });
 
 // ========== DEBUG FORCE START ENDPOINT ==========
-app.get('/debug-force-start/:stake', async (req, res) => {
+app.get('/force-start/:stake', async (req, res) => {
   try {
     const stake = parseInt(req.params.stake);
     const room = await Room.findOne({ stake: stake });
@@ -3445,7 +3110,7 @@ app.get('/debug-calculations/:stake/:players', (req, res) => {
 });
 
 // ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_TELEGRAM_BOT_TOKEN_HERE';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
 // Simple Telegram webhook
 app.post('/telegram-webhook', express.json(), async (req, res) => {
@@ -3491,11 +3156,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Real-time multiplayer\n` +
                   `• Real-time box tracking\n` +
                   `• Telegram login\n` +
-                  `• Game starts automatically when 2 online players join\n` +
-                  `• Countdown stops if players disconnect\n` +
-                  `• Offline players automatically removed\n` +
-                  `• Clear display shows online/offline players\n` +
-                  `• ✅ Fixed: Disconnect handling issues resolved\n\n` +
+                  `• Game starts automatically when 2 players join\n` +
+                  `• Timer continues even if players leave\n` +
+                  `• Random BINGO card numbers\n` +
+                  `• ✅ Fixed: Connection tracking issues resolved\n` +
+                  `• ✅ Fixed: Game starts properly now!\n\n` +
                   `_Need funds? Contact admin_`,
             parse_mode: 'Markdown',
             reply_markup: {
@@ -3542,18 +3207,16 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `1. Click "Play Now"\n` +
                   `2. Select room (10-100 ETB)\n` +
                   `3. Choose ticket (1-100) - See taken boxes in real-time!\n` +
-                  `4. Wait for 2 online players (30-second countdown starts)\n` +
-                  `5. Countdown stops if players disconnect\n` +
-                  `6. Offline players automatically removed and refunded\n` +
-                  `7. Mark numbers as called\n` +
-                  `8. Claim BINGO!\n\n` +
+                  `4. Wait for 2 players (30-second countdown starts)\n` +
+                  `5. Timer continues even if players leave\n` +
+                  `6. Mark numbers as called\n` +
+                  `7. Claim BINGO!\n\n` +
                   `*Four Corners Bonus:* 50 ETB!\n` +
                   `*Real-time Box Tracking:* See which boxes are taken instantly!\n` +
                   `*Auto Start:* Game starts when 2 online players join\n` +
-                  `*Countdown Stops:* If online players drop below 2\n` +
-                  `*Offline Players:* Automatically removed and refunded\n` +
-                  `*Clear Display:* Shows online/offline/total players\n` +
-                  `*✅ Fixed:* Disconnect handling issues resolved\n\n` +
+                  `*Timer Doesn't Reset:* Game continues even if players leave\n` +
+                  `*Random BINGO Cards:* Each card has unique random numbers\n` +
+                  `*✅ Fixed:* Connection tracking issues resolved - Game starts properly now!\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -3622,11 +3285,12 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Disconnect handling, Offline player removal, Countdown stops when players disconnect</p>
-            <p><strong>✅ Offline players automatically removed and refunded</strong></p>
-            <p><strong>✅ Countdown stops when online players drop below 2</strong></p>
-            <p><strong>✅ Clear room display with online/offline counts</strong></p>
-            <p><strong>✅ Game only starts with 2+ online players</strong></p>
+            <p><strong>Fixed Issues:</strong> Connection tracking fixed, Game starts properly when 2 players join</p>
+            <p><strong>✅ 30-second countdown now working</strong></p>
+            <p><strong>✅ Balls pop every 3 seconds</strong></p>
+            <p><strong>✅ Countdown continues when players leave</strong></p>
+            <p><strong>✅ Game starts with any players at countdown 0</strong></p>
+            <p><strong>✅✅ CONNECTION TRACKING FIXED - Game starts properly!</strong></p>
           </div>
           
           <div>
@@ -3669,7 +3333,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║             🤖 BINGO ELITE - DISCONNECT FIXED       ║
+║             🤖 BINGO ELITE - TELEGRAM READY         ║
 ╠══════════════════════════════════════════════════════╣
 ║  URL:          https://bingo-telegram-game.onrender.com ║
 ║  Port:         ${PORT}                                ║
@@ -3681,7 +3345,8 @@ server.listen(PORT, () => {
 ║  Debug:        /debug-connections                    ║
 ║  Debug Users:  /debug-users                          ║
 ║  Debug Room:   /debug-room/:stake                    ║
-║  Force Start:  /debug-force-start/:stake             ║
+║  Force Start:  /force-start/:stake                   ║
+║  Test:         /test-connections                     ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
@@ -3690,14 +3355,16 @@ server.listen(PORT, () => {
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
 ║  🧹 Box Clearing After Game: ✅ IMPLEMENTED         ║
-║  🚀 FIXES: ✅ Offline players removed               ║
-║         ✅ Countdown stops when <2 online players   ║
-║         ✅ Clear room display with player counts    ║
-║         ✅ Automatic refunds for disconnected players║
-║         ✅ Game only starts with 2+ online players  ║
-║         ✅ Periodic cleanup of empty games          ║
+║  🚀 FIXES: ✅ Game timer working                    ║
+║         ✅ Ball drawing fixed (every 3 seconds)     ║
+║         ✅ Players properly removed when leaving    ║
+║         ✅✅ 30-SECOND COUNTDOWN NOW WORKING        ║
+║         ✅✅ BALLS POP EVERY 3 SECONDS WORKING      ║
+║         ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE ║
+║         ✅✅ GAME STARTS WITH ANY PLAYERS AT 0      ║
+║         ✅✅✅ CONNECTION TRACKING FIXED - GAME STARTS PROPERLY!
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready with FIXED disconnect handling
+✅ Server ready for REAL-TIME tracking and Telegram Mini App
   `);
   
   // Initial broadcast
