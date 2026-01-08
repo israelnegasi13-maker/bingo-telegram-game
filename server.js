@@ -651,7 +651,7 @@ async function startGameTimer(room) {
   console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
 }
 
-// Check if a player has bingo
+// ✅✅✅ FIXED: Check if a player has bingo - PROPERLY HANDLES NUMBER COMPARISON
 function checkBingo(markedNumbers, grid) {
   const patterns = [
     // Rows
@@ -676,13 +676,40 @@ function checkBingo(markedNumbers, grid) {
     [0,4,20,24]
   ];
   
+  console.log('🔍 BINGO CHECK DETAILS:');
+  console.log('   Marked numbers:', markedNumbers);
+  console.log('   Grid:', grid);
+  
   for (const pattern of patterns) {
     const isBingo = pattern.every(index => {
       const cellValue = grid[index];
-      return markedNumbers.includes(cellValue) || cellValue === 'FREE';
+      
+      // Handle FREE space
+      if (cellValue === 'FREE') {
+        const hasFree = markedNumbers.includes('FREE') || markedNumbers.some(m => m === 'FREE');
+        console.log(`   Cell ${index} (FREE): ${hasFree ? '✅ Marked' : '❌ Not marked'}`);
+        return hasFree;
+      }
+      
+      // Check if the number is in markedNumbers
+      // Convert both to numbers for comparison since client might send strings
+      const cellValueNum = Number(cellValue);
+      const isMarked = markedNumbers.some(marked => {
+        // Handle 'FREE' string
+        if (marked === 'FREE') return false;
+        // Convert marked to number and compare
+        const markedNum = Number(marked);
+        return markedNum === cellValueNum;
+      });
+      
+      console.log(`   Cell ${index} (${cellValue}): ${isMarked ? '✅ Marked' : '❌ Not marked'}`);
+      return isMarked;
     });
     
     if (isBingo) {
+      console.log(`✅ BINGO FOUND with pattern: ${pattern.join(',')}`);
+      console.log(`   Is four corners: ${pattern.length === 4 && pattern[0] === 0 && pattern[1] === 4 && pattern[2] === 20 && pattern[3] === 24}`);
+      
       return {
         isBingo: true,
         pattern: pattern,
@@ -691,6 +718,7 @@ function checkBingo(markedNumbers, grid) {
     }
   }
   
+  console.log('❌ No BINGO pattern found');
   return { isBingo: false };
 }
 
@@ -1624,7 +1652,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ✅ FIXED CLAIM BINGO LOGIC - PROPERLY ENDS GAME AND AWARDS MONEY ==========
+  // ========== ✅✅✅ FIXED CLAIM BINGO LOGIC - PROPERLY HANDLES NUMBER COMPARISON ==========
   socket.on('claimBingo', async (data, callback) => {
     try {
       const { room, grid, marked } = data;
@@ -1656,11 +1684,27 @@ io.on('connection', (socket) => {
         return;
       }
       
+      console.log('🎯 BINGO CLAIM RECEIVED:');
+      console.log('   User:', user.userName);
+      console.log('   Room:', room);
+      console.log('   Grid:', grid);
+      console.log('   Marked:', marked);
+      
+      // ✅ FIXED: Convert marked numbers properly for comparison
+      // The client may send strings or numbers, so we need to handle both
+      const markedNumbers = marked.map(item => {
+        if (item === 'FREE') return 'FREE';
+        return Number(item); // Convert to number for comparison
+      }).filter(item => !isNaN(item) || item === 'FREE');
+      
+      console.log('   Marked (converted):', markedNumbers);
+      
       // Check if bingo is valid
-      const bingoCheck = checkBingo(marked, grid);
+      const bingoCheck = checkBingo(markedNumbers, grid);
       if (!bingoCheck.isBingo) {
+        console.log('❌ Invalid bingo claim - no winning pattern found');
         socket.emit('error', 'Invalid bingo claim');
-        if (callback) callback({ success: false, message: 'Invalid bingo claim' });
+        if (callback) callback({ success: false, message: 'Invalid bingo claim - no winning pattern' });
         return;
       }
       
@@ -2408,7 +2452,7 @@ app.get('/', (req, res) => {
           <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
           <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
-          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅ FIXED: Claim Bingo now ends game and awards money!</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
           <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
         </div>
         
@@ -2437,7 +2481,7 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.6.1 (FULLY FIXED) | Database: MongoDB Atlas<br>
+            Version: 2.6.2 (BINGO FIXED) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
@@ -2450,7 +2494,7 @@ app.get('/', (req, res) => {
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅ CONNECTION TRACKING FIXED - Game starts properly now!<br>
-            ✅✅✅ CLAIM BINGO NOW ENDS GAME AND AWARDS MONEY<br>
+            ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
             ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS
           </p>
         </div>
@@ -2550,7 +2594,7 @@ app.get('/telegram', (req, res) => {
                 <p><strong>✅ FIXED: Game timer and ball drawing issues resolved</strong></p>
                 <p><strong>✅ FIXED: 30-second countdown now working</strong></p>
                 <p><strong>✅ FIXED: Balls pop every 3 seconds</strong></p>
-                <p><strong>✅✅ FIXED: Claim Bingo ends game and awards money</strong></p>
+                <p><strong>✅✅✅✅ FIXED: Claim Bingo now properly checks numbers!</strong></p>
                 <p><strong>✅✅ FIXED: All players return to lobby after game ends</strong></p>
                 <p><strong>🚀 NEW: Game starts with 1 player after 30 seconds!</strong></p>
             </div>
@@ -2563,7 +2607,7 @@ app.get('/telegram', (req, res) => {
                 <p>Game starts with 1 player after 30 seconds</p>
                 <p>Timer continues even if players leave</p>
                 <p>Balls drawn every 3 seconds</p>
-                <p>✅ Claim Bingo now properly ends game</p>
+                <p>✅✅✅ Claim Bingo now properly checks numbers</p>
                 <p>✅ All players return to lobby automatically</p>
             </div>
         </div>
@@ -2808,7 +2852,7 @@ app.get('/health', async (req, res) => {
       countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
       minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       fixedIssues: [
-        'claim_bingo_ends_game_and_awards_money',
+        'claim_bingo_properly_checks_numbers',
         'all_players_return_to_lobby_after_game_ends',
         'game_starts_with_1_player_after_30_seconds',
         'connection_tracking_fixed',
@@ -3179,7 +3223,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Game starts automatically when 1 player joins\n` +
                   `• Timer continues even if players leave\n` +
                   `• Random BINGO card numbers\n` +
-                  `• ✅ Fixed: Claim Bingo ends game and awards money\n` +
+                  `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
                   `• ✅ Fixed: All players return to lobby after game ends\n` +
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
                   `• ✅ Fixed: Game starts properly now!\n\n` +
@@ -3239,7 +3283,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*Auto Start:* Game starts when 1 online player joins\n` +
                   `*Timer Doesn't Reset:* Game continues even if players leave\n` +
                   `*Random BINGO Cards:* Each card has unique random numbers\n` +
-                  `*✅ Fixed:* Claim Bingo ends game and awards money\n` +
+                  `*✅✅✅ Fixed:* Claim Bingo now properly checks numbers\n` +
                   `*✅ Fixed:* All players return to lobby after game ends\n` +
                   `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
                   `_Need help? Contact admin_`,
@@ -3310,12 +3354,12 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Claim Bingo ends game and awards money, All players return to lobby, Game starts with 1 player</p>
+            <p><strong>Fixed Issues:</strong> Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
             <p><strong>✅ Balls pop every 3 seconds</strong></p>
             <p><strong>✅ Countdown continues when players leave</strong></p>
             <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
-            <p><strong>✅✅ CLAIM BINGO ENDS GAME AND AWARDS MONEY</strong></p>
+            <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
           </div>
           
@@ -3388,7 +3432,7 @@ server.listen(PORT, () => {
 ║         ✅✅ BALLS POP EVERY 3 SECONDS WORKING      ║
 ║         ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE ║
 ║         ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS ║
-║         ✅✅✅ CLAIM BINGO ENDS GAME AND AWARDS MONEY ║
+║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS ║
 ╚══════════════════════════════════════════════════════╝
 ✅ Server ready for REAL-TIME tracking and Telegram Mini App
