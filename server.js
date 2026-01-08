@@ -64,7 +64,7 @@ const roomSchema = new mongoose.Schema({
   lastBoxUpdate: { type: Date, default: Date.now },
   countdownStartTime: { type: Date, default: null },
   countdownStartedWith: { type: Number, default: 0 },
-  isLocked: { type: Boolean, default: false } // NEW: Room lock status
+  isLocked: { type: Boolean, default: false } // ⭐⭐ NEW: Room lock for game in progress
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -145,7 +145,7 @@ const CONFIG = {
   ROOM_STAKES: [10, 20, 50, 100],
   MAX_PLAYERS_PER_ROOM: 100,
   GAME_TIMER: 3,
-  MIN_PLAYERS_TO_START: 1, // ⭐⭐ CHANGED FROM 2 TO 1
+  MIN_PLAYERS_TO_START: 1,
   HOUSE_COMMISSION: {
     10: 2,
     20: 4,
@@ -174,8 +174,17 @@ function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = 
     room: roomStake,
     takenBoxes: takenBoxes,
     playerCount: takenBoxes.length,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    isLocked: false
   };
+  
+  // Check if room is locked (game in progress)
+  Room.findOne({ stake: roomStake }).then(room => {
+    if (room && room.isLocked) {
+      updateData.isLocked = true;
+      updateData.lockedMessage = "Game in progress - room locked";
+    }
+  });
   
   if (newBox && playerName) {
     updateData.newBox = newBox;
@@ -196,12 +205,13 @@ function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = 
         playerCount: takenBoxes.length,
         timestamp: new Date().toISOString(),
         newBox: newBox,
-        playerName: playerName
+        playerName: playerName,
+        isLocked: updateData.isLocked
       });
     }
   });
   
-  console.log(`📦 Real-time box update for room ${roomStake}: ${takenBoxes.length} boxes taken${newBox ? `, new box ${newBox} by ${playerName}` : ''}`);
+  console.log(`📦 Real-time box update for room ${roomStake}: ${takenBoxes.length} boxes taken, locked: ${updateData.isLocked}`);
 }
 
 function cleanupRoomTimer(stake) {
@@ -275,7 +285,7 @@ async function getUser(userId, userName) {
 
 async function getRoom(stake) {
   try {
-    let room = await Room.findOne({ stake: stake, status: { $in: ['waiting', 'starting', 'playing'] } });
+    let room = await Room.findOne({ stake: stake });
     
     if (!room) {
       room = new Room({
@@ -283,7 +293,8 @@ async function getRoom(stake) {
         players: [],
         takenBoxes: [],
         status: 'waiting',
-        lastBoxUpdate: new Date()
+        lastBoxUpdate: new Date(),
+        isLocked: false
       });
       await room.save();
     }
@@ -292,6 +303,40 @@ async function getRoom(stake) {
   } catch (error) {
     console.error('Error getting room:', error);
     return null;
+  }
+}
+
+// ⭐⭐ NEW: Lock room function
+async function lockRoom(roomStake) {
+  try {
+    const room = await Room.findOne({ stake: roomStake });
+    if (room) {
+      room.isLocked = true;
+      await room.save();
+      console.log(`🔒 Room ${roomStake} locked (game in progress)`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error locking room:', error);
+    return false;
+  }
+}
+
+// ⭐⭐ NEW: Unlock room function
+async function unlockRoom(roomStake) {
+  try {
+    const room = await Room.findOne({ stake: roomStake });
+    if (room) {
+      room.isLocked = false;
+      await room.save();
+      console.log(`🔓 Room ${roomStake} unlocked (game ended)`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error unlocking room:', error);
+    return false;
   }
 }
 
@@ -327,22 +372,14 @@ async function getOnlinePlayersInRoom(roomStake) {
     const onlinePlayers = [];
     const connectedUserIds = getConnectedUsers();
     
-    console.log(`🔍 Checking online players for room ${roomStake}:`);
-    console.log(`   Total players in room: ${room.players.length}`);
-    console.log(`   Connected users: ${connectedUserIds.length}`);
-    
     // Check each player in the room
     for (const playerId of room.players) {
       // Check if player is in connected users
       if (connectedUserIds.includes(playerId)) {
         onlinePlayers.push(playerId);
-        console.log(`   ✅ ${playerId} is ONLINE`);
-      } else {
-        console.log(`   ❌ ${playerId} is OFFLINE`);
       }
     }
     
-    console.log(`   Online players found: ${onlinePlayers.length}`);
     return onlinePlayers;
   } catch (error) {
     console.error('Error getting online players in room:', error);
@@ -366,10 +403,9 @@ async function broadcastRoomStatus() {
       
       roomStatus[room.stake] = {
         stake: room.stake,
-        playerCount: onlinePlayers.length, // Use online players count
-        totalPlayers: room.players.length, // Total players (including offline)
+        playerCount: onlinePlayers.length,
+        totalPlayers: room.players.length,
         status: room.status,
-        isLocked: room.isLocked || false, // Include lock status
         takenBoxes: room.takenBoxes.length,
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
@@ -379,7 +415,8 @@ async function broadcastRoomStatus() {
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
         minPlayers: CONFIG.MIN_PLAYERS_TO_START,
-        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
+        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS,
+        isLocked: room.isLocked || false
       };
     }
     
@@ -457,15 +494,15 @@ async function updateAdminPanel() {
         totalPlayers: room.players.length,
         takenBoxes: room.takenBoxes,
         status: room.status,
-        isLocked: room.isLocked || false, // Include lock status
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
         potentialPrize: potentialPrize,
         houseFee: houseFee,
-        players: room.players, // Include player IDs
-        onlinePlayers: onlinePlayers // Online player IDs
+        players: room.players,
+        onlinePlayers: onlinePlayers,
+        isLocked: room.isLocked || false
       };
     }
     
@@ -480,7 +517,7 @@ async function updateAdminPanel() {
     
     // Send to all admin sockets
     const adminData = {
-      totalPlayers: connectedPlayers, // Real-time connected players
+      totalPlayers: connectedPlayers,
       activeGames: activeGames,
       totalUsers: users.length,
       connectedSockets: connectedSocketsCount,
@@ -539,6 +576,9 @@ function logActivity(type, details, adminSocketId = null) {
 async function startGameTimer(room) {
   console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
   
+  // ⭐⭐ LOCK THE ROOM
+  await lockRoom(room.stake);
+  
   // Clear any existing timer first
   cleanupRoomTimer(room.stake);
   
@@ -547,10 +587,10 @@ async function startGameTimer(room) {
   room.currentBall = null;
   room.ballsDrawn = 0;
   room.startTime = new Date();
-  room.isLocked = true; // LOCK THE ROOM WHEN GAME STARTS
+  room.status = 'playing';
   await room.save();
   
-  console.log(`✅ Room ${room.stake} set to playing and LOCKED, starting ball timer...`);
+  console.log(`✅ Room ${room.stake} set to playing, starting ball timer...`);
   
   const timer = setInterval(async () => {
     try {
@@ -789,20 +829,20 @@ async function endGameWithNoWinner(room) {
     room.players = [];
     room.takenBoxes = [];
     room.status = 'waiting';
-    room.isLocked = false; // UNLOCK THE ROOM
     room.calledNumbers = [];
     room.currentBall = null;
     room.ballsDrawn = 0;
     room.startTime = null;
     room.endTime = new Date();
     room.lastBoxUpdate = new Date();
+    room.isLocked = false; // ⭐⭐ UNLOCK THE ROOM
     await room.save();
     
     // Broadcast empty boxes
     broadcastTakenBoxes(room.stake, []);
     io.emit('boxesCleared', { room: room.stake, reason: 'game_ended_no_winner' });
     
-    console.log(`✅ Game ended with no winner for room ${room.stake}. Boxes cleared for next game. Room UNLOCKED.`);
+    console.log(`✅ Game ended with no winner for room ${room.stake}. Boxes cleared for next game.`);
     
     // Update displays
     broadcastRoomStatus();
@@ -828,7 +868,8 @@ async function startCountdownForRoom(room) {
     // Update room status
     room.status = 'starting';
     room.countdownStartTime = new Date();
-    room.countdownStartedWith = room.players.length; // Track how many players we started with
+    room.countdownStartedWith = room.players.length;
+    room.isLocked = false; // Room not locked during countdown
     await room.save();
     
     let countdown = CONFIG.COUNTDOWN_TIMER;
@@ -906,7 +947,6 @@ async function startCountdownForRoom(room) {
             // Update room to playing
             finalRoom.status = 'playing';
             finalRoom.startTime = new Date();
-            finalRoom.isLocked = true; // LOCK THE ROOM
             finalRoom.countdownStartTime = null;
             finalRoom.countdownStartedWith = 0;
             await finalRoom.save();
@@ -939,14 +979,14 @@ async function startCountdownForRoom(room) {
             // Broadcast room status update
             broadcastRoomStatus();
             
-            console.log(`✅ Game AUTO STARTED for room ${room.stake}, timer active, room LOCKED`);
+            console.log(`✅ Game AUTO STARTED for room ${room.stake}, timer active`);
           } else {
             // No players - reset room
             console.log(`⚠️ Game start aborted for room ${room.stake}: no online players`);
             finalRoom.status = 'waiting';
-            finalRoom.isLocked = false; // UNLOCK THE ROOM
             finalRoom.countdownStartTime = null;
             finalRoom.countdownStartedWith = 0;
+            finalRoom.isLocked = false;
             await finalRoom.save();
             
             // Notify players about reset
@@ -1164,8 +1204,8 @@ io.on('connection', (socket) => {
     if (room) {
       // Force start game immediately
       room.status = 'playing';
-      room.isLocked = true; // LOCK THE ROOM
       room.startTime = new Date();
+      room.isLocked = true; // ⭐⭐ LOCK THE ROOM
       await room.save();
       
       // Start game timer
@@ -1255,9 +1295,9 @@ io.on('connection', (socket) => {
       room.players = [];
       room.takenBoxes = [];
       room.status = 'ended';
-      room.isLocked = false; // UNLOCK THE ROOM
       room.endTime = new Date();
-      room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
+      room.lastBoxUpdate = new Date();
+      room.isLocked = false; // ⭐⭐ UNLOCK THE ROOM
       await room.save();
       
       // Broadcast empty boxes
@@ -1323,8 +1363,8 @@ io.on('connection', (socket) => {
     room.players = [];
     room.takenBoxes = [];
     room.status = 'waiting';
-    room.isLocked = false; // UNLOCK THE ROOM
-    room.lastBoxUpdate = new Date(); // 🚨 Update timestamp
+    room.lastBoxUpdate = new Date();
+    room.isLocked = false; // ⭐⭐ UNLOCK THE ROOM
     await room.save();
     
     // Broadcast cleared boxes
@@ -1355,44 +1395,7 @@ io.on('connection', (socket) => {
       console.log(`   Room timers active: ${roomTimers.has(`countdown_${roomStake}`)}`);
       console.log(`   Room locked: ${room.isLocked}`);
       
-      socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, locked: ${room.isLocked}, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}`);
-    }
-  });
-  
-  // ⭐⭐ ADDED: Room lock/unlock functions
-  socket.on('admin:lockRoom', async (roomStake) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    const room = await Room.findOne({ stake: parseInt(roomStake) });
-    if (room) {
-      room.isLocked = true;
-      await room.save();
-      
-      socket.emit('admin:success', `Room ${roomStake} locked`);
-      broadcastRoomStatus();
-      
-      logActivity('ADMIN_LOCK_ROOM', { adminSocket: socket.id, roomStake }, socket.id);
-    }
-  });
-  
-  socket.on('admin:unlockRoom', async (roomStake) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    const room = await Room.findOne({ stake: parseInt(roomStake) });
-    if (room) {
-      room.isLocked = false;
-      await room.save();
-      
-      socket.emit('admin:success', `Room ${roomStake} unlocked`);
-      broadcastRoomStatus();
-      
-      logActivity('ADMIN_UNLOCK_ROOM', { adminSocket: socket.id, roomStake }, socket.id);
+      socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}, locked: ${room.isLocked}`);
     }
   });
   
@@ -1472,21 +1475,23 @@ io.on('connection', (socket) => {
   // FIXED: Get taken boxes from ALL rooms
   socket.on('getTakenBoxes', async ({ room }, callback) => {
     try {
-      // FIX: Get taken boxes from ALL rooms (not just waiting/starting)
       const roomData = await Room.findOne({ 
         stake: parseInt(room)
       });
       
       if (roomData) {
-        console.log(`📦 Getting taken boxes for room ${room}: ${roomData.takenBoxes.length} boxes`);
-        callback(roomData.takenBoxes || []);
+        console.log(`📦 Getting taken boxes for room ${room}: ${roomData.takenBoxes.length} boxes, locked: ${roomData.isLocked}`);
+        callback({
+          takenBoxes: roomData.takenBoxes || [],
+          isLocked: roomData.isLocked || false
+        });
       } else {
         console.log(`📦 No room found for ${room}, creating new one`);
-        callback([]);
+        callback({ takenBoxes: [], isLocked: false });
       }
     } catch (error) {
       console.error('Error getting taken boxes:', error);
-      callback([]);
+      callback({ takenBoxes: [], isLocked: false });
     }
   });
   
@@ -1509,14 +1514,16 @@ io.on('connection', (socket) => {
               room: data.room,
               takenBoxes: room.takenBoxes || [],
               playerCount: room.players.length,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              isLocked: room.isLocked || false
             });
           } else {
             socket.emit('boxesTakenUpdate', {
               room: data.room,
               takenBoxes: [],
               playerCount: 0,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              isLocked: false
             });
           }
         })
@@ -1531,7 +1538,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ⭐⭐ FIXED: Improved joinRoom function with ROOM LOCK LOGIC
+  // ⭐⭐ FIXED: Improved joinRoom function with better countdown logic and ROOM LOCK CHECK
   socket.on('joinRoom', async (data, callback) => {
     try {
       const { room, box, userName } = data;
@@ -1558,8 +1565,7 @@ io.on('connection', (socket) => {
       
       // Get or create room
       let roomData = await Room.findOne({ 
-        stake: room, 
-        status: { $in: ['waiting', 'starting', 'playing'] } 
+        stake: room
       });
       
       if (!roomData) {
@@ -1569,15 +1575,20 @@ io.on('connection', (socket) => {
           players: [],
           takenBoxes: [],
           status: 'waiting',
-          lastBoxUpdate: new Date()
+          lastBoxUpdate: new Date(),
+          isLocked: false
         });
         await roomData.save();
       }
       
-      // ⭐⭐ ROOM LOCK CHECK: Prevent joining if room is locked
+      // ⭐⭐ CHECK IF ROOM IS LOCKED (GAME IN PROGRESS)
       if (roomData.isLocked) {
-        socket.emit('error', 'Room is locked. Game in progress. Please wait for next game.');
-        if (callback) callback({ success: false, message: 'Room is locked. Game in progress.' });
+        console.log(`🔒 Room ${room} is locked - game in progress`);
+        socket.emit('error', 'Game is already in progress. Please wait for the next round.');
+        if (callback) callback({ 
+          success: false, 
+          message: 'Room is locked - game in progress. Please wait for next round.' 
+        });
         return;
       }
       
@@ -1661,14 +1672,15 @@ io.on('connection', (socket) => {
         }
       });
       
-      // ⭐⭐ FIXED: Start countdown if we have at least 1 online player
-      if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
+      // ⭐⭐ FIXED: Start countdown if we have at least 1 online player and room is not locked
+      if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting' && !roomData.isLocked) {
         console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online player(s)!`);
         await startCountdownForRoom(roomData);
       } else {
         console.log(`⏸️ NOT starting countdown:`);
         console.log(`   Online players: ${onlinePlayers.length} (need ${CONFIG.MIN_PLAYERS_TO_START})`);
         console.log(`   Room status: ${roomData.status} (need 'waiting')`);
+        console.log(`   Room locked: ${roomData.isLocked} (need false)`);
       }
       
       // Send personal confirmation
@@ -1676,7 +1688,8 @@ io.on('connection', (socket) => {
         room: room,
         takenBoxes: roomData.takenBoxes,
         personalBox: box,
-        message: `You selected box ${box}! Waiting for players...`
+        message: `You selected box ${box}! Waiting for players...`,
+        isLocked: roomData.isLocked
       });
       
       // Broadcast updates
@@ -1690,14 +1703,16 @@ io.on('connection', (socket) => {
         box,
         takenBoxes: roomData.takenBoxes.length,
         playerCount: roomData.players.length,
-        onlinePlayers: onlinePlayers.length
+        onlinePlayers: onlinePlayers.length,
+        isLocked: roomData.isLocked
       });
       
       if (callback) {
         callback({ 
           success: true, 
           message: 'Joined room successfully',
-          onlinePlayers: onlinePlayers.length
+          onlinePlayers: onlinePlayers.length,
+          isLocked: roomData.isLocked
         });
       }
       
@@ -1836,7 +1851,6 @@ io.on('connection', (socket) => {
       // Update room status
       roomData.status = 'ended';
       roomData.endTime = new Date();
-      roomData.isLocked = false; // UNLOCK THE ROOM
       roomData.lastBoxUpdate = new Date();
       roomData.gameHistory.push({
         timestamp: new Date(),
@@ -1861,6 +1875,7 @@ io.on('connection', (socket) => {
       roomData.startTime = null;
       roomData.endTime = new Date();
       roomData.lastBoxUpdate = new Date();
+      roomData.isLocked = false; // ⭐⭐ UNLOCK THE ROOM
       await roomData.save();
       
       // Create game over data
@@ -1926,7 +1941,7 @@ io.on('connection', (socket) => {
       broadcastTakenBoxes(room, []);
       io.emit('boxesCleared', { room: room, reason: 'game_ended_bingo_win' });
       
-      console.log(`🎮 Game ended with bingo win for room ${room}. Boxes cleared for next game. Room UNLOCKED.`);
+      console.log(`🎮 Game ended with bingo win for room ${room}. Boxes cleared for next game. Room unlocked.`);
       
       broadcastRoomStatus();
       updateAdminPanel();
@@ -2001,9 +2016,9 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Prevent leaving if game is already playing AND locked
-      if (room.status === 'playing' && room.isLocked) {
-        console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
+      // Prevent leaving if game is already playing and locked
+      if (room.isLocked) {
+        console.log(`❌ Player ${user.userName} tried to leave during locked game in room ${roomStake}`);
         socket.emit('error', 'Cannot leave room during active game! Wait for game to end.');
         return;
       }
@@ -2035,7 +2050,7 @@ io.on('connection', (socket) => {
       user.box = null;
       
       // Refund stake if game hasn't started
-      if (room.status !== 'playing') {
+      if (!room.isLocked) {
         const oldBalance = user.balance;
         user.balance += roomStake;
         
@@ -2063,7 +2078,7 @@ io.on('connection', (socket) => {
       // Send success message
       socket.emit('leftRoom', { 
         message: 'Left room successfully',
-        refunded: room.status !== 'playing'
+        refunded: !room.isLocked
       });
       
       // Update lobby for remaining players
@@ -2094,7 +2109,8 @@ io.on('connection', (socket) => {
         remainingPlayers: room.players.length,
         onlinePlayers: onlinePlayers.length,
         remainingBoxes: room.takenBoxes.length,
-        status: room.status
+        status: room.status,
+        isLocked: room.isLocked
       });
       
     } catch (error) {
@@ -2115,7 +2131,8 @@ io.on('connection', (socket) => {
         
         socket.emit('lobbyUpdate', {
           room: room,
-          count: onlinePlayers.length
+          count: onlinePlayers.length,
+          isLocked: roomData.isLocked || false
         });
         
         // Also send countdown status if room is starting
@@ -2174,8 +2191,8 @@ io.on('connection', (socket) => {
           const room = await Room.findOne({ stake: roomStake });
           
           if (room) {
-            // Only remove from room if game is NOT playing
-            if (room.status !== 'playing') {
+            // Only remove from room if game is NOT locked (not in progress)
+            if (!room.isLocked) {
               const playerIndex = room.players.indexOf(userId);
               const boxIndex = room.takenBoxes.indexOf(user.box);
               
@@ -2199,7 +2216,7 @@ io.on('connection', (socket) => {
               
               console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect`);
             } else {
-              console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, keeping in game`);
+              console.log(`⚠️ User ${user.userName} disconnected during locked gameplay in room ${roomStake}, keeping in game`);
             }
           }
           
@@ -2317,9 +2334,9 @@ async function cleanupStuckCountdowns() {
           
           // Reset room status
           room.status = 'waiting';
-          room.isLocked = false; // UNLOCK THE ROOM
           room.countdownStartTime = null;
           room.countdownStartedWith = 0;
+          room.isLocked = false;
           await room.save();
           
           // Get online players and notify them
@@ -2342,7 +2359,7 @@ async function cleanupStuckCountdowns() {
             }
           });
           
-          console.log(`✅ Reset stuck room ${room.stake} back to waiting and unlocked`);
+          console.log(`✅ Reset stuck room ${room.stake} back to waiting`);
         }
       }
     }
@@ -2373,8 +2390,8 @@ async function cleanupStaleRooms() {
         room.players = [];
         room.takenBoxes = [];
         room.status = 'waiting';
-        room.isLocked = false; // UNLOCK THE ROOM
         room.lastBoxUpdate = new Date();
+        room.isLocked = false;
         await room.save();
         
         // Broadcast that boxes are cleared
@@ -2404,12 +2421,12 @@ async function cleanupStaleRooms() {
       room.players = [];
       room.takenBoxes = [];
       room.status = 'waiting';
-      room.isLocked = false; // UNLOCK THE ROOM
       room.calledNumbers = [];
       room.currentBall = null;
       room.ballsDrawn = 0;
       room.startTime = null;
       room.lastBoxUpdate = new Date();
+      room.isLocked = false;
       await room.save();
       
       // Broadcast cleared boxes
@@ -2514,7 +2531,8 @@ app.get('/', (req, res) => {
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
           <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
-          <p style="color: #10b981; font-weight: bold;">🔒 NEW: Room lock system - Rooms lock when game starts!</p>
+          <p style="color: #3b82f6; font-weight: bold; margin-top: 10px;">🔒 NEW: Room lock logic added - rooms lock during game play</p>
+          <p style="color: #3b82f6;">📸 NEW: Professional game selection interface with images</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -2542,13 +2560,15 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.7.0 (BINGO FIXED + ROOM LOCK) | Database: MongoDB Atlas<br>
+            Version: 2.7.0 (ROOM LOCK + IMAGES) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Bot Username: @ethio_games1_bot<br>
-            Real-time Box Tracking: ✅ ACTIVE<br>
+            Real-time Box Updates: ✅ ACTIVE<br>
+            Room Lock System: ✅ IMPLEMENTED (prevents joining during game)<br>
+            Professional Interface: ✅ WITH IMAGES<br>
             Fixed Issues: ✅ Game timer working, ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
             ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
             ✅ Balls drawn correctly, ✅ BINGO checking working<br>
@@ -2557,8 +2577,7 @@ app.get('/', (req, res) => {
             ✅✅ CONNECTION TRACKING FIXED - Game starts properly now!<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
             ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
-            🔒 NEW: ROOM LOCK SYSTEM - Rooms automatically lock when game starts<br>
-            🔓 Rooms unlock when game ends or is force ended by admin
+            🔒 NEW: Rooms lock during gameplay, unlock after game ends
           </p>
         </div>
       </div>
@@ -2575,7 +2594,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Telegram Mini App entry point with professional game selection interface and images
+// Telegram Mini App entry point with professional game selection interface and IMAGES
 app.get('/telegram', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -2837,47 +2856,15 @@ app.get('/telegram', (req, res) => {
                 margin-top: 10px;
             }
             
-            /* Bingo Image CSS */
-            .bingo-image {
-                background: linear-gradient(135deg, #1e40af, #3b82f6, #60a5fa);
-            }
-            
-            .bingo-icon {
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                animation: pulse 2s infinite;
-            }
-            
-            /* Keno Image CSS */
-            .keno-image {
-                background: linear-gradient(135deg, #7c3aed, #8b5cf6, #a78bfa);
-            }
-            
-            .keno-icon {
-                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-            }
-            
             @keyframes pulse {
-                0% { transform: scale(1); opacity: 1; }
-                50% { transform: scale(1.05); opacity: 0.8; }
-                100% { transform: scale(1); opacity: 1; }
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
             }
             
             @keyframes slideIn {
                 from { opacity: 0; transform: translateY(20px); }
                 to { opacity: 1; transform: translateY(0); }
-            }
-            
-            @keyframes float {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-10px); }
-            }
-            
-            .floating {
-                animation: float 3s ease-in-out infinite;
             }
             
             @media (max-width: 480px) {
@@ -2900,10 +2887,6 @@ app.get('/telegram', (req, res) => {
                 .welcome-text {
                     font-size: 1.5rem;
                 }
-                
-                .game-content {
-                    padding: 15px;
-                }
             }
             
             @media (max-width: 380px) {
@@ -2913,10 +2896,6 @@ app.get('/telegram', (req, res) => {
                 
                 .game-image-container {
                     height: 130px;
-                }
-                
-                .game-content {
-                    padding: 12px;
                 }
             }
             
@@ -2944,52 +2923,30 @@ app.get('/telegram', (req, res) => {
                 color: white;
             }
             
-            /* Image placeholder with pattern */
+            /* CSS Image Placeholders */
+            .bingo-image {
+                background: linear-gradient(135deg, #1e40af, #3b82f6);
+            }
+            
+            .keno-image {
+                background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+            }
+            
             .image-placeholder {
                 width: 100%;
                 height: 100%;
                 display: flex;
-                flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .image-placeholder.pattern-bingo {
-                background: 
-                    radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.3) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 20%, rgba(29, 78, 216, 0.3) 0%, transparent 50%),
-                    radial-gradient(circle at 40% 40%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
-                    linear-gradient(135deg, #1e40af, #3b82f6);
-            }
-            
-            .image-placeholder.pattern-keno {
-                background: 
-                    radial-gradient(circle at 30% 70%, rgba(139, 92, 246, 0.3) 0%, transparent 50%),
-                    radial-gradient(circle at 70% 30%, rgba(124, 58, 237, 0.3) 0%, transparent 50%),
-                    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.2) 0%, transparent 50%),
-                    linear-gradient(135deg, #7c3aed, #8b5cf6);
-            }
-            
-            .image-placeholder .pattern-dots {
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                background-image: 
-                    radial-gradient(circle at 25% 25%, white 2px, transparent 3px),
-                    radial-gradient(circle at 75% 75%, white 2px, transparent 3px),
-                    radial-gradient(circle at 25% 75%, white 2px, transparent 3px),
-                    radial-gradient(circle at 75% 25%, white 2px, transparent 3px);
-                background-size: 50px 50px;
-                opacity: 0.1;
+                font-size: 4rem;
+                color: white;
             }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo floating">🎮</div>
+                <div class="logo">🎮</div>
                 <h1 class="welcome-text">ETHIO GAMES</h1>
                 <p class="subtitle">Premium gaming experience on Telegram</p>
                 
@@ -3003,24 +2960,25 @@ app.get('/telegram', (req, res) => {
                 <!-- BINGO CARD -->
                 <div class="game-card" onclick="launchGame('bingo')">
                     <div class="game-image-container">
-                        <div class="image-placeholder pattern-bingo">
-                            <div class="pattern-dots"></div>
+                        <div class="bingo-image image-placeholder">
+                            <div class="game-icon">🎱</div>
+                        </div>
+                        <div class="game-image-overlay">
                             <div class="game-icon">🎱</div>
                         </div>
                     </div>
-                    
                     <div class="game-content">
                         <h2 class="game-title">BINGO ELITE</h2>
                         <p class="game-description">
-                            Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus! 
-                            Rooms automatically lock when game starts.
+                            Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus!
                         </p>
                         
                         <div class="features">
                             <span class="feature-tag">🎯 50 ETB Bonus</span>
                             <span class="feature-tag">👥 100 Players</span>
                             <span class="feature-tag">💰 Real Money</span>
-                            <span class="feature-tag">🔒 Auto-Lock</span>
+                            <span class="feature-tag">⚡ Real-time</span>
+                            <span class="feature-tag">🔒 Auto-lock</span>
                         </div>
                         
                         <button class="play-btn" id="bingoBtn">
@@ -3032,17 +2990,17 @@ app.get('/telegram', (req, res) => {
                 <!-- KENO CARD -->
                 <div class="game-card" onclick="launchGame('keno')">
                     <div class="game-image-container">
-                        <div class="image-placeholder pattern-keno">
-                            <div class="pattern-dots"></div>
+                        <div class="keno-image image-placeholder">
+                            <div class="game-icon">🎲</div>
+                        </div>
+                        <div class="game-image-overlay">
                             <div class="game-icon">🎲</div>
                         </div>
                     </div>
-                    
                     <div class="game-content">
                         <h2 class="game-title">KENO ULTRA</h2>
                         <p class="game-description">
-                            Fast-paced number selection game with instant wins. Pick your lucky numbers and win big! 
-                            Coming soon to ETHIO GAMES.
+                            Fast-paced number selection game with instant wins. Coming soon!
                         </p>
                         
                         <div class="features">
@@ -3069,9 +3027,6 @@ app.get('/telegram', (req, res) => {
                 <p style="font-size: 0.7rem; color: #64748b; margin-top: 5px;">
                     Need funds? Contact admin @ethio_games1_bot
                 </p>
-                <p style="font-size: 0.6rem; color: #475569; margin-top: 5px;">
-                    🔒 Rooms automatically lock when game starts • 🔓 Unlock when game ends
-                </p>
             </div>
         </div>
         
@@ -3089,6 +3044,7 @@ app.get('/telegram', (req, res) => {
             
             // Get user info from Telegram
             const user = tg.initDataUnsafe?.user;
+            let userBalance = 0.00;
             
             // Function to get first letter of name for avatar
             function getFirstLetter(name) {
@@ -3148,17 +3104,15 @@ app.get('/telegram', (req, res) => {
                 card.style.animation = \`slideIn 0.5s ease \${index * 0.1}s forwards\`;
                 card.style.opacity = '0';
             });
-            
-            // Add floating animation to logo
-            const logo = document.querySelector('.logo');
-            setInterval(() => {
-                logo.classList.toggle('floating');
-            }, 3000);
         </script>
     </body>
     </html>
   `);
 });
+
+// ... [Rest of the server.js file remains the same - including all the other routes and endpoints]
+// Due to character limits, the rest of the file (admin endpoints, debug endpoints, etc.) remains unchanged
+// Just make sure to replace the entire /telegram route as shown above
 
 app.get('/socket-test', (req, res) => {
   res.send(`
@@ -3256,7 +3210,7 @@ app.get('/socket-test', (req, res) => {
         });
         
         socket.on('boxesTakenUpdate', (data) => {
-          addLog('Boxes update: ' + data.takenBoxes.length + ' boxes taken in room ' + data.room, 'info');
+          addLog('Boxes update: ' + data.takenBoxes.length + ' boxes taken in room ' + data.room + ', locked: ' + (data.isLocked ? 'YES' : 'NO'), 'info');
         });
         
         socket.on('boxesCleared', (data) => {
@@ -3280,7 +3234,7 @@ app.get('/socket-test', (req, res) => {
         function testRoomStatus() {
           addLog('Requesting room status...', 'info');
           socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
-            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+            addLog('Taken boxes for room 10: ' + boxes.takenBoxes.length + ' boxes, locked: ' + boxes.isLocked, 'info');
           });
         }
         
@@ -3320,7 +3274,7 @@ app.get('/health', async (req, res) => {
         totalPlayers: room.players.length,
         countdownStartTime: room.countdownStartTime,
         countdownStartedWith: room.countdownStartedWith,
-        isLocked: room.isLocked || false
+        isLocked: room.isLocked
       };
     }));
     
@@ -3360,13 +3314,8 @@ app.get('/health', async (req, res) => {
         'balls_pop_every_3_seconds',
         '30_second_countdown_working',
         'countdown_continues_when_players_leave',
-        'game_starts_with_any_players_at_countdown_0'
-      ],
-      newFeatures: [
-        'room_lock_system',
-        'professional_game_interface',
-        'game_images',
-        'admin_room_lock_controls'
+        'game_starts_with_any_players_at_countdown_0',
+        'room_lock_system_implemented'
       ]
     });
   } catch (error) {
@@ -3556,7 +3505,6 @@ app.get('/debug-room/:stake', async (req, res) => {
       stake: stake,
       roomExists: !!room,
       roomStatus: room?.status || 'not_found',
-      isLocked: room?.isLocked || false,
       playersInRoom: room?.players?.length || 0,
       onlinePlayers: onlinePlayers.length,
       takenBoxes: room?.takenBoxes?.length || 0,
@@ -3564,7 +3512,8 @@ app.get('/debug-room/:stake', async (req, res) => {
       gameTimerActive: roomTimers.has(stake),
       roomData: room,
       countdownStartedWith: room?.countdownStartedWith || 0,
-      countdownStartTime: room?.countdownStartTime
+      countdownStartTime: room?.countdownStartTime,
+      isLocked: room?.isLocked || false
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3580,8 +3529,8 @@ app.get('/force-start/:stake', async (req, res) => {
     if (room) {
       // Force start game
       room.status = 'playing';
-      room.isLocked = true; // LOCK THE ROOM
       room.startTime = new Date();
+      room.isLocked = true;
       await room.save();
       
       // Start game timer
@@ -3604,9 +3553,8 @@ app.get('/force-start/:stake', async (req, res) => {
       
       res.json({ 
         success: true, 
-        message: `Forced game start for ${stake} ETB room`,
-        players: room.players.length,
-        locked: room.isLocked
+        message: `Forced game start for ${stake} ETB room (locked)`,
+        players: room.players.length
       });
     } else {
       res.json({ success: false, message: 'Room not found' });
@@ -3725,10 +3673,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Four Corners Bonus: 50 ETB\n` +
                   `• Real-time multiplayer\n` +
                   `• Real-time box tracking\n` +
-                  `• 🔒 Room lock system - Rooms lock when game starts\n` +
+                  `• Telegram login\n` +
                   `• Game starts automatically when 1 player joins\n` +
                   `• Timer continues even if players leave\n` +
                   `• Random BINGO card numbers\n` +
+                  `• 🔒 Room lock during gameplay\n` +
                   `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
                   `• ✅ Fixed: All players return to lobby after game ends\n` +
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
@@ -3746,6 +3695,4 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           })
         });
       }
-      else if (text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user
+      else if (text === '/
