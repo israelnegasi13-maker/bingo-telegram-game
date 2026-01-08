@@ -167,6 +167,7 @@ let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
+let processingClaims = new Map(); // ⭐⭐ NEW: Track claims being processed
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
 function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
@@ -211,6 +212,22 @@ function cleanupRoomTimer(stake) {
     console.log(`🧹 Cleaned up timer for room ${stake}`);
   }
 }
+
+// ⭐⭐ NEW: Clear stale processing claims
+function cleanupProcessingClaims() {
+  const now = Date.now();
+  const tenSecondsAgo = now - 10000;
+  
+  processingClaims.forEach((timestamp, roomStake) => {
+    if (timestamp < tenSecondsAgo) {
+      processingClaims.delete(roomStake);
+      console.log(`🧹 Cleaned up stale processing claim for room ${roomStake}`);
+    }
+  });
+}
+
+// Run cleanup every 10 seconds
+setInterval(cleanupProcessingClaims, 10000);
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -915,26 +932,44 @@ async function startCountdownForRoom(room) {
         // Get online players
         const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
         
-        // Send countdown to ALL players in room
+        // Send countdown to ALL players in room AND subscribed sockets
         console.log(`⏱️ Room ${room.stake}: Countdown ${countdown}s, ${onlinePlayers.length} online players`);
         
-        // Send to ALL players in the room
+        // Send to ALL players in the room AND subscribed sockets
+        const socketsToSend = new Set();
+        
+        // Add sockets of players in the room
         currentRoom.players.forEach(userId => {
           for (const [socketId, uId] of socketToUser.entries()) {
             if (uId === userId) {
-              const socket = io.sockets.sockets.get(socketId);
-              if (socket && socket.connected) {
-                socket.emit('gameCountdown', {
-                  room: room.stake,
-                  timer: countdown,
-                  onlinePlayers: onlinePlayers.length
-                });
-                socket.emit('lobbyUpdate', {
-                  room: room.stake,
-                  count: onlinePlayers.length
-                });
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                socketsToSend.add(socketId);
               }
             }
+          }
+        });
+        
+        // Add subscribed sockets (for discovery overlay)
+        const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+        subscribedSockets.forEach(socketId => {
+          if (io.sockets.sockets.get(socketId)?.connected) {
+            socketsToSend.add(socketId);
+          }
+        });
+        
+        // Send to all collected sockets
+        socketsToSend.forEach(socketId => {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket && socket.connected) {
+            socket.emit('gameCountdown', {
+              room: room.stake,
+              timer: countdown,
+              onlinePlayers: onlinePlayers.length
+            });
+            socket.emit('lobbyUpdate', {
+              room: room.stake,
+              count: onlinePlayers.length
+            });
           }
         });
         
@@ -979,25 +1014,43 @@ async function startCountdownForRoom(room) {
             finalRoom.countdownStartedWith = 0;
             await finalRoom.save();
             
-            // Notify ALL players in the room
+            // Notify ALL players in the room AND subscribed sockets
+            const finalSocketsToSend = new Set();
+            
+            // Add sockets of players in the room
             finalRoom.players.forEach(userId => {
               for (const [socketId, uId] of socketToUser.entries()) {
                 if (uId === userId) {
-                  const socket = io.sockets.sockets.get(socketId);
-                  if (socket && socket.connected) {
-                    socket.emit('gameStarted', { 
-                      room: room.stake,
-                      players: finalOnlinePlayers.length
-                    });
-                    
-                    // Send final countdown message
-                    socket.emit('gameCountdown', {
-                      room: room.stake,
-                      timer: 0,
-                      gameStarting: true
-                    });
+                  if (io.sockets.sockets.get(socketId)?.connected) {
+                    finalSocketsToSend.add(socketId);
                   }
                 }
+              }
+            });
+            
+            // Add subscribed sockets
+            const finalSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+            finalSubscribedSockets.forEach(socketId => {
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                finalSocketsToSend.add(socketId);
+              }
+            });
+            
+            // Send game started event
+            finalSocketsToSend.forEach(socketId => {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket && socket.connected) {
+                socket.emit('gameStarted', { 
+                  room: room.stake,
+                  players: finalOnlinePlayers.length
+                });
+                
+                // Send final countdown message
+                socket.emit('gameCountdown', {
+                  room: room.stake,
+                  timer: 0,
+                  gameStarting: true
+                });
               }
             });
             
@@ -1017,22 +1070,40 @@ async function startCountdownForRoom(room) {
             await finalRoom.save();
             
             // Notify players about reset
+            const resetSocketsToSend = new Set();
+            
+            // Add sockets of players in the room
             finalRoom.players.forEach(userId => {
               for (const [socketId, uId] of socketToUser.entries()) {
                 if (uId === userId) {
-                  const socket = io.sockets.sockets.get(socketId);
-                  if (socket && socket.connected) {
-                    socket.emit('countdownStopped', {
-                      room: room.stake,
-                      reason: 'no_players_online'
-                    });
-                    socket.emit('lobbyUpdate', {
-                      room: room.stake,
-                      count: 0,
-                      reason: 'not_enough_players'
-                    });
+                  if (io.sockets.sockets.get(socketId)?.connected) {
+                    resetSocketsToSend.add(socketId);
                   }
                 }
+              }
+            });
+            
+            // Add subscribed sockets
+            const resetSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+            resetSubscribedSockets.forEach(socketId => {
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                resetSocketsToSend.add(socketId);
+              }
+            });
+            
+            // Send reset notifications
+            resetSocketsToSend.forEach(socketId => {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket && socket.connected) {
+                socket.emit('countdownStopped', {
+                  room: room.stake,
+                  reason: 'no_players_online'
+                });
+                socket.emit('lobbyUpdate', {
+                  room: room.stake,
+                  count: 0,
+                  reason: 'not_enough_players'
+                });
               }
             });
             
@@ -1237,18 +1308,36 @@ io.on('connection', (socket) => {
       // Start game timer
       await startGameTimer(room);
       
-      // Notify all players in room
+      // Notify all players in room AND subscribed sockets
+      const socketsToSend = new Set();
+      
+      // Add sockets of players in the room
       room.players.forEach(userId => {
         for (const [sId, uId] of socketToUser.entries()) {
           if (uId === userId) {
-            const s = io.sockets.sockets.get(sId);
-            if (s) {
-              s.emit('gameStarted', { 
-                room: roomStake,
-                players: room.players.length
-              });
+            if (io.sockets.sockets.get(sId)?.connected) {
+              socketsToSend.add(sId);
             }
           }
+        }
+      });
+      
+      // Add subscribed sockets
+      const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+      subscribedSockets.forEach(socketId => {
+        if (io.sockets.sockets.get(socketId)?.connected) {
+          socketsToSend.add(socketId);
+        }
+      });
+      
+      // Send game started event
+      socketsToSend.forEach(socketId => {
+        const s = io.sockets.sockets.get(socketId);
+        if (s) {
+          s.emit('gameStarted', { 
+            room: roomStake,
+            players: room.players.length
+          });
         }
       });
       
@@ -1485,7 +1574,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ⭐⭐ NEW: Get room countdown status for discovery overlay
+  // ⭐⭐ UPDATED: Get room countdown status for discovery overlay
   socket.on('getRoomCountdown', async ({ room }, callback) => {
     try {
       const roomData = await Room.findOne({ stake: parseInt(room) });
@@ -1578,7 +1667,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ⭐⭐ FIXED: Improved joinRoom function with ROOM LOCK FEATURE
+  // ⭐⭐ UPDATED: Improved joinRoom function with timer synchronization
   socket.on('joinRoom', async (data, callback) => {
     try {
       const { room, box, userName } = data;
@@ -1709,6 +1798,19 @@ io.on('connection', (socket) => {
         }
       });
       
+      // ⭐⭐ UPDATED: Send immediate countdown update if room is starting
+      if (roomData.status === 'starting' && roomData.countdownStartTime) {
+        const elapsed = Date.now() - roomData.countdownStartTime;
+        const secondsRemaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor(elapsed / 1000));
+        
+        // Send immediate countdown update to the joining player
+        socket.emit('gameCountdown', {
+          room: room,
+          timer: secondsRemaining,
+          onlinePlayers: onlinePlayers.length
+        });
+      }
+      
       // ⭐⭐ FIXED: Start countdown if we have at least 1 online player
       if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
         console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online player(s)!`);
@@ -1756,7 +1858,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ✅✅✅ FIXED CLAIM BINGO LOGIC ==========
+  // ========== ✅✅✅ FIXED CLAIM BINGO LOGIC WITH DOUBLE CLAIM PROTECTION ==========
   socket.on('claimBingo', async (data, callback) => {
     try {
       const { room, grid, marked } = data;
@@ -1775,14 +1877,33 @@ io.on('connection', (socket) => {
         return;
       }
       
-      const roomData = await Room.findOne({ stake: parseInt(room), status: 'playing' });
+      const roomStake = parseInt(room);
+      
+      // ⭐⭐ FIX: CHECK IF CLAIM IS ALREADY BEING PROCESSED FOR THIS ROOM
+      if (processingClaims.has(roomStake)) {
+        console.log(`🚨 DOUBLE CLAIM PREVENTED: Room ${roomStake} already has a claim being processed`);
+        socket.emit('error', 'A bingo claim is already being processed for this room');
+        if (callback) callback({ 
+          success: false, 
+          message: 'A bingo claim is already being processed. Please wait.' 
+        });
+        return;
+      }
+      
+      // ⭐⭐ LOCK THE ROOM FOR CLAIM PROCESSING
+      processingClaims.set(roomStake, Date.now());
+      console.log(`🔒 Locked room ${roomStake} for claim processing by ${user.userName}`);
+      
+      const roomData = await Room.findOne({ stake: roomStake, status: 'playing' });
       if (!roomData) {
+        processingClaims.delete(roomStake); // Release lock
         socket.emit('error', 'Game not found or not in progress');
         if (callback) callback({ success: false, message: 'Game not found or not in progress' });
         return;
       }
       
       if (!roomData.players.includes(userId)) {
+        processingClaims.delete(roomStake); // Release lock
         socket.emit('error', 'You are not in this game');
         if (callback) callback({ success: false, message: 'You are not in this game' });
         return;
@@ -1791,6 +1912,7 @@ io.on('connection', (socket) => {
       console.log('🎯 BINGO CLAIM RECEIVED:');
       console.log('   User:', user.userName);
       console.log('   Room:', room);
+      console.log('   Processing lock active:', processingClaims.has(roomStake));
       
       // Convert marked numbers properly for comparison
       const markedNumbers = marked.map(item => {
@@ -1801,6 +1923,7 @@ io.on('connection', (socket) => {
       // Check if bingo is valid
       const bingoCheck = checkBingo(markedNumbers, grid);
       if (!bingoCheck.isBingo) {
+        processingClaims.delete(roomStake); // Release lock
         console.log('❌ Invalid bingo claim - no winning pattern found');
         socket.emit('error', 'Invalid bingo claim');
         if (callback) callback({ success: false, message: 'Invalid bingo claim - no winning pattern' });
@@ -1828,6 +1951,8 @@ io.on('connection', (socket) => {
       console.log(`🎰 WIN CALCULATION for ${room} ETB room:`);
       console.log(`   Total players: ${totalPlayers}`);
       console.log(`   Total prize: ${totalPrize} ETB`);
+      console.log(`   Is four corners: ${isFourCornersWin}`);
+      console.log(`   Bonus: ${bonus} ETB`);
       
       // Update user balance
       const oldBalance = user.balance;
@@ -1898,6 +2023,10 @@ io.on('connection', (socket) => {
       roomData.endTime = new Date();
       roomData.lastBoxUpdate = new Date();
       await roomData.save();
+      
+      // ⭐⭐ RELEASE THE PROCESSING LOCK
+      processingClaims.delete(roomStake);
+      console.log(`🔓 Released processing lock for room ${roomStake}`);
       
       // Create game over data
       const gameOverData = {
@@ -1980,6 +2109,13 @@ io.on('connection', (socket) => {
       });
       
     } catch (error) {
+      // ⭐⭐ RELEASE LOCK ON ERROR TOO
+      const roomStake = parseInt(data?.room);
+      if (roomStake && processingClaims.has(roomStake)) {
+        processingClaims.delete(roomStake);
+        console.log(`🔓 Released processing lock for room ${roomStake} due to error`);
+      }
+      
       console.error('Error in claimBingo:', error);
       socket.emit('error', 'Server error processing bingo claim');
       if (callback) {
@@ -2354,23 +2490,41 @@ async function cleanupStuckCountdowns() {
           room.countdownStartedWith = 0;
           await room.save();
           
-          // Get online players and notify them
-          const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-          onlinePlayers.forEach(userId => {
+          // Notify all subscribed sockets and players
+          const socketsToSend = new Set();
+          
+          // Add sockets of players in the room
+          room.players.forEach(userId => {
             for (const [socketId, uId] of socketToUser.entries()) {
               if (uId === userId) {
-                const socket = io.sockets.sockets.get(socketId);
-                if (socket) {
-                  socket.emit('gameCountdown', {
-                    room: room.stake,
-                    timer: 0
-                  });
-                  socket.emit('lobbyUpdate', {
-                    room: room.stake,
-                    count: onlinePlayers.length
-                  });
+                if (io.sockets.sockets.get(socketId)?.connected) {
+                  socketsToSend.add(socketId);
                 }
               }
+            }
+          });
+          
+          // Add subscribed sockets
+          const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+          subscribedSockets.forEach(socketId => {
+            if (io.sockets.sockets.get(socketId)?.connected) {
+              socketsToSend.add(socketId);
+            }
+          });
+          
+          // Send notifications
+          const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+          socketsToSend.forEach(socketId => {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('gameCountdown', {
+                room: room.stake,
+                timer: 0
+              });
+              socket.emit('lobbyUpdate', {
+                room: room.stake,
+                count: onlinePlayers.length
+              });
             }
           });
           
@@ -2544,10 +2698,9 @@ app.get('/', (req, res) => {
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
           <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
-          <p style="color: #f59e0b; font-weight: bold; margin-top: 10px;">🆕 FEATURES ADDED:</p>
-          <p style="color: #f59e0b;">1. 🔒 Rooms lock when game is playing</p>
-          <p style="color: #f59e0b;">2. ⏰ Auto-clear games after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-          <p style="color: #f59e0b;">3. ⏱️ Timer shows on box selection screen</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED</p>
+          <p style="color: #10b981;">✅ Claim lock prevents double prize payouts</p>
+          <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -2575,9 +2728,10 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.7.0 (WITH NEW FEATURES) | Database: MongoDB Atlas<br>
+            Version: 2.8.0 (WITH DOUBLE PRIZE FIX) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
+            Processing Claims: ${processingClaims.size} active<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
             Game Timeout: ${CONFIG.GAME_TIMEOUT_MINUTES} minutes auto-clear<br>
@@ -2585,8 +2739,10 @@ app.get('/', (req, res) => {
             Real-time Box Updates: ✅ ACTIVE<br>
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES} minute timeout<br>
-            Box Selection Timer: ✅ SHOWS COUNTDOWN<br>
-            Fixed Issues: ✅ Game timer working, ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
+            Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
+            Fixed Issues: ✅ Double prize bug fixed, ✅ Claim lock implemented<br>
+            ✅ Timer synchronization fixed, ✅ Game timer working<br>
+            ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
             ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
             ✅ Balls drawn correctly, ✅ BINGO checking working<br>
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
@@ -2939,6 +3095,7 @@ app.get('/telegram', (req, res) => {
                         <span class="feature-tag">⚡ Real-time</span>
                         <span class="feature-tag">🔒 Room Lock</span>
                         <span class="feature-tag">⏰ 7-min Auto-clear</span>
+                        <span class="feature-tag">🔒 Double Prize Fix</span>
                     </div>
                     
                     <button class="play-btn" id="bingoBtn">
@@ -3210,6 +3367,7 @@ app.get('/health', async (req, res) => {
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSockets.size,
       socketToUser: socketToUser.size,
+      processingClaims: processingClaims.size,
       totalUsers: totalUsers,
       activeGames: activeGames,
       startingRooms: roomDetails,
@@ -3229,13 +3387,16 @@ app.get('/health', async (req, res) => {
       gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES + ' minutes',
       minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       roomLockFeature: 'enabled',
-      boxSelectionTimer: 'enabled',
+      boxSelectionTimer: 'synced with waiting room',
       newFeatures: [
+        'double_prize_bug_fixed_with_claim_lock',
+        'timer_synchronization_between_discovery_and_waiting',
         'room_lock_when_playing',
         '7_minute_game_timeout_auto_clear',
         'timer_on_box_selection_interface'
       ],
       fixedIssues: [
+        'double_claim_prevention_implemented',
         'claim_bingo_properly_checks_numbers',
         'all_players_return_to_lobby_after_game_ends',
         'game_starts_with_1_player_after_30_seconds',
@@ -3325,6 +3486,7 @@ app.get('/real-time-status', async (req, res) => {
       socketToUserSize: socketToUserSize,
       socketToUser: Array.from(socketToUser.entries()),
       adminSockets: Array.from(adminSockets),
+      processingClaims: Array.from(processingClaims.entries()),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -3351,6 +3513,7 @@ app.get('/test-connections', (req, res) => {
     connectedSockets: Array.from(connectedSockets).length,
     socketToUserSize: socketToUser.size,
     socketToUserEntries: Array.from(socketToUser.entries()),
+    processingClaims: Array.from(processingClaims.entries()),
     connections: connections,
     getConnectedUsersResult: getConnectedUsers()
   });
@@ -3369,6 +3532,8 @@ app.get('/debug-connections', async (req, res) => {
       connectedUserIds: connectedUserIds,
       socketToUserCount: socketToUser.size,
       socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
+      processingClaimsCount: processingClaims.size,
+      processingClaims: Array.from(processingClaims.entries()),
       connectedSocketsCount: connectedSockets.size,
       connectedSockets: connectedSocketsArray.map(socketId => {
         const socket = io.sockets.sockets.get(socketId);
@@ -3417,6 +3582,7 @@ app.get('/debug-users', async (req, res) => {
       totalConnectedUsers: connectedUserIds.length,
       connectedUserIds: connectedUserIds,
       socketToUserSize: socketToUser.size,
+      processingClaimsCount: processingClaims.size,
       connectedSockets: connectedSockets.size,
       allUsers: userStatus
     });
@@ -3441,6 +3607,7 @@ app.get('/debug-room/:stake', async (req, res) => {
       takenBoxes: room?.takenBoxes?.length || 0,
       countdownActive: roomTimers.has(`countdown_${stake}`),
       gameTimerActive: roomTimers.has(stake),
+      processingClaim: processingClaims.has(stake),
       roomData: room,
       countdownStartedWith: room?.countdownStartedWith || 0,
       countdownStartTime: room?.countdownStartTime,
@@ -3468,18 +3635,36 @@ app.get('/force-start/:stake', async (req, res) => {
       // Start game timer
       await startGameTimer(room);
       
-      // Notify all players
+      // Notify all players and subscribed sockets
+      const socketsToSend = new Set();
+      
+      // Add sockets of players in the room
       room.players.forEach(userId => {
         for (const [socketId, uId] of socketToUser.entries()) {
           if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
-              socket.emit('gameStarted', { 
-                room: stake,
-                players: room.players.length
-              });
+            if (io.sockets.sockets.get(socketId)?.connected) {
+              socketsToSend.add(socketId);
             }
           }
+        }
+      });
+      
+      // Add subscribed sockets
+      const subscribedSockets = roomSubscriptions.get(stake) || new Set();
+      subscribedSockets.forEach(socketId => {
+        if (io.sockets.sockets.get(socketId)?.connected) {
+          socketsToSend.add(socketId);
+        }
+      });
+      
+      // Send game started event
+      socketsToSend.forEach(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.emit('gameStarted', { 
+            room: stake,
+            players: room.players.length
+          });
         }
       });
       
@@ -3598,7 +3783,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             chat_id: chatId,
             text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                  `🎯 *New Features:*\n` +
+                  `🎯 *New Features & Fixes:*\n` +
+                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
+                  `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Room lock when game is playing\n` +
                   `• ⏰ Auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
                   `• ⏱️ Timer shows on box selection screen\n` +
@@ -3610,6 +3797,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Game starts automatically when 1 player joins\n` +
                   `• Timer continues even if players leave\n` +
                   `• Random BINGO card numbers\n` +
+                  `• ✅✅✅ Fixed: Double prize bug eliminated\n` +
                   `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
                   `• ✅ Fixed: All players return to lobby after game ends\n` +
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
@@ -3651,7 +3839,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `🎮 *Bingo Elite Help*\n\n` +
-                  `*New Features:*\n` +
+                  `*New Features & Fixes:*\n` +
+                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
+                  `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Rooms lock when game is playing\n` +
                   `• ⏰ Games auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
                   `• ⏱️ Timer shows on box selection screen\n\n` +
@@ -3669,7 +3859,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `6. Timer continues even if players leave\n` +
                   `7. 🔒 Room locks when game starts\n` +
                   `8. Mark numbers as called\n` +
-                  `9. Claim BINGO! - Game ends and you get your money!\n` +
+                  `9. Claim BINGO! - 🔒 Claim lock prevents double prizes\n` +
                   `10. ⏰ Game auto-ends after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes if no winner\n` +
                   `11. ALL players return to lobby automatically\n\n` +
                   `*Four Corners Bonus:* 50 ETB!\n` +
@@ -3677,6 +3867,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*Auto Start:* Game starts when 1 online player joins\n` +
                   `*Timer Doesn't Reset:* Game continues even if players leave\n` +
                   `*Random BINGO Cards:* Each card has unique random numbers\n` +
+                  `*🔒 DOUBLE PRIZE FIXED:* Claim lock prevents multiple payouts\n` +
                   `*✅✅✅ Fixed:* Claim Bingo now properly checks numbers\n` +
                   `*✅ Fixed:* All players return to lobby after game ends\n` +
                   `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
@@ -3745,16 +3936,19 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
-            <p><strong>New Features Added:</strong></p>
-            <p>1. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>2. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>3. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p><strong>New Features & Fixes Added:</strong></p>
+            <p>1. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
+            <p>2. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>3. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>4. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>5. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
+            <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
             <p><strong>✅ Balls pop every 3 seconds</strong></p>
             <p><strong>✅ Countdown continues when players leave</strong></p>
             <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
+            <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
           </div>
@@ -3820,12 +4014,15 @@ server.listen(PORT, () => {
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
-║  🆕 NEW FEATURES:                                    ║
+║  🆕 NEW FEATURES & FIXES:                           ║
+║  🔒 DOUBLE PRIZE BUG: ✅ FIXED WITH CLAIM LOCK     ║
+║  ⏱️ Timer Sync: ✅ Discovery ↔ Waiting Room        ║
 ║  🔒 Room Lock: ✅ When game is playing              ║
 ║  ⏰ Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES}-minute timeout ║
 ║  ⏱️ Box Timer: ✅ Shows on selection screen         ║
 ║  🧹 Box Clearing After Game: ✅ IMPLEMENTED         ║
-║  🚀 FIXES: ✅ Game timer working                    ║
+║  🚀 FIXES: ✅ Double prize bug eliminated           ║
+║         ✅ Game timer working                        ║
 ║         ✅ Ball drawing fixed (every 3 seconds)     ║
 ║         ✅ Players properly removed when leaving    ║
 ║         ✅✅ 30-SECOND COUNTDOWN NOW WORKING        ║
@@ -3835,7 +4032,7 @@ server.listen(PORT, () => {
 ║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready with NEW FEATURES and Telegram Mini App
+✅ Server ready with DOUBLE PRIZE FIX and Timer Synchronization
   `);
   
   // Initial broadcast
