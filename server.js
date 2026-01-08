@@ -2512,7 +2512,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Telegram Mini App entry point
+// Telegram Mini App entry point with professional game selection interface
 app.get('/telegram', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -2520,95 +2520,367 @@ app.get('/telegram', (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Bingo Elite - Telegram Mini App</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        <title>ETHIO GAMES - Telegram Mini App</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
-            body {
+            :root {
+                --primary-color: #3b82f6;
+                --secondary-color: #8b5cf6;
+                --accent-color: #fbbf24;
+                --dark-bg: #0f172a;
+                --card-bg: #1e293b;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+            }
+            
+            * {
                 margin: 0;
                 padding: 0;
-                font-family: Arial, sans-serif;
-                background: #0f172a;
-                color: white;
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                background: var(--dark-bg);
+                color: var(--text-primary);
                 height: 100vh;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
+                overflow: hidden;
+                padding: 0;
+                margin: 0;
             }
             
             .container {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: space-between;
                 padding: 20px;
                 max-width: 500px;
+                margin: 0 auto;
+            }
+            
+            .header {
+                width: 100%;
+                text-align: center;
+                padding: 15px 0;
+                position: relative;
+            }
+            
+            .header::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 60px;
+                height: 4px;
+                background: var(--accent-color);
+                border-radius: 2px;
             }
             
             .logo {
-                font-size: 3rem;
-                margin-bottom: 20px;
-                color: #fbbf24;
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+                color: var(--accent-color);
             }
             
-            .btn {
-                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            .welcome-text {
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 5px;
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            
+            .subtitle {
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                margin-bottom: 20px;
+            }
+            
+            .games-grid {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 20px;
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px 0;
+            }
+            
+            .game-card {
+                background: var(--card-bg);
+                border-radius: 20px;
+                padding: 25px;
+                text-align: center;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+                position: relative;
+                overflow: hidden;
+                cursor: pointer;
+            }
+            
+            .game-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            }
+            
+            .game-card:hover {
+                transform: translateY(-5px);
+                border-color: rgba(59, 130, 246, 0.3);
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            }
+            
+            .game-card:active {
+                transform: translateY(-2px);
+            }
+            
+            .game-icon {
+                font-size: 3.5rem;
+                margin-bottom: 15px;
+                display: block;
+            }
+            
+            .bingo-icon {
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: pulse 2s infinite;
+            }
+            
+            .keno-icon {
+                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            
+            .game-title {
+                font-size: 1.5rem;
+                font-weight: 700;
+                margin-bottom: 8px;
+            }
+            
+            .game-description {
+                color: var(--text-secondary);
+                font-size: 0.85rem;
+                line-height: 1.4;
+                margin-bottom: 15px;
+                min-height: 40px;
+            }
+            
+            .features {
+                display: flex;
+                justify-content: center;
+                gap: 8px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }
+            
+            .feature-tag {
+                background: rgba(59, 130, 246, 0.1);
+                color: #60a5fa;
+                padding: 4px 10px;
+                border-radius: 15px;
+                font-size: 0.7rem;
+                font-weight: 600;
+                border: 1px solid rgba(59, 130, 246, 0.2);
+            }
+            
+            .play-btn {
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
                 color: white;
                 border: none;
-                padding: 15px 30px;
-                border-radius: 15px;
-                font-size: 1.2rem;
-                font-weight: bold;
+                padding: 14px 20px;
+                border-radius: 12px;
+                font-size: 1rem;
+                font-weight: 700;
+                width: 100%;
                 cursor: pointer;
-                margin: 20px 0;
-                text-decoration: none;
-                display: inline-block;
+                transition: all 0.2s;
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
             }
             
-            .btn:hover {
-                transform: scale(1.05);
+            .play-btn:hover {
+                transform: scale(1.02);
+                box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
             }
             
-            .info {
-                background: rgba(255,255,255,0.1);
-                padding: 15px;
-                border-radius: 10px;
-                margin: 20px 0;
-                font-size: 0.9rem;
+            .play-btn:active {
+                transform: scale(0.98);
+            }
+            
+            .coming-soon {
+                background: linear-gradient(90deg, #64748b, #475569);
+                opacity: 0.7;
+                cursor: not-allowed;
+            }
+            
+            .coming-soon:hover {
+                transform: none;
+                box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+            }
+            
+            .footer {
+                width: 100%;
+                text-align: center;
+                padding: 15px 0;
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            
+            .balance-pill {
+                background: rgba(251, 191, 36, 0.1);
+                padding: 8px 16px;
+                border-radius: 50px;
+                border: 1px solid rgba(251, 191, 36, 0.3);
+                font-weight: 700;
+                color: var(--accent-color);
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 10px;
+            }
+            
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            
+            @keyframes slideIn {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            
+            @media (max-width: 480px) {
+                .container {
+                    padding: 15px;
+                }
+                
+                .game-card {
+                    padding: 20px;
+                }
+                
+                .game-icon {
+                    font-size: 3rem;
+                }
+                
+                .welcome-text {
+                    font-size: 1.5rem;
+                }
+            }
+            
+            @media (max-width: 380px) {
+                .games-grid {
+                    gap: 15px;
+                }
+                
+                .game-card {
+                    padding: 15px;
+                }
+            }
+            
+            /* User info in top right */
+            .user-info {
+                position: absolute;
+                top: 15px;
+                right: 0;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+            }
+            
+            .user-avatar {
+                width: 32px;
+                height: 32px;
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                color: white;
             }
         </style>
     </head>
     <body>
         <div class="container">
-            <div class="logo">🎮</div>
-            <h1>Bingo Elite</h1>
-            <p>Play real-time Bingo with players worldwide on Telegram!</p>
-            
-            <div class="info">
-                <p><strong>💰 Win Real Money in ETB</strong></p>
-                <p><strong>🎯 Four Corners Bonus: 50 ETB</strong></p>
-                <p><strong>👥 Play with 100 players per room</strong></p>
-                <p><strong>📦 Real-time Box Tracking</strong></p>
-                <p><strong>🤖 Telegram Mini App Integrated</strong></p>
-                <p><strong>✅ FIXED: Timer doesn't reset when players leave</strong></p>
-                <p><strong>✅ FIXED: Game starts with 1 player after 30 seconds</strong></p>
-                <p><strong>✅ FIXED: Random BINGO card numbers</strong></p>
-                <p><strong>✅ FIXED: Game timer and ball drawing issues resolved</strong></p>
-                <p><strong>✅ FIXED: 30-second countdown now working</strong></p>
-                <p><strong>✅ FIXED: Balls pop every 3 seconds</strong></p>
-                <p><strong>✅✅✅✅ FIXED: Claim Bingo now properly checks numbers!</strong></p>
-                <p><strong>✅✅ FIXED: All players return to lobby after game ends</strong></p>
-                <p><strong>🚀 NEW: Game starts with 1 player after 30 seconds!</strong></p>
+            <div class="header">
+                <div class="logo">🎮</div>
+                <h1 class="welcome-text">ETHIO GAMES</h1>
+                <p class="subtitle">Premium gaming experience on Telegram</p>
+                
+                <div id="userInfo" class="user-info" style="display: none;">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <span id="userName">User</span>
+                </div>
             </div>
             
-            <button class="btn" id="playBtn">LAUNCH GAME</button>
+            <div class="games-grid">
+                <!-- BINGO CARD -->
+                <div class="game-card" onclick="launchGame('bingo')">
+                    <div class="game-icon bingo-icon">🎱</div>
+                    <h2 class="game-title">BINGO ELITE</h2>
+                    <p class="game-description">
+                        Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus!
+                    </p>
+                    
+                    <div class="features">
+                        <span class="feature-tag">🎯 50 ETB Bonus</span>
+                        <span class="feature-tag">👥 100 Players</span>
+                        <span class="feature-tag">💰 Real Money</span>
+                        <span class="feature-tag">⚡ Real-time</span>
+                    </div>
+                    
+                    <button class="play-btn" id="bingoBtn">
+                        🎮 PLAY BINGO
+                    </button>
+                </div>
+                
+                <!-- KENO CARD -->
+                <div class="game-card" onclick="launchGame('keno')">
+                    <div class="game-icon keno-icon">🎲</div>
+                    <h2 class="game-title">KENO ULTRA</h2>
+                    <p class="game-description">
+                        Fast-paced number selection game with instant wins. Coming soon!
+                    </p>
+                    
+                    <div class="features">
+                        <span class="feature-tag">🎰 Instant Wins</span>
+                        <span class="feature-tag">⚡ Fast Gameplay</span>
+                        <span class="feature-tag">💰 High Payouts</span>
+                        <span class="feature-tag">🔜 Coming Soon</span>
+                    </div>
+                    
+                    <button class="play-btn coming-soon" id="kenoBtn" disabled>
+                        🎯 COMING SOON
+                    </button>
+                </div>
+            </div>
             
-            <div style="margin-top: 30px; font-size: 0.8rem; color: #94a3b8;">
-                <p>Bot: @ethio_games1_bot</p>
-                <p>Stakes: 10, 20, 50, 100 ETB</p>
-                <p>Game starts with 1 player after 30 seconds</p>
-                <p>Timer continues even if players leave</p>
-                <p>Balls drawn every 3 seconds</p>
-                <p>✅✅✅ Claim Bingo now properly checks numbers</p>
-                <p>✅ All players return to lobby automatically</p>
+            <div class="footer">
+                <div class="balance-pill" id="balancePill" style="display: none;">
+                    <span>💰 Balance: </span>
+                    <span id="balanceAmount">0.00</span>
+                    <span> ETB</span>
+                </div>
+                <p style="margin-top: 10px;">Powered by Telegram • Play responsibly</p>
+                <p style="font-size: 0.7rem; color: #64748b; margin-top: 5px;">
+                    Need funds? Contact admin @ethio_games1_bot
+                </p>
             </div>
         </div>
         
@@ -2626,9 +2898,18 @@ app.get('/telegram', (req, res) => {
             
             // Get user info from Telegram
             const user = tg.initDataUnsafe?.user;
+            let userBalance = 0.00;
+            
+            // Function to get first letter of name for avatar
+            function getFirstLetter(name) {
+                return name ? name.charAt(0).toUpperCase() : 'U';
+            }
             
             if (user) {
-                document.getElementById('playBtn').innerHTML = \`🎮 PLAY AS \${user.first_name}\`;
+                // Show user info
+                document.getElementById('userInfo').style.display = 'flex';
+                document.getElementById('userName').textContent = user.first_name || 'User';
+                document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
                 
                 // Store user info for game
                 localStorage.setItem('telegramUser', JSON.stringify({
@@ -2639,32 +2920,50 @@ app.get('/telegram', (req, res) => {
                 }));
             }
             
-            // Launch game
-            document.getElementById('playBtn').addEventListener('click', function() {
-                // Add haptic feedback
+            // Launch game function
+            function launchGame(game) {
+                // Haptic feedback
                 if (tg && tg.HapticFeedback) {
                     tg.HapticFeedback.impactOccurred('light');
                 }
                 
-                // Redirect to game
-                window.location.href = '/game';
-            });
+                if (game === 'bingo') {
+                    // Redirect to bingo game
+                    window.location.href = '/game';
+                } else if (game === 'keno') {
+                    // Keno coming soon - show message
+                    tg.showPopup({
+                        title: 'Coming Soon',
+                        message: 'KENO ULTRA is under development and will be available soon!',
+                        buttons: [{ type: 'ok' }]
+                    });
+                }
+            }
+            
+            // Add click handlers to game cards
+            document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
+            document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
             
             // Add Telegram Main Button if available
             if (tg && tg.MainButton) {
                 tg.MainButton.setText('🎮 PLAY BINGO');
                 tg.MainButton.show();
                 tg.MainButton.onClick(function() {
-                    window.location.href = '/game';
+                    launchGame('bingo');
                 });
             }
+            
+            // Add animation to game cards
+            document.querySelectorAll('.game-card').forEach((card, index) => {
+                card.style.animation = \`slideIn 0.5s ease \${index * 0.1}s forwards\`;
+                card.style.opacity = '0';
+            });
         </script>
     </body>
     </html>
   `);
 });
 
-// Socket.IO connection test page
 app.get('/socket-test', (req, res) => {
   res.send(`
     <!DOCTYPE html>
