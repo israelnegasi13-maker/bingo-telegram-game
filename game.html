@@ -1315,7 +1315,8 @@
         selectedBox: null,
         roomSubscribed: false,
         onlinePlayersCount: 0,
-        totalPlayersCount: 0
+        totalPlayersCount: 0,
+        isResettingLobby: false
     };
 
     // Update connection status UI
@@ -2252,6 +2253,14 @@
     function resetToLobby() {
         console.log('🔄 Resetting to lobby...');
         
+        // Check if already resetting
+        if (state.isResettingLobby) {
+            console.log('⚠️ Already resetting lobby, skipping');
+            return;
+        }
+        
+        state.isResettingLobby = true;
+        
         // Reset game state
         state.stake = 0;
         state.grid = [];
@@ -2317,6 +2326,8 @@
         
         // Update last activity
         state.lastActivityTime = Date.now();
+        
+        state.isResettingLobby = false;
         
         console.log('✅ Lobby reset complete');
     }
@@ -2525,7 +2536,7 @@
         state.lastActivityTime = Date.now();
     });
 
-    // ⭐⭐ FIXED: gameOver event handler - Properly handles game end
+    // ⭐⭐✅ FIXED: gameOver event handler - Properly handles game end and returns all to lobby
     socket.on('gameOver', (d) => {
         console.log('🎮 Game over event received:', d);
         
@@ -2533,6 +2544,12 @@
         if(d.room === state.stake) {
             const isWinner = d.winnerId === state.userId;
             console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
+            
+            // Check if already resetting
+            if (state.isResettingLobby) {
+                console.log('⚠️ Already resetting lobby, ignoring gameOver event');
+                return;
+            }
             
             // Disable BINGO button
             document.getElementById('btnBingo').disabled = true;
