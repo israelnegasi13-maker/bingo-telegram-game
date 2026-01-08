@@ -10,7 +10,7 @@
     
     <style>
         :root {
-            --main-color: #3b82f6;  /* Single blue color for everything */
+            --main-color: #3b82f6;
             --main-dark: #1d4ed8;
             --main-light: #60a5fa;
             --p-gold: #fbbf24;
@@ -51,7 +51,7 @@
                 radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
         }
 
-        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay {
+        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay, #roomLockedOverlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-dark);
@@ -69,7 +69,7 @@
             visibility: hidden;
         }
 
-        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active { 
+        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active, #roomLockedOverlay.active { 
             pointer-events: auto; 
             opacity: 1; 
             visibility: visible; 
@@ -77,6 +77,7 @@
 
         #reconnectOverlay { background: rgba(2, 6, 23, 0.8); z-index: 10001; }
         #insufficientOverlay { z-index: 10000; }
+        #roomLockedOverlay { z-index: 10002; }
 
         .game-status-title {
             font-size: 3.5rem;
@@ -176,10 +177,10 @@
             border: 1px solid rgba(251, 191, 36, 0.4);
         }
         
-        .status-playing {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+        .status-playing, .status-locked {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
         }
         
         .status-ended {
@@ -356,7 +357,6 @@
             flex-shrink: 0;
         }
 
-        /* MAKING THE POPPING BALL BIGGER - Changed from 65px to 80px */
         .ball-display {
             width: 80px; 
             height: 80px;
@@ -374,49 +374,40 @@
             overflow: hidden;
         }
 
-        /* Adjusted letter position for bigger ball */
         .ball-letter {
-            font-size: 1.4rem; /* Increased from 1.2rem */
+            font-size: 1.4rem;
             font-weight: 900;
             position: absolute;
-            top: 8px; /* Adjusted for bigger ball */
-            height: 25px; /* Increased from 20px */
+            top: 8px;
+            height: 25px;
             width: 100%;
             text-align: center;
-            color: var(--main-color) !important; /* SINGLE COLOR */
-        }
-
-        /* Adjusted number position for bigger ball */
-        .ball-number {
-            font-size: 2.2rem; /* Increased from 1.8rem */
-            margin-top: 20px; /* Increased from 15px */
-        }
-
-        /* SINGLE COLOR THEME: All balls use main color */
-        .ball-display .ball-letter {
             color: var(--main-color) !important;
         }
 
-        /* MAKING RECENT CALLED NUMBERS LOWER AND BIGGER - Adjusted history strip */
+        .ball-number {
+            font-size: 2.2rem;
+            margin-top: 20px;
+        }
+
         .history-strip {
             display: flex; 
-            gap: 6px; /* Increased from 5px */
+            gap: 6px;
             overflow-x: auto; 
             overflow-y: hidden;
             padding: 5px 15px;
-            height: 45px; /* Increased from 40px */
+            height: 45px;
             align-items: center;
-            margin-top: -5px; /* Added to move it lower */
+            margin-top: -5px;
             scrollbar-width: none;
             -ms-overflow-style: none;
         }
         .history-strip::-webkit-scrollbar { display: none; }
         
-        /* Making history balls bigger */
         .history-ball {
-            min-width: 32px; /* Increased from 26px */
-            width: 32px; /* Increased from 26px */
-            height: 32px; /* Increased from 26px */
+            min-width: 32px;
+            width: 32px;
+            height: 32px;
             background: rgba(255,255,255,0.05);
             border-radius: 50%;
             display: flex; 
@@ -431,29 +422,21 @@
             overflow: hidden;
         }
 
-        /* Making history letter bigger */
         .history-letter {
             position: absolute;
-            top: 2px; /* Adjusted for bigger ball */
-            font-size: 0.55rem; /* Increased from 0.45rem */
+            top: 2px;
+            font-size: 0.55rem;
             font-weight: 900;
             line-height: 1;
-            color: var(--main-color) !important; /* SINGLE COLOR */
-        }
-
-        /* Making history number bigger */
-        .history-number {
-            margin-top: 10px; /* Increased from 7px */
-            font-size: 0.75rem; /* Increased from 0.6rem */
-            line-height: 1;
-        }
-
-        /* SINGLE COLOR THEME: All history balls use main color */
-        .history-ball .history-letter {
             color: var(--main-color) !important;
         }
 
-        /* Bingo Grid with Letters */
+        .history-number {
+            margin-top: 10px;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
         .bingo-container {
             width: 95%;
             max-width: 320px;
@@ -479,11 +462,6 @@
             justify-content: center;
             font-weight: 900; 
             font-size: 1.2rem;
-            color: var(--main-color) !important; /* SINGLE COLOR */
-        }
-
-        /* SINGLE COLOR THEME: All letters use main color */
-        .bingo-letter-cell {
             color: var(--main-color) !important;
         }
 
@@ -503,7 +481,7 @@
             justify-content: center;
             font-weight: 900; 
             font-size: 1rem;
-            color: var(--main-color) !important; /* SINGLE COLOR */
+            color: var(--main-color) !important;
             cursor: pointer;
             position: relative;
             transition: all 0.2s;
@@ -529,7 +507,6 @@
             font-size: 0.8rem;
         }
 
-        /* Four corners indicator */
         .cell.corner {
             animation: cornerGlow 2s infinite;
         }
@@ -584,6 +561,12 @@
             margin-bottom: 10px;
         }
 
+        /* Smaller timer for discovery overlay */
+        .discovery-timer {
+            font-size: 3.5rem !important;
+            margin-bottom: 5px !important;
+        }
+
         .players-waiting {
             font-size: 0.9rem;
             color: #94a3b8;
@@ -615,10 +598,9 @@
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: var(--main-color) !important; /* SINGLE COLOR */
+            background: var(--main-color) !important;
         }
 
-        /* Special win styles */
         .bonus-message {
             font-size: 1rem;
             color: var(--p-gold);
@@ -685,7 +667,6 @@
             animation: pulse 1s infinite;
         }
 
-        /* Connection status indicator */
         .connection-status {
             position: fixed;
             top: 10px;
@@ -714,7 +695,6 @@
             animation: pulse 2s infinite;
         }
 
-        /* Real-time notification */
         .notification {
             position: fixed;
             top: 70px;
@@ -726,7 +706,6 @@
             animation: slideDown 0.3s ease-out;
         }
 
-        /* Availability indicator */
         .availability-indicator {
             display: flex;
             justify-content: space-between;
@@ -754,7 +733,6 @@
             animation: pulse 1s infinite;
         }
 
-        /* Box update alert */
         #boxUpdateAlert {
             display: none;
             position: fixed;
@@ -771,7 +749,6 @@
             animation: slideDown 0.3s ease-out;
         }
 
-        /* Confirm button */
         #confirmBoxBtn {
             grid-column: 1 / span 5;
             margin-top: 15px;
@@ -791,7 +768,6 @@
             transform: scale(0.98);
         }
 
-        /* Live box counter */
         .live-box-counter {
             position: fixed;
             top: 100px;
@@ -831,43 +807,89 @@
             to { opacity: 1; }
         }
 
+        .online-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.6rem;
+            color: #94a3b8;
+        }
+
+        .online-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .online-count {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .total-count {
+            color: #64748b;
+        }
+
+        /* Locked room overlay */
+        .locked-room-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #ef4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Discovery timer container */
+        .discovery-timer-container {
+            display: none;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Game timeout notification */
+        .timeout-notification {
+            background: rgba(239, 68, 68, 0.9) !important;
+        }
+
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
             .ball-display {
-                width: 70px; /* Adjusted for mobile */
-                height: 70px; /* Adjusted for mobile */
+                width: 70px;
+                height: 70px;
             }
             
             .ball-letter {
-                font-size: 1.2rem; /* Adjusted for mobile */
-                top: 6px; /* Adjusted for mobile */
+                font-size: 1.2rem;
+                top: 6px;
             }
             
             .ball-number {
-                font-size: 1.8rem; /* Adjusted for mobile */
-                margin-top: 15px; /* Adjusted for mobile */
+                font-size: 1.8rem;
+                margin-top: 15px;
             }
             
             .history-strip {
-                height: 40px; /* Increased from 38px */
+                height: 40px;
                 padding: 4px 12px;
-                gap: 5px; /* Increased from 4px */
+                gap: 5px;
             }
             
             .history-ball {
-                min-width: 28px; /* Increased from 24px */
-                width: 28px; /* Increased from 24px */
-                height: 28px; /* Increased from 24px */
+                min-width: 28px;
+                width: 28px;
+                height: 28px;
             }
             
             .history-letter {
-                font-size: 0.5rem; /* Increased from 0.4rem */
+                font-size: 0.5rem;
                 top: 1px;
             }
             
             .history-number {
-                font-size: 0.65rem; /* Increased from 0.55rem */
-                margin-top: 8px; /* Increased from 6px */
+                font-size: 0.65rem;
+                margin-top: 8px;
             }
             
             .bingo-container {
@@ -909,29 +931,37 @@
                 padding: 10px;
                 font-size: 0.8rem;
             }
+            
+            .timer-display {
+                font-size: 4rem;
+            }
+            
+            .discovery-timer {
+                font-size: 3rem !important;
+            }
         }
 
         /* Very small phones */
         @media (max-width: 360px) {
             .history-strip {
-                height: 38px; /* Increased from 36px */
+                height: 38px;
                 padding: 3px 10px;
-                gap: 4px; /* Increased from 3px */
+                gap: 4px;
             }
             
             .history-ball {
-                min-width: 26px; /* Increased from 22px */
-                width: 26px; /* Increased from 22px */
-                height: 26px; /* Increased from 22px */
+                min-width: 26px;
+                width: 26px;
+                height: 26px;
             }
             
             .history-letter {
-                font-size: 0.45rem; /* Increased from 0.35rem */
+                font-size: 0.45rem;
             }
             
             .history-number {
-                font-size: 0.6rem; /* Increased from 0.5rem */
-                margin-top: 7px; /* Increased from 5px */
+                font-size: 0.6rem;
+                margin-top: 7px;
             }
             
             .bingo-container {
@@ -943,12 +973,12 @@
             }
             
             .ball-display {
-                width: 65px; /* Adjusted for very small */
-                height: 65px; /* Adjusted for very small */
+                width: 65px;
+                height: 65px;
             }
             
             .ball-number {
-                font-size: 1.6rem; /* Adjusted for very small */
+                font-size: 1.6rem;
             }
             
             .availability-indicator {
@@ -956,32 +986,14 @@
                 gap: 5px;
                 text-align: center;
             }
-        }
-
-        /* Online status indicator */
-        .online-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.6rem;
-            color: #94a3b8;
-        }
-
-        .online-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #10b981;
-            animation: pulse 2s infinite;
-        }
-
-        .online-count {
-            color: #10b981;
-            font-weight: 700;
-        }
-
-        .total-count {
-            color: #64748b;
+            
+            .timer-display {
+                font-size: 3.5rem;
+            }
+            
+            .discovery-timer {
+                font-size: 2.5rem !important;
+            }
         }
     </style>
 </head>
@@ -999,6 +1011,16 @@
 <div class="live-box-counter" id="liveBoxCounter">
     <span class="count" id="liveBoxCount">0</span>
     <span class="label">BOXES TAKEN</span>
+</div>
+
+<!-- Room Locked Overlay -->
+<div id="roomLockedOverlay">
+    <div class="locked-room-icon">🔒</div>
+    <div class="game-status-title lose-gradient" style="font-size: 2.5rem;">ROOM LOCKED</div>
+    <div id="roomLockedMessage" style="font-weight: 900; color: white; font-size: 1.2rem; margin: 20px 0; line-height: 1.4;">
+        Game is in progress. Please wait for the current game to finish.
+    </div>
+    <p style="color: #94a3b8; margin-top: 10px; font-size: 0.8rem;">Returning to room selection...</p>
 </div>
 
 <div id="reconnectOverlay">
@@ -1158,6 +1180,15 @@
         Available tickets for <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span> room
     </p>
     
+    <!-- Discovery Timer Container -->
+    <div class="discovery-timer-container" id="discoveryTimerContainer">
+        <div class="timer-display discovery-timer" id="discoveryTimer">30</div>
+        <div style="font-size: 0.9rem; color: #94a3b8; margin-top: -10px;">
+            Game starts in <span id="discoveryTimerSeconds">30</span> seconds
+        </div>
+        <div class="players-waiting" id="discoveryPlayersInfo" style="margin-top: 5px;"></div>
+    </div>
+    
     <!-- Real-time counter -->
     <div class="availability-indicator">
         <div>
@@ -1289,9 +1320,9 @@
         forceNew: true,
         autoConnect: true,
         query: {
-            userId: 'pending', // Will be updated after init
+            userId: 'pending',
             source: 'telegram_game',
-            version: '2.6.2'
+            version: '2.7.0'
         }
     });
 
@@ -1316,7 +1347,9 @@
         roomSubscribed: false,
         onlinePlayersCount: 0,
         totalPlayersCount: 0,
-        isResettingLobby: false
+        isResettingLobby: false,
+        discoveryTimerInterval: null,
+        currentDiscoveryTimer: 30
     };
 
     // Update connection status UI
@@ -1328,7 +1361,6 @@
             dot.className = 'connection-dot connected';
             text.textContent = 'CONNECTED';
             text.style.color = '#10b981';
-            // Hide loading overlay
             document.getElementById('loadingOverlay').classList.remove('active');
         } else {
             dot.className = 'connection-dot';
@@ -1337,24 +1369,20 @@
         }
     }
 
-    // ⭐⭐ FIXED: Generate proper user ID
     function generateUserId() {
         const telegramUser = tg.initDataUnsafe?.user;
         if (telegramUser && telegramUser.id) {
             return `tg_${telegramUser.id}`;
         }
         
-        // Check localStorage for existing guest ID
         let guestId = localStorage.getItem('bingo_guest_id');
         if (!guestId) {
-            // Generate a more unique ID
             guestId = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}_${Math.random().toString(36).substr(2, 9)}`;
             localStorage.setItem('bingo_guest_id', guestId);
         }
         return guestId;
     }
 
-    // Get user name
     function getUserName() {
         const telegramUser = tg.initDataUnsafe?.user;
         if (telegramUser && telegramUser.first_name) {
@@ -1367,7 +1395,6 @@
         return `Player${Math.floor(Math.random() * 1000)}`;
     }
 
-    // Save user info to localStorage
     function saveUserInfo() {
         if (state.userId && !state.userId.startsWith('tg_')) {
             localStorage.setItem('bingo_guest_id', state.userId);
@@ -1377,16 +1404,14 @@
         }
     }
 
-    // Update socket query with actual user ID
     function updateSocketQuery() {
         if (state.userId) {
             socket.io.opts.query.userId = state.userId;
-            socket.io.opts.query.userName = state.userName; // Also send userName
+            socket.io.opts.query.userName = state.userName;
             console.log('Socket query updated with userId:', state.userId, 'userName:', state.userName);
         }
     }
 
-    // ⭐⭐ FIXED: Send initialization event to server
     function sendInitEvent() {
         if (state.isConnected && state.userId && !state.isInitialized) {
             console.log('📤 SENDING INIT EVENT for user:', state.userName, 'ID:', state.userId);
@@ -1399,7 +1424,6 @@
                     console.log('✅ Init SUCCESS:', response.message);
                     state.isInitialized = true;
                     
-                    // Request room status after successful init
                     setTimeout(() => {
                         socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
                             console.log('Initial boxes for room 10:', boxes.length);
@@ -1428,17 +1452,17 @@
         if (type === 'success') bgColor = 'rgba(16, 185, 129, 0.9)';
         if (type === 'error') bgColor = 'rgba(239, 68, 68, 0.9)';
         if (type === 'warning') bgColor = 'rgba(245, 158, 11, 0.9)';
+        if (type === 'timeout') bgColor = 'rgba(239, 68, 68, 0.9)';
         
         notification.innerHTML = `
             <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; background: ${bgColor}; border-radius: 12px; color: white; font-weight: 600; font-size: 0.9rem; backdrop-filter: blur(10px);">
-                <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div>
+                <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'timeout' ? '⏰' : '📦'}</div>
                 <div>${message}</div>
             </div>
         `;
         
         document.body.appendChild(notification);
         
-        // Remove after duration
         setTimeout(() => {
             notification.style.animation = 'slideUp 0.3s ease-out';
             setTimeout(() => {
@@ -1457,36 +1481,26 @@
         state.connectionAttempts = 0;
         state.isInitialized = false;
         
-        // Update UI
         updateConnectionStatus(true, 'CONNECTED');
         document.getElementById('reconnectOverlay').classList.remove('active');
         document.getElementById('loadingOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
         
-        // Get user info
         state.userId = generateUserId();
         state.userName = getUserName();
         
-        // ⭐⭐ DEBUG: Log the generated user ID
         console.log('👤 Generated User ID:', state.userId);
         console.log('👤 User Name:', state.userName);
         
-        // Update displays
         document.getElementById('userIdDisplay').textContent = state.userId.substring(0, 8) + '...';
         document.getElementById('userDisplay').textContent = state.userName.toUpperCase();
         
-        // Save user info
         saveUserInfo();
-        
-        // Update socket query with actual user ID
         updateSocketQuery();
-        
-        // Send init event
         sendInitEvent();
         
         console.log('Connected to server as:', state.userName, 'ID:', state.userId, 'Socket:', socket.id);
         
-        // Start activity monitoring
         startActivityMonitoring();
     });
 
@@ -1496,23 +1510,18 @@
         state.isConnected = false;
         state.isInitialized = false;
         
-        // Update UI
         updateConnectionStatus(false, 'DISCONNECTED');
         
-        // Show reconnect overlay
         const reconnectOverlay = document.getElementById('reconnectOverlay');
         reconnectOverlay.classList.add('active');
         
-        // Update status text
         const statusText = reconnectOverlay.querySelector('p');
         if (statusText) {
             statusText.textContent = `RECONNECTING... (${reason})`;
         }
         
-        // Increment connection attempts
         state.connectionAttempts++;
         
-        // Auto-reconnect after delay
         const delay = Math.min(3000 * state.connectionAttempts, 10000);
         setTimeout(() => {
             if (!state.isConnected) {
@@ -1529,7 +1538,6 @@
         updateConnectionStatus(false, 'CONNECTION ERROR');
         document.getElementById('loadingText').textContent = `CONNECTION ERROR: ${error.message}`;
         
-        // Try to reconnect
         setTimeout(() => {
             if (!state.isConnected) {
                 socket.connect();
@@ -1559,11 +1567,10 @@
         document.getElementById('userDisplay').textContent = data.userName.toUpperCase();
         document.getElementById('userIdDisplay').textContent = data.userId.substring(0, 8) + '...';
         
-        // Save user info
         saveUserInfo();
     });
 
-    // ⭐⭐ FIXED: Handle room status updates with debugging
+    // ⭐⭐ UPDATED: Handle room status updates with locked room support
     socket.on('roomStatus', (roomData) => {
         console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
         
@@ -1571,16 +1578,13 @@
         updateRoomDisplay();
         state.lastActivityTime = Date.now();
         
-        // Calculate total online players across all rooms
         let totalOnline = 0;
         Object.values(roomData).forEach(room => {
             totalOnline += room.playerCount || 0;
-            console.log(`   Room ${room.stake}: ${room.playerCount} online, ${room.totalPlayers} total, status: ${room.status}`);
+            console.log(`   Room ${room.stake}: ${room.playerCount} online, ${room.totalPlayers} total, status: ${room.status}, locked: ${room.locked || false}`);
         });
         
         state.onlinePlayersCount = totalOnline;
-        
-        // Update global online counter
         document.getElementById('globalOnlineCount').textContent = totalOnline;
     });
 
@@ -1591,11 +1595,17 @@
             const prizeElement = document.getElementById(`roomPrize${stake}`);
             
             if (statusElement && playersElement && prizeElement) {
-                const status = roomInfo.status.toUpperCase();
+                // Check if room is locked (game is playing)
+                const isLocked = roomInfo.locked || roomInfo.status === 'locked';
+                const status = isLocked ? 'LOCKED' : roomInfo.status.toUpperCase();
+                
                 statusElement.textContent = status;
                 statusElement.className = 'room-status';
                 
-                if (roomInfo.status === 'waiting') {
+                if (isLocked) {
+                    statusElement.classList.add('status-locked');
+                    statusElement.title = 'Game in progress - room locked';
+                } else if (roomInfo.status === 'waiting') {
                     statusElement.classList.add('status-waiting');
                 } else if (roomInfo.status === 'starting') {
                     statusElement.classList.add('status-starting');
@@ -1609,7 +1619,6 @@
                 const totalPlayers = roomInfo.totalPlayers || playerCount;
                 const potentialPrize = roomInfo.potentialPrize || 0;
                 
-                // Show online players count with total in parentheses
                 playersElement.innerHTML = `
                     <span class="count">${playerCount}</span>/100 players
                     <div class="prize-info">
@@ -1617,7 +1626,6 @@
                     </div>
                 `;
                 
-                // Add online indicator tooltip
                 if (totalPlayers > playerCount) {
                     playersElement.innerHTML += `<div style="font-size: 0.6rem; color: #64748b; margin-top: 2px;">(${totalPlayers} total players)</div>`;
                 }
@@ -1641,11 +1649,9 @@
             balancePill.classList.remove('zero-balance');
         }
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
-    // ⭐⭐ FIXED: Refresh balance function
     function refreshBalance() {
         const refreshBtn = document.getElementById('refreshBtn');
         refreshBtn.classList.add('spinning');
@@ -1657,7 +1663,6 @@
             console.log('✅ Balance refresh requested');
         } else {
             console.log('⚠️ Cannot refresh balance - not connected or not initialized');
-            // Try to reconnect and re-initialize
             if (!state.isConnected) {
                 socket.connect();
             } else if (!state.isInitialized) {
@@ -1669,7 +1674,6 @@
             refreshBtn.classList.remove('spinning');
         }, 500);
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
 
@@ -1697,25 +1701,40 @@
         // Show live box counter
         document.getElementById('liveBoxCounter').classList.add('active');
         
+        // Reset discovery timer
+        const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
+        if (discoveryTimerContainer) {
+            discoveryTimerContainer.style.display = 'none';
+        }
+        
         if(state.isConnected) {
             // Subscribe to room updates
             socket.emit('subscribeToRoom', { room: amt });
             state.roomSubscribed = true;
             
-            // Request taken boxes with debugging
+            // Request taken boxes
             console.log(`📤 Requesting taken boxes for room ${amt}...`);
             socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
                 console.log(`📦 Received taken boxes for room ${amt}:`, takenBoxes);
-                console.log(`📦 Box count: ${takenBoxes.length}, Is array: ${Array.isArray(takenBoxes)}`);
-                
-                // Ensure we have an array
-                const boxes = Array.isArray(takenBoxes) ? takenBoxes : [];
-                renderBoxes(boxes);
-                updateBoxCounters(boxes);
+                renderBoxes(takenBoxes);
+                updateBoxCounters(takenBoxes);
+            });
+            
+            // ⭐⭐ NEW: Request countdown status for discovery overlay
+            socket.emit('getRoomCountdown', { room: amt }, (response) => {
+                if (response && response.countdownActive) {
+                    console.log(`⏱️ Discovery timer active: ${response.seconds} seconds, ${response.onlinePlayers} online players`);
+                    updateDiscoveryTimer(response.seconds, response.onlinePlayers);
+                } else {
+                    // Hide timer if no countdown
+                    const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
+                    if (discoveryTimerContainer) {
+                        discoveryTimerContainer.style.display = 'none';
+                    }
+                }
             });
         }
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
 
@@ -1742,11 +1761,9 @@
             b.textContent = i;
             b.dataset.number = i;
             
-            // Add animation for newly taken boxes
             if (isTaken) {
                 b.innerHTML = `<div>${i}</div><div style="font-size:0.6rem;margin-top:2px;">TAKEN</div>`;
                 
-                // Check if this box was recently taken (for animation)
                 if (!state.previousTakenBoxes || !state.previousTakenBoxes.includes(i)) {
                     b.classList.add('newly-taken');
                     setTimeout(() => {
@@ -1764,10 +1781,7 @@
             grid.appendChild(b);
         }
         
-        // Store previous taken boxes for animation detection
         state.previousTakenBoxes = taken;
-        
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
     
@@ -1783,7 +1797,6 @@
             selectedBox.classList.add('selected');
             state.selectedBox = boxNumber;
             
-            // Add confirmation button
             const grid = document.getElementById('discoveryGrid');
             let confirmBtn = document.getElementById('confirmBoxBtn');
             
@@ -1834,13 +1847,11 @@
         document.getElementById('takenCount').textContent = takenCount;
         document.getElementById('liveBoxCount').textContent = takenCount;
         
-        // Update live indicator
         const liveIndicator = document.getElementById('liveIndicator');
         if (state.isConnected) {
             liveIndicator.style.color = '#10b981';
         }
         
-        // Show notification if new boxes were taken
         if (takenCount > state.lastBoxCount) {
             const newBoxes = takenCount - state.lastBoxCount;
             if (newBoxes > 0 && state.lastBoxCount > 0) {
@@ -1851,12 +1862,58 @@
         state.lastBoxCount = takenCount;
     }
 
+    // ⭐⭐ NEW: Update discovery timer
+    function updateDiscoveryTimer(seconds, onlinePlayers) {
+        const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
+        const discoveryTimer = document.getElementById('discoveryTimer');
+        const discoveryTimerSeconds = document.getElementById('discoveryTimerSeconds');
+        const discoveryPlayersInfo = document.getElementById('discoveryPlayersInfo');
+        
+        if (discoveryTimerContainer && discoveryTimer && discoveryTimerSeconds) {
+            // Show the timer container
+            discoveryTimerContainer.style.display = 'block';
+            
+            // Update timer display
+            discoveryTimer.textContent = seconds;
+            discoveryTimerSeconds.textContent = seconds;
+            state.currentDiscoveryTimer = seconds;
+            
+            // Update timer styling
+            if (seconds > 0) {
+                if (seconds <= 5) {
+                    discoveryTimer.style.color = '#ef4444';
+                    discoveryTimer.style.animation = 'pulse 0.5s infinite';
+                } else if (seconds <= 10) {
+                    discoveryTimer.style.color = '#f59e0b';
+                    discoveryTimer.style.animation = '';
+                } else {
+                    discoveryTimer.style.color = '#3b82f6';
+                    discoveryTimer.style.animation = '';
+                }
+                
+                // Update player info
+                if (discoveryPlayersInfo) {
+                    discoveryPlayersInfo.innerHTML = `🎮 <span style="color: #10b981; font-weight: 700;">${onlinePlayers || 0}</span> online player${onlinePlayers !== 1 ? 's' : ''} waiting`;
+                    discoveryPlayersInfo.style.color = '#94a3b8';
+                }
+            } else {
+                // Timer reached 0
+                discoveryTimer.style.color = '#ef4444';
+                discoveryTimer.style.animation = 'pulse 0.5s infinite';
+                
+                if (discoveryPlayersInfo) {
+                    discoveryPlayersInfo.innerHTML = '🎮 Game starting now!';
+                    discoveryPlayersInfo.style.color = '#10b981';
+                }
+            }
+        }
+    }
+
     function joinLobby(box) {
         // Clear any existing confirmation button
         const confirmBtn = document.getElementById('confirmBoxBtn');
         if (confirmBtn) confirmBtn.remove();
         
-        // ⭐⭐ FIXED: Generate BINGO card with truly random numbers
         generateTraditionalBingoCard(box);
         toggleScreen('discoveryOverlay', 'waitOverlay');
         
@@ -1870,16 +1927,13 @@
                 userName: state.userName
             });
             
-            // Send activity update
             socket.emit('player:activity', { action: 'joined_lobby', room: state.stake, box: box });
             
-            // Request room info after joining
             setTimeout(() => {
                 socket.emit('getRoomInfo', { room: state.stake });
             }, 500);
         }
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
     
@@ -1892,6 +1946,12 @@
         
         // Hide live box counter
         document.getElementById('liveBoxCounter').classList.remove('active');
+        
+        // Hide discovery timer
+        const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
+        if (discoveryTimerContainer) {
+            discoveryTimerContainer.style.display = 'none';
+        }
         
         // Clear selected box
         state.selectedBox = null;
@@ -1907,11 +1967,9 @@
                 timestamp: Date.now()
             });
             
-            // Reset to lobby
             toggleScreen('waitOverlay', 'stakeOverlay');
             document.getElementById('roomDisplay').textContent = 'LOBBY';
             
-            // ⭐⭐ FIXED: Reset timer display
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitTimer').style.color = '#64748b';
             document.getElementById('waitTimer').style.animation = '';
@@ -1921,7 +1979,6 @@
         }
     }
 
-    // ⭐⭐ FIXED: Generate BINGO card with truly random numbers in each column
     function generateTraditionalBingoCard(seed) {
         const letters = ['B', 'I', 'N', 'G', 'O'];
         const ranges = {
@@ -1948,10 +2005,8 @@
         const random = seededRandom(seed * 777);
         state.grid = [];
         
-        // Create arrays of all possible numbers for each column
         const availableNumbers = {};
         
-        // Initialize available numbers for each column
         for (const letter of letters) {
             const range = ranges[letter];
             availableNumbers[letter] = [];
@@ -1959,55 +2014,35 @@
                 availableNumbers[letter].push(i);
             }
             
-            // Shuffle the array for randomness
             for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
                 const j = Math.floor(random() * (i + 1));
                 [availableNumbers[letter][i], availableNumbers[letter][j]] = [availableNumbers[letter][j], availableNumbers[letter][i]];
             }
         }
         
-        // Generate the card (5x5 grid)
         for (let row = 0; row < 5; row++) {
             for (let col = 0; col < 5; col++) {
                 const index = row * 5 + col;
                 const letter = letters[col];
                 
-                // Free space in the center (N column, 3rd row)
                 if (col === 2 && row === 2) {
                     state.grid[index] = 'FREE';
                     continue;
                 }
                 
-                // Get available numbers for this column
                 const available = availableNumbers[letter];
                 
                 if (available.length > 0) {
-                    // Pick the next number from available numbers
                     const selectedNumber = available.shift();
-                    
-                    // ✅ STORE AS NUMBER, NOT STRING
                     state.grid[index] = selectedNumber;
                 } else {
-                    // Fallback: if somehow no numbers left, generate random within range
                     const range = ranges[letter];
                     state.grid[index] = Math.floor(random() * (range.max - range.min + 1)) + range.min;
                 }
             }
         }
-        
-        // Verify we have correct distribution
-        console.log('Generated BINGO card with random numbers:');
-        for (let col = 0; col < 5; col++) {
-            const columnNumbers = [];
-            for (let row = 0; row < 5; row++) {
-                const index = row * 5 + col;
-                columnNumbers.push(state.grid[index]);
-            }
-            console.log(`${letters[col]}: ${columnNumbers.join(', ')}`);
-        }
     }
 
-    // Get BINGO letter for a number
     function getBingoLetter(number) {
         if (number >= 1 && number <= 15) return 'B';
         if (number >= 16 && number <= 30) return 'I';
@@ -2017,11 +2052,9 @@
         return '';
     }
 
-    // ✅ FIXED: No automatic marking - players must click numbers themselves
     function triggerNewBall(num, letter) {
         console.log(`🎱 Ball drawn: ${letter}-${num} - Players must click manually`);
         
-        // Haptic feedback for new ball
         try { 
             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                 tg.HapticFeedback.impactOccurred('medium'); 
@@ -2032,26 +2065,19 @@
         const ballLetter = document.getElementById('ballLetter');
         const ballNumber = document.getElementById('ballNumber');
         
-        // Set letter and number
         ballLetter.textContent = letter;
         ballNumber.textContent = num;
-        
-        // SINGLE COLOR THEME: Set color to main color
         ballLetter.style.color = 'var(--main-color)';
         
-        // Reset animation
         ballDisplay.style.animation = 'none';
-        void ballDisplay.offsetWidth; // Trigger reflow
+        void ballDisplay.offsetWidth;
         
-        // Apply new animation with longer duration
         ballDisplay.style.animation = 'ballPop 0.8s ease-out';
 
-        // Add to history
         state.history.unshift({ num, letter });
         const h = document.getElementById('ballHistory');
         h.innerHTML = '';
         
-        // Show last 8 balls in history (reduced for mobile)
         state.history.slice(0, 8).forEach(ball => {
             const hb = document.createElement('div');
             hb.className = 'history-ball';
@@ -2063,17 +2089,13 @@
             h.appendChild(hb);
         });
         
-        // ✅ ADD to called numbers but DO NOT automatically mark
         state.calledNumbers.add(num);
         
-        // ✅ FIXED: REMOVED "Mark number X" notification
         console.log(`📌 Number ${letter}-${num} added to called numbers. Player must click to mark.`);
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
 
-    // ⭐⭐ FIXED: Check for any winning pattern (including four corners)
     function checkWinningPattern() {
         const grid = state.grid;
         const marked = state.markedNumbers;
@@ -2091,12 +2113,10 @@
         console.log('   Marked:', Array.from(marked));
         console.log('   Called numbers:', Array.from(state.calledNumbers));
         
-        // Check four corners first (B1, B5, O1, O5)
         const fourCorners = isM(0) && isM(4) && isM(20) && isM(24);
         console.log('   Four corners check:', fourCorners);
         console.log('   Corners values:', grid[0], grid[4], grid[20], grid[24]);
         
-        // Check rows
         for(let i=0; i<5; i++) {
             const rowBingo = isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4);
             if (rowBingo) {
@@ -2105,7 +2125,6 @@
             }
         }
         
-        // Check columns
         for(let i=0; i<5; i++) {
             const colBingo = isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20);
             if (colBingo) {
@@ -2114,7 +2133,6 @@
             }
         }
         
-        // Check diagonals
         const diag1 = isM(0) && isM(6) && isM(12) && isM(18) && isM(24);
         const diag2 = isM(4) && isM(8) && isM(12) && isM(16) && isM(20);
         
@@ -2127,7 +2145,6 @@
             return true;
         }
         
-        // Check four corners
         if (fourCorners) {
             console.log('✅ Four Corners BINGO!');
             return true;
@@ -2137,7 +2154,6 @@
         return false;
     }
 
-    // ⭐⭐ FIXED: Initialize game board with single color theme
     function initGameBoard() {
         const target = document.getElementById('mainGrid');
         target.innerHTML = '';
@@ -2152,7 +2168,6 @@
             if (isCorner) {
                 cell.classList.add('corner');
                 
-                // Add four corners badge
                 const badge = document.createElement('div');
                 badge.className = 'four-corners-badge';
                 badge.textContent = '4C';
@@ -2163,47 +2178,36 @@
             cell.dataset.index = index;
             cell.dataset.value = val;
             
-            // ⭐⭐ SINGLE COLOR THEME: All numbers use main color
             if (!isFree) {
                 cell.style.color = 'var(--main-color)';
             }
             
-            // ✅ FIXED: Only allow marking if number has been called or is FREE space
             cell.onclick = () => {
-                // Only allow marking if number has been called OR it's FREE space
                 if (state.calledNumbers.has(val) || isFree) {
                     if(!cell.classList.contains('marked')) {
                         cell.classList.add('marked');
-                        // ✅ STORE AS NUMBER (not string) for proper comparison
                         state.markedNumbers.add(isFree ? 'FREE' : val);
                         
-                        // Haptic feedback
                         try { 
                             if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                                 tg.HapticFeedback.impactOccurred('light'); 
                             }
                         } catch(e){}
                         
-                        // Check for win
                         if(checkWinningPattern()) {
                             document.getElementById('btnBingo').disabled = false;
                             showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                         } else {
-                            // Show feedback for marking
                             showNotification(`✅ Marked ${val}`, 'success', 1000);
                         }
                     } else {
-                        // Already marked - unmark if needed
                         cell.classList.remove('marked');
-                        // ✅ Remove the correct type (number or 'FREE')
                         state.markedNumbers.delete(isFree ? 'FREE' : val);
                     }
                 } else {
-                    // Number hasn't been called yet
                     showNotification(`❌ ${val} hasn't been called yet!`, 'error', 2000);
                 }
                 
-                // Update last activity
                 state.lastActivityTime = Date.now();
             };
             target.appendChild(cell);
@@ -2214,19 +2218,15 @@
         console.log('Called numbers:', Array.from(state.calledNumbers));
         console.log('Marked numbers:', Array.from(state.markedNumbers));
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     }
 
-    // ⭐⭐✅ FIXED: claimBingo function - Sends marked numbers properly (as numbers, not strings)
     function claimBingo() {
         if(state.isConnected && !document.getElementById('btnBingo').disabled) {
             console.log('🎯 Claiming BINGO!');
             
-        // ✅ FIXED: Send marked numbers properly - keep as stored (numbers for grid numbers, 'FREE' for free space)
             const markedNumbers = Array.from(state.markedNumbers);
             
-            // Log what we're sending for debugging
             console.log('📤 Sending BINGO claim:');
             console.log('   Grid:', state.grid);
             console.log('   Marked numbers:', markedNumbers);
@@ -2236,25 +2236,19 @@
                 grid: state.grid, 
                 marked: markedNumbers 
             }, (response) => {
-                // This callback handles the server response
                 if (response && response.success) {
                     console.log('✅ BINGO claim accepted by server');
-                    // Show immediate feedback
                     showNotification('🎉 BINGO claim sent! Checking...', 'success', 2000);
                 } else {
                     console.log('❌ BINGO claim rejected:', response?.message);
                     showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
-                    // Re-enable button if claim was rejected
                     setTimeout(() => {
                         document.getElementById('btnBingo').disabled = false;
                     }, 1000);
                 }
             });
             
-            // Disable button to prevent multiple clicks
             document.getElementById('btnBingo').disabled = true;
-            
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     }
@@ -2269,7 +2263,6 @@
     function resetToLobby() {
         console.log('🔄 Resetting to lobby...');
         
-        // Check if already resetting
         if (state.isResettingLobby) {
             console.log('⚠️ Already resetting lobby, skipping');
             return;
@@ -2277,7 +2270,6 @@
         
         state.isResettingLobby = true;
         
-        // Reset game state
         state.stake = 0;
         state.grid = [];
         state.calledNumbers.clear();
@@ -2289,20 +2281,18 @@
         state.onlinePlayersCount = 0;
         state.totalPlayersCount = 0;
         
-        // Unsubscribe from room if subscribed
         if (state.isConnected && state.roomSubscribed) {
             socket.emit('unsubscribeFromRoom', { room: state.stake });
             state.roomSubscribed = false;
         }
         
-        // Hide all overlays except stake overlay
         document.querySelectorAll('.step-overlay').forEach(s => s.classList.remove('active'));
         document.getElementById('winOverlay').classList.remove('active');
         document.getElementById('loseOverlay').classList.remove('active');
         document.getElementById('insufficientOverlay').classList.remove('active');
+        document.getElementById('roomLockedOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
         
-        // Reset UI elements
         document.getElementById('btnBingo').disabled = true;
         document.getElementById('ballLetter').textContent = '--';
         document.getElementById('ballNumber').textContent = '--';
@@ -2311,10 +2301,8 @@
         document.getElementById('mainGrid').innerHTML = '';
         document.getElementById('roomDisplay').textContent = 'LOBBY';
         
-        // Hide live box counter
         document.getElementById('liveBoxCounter').classList.remove('active');
         
-        // Reset timer display
         document.getElementById('waitTimer').textContent = "30";
         document.getElementById('waitTimer').style.color = '#64748b';
         document.getElementById('waitTimer').style.animation = '';
@@ -2323,32 +2311,25 @@
         document.getElementById('playersWaitingInfo').textContent = "Game starts with 1 online player after 30 seconds";
         document.getElementById('playersWaitingInfo').style.color = '#94a3b8';
         
-        // Reset bonus messages
         document.getElementById('bonusMessage').style.display = 'none';
         document.getElementById('specialWinMessage').style.display = 'none';
         document.getElementById('prizeBreakdown').style.display = 'none';
         document.getElementById('losePrizeBreakdown').style.display = 'none';
         
-        // Update room status display
         updateRoomDisplay();
         
-        // Send activity update
         if (state.isConnected) {
             socket.emit('player:activity', { action: 'returned_to_lobby' });
         }
         
-        // Refresh balance
         refreshBalance();
-        
-        // Update last activity
         state.lastActivityTime = Date.now();
-        
         state.isResettingLobby = false;
         
         console.log('✅ Lobby reset complete');
     }
 
-    // ⭐⭐ FIXED: lobbyUpdate event handler - Game starts with 1 player
+    // ⭐⭐ UPDATED: lobbyUpdate event handler - Also updates discovery overlay
     socket.on('lobbyUpdate', (d) => {
         console.log('👥 Lobby update:', d);
         
@@ -2358,7 +2339,6 @@
             const status = document.getElementById('lobbyStatus');
             const info = document.getElementById('playersWaitingInfo');
             
-            // FIXED: Game starts with 1 player
             if (playerCount >= 1) {
                 status.textContent = "GAME STARTING IN 30 SECONDS!";
                 status.style.color = '#10b981';
@@ -2371,19 +2351,27 @@
                 info.style.color = '#94a3b8';
             }
             
-            // Update last activity
+            // ⭐⭐ NEW: Also update discovery overlay if active
+            const discoveryOverlay = document.getElementById('discoveryOverlay');
+            if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
+                const discoveryPlayersInfo = document.getElementById('discoveryPlayersInfo');
+                if (discoveryPlayersInfo && document.getElementById('discoveryTimerContainer').style.display !== 'none') {
+                    discoveryPlayersInfo.innerHTML = `🎮 <span style="color: #10b981; font-weight: 700;">${playerCount}</span> online player${playerCount !== 1 ? 's' : ''} waiting`;
+                }
+            }
+            
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ FIXED: gameCountdown event handler - Timer continues when players leave
+    // ⭐⭐ UPDATED: gameCountdown event handler - Updates both wait overlay and discovery overlay
     socket.on('gameCountdown', (d) => {
         console.log('⏱️ Game countdown event:', d);
         
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
-            // Update timer
+            // Update waiting overlay timer
             timerElement.textContent = d.timer;
             
             if (d.timer > 0) {
@@ -2400,27 +2388,28 @@
                     timerElement.style.animation = '';
                 }
             } else {
-                // Timer reached 0 - game should start
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING NOW!";
                 document.getElementById('lobbyStatus').style.color = '#10b981';
                 timerElement.style.color = '#ef4444';
                 timerElement.style.animation = 'pulse 0.5s infinite';
                 
-                // Show notification that game is starting
                 showNotification('🎮 Game starting now!', 'success', 2000);
             }
             
-            // Update last activity
+            // ⭐⭐ NEW: Also update discovery overlay timer if visible
+            const discoveryOverlay = document.getElementById('discoveryOverlay');
+            if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
+                updateDiscoveryTimer(d.timer, d.onlinePlayers);
+            }
+            
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ ADDED: Countdown stopped event handler - CRITICAL FIX
     socket.on('countdownStopped', (data) => {
         if (data.room === state.stake) {
             console.log('Countdown stopped:', data.reason);
             
-            // Update UI
             const timerElement = document.getElementById('waitTimer');
             const statusElement = document.getElementById('lobbyStatus');
             const infoElement = document.getElementById('playersWaitingInfo');
@@ -2438,45 +2427,35 @@
                 showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
             }
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ FIXED: Game started event handler - NOW WORKING
     socket.on('gameStarted', (d) => {
         console.log('🎮 Game started event received:', d);
         
         if(d.room === state.stake) {
             console.log(`✅ Game started in our room ${state.stake}`);
             
-            // Hide waiting overlay
             document.getElementById('waitOverlay').classList.remove('active');
-            
-            // Initialize game board
             initGameBoard();
             
-            // Reset timer display
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitTimer').style.color = '#64748b';
             document.getElementById('waitTimer').style.animation = '';
             
-            // Show notification
             showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
             
-            // Haptic feedback for game start
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                     tg.HapticFeedback.impactOccurred('heavy'); 
                 }
             } catch(e){}
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ ADDED: Admin force start event handler
     socket.on('admin:forceStartGame', (data) => {
         if (data.room === state.stake) {
             console.log('🎮 Admin force starting game');
@@ -2484,24 +2463,20 @@
             initGameBoard();
             showNotification('🎮 Game starting now by admin!', 'success', 3000);
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ ADDED: Admin force end event handler
     socket.on('admin:forceEndGame', (data) => {
         if (data.room === state.stake) {
             console.log('🎮 Admin force ending game');
             resetToLobby();
             showNotification('⚠️ Game ended by admin', 'warning', 3000);
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
 
-    // ⭐⭐ FIXED: Ball drawn event handler - NOW WORKING
     socket.on('ballDrawn', (d) => {
         console.log('🎱 Ball drawn event received:', d);
         
@@ -2520,23 +2495,55 @@
             showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
         }
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
     socket.on('joinedRoom', () => {
         console.log('Successfully joined room');
-        
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
     socket.on('boxTaken', () => {
         showNotification('This ticket is already taken! Please select another.', 'error', 3000);
         toggleScreen('waitOverlay', 'discoveryOverlay');
-        
-        // Update last activity
         state.lastActivityTime = Date.now();
+    });
+
+    // ⭐⭐ NEW: Handle room locked event
+    socket.on('roomLocked', (data) => {
+        console.log('🔒 Room locked event received:', data);
+        
+        showNotification(`🔒 ${data.message}`, 'warning', 3000);
+        
+        // Show room locked overlay
+        const roomLockedOverlay = document.getElementById('roomLockedOverlay');
+        const roomLockedMessage = document.getElementById('roomLockedMessage');
+        
+        if (roomLockedMessage) {
+            roomLockedMessage.textContent = data.message || 'Game is in progress. Please wait for the current game to finish.';
+        }
+        
+        roomLockedOverlay.classList.add('active');
+        
+        // Automatically return to stake selection after 3 seconds
+        setTimeout(() => {
+            roomLockedOverlay.classList.remove('active');
+            toggleScreen('discoveryOverlay', 'stakeOverlay');
+            
+            // Hide discovery timer if visible
+            const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
+            if (discoveryTimerContainer) {
+                discoveryTimerContainer.style.display = 'none';
+            }
+            
+            // Reset state
+            state.stake = 0;
+            state.selectedBox = null;
+            state.roomSubscribed = false;
+            
+            document.getElementById('roomDisplay').textContent = 'LOBBY';
+            document.getElementById('liveBoxCounter').classList.remove('active');
+        }, 3000);
     });
 
     socket.on('insufficientFunds', () => {
@@ -2547,31 +2554,24 @@
             ov.classList.remove('active');
         }, 3000);
         toggleScreen('waitOverlay', 'stakeOverlay');
-        
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
-    // ⭐⭐✅ FIXED: gameOver event handler - Properly handles game end and returns all to lobby
     socket.on('gameOver', (d) => {
         console.log('🎮 Game over event received:', d);
         
-        // Check if this game over is for our current room
         if(d.room === state.stake) {
             const isWinner = d.winnerId === state.userId;
             console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
             
-            // Check if already resetting
             if (state.isResettingLobby) {
                 console.log('⚠️ Already resetting lobby, ignoring gameOver event');
                 return;
             }
             
-            // Disable BINGO button
             document.getElementById('btnBingo').disabled = true;
 
             if(isWinner) {
-                // WE WON!
                 const winOverlay = document.getElementById('winOverlay');
                 const bonusMessage = document.getElementById('bonusMessage');
                 const prizeBreakdown = document.getElementById('prizeBreakdown');
@@ -2580,7 +2580,6 @@
                 const totalPrizeValue = document.getElementById('totalPrizeValue');
                 const bonusItem = document.getElementById('bonusItem');
                 
-                // Update prize breakdown
                 basePrizeValue.textContent = (d.basePrize || d.prize).toFixed(2) + " ETB";
                 totalPrizeValue.textContent = d.prize.toFixed(2) + " ETB";
                 
@@ -2596,27 +2595,23 @@
                 
                 prizeBreakdown.style.display = 'block';
                 
-                // Update main prize display
                 document.getElementById('winPrize').innerHTML = `
                     🏆 <strong style="font-size: 2.2rem;">${d.prize.toFixed(2)} ETB</strong>
                 `;
                 
                 winOverlay.classList.add('active');
                 
-                // Haptic feedback for win
                 try { 
                     if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                         tg.HapticFeedback.impactOccurred('heavy'); 
                     }
                 } catch(e){}
                 
-                // Return to lobby after 5 seconds
                 setTimeout(() => {
                     winOverlay.classList.remove('active');
                     resetToLobby();
                 }, 5000);
             } else {
-                // WE LOST
                 const loseOverlay = document.getElementById('loseOverlay');
                 const specialWinMessage = document.getElementById('specialWinMessage');
                 const losePrizeBreakdown = document.getElementById('losePrizeBreakdown');
@@ -2626,7 +2621,6 @@
                 const playersCount = document.getElementById('playersCount');
                 const loseBonusItem = document.getElementById('loseBonusItem');
                 
-                // Determine message based on winner
                 let msg = "";
                 if (d.winnerId === 'HOUSE') {
                     msg = "Game ended - no winner!";
@@ -2638,7 +2632,6 @@
                 
                 document.getElementById('loseMessage').textContent = msg;
                 
-                // Update prize breakdown for loser (only if there's a real winner)
                 if (d.winnerId && d.winnerId !== 'HOUSE' && d.winnerId !== 'ADMIN') {
                     winnerName.textContent = d.winnerName || "Another player";
                     winnerTotal.textContent = d.prize.toFixed(2) + " ETB";
@@ -2663,14 +2656,30 @@
                 
                 loseOverlay.classList.add('active');
                 
-                // Return to lobby after 4 seconds
                 setTimeout(() => {
                     loseOverlay.classList.remove('active');
                     resetToLobby();
                 }, 4000);
             }
             
-            // Update last activity
+            state.lastActivityTime = Date.now();
+        }
+    });
+
+    // ⭐⭐ NEW: Handle game timeout event (7-minute auto-clear)
+    socket.on('gameTimeout', (data) => {
+        console.log('⏰ Game timeout event received:', data);
+        
+        if(data.room === state.stake) {
+            console.log('⏰ Game timed out for our room, refunding stake');
+            
+            showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'timeout', 4000);
+            
+            // Reset to lobby after delay
+            setTimeout(() => {
+                resetToLobby();
+            }, 2000);
+            
             state.lastActivityTime = Date.now();
         }
     });
@@ -2694,7 +2703,6 @@
             balancePill.style.animation = '';
         }, 500);
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
@@ -2703,63 +2711,50 @@
         state.balance = parseFloat(data.newBalance);
         document.getElementById('balanceVal').textContent = data.newBalance.toFixed(2);
         
-        // Update last activity
         state.lastActivityTime = Date.now();
     });
 
-    // ========== REAL-TIME BOX UPDATES ==========
     socket.on('boxesTakenUpdate', (data) => {
         console.log('📦 Real-time box update received:', data);
         console.log(`📦 Room: ${data.room}, Taken boxes: ${data.takenBoxes.length}, Current stake: ${state.stake}`);
         
-        // If we're looking at this room's boxes
         if (data.room === state.stake) {
             console.log(`📦 Updating display for room ${state.stake} with ${data.takenBoxes.length} boxes`);
             
-            // Update the discovery grid if visible
             if (document.getElementById('discoveryOverlay').classList.contains('active')) {
                 renderBoxes(data.takenBoxes);
                 updateBoxCounters(data.takenBoxes);
             }
             
-            // Update live box counter
             document.getElementById('liveBoxCount').textContent = data.takenBoxes.length;
             
-            // Show notification for new box taken
             if (data.newBox && data.playerName) {
-                // Don't show notification for our own selection
                 if (data.playerName !== state.userName) {
                     showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 3000);
                 }
             }
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
 
-    // Listen for when boxes are cleared (game ends)
     socket.on('boxesCleared', (data) => {
         console.log('📦 Boxes cleared event received:', data);
         if (data.room === state.stake) {
             console.log(`📦 Clearing boxes for room ${state.stake}`);
             
-            // Reset the discovery grid
             if (document.getElementById('discoveryOverlay').classList.contains('active')) {
                 renderBoxes([]);
                 updateBoxCounters([]);
             }
             
-            // Reset counter
             state.lastBoxCount = 0;
             state.previousTakenBoxes = [];
             
-            // Hide live box counter
             document.getElementById('liveBoxCounter').classList.remove('active');
             
             showNotification('🎮 Room reset - all boxes are now available!', 'info', 3000);
             
-            // Update last activity
             state.lastActivityTime = Date.now();
         }
     });
@@ -2769,7 +2764,6 @@
         resetToLobby();
     });
 
-    // ========== ACTIVITY MONITORING ==========
     // Activity monitoring to keep connection alive
     function startActivityMonitoring() {
         setInterval(() => {
@@ -2777,7 +2771,6 @@
                 const now = Date.now();
                 const timeSinceLastActivity = now - state.lastActivityTime;
                 
-                // Send periodic activity ping if user is active (within last 30 seconds)
                 if (timeSinceLastActivity < 30000) {
                     socket.emit('player:activity', { 
                         action: 'heartbeat',
@@ -2788,31 +2781,25 @@
                     });
                 }
                 
-                // Send ping every 15 seconds to keep connection alive
                 socket.emit('ping');
                 
-                // If not initialized, try to send init event again
                 if (!state.isInitialized && state.userId) {
                     sendInitEvent();
                 }
             }
-        }, 15000); // Every 15 seconds
+        }, 15000);
     }
 
     // Auto-reconnect on load
     window.onload = () => {
-        // Show user name immediately
         state.userName = getUserName();
         document.getElementById('userDisplay').textContent = state.userName.toUpperCase();
         
-        // Generate user ID immediately
         state.userId = generateUserId();
         document.getElementById('userIdDisplay').textContent = state.userId.substring(0, 8) + '...';
         
-        // Update socket query with user ID
         updateSocketQuery();
         
-        // Auto-connect after a short delay
         setTimeout(() => {
             if (!state.isConnected) {
                 document.getElementById('loadingText').textContent = "CONNECTING TO SERVER...";
@@ -2821,7 +2808,6 @@
             }
         }, 1000);
         
-        // Add click event listeners for activity tracking
         document.addEventListener('click', () => {
             state.lastActivityTime = Date.now();
         });
@@ -2830,10 +2816,8 @@
             state.lastActivityTime = Date.now();
         });
         
-        // Handle visibility change (tab switching)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && state.isConnected) {
-                // Tab became visible, send activity
                 state.lastActivityTime = Date.now();
                 if (state.isConnected) {
                     socket.emit('player:activity', { action: 'tab_visible' });
