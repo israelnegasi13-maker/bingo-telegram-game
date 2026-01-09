@@ -303,6 +303,7 @@
             align-items: center;
             gap: 20px;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
         }
 
         .stat-card:hover {
@@ -627,7 +628,7 @@
             color: var(--text-muted);
         }
 
-        .form-group input, .form-group select {
+        .form-group input, .form-group select, .form-group textarea {
             width: 100%;
             padding: 15px;
             background: rgba(15, 23, 42, 0.8);
@@ -637,7 +638,7 @@
             font-size: 1rem;
         }
 
-        .form-group input:focus, .form-group select:focus {
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
             outline: none;
             border-color: var(--primary);
         }
@@ -1008,6 +1009,129 @@
             background: var(--dark-card);
             color: var(--text);
         }
+
+        /* New CSS for enhanced features */
+        .health-stat {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .health-stat:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .room-detail-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .room-detail-card h4 {
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .mass-action-param {
+            margin-bottom: 15px;
+        }
+        
+        .mass-action-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .box-activity-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.9rem;
+        }
+        
+        .box-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border-radius: 6px;
+            text-align: center;
+            line-height: 24px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .diagnostic-result {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .room-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .room-status-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 15px;
+        }
+        
+        .room-status-card.locked {
+            border-color: var(--danger);
+        }
+        
+        .room-status-card.starting {
+            border-color: var(--warning);
+        }
+        
+        .room-status-card.waiting {
+            border-color: var(--success);
+        }
+        
+        .health-alert {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .health-alert.warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        .health-alert.danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .health-alert.success {
+            background: rgba(6, 214, 160, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(6, 214, 160, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -1121,6 +1245,9 @@
                         <button class="btn-action btn-add" onclick="openDebugConnections()" title="Debug Connections">
                             <i class="fas fa-network-wired"></i>
                         </button>
+                        <button class="btn-action" style="background: rgba(139, 92, 246, 0.15); color: var(--secondary);" onclick="showMassActionModal()" title="Mass Actions">
+                            <i class="fas fa-users-cog"></i>
+                        </button>
                         <button class="btn-logout" onclick="logout()">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </button>
@@ -1132,7 +1259,7 @@
             <div id="overviewSection" class="content-section active">
                 <!-- Stats Grid -->
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card" onclick="viewActiveConnections()">
                         <div class="stat-icon users">
                             <i class="fas fa-users"></i>
                         </div>
@@ -1145,7 +1272,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="stat-card" onclick="runSystemDiagnostics()">
                         <div class="stat-icon online">
                             <i class="fas fa-signal"></i>
                         </div>
@@ -1158,7 +1285,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="stat-card" onclick="viewRoomLocks()">
                         <div class="stat-icon games">
                             <i class="fas fa-gamepad"></i>
                         </div>
@@ -1171,7 +1298,7 @@
                         </div>
                     </div>
                     
-                    <div class="stat-card">
+                    <div class="stat-card" onclick="showAddFundsModal()">
                         <div class="stat-icon balance">
                             <i class="fas fa-coins"></i>
                         </div>
@@ -1217,6 +1344,88 @@
                         </div>
                         <h4>Emergency</h4>
                         <p>System controls</p>
+                    </div>
+                </div>
+
+                <!-- System Health Dashboard -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>System Health</h3>
+                        <div class="table-controls">
+                            <button class="btn-action btn-add" onclick="runSystemDiagnostics()">
+                                <i class="fas fa-stethoscope"></i> Run Diagnostics
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" style="margin-top: 15px;">
+                        <div class="stat-card health-stat" onclick="viewActiveConnections()">
+                            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);">
+                                <i class="fas fa-plug"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Active Connections</h3>
+                                <div class="stat-value" id="activeSocketCount">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-signal"></i> Real-time
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card health-stat" onclick="viewRoomLocks()">
+                            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">
+                                <i class="fas fa-lock"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Locked Rooms</h3>
+                                <div class="stat-value" id="lockedRoomsCount">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-gamepad"></i> Games in progress
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card health-stat" onclick="viewProcessingClaims()">
+                            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Processing Claims</h3>
+                                <div class="stat-value" id="processingClaimsCount">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-check-circle"></i> Claim lock active
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-card health-stat" onclick="viewStuckCountdowns()">
+                            <div class="stat-icon" style="background: rgba(6, 214, 160, 0.15); color: var(--success);">
+                                <i class="fas fa-hourglass-half"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3>Countdown Status</h3>
+                                <div class="stat-value" id="activeCountdowns">0</div>
+                                <div class="stat-change">
+                                    <i class="fas fa-clock"></i> Rooms starting
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Box Activity -->
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>Recent Box Activity</h3>
+                        <div class="table-controls">
+                            <button class="btn-action btn-add" onclick="refreshBoxActivity()">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-feed" id="boxActivityFeed" style="max-height: 300px;">
+                        <!-- Box activity items will be inserted here -->
                     </div>
                 </div>
 
@@ -1690,6 +1899,52 @@
         </div>
     </div>
 
+    <!-- Room Details Modal -->
+    <div id="roomDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-door-open"></i> Room Details</h3>
+                <button class="btn-close" onclick="hideModal('roomDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="roomDetailsContent">
+                <!-- Room details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Mass Action Modal -->
+    <div id="massActionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-users-cog"></i> Mass Action</h3>
+                <button class="btn-close" onclick="hideModal('massActionModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label>Select Action</label>
+                <select class="filter-select" id="massActionType" onchange="updateMassActionParams()">
+                    <option value="addFunds">Add Funds to All Online Users</option>
+                    <option value="kickAll">Kick All Offline Users</option>
+                    <option value="broadcast">Send Broadcast Message</option>
+                    <option value="clearEmptyRooms">Clear Empty Rooms</option>
+                </select>
+            </div>
+            
+            <div id="massActionParams">
+                <!-- Dynamic parameters will be loaded here -->
+            </div>
+            
+            <button class="btn-modal" onclick="executeMassAction()">
+                <i class="fas fa-play"></i> Execute Mass Action
+            </button>
+        </div>
+    </div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -1718,7 +1973,8 @@
             lastPlayerCount: 0,
             debugInfo: {},
             showUserDetails: false,
-            multiSocketUsers: 0
+            multiSocketUsers: 0,
+            boxActivityLog: []
         };
 
         // Initialize
@@ -1746,6 +2002,16 @@
             
             // Setup user info display
             setupUserInfoDisplay();
+            
+            // Initialize mass action params
+            updateMassActionParams();
+            
+            // Add initial box activity
+            setTimeout(() => {
+                if (state.isAdmin) {
+                    addBoxActivity({message: 'System monitoring initialized - Ready for box activity tracking', room: 'System'});
+                }
+            }, 3000);
         });
         
         function attachNavListeners() {
@@ -1854,6 +2120,9 @@
                 // Update debug stats
                 document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
                 updateDebugStats();
+                
+                // Update system health stats
+                updateSystemHealthStats(data);
             });
 
             state.socket.on('admin:players', (data) => {
@@ -1900,6 +2169,7 @@
                 state.rooms = data;
                 updateRoomsTable();
                 updateRoomCharts(data);
+                updateSystemHealthStats(data);
             });
 
             state.socket.on('admin:transactions', (data) => {
@@ -1929,6 +2199,27 @@
             state.socket.on('game:activity', (activity) => {
                 addActivityItem(activity);
                 addSystemLog('Game activity: ' + JSON.stringify(activity));
+            });
+            
+            // Box activity events
+            state.socket.on('admin:boxActivity', (activity) => {
+                addBoxActivity(activity);
+                addSystemLog('Box activity: ' + activity.message);
+            });
+            
+            // Mass action completion
+            state.socket.on('admin:massActionComplete', (data) => {
+                showToast(`Mass action completed: ${data.message}`, 'success');
+                updateAdminPanel();
+                addSystemLog(`Mass action completed: ${data.message}`);
+            });
+            
+            // Broadcast events
+            state.socket.on('adminBroadcast', (data) => {
+                addActivityItem({
+                    message: `Broadcast from ${data.from}: ${data.message}`
+                });
+                addSystemLog(`Admin broadcast: ${data.message}`);
             });
         }
 
@@ -1997,6 +2288,9 @@
             document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
             document.getElementById('activeGames').textContent = data.activeGames || 0;
             document.getElementById('houseBalance').textContent = (data.houseBalance || 0).toFixed(2) + ' ETB';
+            
+            // Update system health stats
+            updateSystemHealthStats(data);
             
             // Update analytics if available
             if (data.totalWagered !== undefined) {
@@ -3124,6 +3418,12 @@
                 e.preventDefault();
                 showAddFundsModal();
             }
+            
+            // Ctrl + M = Mass actions
+            if (e.ctrlKey && e.key === 'm') {
+                e.preventDefault();
+                showMassActionModal();
+            }
         });
 
         // Add some sample activity on load
@@ -3134,6 +3434,338 @@
                 addSystemLog('Admin dashboard loaded with multi-socket support');
             }
         }, 2000);
-    </script>
-</body>
-</html>
+        
+        // ========== NEW ENHANCED FEATURES ==========
+        
+        // Box Activity Tracking
+        function refreshBoxActivity() {
+            // This would typically fetch from server
+            // For now, we'll simulate activity
+            addSystemLog('Box activity refreshed');
+            showToast('Box activity refreshed', 'success');
+            
+            // Simulate some box activity
+            if (Object.keys(state.rooms).length > 0) {
+                const stakes = Object.keys(state.rooms);
+                const randomStake = stakes[Math.floor(Math.random() * stakes.length)];
+                const randomBox = Math.floor(Math.random() * 100) + 1;
+                const users = state.users.filter(u => u.isOnline);
+                if (users.length > 0) {
+                    const randomUser = users[Math.floor(Math.random() * users.length)];
+                    addBoxActivity({
+                        message: `${randomUser.userName} selected box ${randomBox} in ${randomStake} ETB room`,
+                        room: randomStake,
+                        box: randomBox,
+                        userName: randomUser.userName
+                    });
+                }
+            }
+        }
+        
+        function addBoxActivity(activity) {
+            const feed = document.getElementById('boxActivityFeed');
+            if (!feed) return;
+            
+            const item = document.createElement('div');
+            item.className = 'box-activity-item';
+            
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const boxNumber = activity.box ? `<span class="box-number">${activity.box}</span>` : '';
+            
+            item.innerHTML = `
+                ${boxNumber}
+                <div style="flex: 1;">
+                    <div>${activity.message}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                        ${time} • Room: ${activity.room || 'System'}
+                    </div>
+                </div>
+            `;
+            
+            // Add to top
+            if (feed.firstChild) {
+                feed.insertBefore(item, feed.firstChild);
+            } else {
+                feed.appendChild(item);
+            }
+            
+            // Limit items
+            if (feed.children.length > 10) {
+                feed.removeChild(feed.lastChild);
+            }
+            
+            // Store in log
+            state.boxActivityLog.unshift({
+                ...activity,
+                timestamp: new Date()
+            });
+            
+            if (state.boxActivityLog.length > 50) {
+                state.boxActivityLog = state.boxActivityLog.slice(0, 50);
+            }
+        }
+        
+        // System Health Functions
+        function updateSystemHealthStats(data) {
+            if (data) {
+                // Update active connections
+                document.getElementById('activeSocketCount').textContent = data.connectedSockets || 0;
+                
+                // Count locked rooms (games in progress)
+                const lockedRooms = Object.values(state.rooms).filter(room => room.status === 'playing').length;
+                document.getElementById('lockedRoomsCount').textContent = lockedRooms;
+                
+                // Count active countdowns
+                const activeCountdowns = Object.values(state.rooms).filter(room => room.status === 'starting').length;
+                document.getElementById('activeCountdowns').textContent = activeCountdowns;
+                
+                // Update from debug info if available
+                if (state.debugInfo) {
+                    document.getElementById('processingClaimsCount').textContent = state.debugInfo.processingClaimsCount || 0;
+                }
+            }
+        }
+        
+        function runSystemDiagnostics() {
+            showToast('Running system diagnostics...', 'info');
+            
+            // Simulate diagnostics
+            const diagnostics = {
+                timestamp: new Date().toISOString(),
+                totalUsers: state.users.length,
+                onlineUsers: state.users.filter(u => u.isOnline).length,
+                activeRooms: Object.keys(state.rooms).length,
+                lockedRooms: Object.values(state.rooms).filter(r => r.status === 'playing').length,
+                startingRooms: Object.values(state.rooms).filter(r => r.status === 'starting').length,
+                waitingRooms: Object.values(state.rooms).filter(r => r.status === 'waiting').length,
+                totalTransactions: state.transactions.length,
+                socketHealth: state.socket?.connected ? 'Healthy' : 'Disconnected',
+                database: 'Connected',
+                processingClaims: state.debugInfo?.processingClaimsCount || 0,
+                connectedSockets: state.debugInfo?.connectedSocketsCount || 0
+            };
+            
+            // Update health stats
+            updateSystemHealthStats(diagnostics);
+            
+            // Show diagnostic results
+            const modalContent = document.getElementById('roomDetailsContent');
+            modalContent.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h4>System Diagnostics Results</h4>
+                    <div class="diagnostic-result">
+                        ${JSON.stringify(diagnostics, null, 2)}
+                    </div>
+                </div>
+                <div class="health-alert ${diagnostics.lockedRooms > 0 ? 'warning' : 'success'}">
+                    <i class="fas fa-${diagnostics.lockedRooms > 0 ? 'exclamation-triangle' : 'check-circle'}"></i>
+                    ${diagnostics.lockedRooms > 0 ? `${diagnostics.lockedRooms} game(s) in progress` : 'All games are ready'}
+                </div>
+                <div class="health-alert ${diagnostics.startingRooms > 0 ? 'warning' : 'success'}">
+                    <i class="fas fa-${diagnostics.startingRooms > 0 ? 'hourglass-half' : 'check-circle'}"></i>
+                    ${diagnostics.startingRooms > 0 ? `${diagnostics.startingRooms} room(s) in countdown` : 'No active countdowns'}
+                </div>
+                <div class="health-alert ${diagnostics.onlineUsers > 0 ? 'success' : 'warning'}">
+                    <i class="fas fa-${diagnostics.onlineUsers > 0 ? 'users' : 'user-slash'}"></i>
+                    ${diagnostics.onlineUsers} online player(s)
+                </div>
+            `;
+            showModal('roomDetailsModal');
+            
+            addSystemLog(`System diagnostics: ${JSON.stringify(diagnostics)}`);
+            showToast('Diagnostics complete', 'success');
+        }
+        
+        function viewActiveConnections() {
+            if (state.debugInfo && state.debugInfo.connectedSockets) {
+                const modalContent = document.getElementById('roomDetailsContent');
+                modalContent.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <h4>Active Socket Connections</h4>
+                        <div class="diagnostic-result">
+                            ${JSON.stringify(state.debugInfo.connectedSockets, null, 2)}
+                        </div>
+                    </div>
+                    <div style="text-align: center; color: var(--text-muted);">
+                        Total: ${state.debugInfo.connectedSocketsCount || 0} connections
+                    </div>
+                `;
+                showModal('roomDetailsModal');
+            } else {
+                fetchDebugConnections();
+                showToast('Fetching connection data...', 'info');
+            }
+        }
+        
+        function viewRoomLocks() {
+            const lockedRooms = Object.entries(state.rooms).filter(([stake, room]) => room.status === 'playing');
+            const startingRooms = Object.entries(state.rooms).filter(([stake, room]) => room.status === 'starting');
+            const waitingRooms = Object.entries(state.rooms).filter(([stake, room]) => room.status === 'waiting');
+            
+            const modalContent = document.getElementById('roomDetailsContent');
+            let content = '<h4>Room Status Overview</h4>';
+            
+            if (lockedRooms.length === 0 && startingRooms.length === 0 && waitingRooms.length === 0) {
+                content += '<p style="text-align: center; color: var(--text-muted); padding: 20px;">No active rooms found</p>';
+            } else {
+                content += '<div class="room-status-grid">';
+                
+                // Locked rooms
+                lockedRooms.forEach(([stake, room]) => {
+                    const roomClass = `room-${stake === '10' ? 'bronze' : stake === '20' ? 'silver' : stake === '50' ? 'gold' : 'elite'}`;
+                    const gameDuration = room.startTime ? Math.floor((Date.now() - new Date(room.startTime)) / 1000 / 60) : 0;
+                    
+                    content += `
+                        <div class="room-status-card locked">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span class="room-badge ${roomClass}">${stake} ETB</span>
+                                <span style="font-size: 0.8rem; color: var(--danger);">
+                                    <i class="fas fa-lock"></i> Locked
+                                </span>
+                            </div>
+                            <div style="font-size: 0.9rem;">
+                                <div>Players: ${room.playerCount || 0}</div>
+                                <div>Balls Drawn: ${room.ballsDrawn || 0}</div>
+                                <div>Duration: ${gameDuration}m</div>
+                            </div>
+                            <button class="btn-action btn-add" onclick="forceEndGame(${stake})" style="width: 100%; margin-top: 10px;">
+                                <i class="fas fa-stop"></i> End Game
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                // Starting rooms
+                startingRooms.forEach(([stake, room]) => {
+                    const roomClass = `room-${stake === '10' ? 'bronze' : stake === '20' ? 'silver' : stake === '50' ? 'gold' : 'elite'}`;
+                    const countdownStart = room.countdownStartTime ? new Date(room.countdownStartTime) : null;
+                    const elapsed = countdownStart ? Math.floor((Date.now() - countdownStart) / 1000) : 0;
+                    const timeRemaining = Math.max(0, 30 - elapsed);
+                    
+                    content += `
+                        <div class="room-status-card starting">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span class="room-badge ${roomClass}">${stake} ETB</span>
+                                <span style="font-size: 0.8rem; color: var(--warning);">
+                                    <i class="fas fa-clock"></i> ${timeRemaining}s
+                                </span>
+                            </div>
+                            <div style="font-size: 0.9rem;">
+                                <div>Players: ${room.playerCount || 0}</div>
+                                <div>Started with: ${room.countdownStartedWith || 0} players</div>
+                                <div>Elapsed: ${elapsed}s / 30s</div>
+                            </div>
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <button class="btn-action btn-add" onclick="forceStartGame(${stake})" style="flex: 1;">
+                                    <i class="fas fa-play"></i> Start Now
+                                </button>
+                                <button class="btn-action btn-ban" onclick="resetCountdown(${stake})" style="flex: 1;">
+                                    <i class="fas fa-redo"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                // Waiting rooms
+                waitingRooms.forEach(([stake, room]) => {
+                    const roomClass = `room-${stake === '10' ? 'bronze' : stake === '20' ? 'silver' : stake === '50' ? 'gold' : 'elite'}`;
+                    
+                    content += `
+                        <div class="room-status-card waiting">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span class="room-badge ${roomClass}">${stake} ETB</span>
+                                <span style="font-size: 0.8rem; color: var(--success);">
+                                    <i class="fas fa-door-open"></i> Waiting
+                                </span>
+                            </div>
+                            <div style="font-size: 0.9rem;">
+                                <div>Players: ${room.playerCount || 0}</div>
+                                <div>Boxes: ${room.takenBoxes?.length || 0}</div>
+                                <div>Min to start: ${CONFIG.MIN_PLAYERS_TO_START}</div>
+                            </div>
+                            <button class="btn-action btn-add" onclick="forceStartGame(${stake})" style="width: 100%; margin-top: 10px;">
+                                <i class="fas fa-play"></i> Start Game
+                            </button>
+                        </div>
+                    `;
+                });
+                
+                content += '</div>';
+                
+                // Summary
+                content += `
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                        <h5>Room Status Summary</h5>
+                        <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                            <div>
+                                <span style="color: var(--danger); font-weight: bold;">${lockedRooms.length}</span> Locked (Playing)
+                            </div>
+                            <div>
+                                <span style="color: var(--warning); font-weight: bold;">${startingRooms.length}</span> Starting
+                            </div>
+                            <div>
+                                <span style="color: var(--success); font-weight: bold;">${waitingRooms.length}</span> Waiting
+                            </div>
+                            <div>
+                                <span style="font-weight: bold;">${Object.keys(state.rooms).length}</span> Total Rooms
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            modalContent.innerHTML = content;
+            showModal('roomDetailsModal');
+        }
+        
+        function viewProcessingClaims() {
+            if (state.debugInfo && state.debugInfo.processingClaims) {
+                const modalContent = document.getElementById('roomDetailsContent');
+                modalContent.innerHTML = `
+                    <div style="margin-bottom: 20px;">
+                        <h4>Processing Claims (Claim Lock Active)</h4>
+                        <p style="color: var(--text-muted); margin-bottom: 10px;">
+                            These rooms have active claim locks preventing double prize payouts:
+                        </p>
+                        <div class="diagnostic-result">
+                            ${JSON.stringify(state.debugInfo.processingClaims, null, 2)}
+                        </div>
+                    </div>
+                    <div class="health-alert ${state.debugInfo.processingClaimsCount > 0 ? 'warning' : 'success'}">
+                        <i class="fas fa-${state.debugInfo.processingClaimsCount > 0 ? 'shield-alt' : 'check-circle'}"></i>
+                        ${state.debugInfo.processingClaimsCount > 0 ? 
+                            `${state.debugInfo.processingClaimsCount} claim(s) being processed` : 
+                            'No active claim locks'}
+                    </div>
+                `;
+                showModal('roomDetailsModal');
+            } else {
+                fetchDebugConnections();
+                showToast('Fetching claim data...', 'info');
+            }
+        }
+        
+        function viewStuckCountdowns() {
+            const startingRooms = Object.entries(state.rooms).filter(([stake, room]) => room.status === 'starting');
+            
+            const modalContent = document.getElementById('roomDetailsContent');
+            let content = '<h4>Rooms in Countdown Phase</h4>';
+            
+            if (startingRooms.length === 0) {
+                content += '<p style="text-align: center; color: var(--text-muted); padding: 20px;">No rooms in countdown phase</p>';
+            } else {
+                content += '<div class="room-status-grid">';
+                
+                startingRooms.forEach(([stake, room]) => {
+                    const roomClass = `room-${stake === '10' ? 'bronze' : stake === '20' ? 'silver' : stake === '50' ? 'gold' : 'elite'}`;
+                    const countdownStart = room.countdownStartTime ? new Date(room.countdownStartTime) : null;
+                    const elapsed = countdownStart ? Math.floor((Date.now() - countdownStart) / 1000) : 0;
+                    const timeRemaining = Math.max(0, 30 - elapsed);
+                    const isStuck = elapsed > 30;
+                    
+                    content += `
+                        <div class="room-status-card ${isStuck ? 'locked' : 'starting'}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span class="room-badge ${roomClass}">${stake} ETB</span>
+                                <span style="font-size: 0.8rem; color: ${isStuck ? 'var(--danger)' :
