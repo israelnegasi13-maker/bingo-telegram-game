@@ -995,6 +995,378 @@
                 font-size: 2.5rem !important;
             }
         }
+
+        /* ========== ANIMATED CHARACTERS FOR TELEGRAM MINI APP ========== */
+        .character-container {
+            width: 100px;
+            height: 120px;
+            position: relative;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .character {
+            position: relative;
+            width: 100px;
+            height: 120px;
+        }
+
+        /* Bingo Character */
+        .bingo-character {
+            animation: bingoBounce 3s ease-in-out infinite;
+        }
+
+        .bingo-character .character-body {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            border-radius: 30px 30px 15px 15px;
+            top: 20px;
+            left: 20px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+
+        .bingo-character .character-head {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: #3b82f6;
+            border-radius: 50%;
+            top: -25px;
+            left: 5px;
+            border: 3px solid #1d4ed8;
+        }
+
+        .bingo-character .character-eye {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            top: 15px;
+        }
+
+        .bingo-character .left-eye {
+            left: 10px;
+            animation: blink 4s infinite;
+        }
+
+        .bingo-character .right-eye {
+            right: 10px;
+            animation: blink 4s infinite 0.5s;
+        }
+
+        .bingo-character .character-smile {
+            position: absolute;
+            width: 25px;
+            height: 12px;
+            border-bottom: 3px solid white;
+            border-radius: 0 0 25px 25px;
+            bottom: 10px;
+            left: 12.5px;
+        }
+
+        .bingo-character .character-ball {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: white;
+            border-radius: 50%;
+            border: 3px solid #fbbf24;
+            bottom: 10px;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #3b82f6;
+            font-size: 0.8rem;
+            animation: ballRotate 4s linear infinite;
+        }
+
+        .bingo-character .character-ball::before {
+            content: "B";
+            position: absolute;
+        }
+
+        .bingo-character .character-arm {
+            position: absolute;
+            width: 40px;
+            height: 8px;
+            background: #1d4ed8;
+            border-radius: 4px;
+            bottom: 30px;
+            left: -15px;
+            transform-origin: right center;
+            animation: waveArm 2s ease-in-out infinite;
+        }
+
+        /* Keno Character */
+        .keno-character {
+            animation: kenoShake 3s ease-in-out infinite;
+        }
+
+        .keno-character .character-body {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            border-radius: 30px 30px 15px 15px;
+            top: 20px;
+            left: 20px;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        }
+
+        .keno-character .character-head {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            top: -25px;
+            left: 5px;
+            border: 3px solid #7c3aed;
+        }
+
+        .keno-character .character-eye {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            top: 15px;
+        }
+
+        .keno-character .left-eye {
+            left: 10px;
+            animation: blink 3s infinite;
+        }
+
+        .keno-character .right-eye {
+            right: 10px;
+            animation: wink 2s infinite;
+        }
+
+        .keno-character .character-wink {
+            position: absolute;
+            width: 12px;
+            height: 3px;
+            background: white;
+            border-radius: 2px;
+            top: 18px;
+            right: 10px;
+            animation: wink 2s infinite;
+        }
+
+        .keno-character .character-dice {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: white;
+            border-radius: 6px;
+            border: 3px solid #fbbf24;
+            bottom: 10px;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #8b5cf6;
+            font-size: 0.8rem;
+            animation: diceRoll 4s linear infinite;
+        }
+
+        .keno-character .character-dice::before {
+            content: "6";
+            position: absolute;
+            animation: diceNumber 2s infinite;
+        }
+
+        .keno-character .character-dice::after {
+            content: "";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, transparent 45%, rgba(139, 92, 246, 0.2) 50%, transparent 55%);
+            animation: diceShine 3s linear infinite;
+        }
+
+        .keno-character .character-arm {
+            position: absolute;
+            width: 40px;
+            height: 8px;
+            background: #7c3aed;
+            border-radius: 4px;
+            bottom: 30px;
+            left: -15px;
+            transform-origin: right center;
+            animation: kenoWave 2s ease-in-out infinite;
+        }
+
+        /* Character Animations */
+        @keyframes bingoBounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes kenoShake {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(3deg);
+            }
+            75% {
+                transform: rotate(-3deg);
+            }
+        }
+
+        @keyframes blink {
+            0%, 90%, 95%, 100% {
+                height: 12px;
+            }
+            92.5%, 97.5% {
+                height: 3px;
+            }
+        }
+
+        @keyframes wink {
+            0%, 70%, 100% {
+                height: 3px;
+            }
+            75%, 95% {
+                height: 12px;
+            }
+        }
+
+        @keyframes ballRotate {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes diceRoll {
+            0% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(90deg);
+            }
+            50% {
+                transform: rotate(180deg);
+            }
+            75% {
+                transform: rotate(270deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes diceNumber {
+            0%, 25% {
+                content: "1";
+            }
+            25.1%, 50% {
+                content: "2";
+            }
+            50.1%, 75% {
+                content: "3";
+            }
+            75.1%, 100% {
+                content: "6";
+            }
+        }
+
+        @keyframes diceShine {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes waveArm {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            50% {
+                transform: rotate(-30deg);
+            }
+        }
+
+        @keyframes kenoWave {
+            0%, 100% {
+                transform: rotate(0deg);
+            }
+            25% {
+                transform: rotate(-25deg);
+            }
+            75% {
+                transform: rotate(25deg);
+            }
+        }
+
+        /* Character Hover Effects */
+        .game-card:hover .bingo-character {
+            animation: bingoBounce 1s ease-in-out infinite;
+        }
+
+        .game-card:hover .keno-character {
+            animation: kenoShake 1s ease-in-out infinite;
+        }
+
+        .game-card:hover .bingo-character .character-ball {
+            animation: ballRotate 2s linear infinite;
+        }
+
+        .game-card:hover .keno-character .character-dice {
+            animation: diceRoll 1s linear infinite;
+        }
+
+        /* Mobile adjustments for characters */
+        @media (max-width: 480px) {
+            .character-container {
+                width: 80px;
+                height: 100px;
+            }
+            
+            .character {
+                width: 80px;
+                height: 100px;
+            }
+            
+            .bingo-character .character-body,
+            .keno-character .character-body {
+                width: 50px;
+                height: 65px;
+            }
+            
+            .bingo-character .character-head,
+            .keno-character .character-head {
+                width: 40px;
+                height: 40px;
+                top: -20px;
+            }
+            
+            .bingo-character .character-ball,
+            .keno-character .character-dice {
+                width: 25px;
+                height: 25px;
+                font-size: 0.7rem;
+            }
+        }
     </style>
 </head>
 <body>
