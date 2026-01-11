@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Bingo Elite - Telegram Mini App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            margin: 20px;
+        }
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #ffd700;
+        }
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+        .buttons {
+            margin-top: 30px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            background: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            margin: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: transform 0.3s, background 0.3s;
+        }
+        .btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .btn-game {
+            background: #ff5722;
+        }
+        .btn-game:hover {
+            background: #e64a19;
+        }
+        .btn-admin {
+            background: #9c27b0;
+        }
+        .btn-admin:hover {
+            background: #7b1fa2;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎮</div>
+        <h1>Bingo Elite</h1>
+        <p style="font-size: 1.2rem; color: #aaa;">Telegram Mini App</p>
+        
+        <div class="status">
+            <h2 style="color: #4CAF50;">✅ Server Ready</h2>
+            <p>Real-time multiplayer bingo with Telegram integration</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature">🎯 Four Corners Bonus: 50 ETB</div>
+            <div class="feature">⚡ Real-time Gameplay</div>
+            <div class="feature">💰 Real Money Prizes</div>
+            <div class="feature">👥 Multiplayer Rooms</div>
+            <div class="feature">🔒 Secure Transactions</div>
+            <div class="feature">📱 Telegram Integrated</div>
+        </div>
+        
+        <div class="buttons">
+            <a href="/game" class="btn btn-game">🎮 Play Game</a>
+            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">🤖 Open Telegram Bot</a>
+            <a href="/" class="btn">🏠 Home</a>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px;">
+            <h3>How to Play:</h3>
+            <ol style="text-align: left; max-width: 500px; margin: 0 auto;">
+                <li>Open @ethio_games1_bot in Telegram</li>
+                <li>Click "🎮 Play Game" button</li>
+                <li>Select a room (10-100 ETB)</li>
+                <li>Choose your ticket number</li>
+                <li>Mark numbers as they're called</li>
+                <li>Claim BINGO to win! 🏆</li>
+            </ol>
+        </div>
+        
+        <div class="stats">
+            <div>Bot: @ethio_games1_bot</div>
+            <div>Server: bingo-telegram-game.onrender.com</div>
+            <div>Version: 2.9.0</div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-redirect to game after 5 seconds
+        setTimeout(() => {
+            window.location.href = '/game';
+        }, 5000);
+        
+        // Display current time
+        function updateTime() {
+            const timeElement = document.getElementById('time');
+            if (timeElement) {
+                timeElement.textContent = new Date().toLocaleTimeString();
+            }
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+    </script>
+</body>
+</html>
