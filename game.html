@@ -51,7 +51,7 @@
                 radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
         }
 
-        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay, #roomLockedOverlay, #walletOverlay {
+        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay, #roomLockedOverlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-dark);
@@ -69,7 +69,7 @@
             visibility: hidden;
         }
 
-        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active, #roomLockedOverlay.active, #walletOverlay.active { 
+        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active, #roomLockedOverlay.active { 
             pointer-events: auto; 
             opacity: 1; 
             visibility: visible; 
@@ -78,7 +78,6 @@
         #reconnectOverlay { background: rgba(2, 6, 23, 0.8); z-index: 10001; }
         #insufficientOverlay { z-index: 10000; }
         #roomLockedOverlay { z-index: 10002; }
-        #walletOverlay { z-index: 10003; }
 
         .game-status-title {
             font-size: 3.5rem;
@@ -313,7 +312,7 @@
         .header-right {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .balance-pill {
@@ -325,6 +324,36 @@
             display: flex;
             align-items: center;
             gap: 5px;
+            font-size: 0.9rem;
+        }
+
+        .balance-pill.small {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+        }
+
+        .balance-pill.small #balanceVal {
+            font-size: 0.9rem;
+        }
+
+        .wallet-btn {
+            background: rgba(16, 185, 129, 0.1);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #10b981;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1.2rem;
+        }
+
+        .wallet-btn:active {
+            transform: scale(0.95);
+            background: rgba(16, 185, 129, 0.2);
         }
 
         .refresh-btn {
@@ -562,7 +591,6 @@
             margin-bottom: 10px;
         }
 
-        /* Smaller timer for discovery overlay */
         .discovery-timer {
             font-size: 3.5rem !important;
             margin-bottom: 5px !important;
@@ -833,7 +861,6 @@
             color: #64748b;
         }
 
-        /* Locked room overlay */
         .locked-room-icon {
             font-size: 4rem;
             margin-bottom: 20px;
@@ -841,7 +868,6 @@
             animation: pulse 1.5s infinite;
         }
 
-        /* Discovery timer container */
         .discovery-timer-container {
             display: none;
             margin-bottom: 20px;
@@ -849,29 +875,122 @@
             width: 100%;
         }
 
-        /* Game timeout notification */
         .timeout-notification {
             background: rgba(239, 68, 68, 0.9) !important;
         }
 
-        /* Wallet styles */
-        .wallet-btn {
-            background: rgba(59, 130, 246, 0.1);
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+        /* WALLET OVERLAY STYLES */
+        .wallet-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 6, 23, 0.95);
+            z-index: 10003;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
+
+        .wallet-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .wallet-container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--card-glass);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid var(--border-glass);
+            position: relative;
+        }
+
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .wallet-title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--p-gold);
+        }
+
+        .close-wallet {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--main-color);
+            border-radius: 50%;
+        }
+
+        .close-wallet:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .wallet-balance-display {
+            background: rgba(251, 191, 36, 0.1);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .wallet-balance-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .wallet-balance-amount {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--p-gold);
+        }
+
+        .wallet-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .wallet-tab {
+            flex: 1;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            color: #94a3b8;
             cursor: pointer;
+            text-align: center;
+            font-weight: 700;
             transition: all 0.2s;
         }
 
-        .wallet-btn:active {
-            transform: rotate(180deg);
-            background: rgba(59, 130, 246, 0.2);
+        .wallet-tab.active {
+            background: var(--main-color);
+            color: white;
+            border-color: var(--main-color);
         }
 
         .wallet-tab-content {
@@ -882,92 +1001,264 @@
             display: block;
         }
 
-        .wallet-input {
+        .deposit-section {
+            text-align: center;
+        }
+
+        .telebirr-number {
+            background: rgba(59, 130, 246, 0.1);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            margin-bottom: 20px;
+        }
+
+        .telebirr-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        .telebirr-value {
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--main-color);
+            letter-spacing: 2px;
+        }
+
+        .instructions {
+            background: rgba(251, 191, 36, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .instructions-title {
+            color: var(--p-gold);
+            font-weight: 700;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .instruction-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .instruction-step .number {
+            background: var(--main-color);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .instruction-step .text {
+            flex: 1;
+        }
+
+        .deposit-form {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 16px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group textarea {
             width: 100%;
-            padding: 12px;
-            background: var(--card-glass);
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border-glass);
-            border-radius: 8px;
+            border-radius: 12px;
             color: white;
             font-size: 1rem;
-            margin-bottom: 15px;
+            font-family: 'Inter', sans-serif;
         }
 
-        .wallet-input:focus {
-            outline: none;
-            border-color: var(--main-color);
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: #64748b;
         }
 
-        .wallet-textarea {
-            width: 100%;
-            padding: 12px;
-            background: var(--card-glass);
-            border: 1px solid var(--border-glass);
-            border-radius: 8px;
-            color: white;
-            font-size: 0.9rem;
-            resize: vertical;
+        .form-group textarea {
             min-height: 100px;
-            margin-bottom: 15px;
+            resize: vertical;
         }
 
-        .wallet-textarea:focus {
-            outline: none;
-            border-color: var(--main-color);
-        }
-
-        .wallet-message {
-            padding: 10px;
-            border-radius: 8px;
-            display: none;
+        .btn-submit {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(90deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 900;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
             margin-top: 10px;
         }
 
-        .wallet-message.success {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+        .btn-submit:active {
+            transform: scale(0.98);
         }
 
-        .wallet-message.error {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
+        .btn-submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .withdraw-section {
+            text-align: center;
+        }
+
+        .withdraw-info {
+            background: rgba(239, 68, 68, 0.1);
+            padding: 20px;
+            border-radius: 16px;
             border: 1px solid rgba(239, 68, 68, 0.3);
+            margin-bottom: 20px;
         }
 
-        .transaction-item {
-            padding: 15px;
+        .withdraw-info .icon {
+            font-size: 2.5rem;
             margin-bottom: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 8px;
-            border-left: 4px solid #10b981;
+            color: #ef4444;
         }
 
-        .transaction-item.withdrawal {
-            border-left-color: #f59e0b;
+        .withdraw-info p {
+            color: #94a3b8;
+            font-size: 0.9rem;
         }
 
-        .transaction-status {
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 0.7rem;
+        .min-withdraw {
+            color: var(--p-gold);
             font-weight: 700;
-            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .wallet-history {
+            margin-top: 20px;
+        }
+
+        .wallet-history-title {
+            color: var(--p-gold);
+            font-weight: 700;
+            margin-bottom: 15px;
+            text-align: left;
+            font-size: 1.1rem;
+        }
+
+        .wallet-history-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+        }
+
+        .wallet-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .wallet-history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-type {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .history-type.deposit {
+            color: #10b981;
+        }
+
+        .history-type.withdraw {
+            color: #ef4444;
+        }
+
+        .history-amount {
+            font-weight: 900;
+            font-size: 1rem;
+        }
+
+        .history-status {
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-weight: 700;
         }
 
         .status-pending {
             background: rgba(245, 158, 11, 0.2);
             color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.4);
         }
 
         .status-approved {
             background: rgba(16, 185, 129, 0.2);
             color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
         }
 
         .status-rejected {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .no-history {
+            color: #64748b;
+            text-align: center;
+            padding: 30px;
+            font-size: 0.9rem;
+        }
+
+        .loading-wallet {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading-wallet .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--main-color);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
         }
 
         /* Mobile-specific adjustments */
@@ -1056,9 +1347,33 @@
             .discovery-timer {
                 font-size: 3rem !important;
             }
+            
+            .wallet-container {
+                padding: 20px;
+            }
+            
+            .wallet-balance-amount {
+                font-size: 2rem;
+            }
+            
+            .telebirr-value {
+                font-size: 1.5rem;
+            }
+            
+            .wallet-history-list {
+                max-height: 150px;
+            }
+            
+            .wallet-tab {
+                padding: 10px;
+                font-size: 0.9rem;
+            }
+            
+            .header-right {
+                gap: 6px;
+            }
         }
 
-        /* Very small phones */
         @media (max-width: 360px) {
             .history-strip {
                 height: 38px;
@@ -1111,6 +1426,23 @@
             .discovery-timer {
                 font-size: 2.5rem !important;
             }
+            
+            .wallet-container {
+                padding: 15px;
+            }
+            
+            .wallet-balance-amount {
+                font-size: 1.8rem;
+            }
+            
+            .wallet-title {
+                font-size: 1.5rem;
+            }
+            
+            .wallet-tab {
+                padding: 8px;
+                font-size: 0.8rem;
+            }
         }
     </style>
 </head>
@@ -1128,6 +1460,129 @@
 <div class="live-box-counter" id="liveBoxCounter">
     <span class="count" id="liveBoxCount">0</span>
     <span class="label">BOXES TAKEN</span>
+</div>
+
+<!-- Wallet Overlay -->
+<div id="walletOverlay" class="wallet-overlay">
+    <div class="wallet-container">
+        <div class="wallet-header">
+            <div class="wallet-title">WALLET</div>
+            <button class="close-wallet" onclick="closeWallet()">×</button>
+        </div>
+        
+        <div class="wallet-balance-display">
+            <div class="wallet-balance-label">YOUR BALANCE</div>
+            <div class="wallet-balance-amount" id="walletBalance">0.00 ETB</div>
+        </div>
+        
+        <div class="wallet-tabs">
+            <div class="wallet-tab active" data-tab="deposit" onclick="switchWalletTab('deposit')">DEPOSIT</div>
+            <div class="wallet-tab" data-tab="withdraw" onclick="switchWalletTab('withdraw')">WITHDRAW</div>
+            <div class="wallet-tab" data-tab="history" onclick="switchWalletTab('history')">HISTORY</div>
+        </div>
+        
+        <!-- Deposit Tab -->
+        <div id="depositTab" class="wallet-tab-content active">
+            <div class="deposit-section">
+                <div class="telebirr-number">
+                    <div class="telebirr-label">SEND MONEY TO THIS TELEBIRR NUMBER:</div>
+                    <div class="telebirr-value">0962577855</div>
+                </div>
+                
+                <div class="instructions">
+                    <div class="instructions-title">📋 INSTRUCTIONS:</div>
+                    <div class="instruction-step">
+                        <div class="number">1</div>
+                        <div class="text">Open your Telebirr app</div>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="number">2</div>
+                        <div class="text">Send money to <strong>0962577855</strong></div>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="number">3</div>
+                        <div class="text">Fill the form below with your transaction details</div>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="number">4</div>
+                        <div class="text">Click "Submit Deposit Request"</div>
+                    </div>
+                    <div class="instruction-step">
+                        <div class="number">5</div>
+                        <div class="text">Admin will verify and add funds to your account</div>
+                    </div>
+                </div>
+                
+                <div class="deposit-form">
+                    <div class="form-group">
+                        <label for="depositAmount">AMOUNT SENT (ETB)</label>
+                        <input type="number" id="depositAmount" placeholder="Enter the exact amount you sent" min="10" step="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="depositTransactionId">TRANSACTION ID</label>
+                        <input type="text" id="depositTransactionId" placeholder="Enter the transaction ID from Telebirr">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="depositNote">ADDITIONAL NOTES (Optional)</label>
+                        <textarea id="depositNote" placeholder="Add any additional information about your deposit..."></textarea>
+                    </div>
+                    
+                    <button class="btn-submit" onclick="submitDeposit()" id="submitDepositBtn">
+                        SUBMIT DEPOSIT REQUEST
+                    </button>
+                    
+                    <p style="color: #64748b; font-size: 0.8rem; margin-top: 15px; text-align: center;">
+                        ⚠️ Make sure you send the exact amount you enter above. Incorrect amounts may cause delays.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Withdraw Tab -->
+        <div id="withdrawTab" class="wallet-tab-content">
+            <div class="withdraw-section">
+                <div class="withdraw-info">
+                    <div class="icon">⚠️</div>
+                    <p>Withdrawal requests are processed manually by admin.</p>
+                    <p>Please ensure your Telebirr number is correct.</p>
+                    <p class="min-withdraw">Minimum withdrawal: 50 ETB</p>
+                </div>
+                
+                <div class="deposit-form">
+                    <div class="form-group">
+                        <label for="withdrawAmount">AMOUNT TO WITHDRAW (ETB)</label>
+                        <input type="number" id="withdrawAmount" placeholder="Minimum 50 ETB" min="50" step="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="withdrawTelebirr">YOUR TELEBIRR NUMBER</label>
+                        <input type="text" id="withdrawTelebirr" placeholder="096XXXXXXXX" pattern="[0-9]{10}" maxlength="10">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="withdrawNote">NOTES (Optional)</label>
+                        <textarea id="withdrawNote" placeholder="Any additional information..."></textarea>
+                    </div>
+                    
+                    <button class="btn-submit" onclick="submitWithdrawal()" id="submitWithdrawBtn">
+                        REQUEST WITHDRAWAL
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- History Tab -->
+        <div id="historyTab" class="wallet-tab-content">
+            <div class="wallet-history">
+                <div class="wallet-history-title">TRANSACTION HISTORY</div>
+                <div class="wallet-history-list" id="walletHistoryList">
+                    <div class="no-history">No transactions yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Room Locked Overlay -->
@@ -1264,7 +1719,7 @@
     
     <p style="color: #64748b; margin-top: 30px; font-size: 0.8rem; max-width: 300px; text-align: center;">
         💰 <strong>Need funds?</strong><br>
-        Contact admin to add ETB to your account
+        Use the wallet button to deposit via Telebirr
     </p>
     
     <div class="bingo-info">
@@ -1354,141 +1809,17 @@
     </button>
 </div>
 
-<!-- Wallet Overlay -->
-<div id="walletOverlay" class="step-overlay">
-    <div style="position: relative; width: 100%; max-width: 400px; padding: 20px;">
-        <!-- Close button -->
-        <button onclick="toggleWalletOverlay()" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer;">×</button>
-        
-        <!-- Tabs -->
-        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <button id="depositTabBtn" onclick="showWalletTab('deposit')" style="flex: 1; padding: 12px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">💰 DEPOSIT</button>
-            <button id="withdrawTabBtn" onclick="showWalletTab('withdraw')" style="flex: 1; padding: 12px; background: #475569; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">💳 WITHDRAW</button>
-            <button id="historyTabBtn" onclick="showWalletTab('history')" style="flex: 1; padding: 12px; background: #475569; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">📋 HISTORY</button>
-        </div>
-        
-        <!-- DEPOSIT TAB -->
-        <div id="depositTabContent" class="wallet-tab-content active">
-            <h2 style="color: var(--p-gold); margin-bottom: 15px;">DEPOSIT FUNDS</h2>
-            
-            <div style="background: var(--card-glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                    <div style="color: #10b981; font-size: 1.5rem;">📱</div>
-                    <div style="font-weight: 700; color: #10b981;">Send via Telebirr</div>
-                </div>
-                
-                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
-                    1. Send money to this Telebirr number:
-                </p>
-                
-                <div style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3); margin-bottom: 15px; text-align: center;">
-                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">Admin Telebirr Number:</div>
-                    <div id="adminPhoneNumber" style="font-size: 1.5rem; font-weight: 900; color: #10b981; letter-spacing: 1px;">+251 9** *** ***</div>
-                </div>
-                
-                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
-                    2. Copy the transaction receipt from SMS
-                </p>
-                
-                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
-                    3. Paste receipt and enter amount below
-                </p>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Your Telebirr Phone:</label>
-                <input type="text" id="depositPhone" placeholder="+2519********" class="wallet-input">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Amount (ETB):</label>
-                <input type="number" id="depositAmount" placeholder="100" min="10" step="10" class="wallet-input">
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Transaction Receipt (from SMS):</label>
-                <textarea id="depositReceipt" placeholder="Paste the complete receipt text from Telebirr SMS here..." rows="4" class="wallet-textarea"></textarea>
-            </div>
-            
-            <button onclick="submitDeposit()" style="width: 100%; padding: 15px; background: linear-gradient(90deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1.1rem; cursor: pointer; margin-bottom: 10px;">
-                SUBMIT DEPOSIT REQUEST
-            </button>
-            
-            <div id="depositMessage" class="wallet-message"></div>
-        </div>
-        
-        <!-- WITHDRAW TAB -->
-        <div id="withdrawTabContent" class="wallet-tab-content">
-            <h2 style="color: var(--p-gold); margin-bottom: 15px;">WITHDRAW FUNDS</h2>
-            
-            <div style="background: var(--card-glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                    <div style="color: #f59e0b; font-size: 1.5rem;">💰</div>
-                    <div style="font-weight: 700; color: #f59e0b;">Withdraw to Telebirr</div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                    <div style="color: #94a3b8;">Available Balance:</div>
-                    <div style="color: var(--p-gold); font-weight: 900; font-size: 1.2rem;" id="withdrawBalance">0.00 ETB</div>
-                </div>
-                
-                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">
-                    Min: 10 ETB • Max: 50,000 ETB
-                </p>
-                <p style="color: #94a3b8; font-size: 0.8rem;">
-                    Withdrawals are processed within 1 hour during business hours (9AM-6PM)
-                </p>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Your Telebirr Phone:</label>
-                <input type="text" id="withdrawPhone" placeholder="+2519********" class="wallet-input">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Amount (ETB):</label>
-                <input type="number" id="withdrawAmount" placeholder="100" min="10" step="10" class="wallet-input">
-            </div>
-            
-            <button onclick="submitWithdrawal()" style="width: 100%; padding: 15px; background: linear-gradient(90deg, #f59e0b, #d97706); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1.1rem; cursor: pointer; margin-bottom: 10px;">
-                REQUEST WITHDRAWAL
-            </button>
-            
-            <div id="withdrawMessage" class="wallet-message"></div>
-        </div>
-        
-        <!-- HISTORY TAB -->
-        <div id="historyTabContent" class="wallet-tab-content">
-            <h2 style="color: var(--p-gold); margin-bottom: 15px;">TRANSACTION HISTORY</h2>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                <button onclick="showHistoryType('all')" id="historyAllBtn" style="flex: 1; padding: 10px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">ALL</button>
-                <button onclick="showHistoryType('deposits')" id="historyDepositsBtn" style="flex: 1; padding: 10px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">DEPOSITS</button>
-                <button onclick="showHistoryType('withdrawals')" id="historyWithdrawalsBtn" style="flex: 1; padding: 10px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">WITHDRAWALS</button>
-            </div>
-            
-            <div id="historyList" style="max-height: 300px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 12px;">
-                <!-- Transactions will be loaded here -->
-                <div style="text-align: center; padding: 40px; color: #64748b;">
-                    <div style="font-size: 2rem; margin-bottom: 10px;">📋</div>
-                    <div>No transactions yet</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="header">
     <div class="header-left">
         <span id="userDisplay" style="font-weight: 900; font-size: 0.9rem;">PLAYER</span>
         <span id="roomDisplay" style="font-size: 0.6rem; color: #64748b;">CONNECTING...</span>
     </div>
     <div class="header-right">
-        <div class="wallet-btn" onclick="toggleWalletOverlay()" title="Wallet">
-            💰
-        </div>
-        <div class="balance-pill" id="balancePill">
+        <div class="balance-pill small" id="balancePill">
             <span id="balanceVal">0.00</span> <small style="font-size: 0.5rem">ETB</small>
+        </div>
+        <div class="wallet-btn" id="walletBtn" onclick="openWallet()" title="Wallet">
+            💰
         </div>
         <div class="refresh-btn" id="refreshBtn" onclick="refreshBalance()" title="Refresh Balance">
             ↻
@@ -1593,15 +1924,14 @@
         totalPlayersCount: 0,
         isResettingLobby: false,
         discoveryTimerInterval: null,
-        currentDiscoveryTimer: 30,
-        depositHistory: [],
-        withdrawalHistory: [],
-        walletConfig: {
-            adminPhone: '+251900000000', // This should be set from server
-            minDeposit: 10,
-            minWithdraw: 10,
-            maxWithdraw: 50000
-        }
+        currentDiscoveryTimer: 30
+    };
+
+    // Wallet state
+    let walletState = {
+        activeTab: 'deposit',
+        transactions: [],
+        isLoadingHistory: false
     };
 
     // Update connection status UI
@@ -1725,6 +2055,282 @@
         }, duration);
     }
 
+    // WALLET FUNCTIONS
+    function openWallet() {
+        document.getElementById('walletOverlay').classList.add('active');
+        document.getElementById('walletBalance').textContent = state.balance.toFixed(2) + ' ETB';
+        loadWalletHistory();
+        state.lastActivityTime = Date.now();
+        
+        // Haptic feedback
+        try { 
+            if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                tg.HapticFeedback.impactOccurred('light'); 
+            }
+        } catch(e){}
+    }
+
+    function closeWallet() {
+        document.getElementById('walletOverlay').classList.remove('active');
+        state.lastActivityTime = Date.now();
+    }
+
+    function switchWalletTab(tab) {
+        walletState.activeTab = tab;
+        
+        // Update tab buttons
+        document.querySelectorAll('.wallet-tab').forEach(t => {
+            t.classList.remove('active');
+        });
+        document.querySelector(`.wallet-tab[data-tab="${tab}"]`).classList.add('active');
+        
+        // Update tab content
+        document.querySelectorAll('.wallet-tab-content').forEach(c => {
+            c.classList.remove('active');
+        });
+        document.getElementById(tab + 'Tab').classList.add('active');
+        
+        // Load history if on history tab
+        if (tab === 'history') {
+            loadWalletHistory();
+        }
+        
+        state.lastActivityTime = Date.now();
+    }
+
+    function submitDeposit() {
+        const amount = document.getElementById('depositAmount').value;
+        const transactionId = document.getElementById('depositTransactionId').value;
+        const note = document.getElementById('depositNote').value;
+        
+        if (!amount || parseFloat(amount) < 10) {
+            showNotification('Please enter a valid amount (minimum 10 ETB)', 'error');
+            return;
+        }
+        
+        if (!transactionId) {
+            showNotification('Please enter the transaction ID from Telebirr', 'error');
+            return;
+        }
+        
+        const submitBtn = document.getElementById('submitDepositBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'SUBMITTING...';
+        
+        if (state.isConnected) {
+            socket.emit('wallet:depositRequest', {
+                amount: parseFloat(amount),
+                transactionId: transactionId,
+                note: note,
+                telebirrNumber: '0962577855'
+            }, (response) => {
+                if (response && response.success) {
+                    showNotification('✅ Deposit request submitted! Admin will verify and add funds.', 'success');
+                    
+                    // Clear form
+                    document.getElementById('depositAmount').value = '';
+                    document.getElementById('depositTransactionId').value = '';
+                    document.getElementById('depositNote').value = '';
+                    
+                    // Switch to history tab
+                    switchWalletTab('history');
+                    
+                    // Load updated history
+                    loadWalletHistory();
+                } else {
+                    showNotification(`❌ ${response?.message || 'Failed to submit deposit request'}`, 'error');
+                }
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'SUBMIT DEPOSIT REQUEST';
+            });
+        } else {
+            showNotification('❌ Not connected to server', 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'SUBMIT DEPOSIT REQUEST';
+        }
+        
+        state.lastActivityTime = Date.now();
+    }
+
+    function submitWithdrawal() {
+        const amount = document.getElementById('withdrawAmount').value;
+        const telebirr = document.getElementById('withdrawTelebirr').value;
+        const note = document.getElementById('withdrawNote').value;
+        
+        if (!amount || parseFloat(amount) < 50) {
+            showNotification('Minimum withdrawal amount is 50 ETB', 'error');
+            return;
+        }
+        
+        if (parseFloat(amount) > state.balance) {
+            showNotification('Insufficient balance for withdrawal', 'error');
+            return;
+        }
+        
+        if (!telebirr || !/^09[0-9]{8}$/.test(telebirr)) {
+            showNotification('Please enter a valid 10-digit Telebirr number starting with 09', 'error');
+            return;
+        }
+        
+        const submitBtn = document.getElementById('submitWithdrawBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'SUBMITTING...';
+        
+        if (state.isConnected) {
+            socket.emit('wallet:withdrawRequest', {
+                amount: parseFloat(amount),
+                telebirrNumber: telebirr,
+                note: note
+            }, (response) => {
+                if (response && response.success) {
+                    showNotification('✅ Withdrawal request submitted! Admin will process it.', 'success');
+                    
+                    // Clear form
+                    document.getElementById('withdrawAmount').value = '';
+                    document.getElementById('withdrawTelebirr').value = '';
+                    document.getElementById('withdrawNote').value = '';
+                    
+                    // Switch to history tab
+                    switchWalletTab('history');
+                    
+                    // Load updated history
+                    loadWalletHistory();
+                    
+                    // Update balance if withdrawal was immediately processed
+                    if (response.newBalance !== undefined) {
+                        state.balance = response.newBalance;
+                        document.getElementById('balanceVal').textContent = state.balance.toFixed(2);
+                        document.getElementById('stakeBalanceVal').textContent = state.balance.toFixed(2);
+                        document.getElementById('walletBalance').textContent = state.balance.toFixed(2) + ' ETB';
+                    }
+                } else {
+                    showNotification(`❌ ${response?.message || 'Failed to submit withdrawal request'}`, 'error');
+                }
+                
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'REQUEST WITHDRAWAL';
+            });
+        } else {
+            showNotification('❌ Not connected to server', 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'REQUEST WITHDRAWAL';
+        }
+        
+        state.lastActivityTime = Date.now();
+    }
+
+    function loadWalletHistory() {
+        if (walletState.isLoadingHistory) return;
+        
+        walletState.isLoadingHistory = true;
+        const historyList = document.getElementById('walletHistoryList');
+        historyList.innerHTML = '<div class="loading-wallet"><div class="spinner"></div><div>Loading history...</div></div>';
+        
+        if (state.isConnected) {
+            socket.emit('wallet:getHistory', {}, (response) => {
+                walletState.isLoadingHistory = false;
+                
+                if (response && response.success && response.transactions) {
+                    walletState.transactions = response.transactions;
+                    renderWalletHistory();
+                } else {
+                    historyList.innerHTML = '<div class="no-history">Failed to load history</div>';
+                }
+            });
+        } else {
+            walletState.isLoadingHistory = false;
+            historyList.innerHTML = '<div class="no-history">Not connected to server</div>';
+        }
+    }
+
+    function renderWalletHistory() {
+        const historyList = document.getElementById('walletHistoryList');
+        
+        if (!walletState.transactions || walletState.transactions.length === 0) {
+            historyList.innerHTML = '<div class="no-history">No transactions yet</div>';
+            return;
+        }
+        
+        historyList.innerHTML = '';
+        
+        walletState.transactions.forEach(transaction => {
+            const item = document.createElement('div');
+            item.className = 'wallet-history-item';
+            
+            const typeClass = transaction.type === 'deposit' ? 'deposit' : 'withdraw';
+            const typeText = transaction.type === 'deposit' ? 'DEPOSIT' : 'WITHDRAWAL';
+            
+            let statusClass = 'status-pending';
+            let statusText = 'PENDING';
+            
+            if (transaction.status === 'approved') {
+                statusClass = 'status-approved';
+                statusText = 'APPROVED';
+            } else if (transaction.status === 'rejected') {
+                statusClass = 'status-rejected';
+                statusText = 'REJECTED';
+            }
+            
+            item.innerHTML = `
+                <div>
+                    <div class="history-type ${typeClass}">${typeText}</div>
+                    <div style="font-size: 0.7rem; color: #64748b;">${new Date(transaction.date).toLocaleDateString()}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="history-amount">${transaction.amount > 0 ? '+' : ''}${transaction.amount} ETB</div>
+                    <div class="history-status ${statusClass}">${statusText}</div>
+                </div>
+            `;
+            
+            historyList.appendChild(item);
+        });
+    }
+
+    // Handle wallet-related socket events
+    socket.on('wallet:history', (transactions) => {
+        walletState.transactions = transactions;
+        if (document.getElementById('walletOverlay').classList.contains('active') && walletState.activeTab === 'history') {
+            renderWalletHistory();
+        }
+    });
+
+    socket.on('wallet:depositApproved', (data) => {
+        showNotification(`✅ Deposit of ${data.amount} ETB approved! New balance: ${data.newBalance} ETB`, 'success', 5000);
+        
+        // Update balance
+        state.balance = data.newBalance;
+        document.getElementById('balanceVal').textContent = state.balance.toFixed(2);
+        document.getElementById('stakeBalanceVal').textContent = state.balance.toFixed(2);
+        document.getElementById('walletBalance').textContent = state.balance.toFixed(2) + ' ETB';
+        
+        // Update history if wallet is open
+        if (document.getElementById('walletOverlay').classList.contains('active')) {
+            loadWalletHistory();
+        }
+    });
+
+    socket.on('wallet:withdrawProcessed', (data) => {
+        if (data.status === 'approved') {
+            showNotification(`✅ Withdrawal of ${data.amount} ETB processed! Sent to ${data.telebirrNumber}`, 'success', 5000);
+        } else if (data.status === 'rejected') {
+            showNotification(`❌ Withdrawal request rejected: ${data.reason || 'Contact admin for details'}`, 'error', 5000);
+        }
+        
+        // Update balance if provided
+        if (data.newBalance !== undefined) {
+            state.balance = data.newBalance;
+            document.getElementById('balanceVal').textContent = state.balance.toFixed(2);
+            document.getElementById('stakeBalanceVal').textContent = state.balance.toFixed(2);
+            document.getElementById('walletBalance').textContent = state.balance.toFixed(2) + ' ETB';
+        }
+        
+        // Update history if wallet is open
+        if (document.getElementById('walletOverlay').classList.contains('active')) {
+            loadWalletHistory();
+        }
+    });
+
     // Handle socket connection
     socket.on('connect', () => {
         console.log('✅ Socket connected:', socket.id);
@@ -1822,13 +2428,6 @@
         saveUserInfo();
     });
 
-    // Handle wallet config from server
-    socket.on('walletConfig', (config) => {
-        console.log('Wallet config received:', config);
-        state.walletConfig = config;
-        document.getElementById('adminPhoneNumber').textContent = config.adminPhone || '+251900000000';
-    });
-
     // Handle room status updates
     socket.on('roomStatus', (roomData) => {
         console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
@@ -1896,9 +2495,8 @@
         state.balance = parseFloat(bal);
         const val = state.balance.toFixed(2);
         document.getElementById('balanceVal').textContent = val;
-        
-        const stakeBal = document.getElementById('stakeBalanceVal');
-        if(stakeBal) stakeBal.textContent = val;
+        document.getElementById('stakeBalanceVal').textContent = val;
+        document.getElementById('walletBalance').textContent = val + ' ETB';
         
         const balancePill = document.getElementById('balancePill');
         if (state.balance === 0) {
@@ -2120,7 +2718,6 @@
         state.lastBoxCount = takenCount;
     }
 
-    // Update discovery timer
     function updateDiscoveryTimer(seconds, onlinePlayers) {
         const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
         const discoveryTimer = document.getElementById('discoveryTimer');
@@ -2549,7 +3146,6 @@
         document.getElementById('loseOverlay').classList.remove('active');
         document.getElementById('insufficientOverlay').classList.remove('active');
         document.getElementById('roomLockedOverlay').classList.remove('active');
-        document.getElementById('walletOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
         
         document.getElementById('btnBingo').disabled = true;
@@ -2588,283 +3184,7 @@
         console.log('✅ Lobby reset complete');
     }
 
-    // ============================================
-    // WALLET FUNCTIONS
-    // ============================================
-
-    function toggleWalletOverlay() {
-        const overlay = document.getElementById('walletOverlay');
-        overlay.classList.toggle('active');
-        
-        if (overlay.classList.contains('active')) {
-            document.getElementById('withdrawBalance').textContent = state.balance.toFixed(2) + ' ETB';
-            document.getElementById('adminPhoneNumber').textContent = state.walletConfig.adminPhone || '+251900000000';
-            loadTransactionHistory();
-        }
-    }
-
-    function showWalletTab(tabName) {
-        // Hide all tabs
-        document.querySelectorAll('.wallet-tab-content').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        
-        // Reset all tab buttons
-        document.getElementById('depositTabBtn').style.background = '#475569';
-        document.getElementById('withdrawTabBtn').style.background = '#475569';
-        document.getElementById('historyTabBtn').style.background = '#475569';
-        
-        // Show selected tab
-        if (tabName === 'deposit') {
-            document.getElementById('depositTabContent').classList.add('active');
-            document.getElementById('depositTabBtn').style.background = 'var(--main-color)';
-        } else if (tabName === 'withdraw') {
-            document.getElementById('withdrawTabContent').classList.add('active');
-            document.getElementById('withdrawTabBtn').style.background = 'var(--main-color)';
-        } else if (tabName === 'history') {
-            document.getElementById('historyTabContent').classList.add('active');
-            document.getElementById('historyTabBtn').style.background = 'var(--main-color)';
-            loadTransactionHistory();
-        }
-    }
-
-    function showHistoryType(type) {
-        document.getElementById('historyAllBtn').style.background = '#475569';
-        document.getElementById('historyDepositsBtn').style.background = '#475569';
-        document.getElementById('historyWithdrawalsBtn').style.background = '#475569';
-        
-        if (type === 'all') {
-            document.getElementById('historyAllBtn').style.background = 'var(--main-color)';
-            renderTransactionHistory('all');
-        } else if (type === 'deposits') {
-            document.getElementById('historyDepositsBtn').style.background = 'var(--main-color)';
-            renderTransactionHistory('deposits');
-        } else if (type === 'withdrawals') {
-            document.getElementById('historyWithdrawalsBtn').style.background = 'var(--main-color)';
-            renderTransactionHistory('withdrawals');
-        }
-    }
-
-    function submitDeposit() {
-        const phone = document.getElementById('depositPhone').value.trim();
-        const amount = parseFloat(document.getElementById('depositAmount').value);
-        const receipt = document.getElementById('depositReceipt').value.trim();
-        
-        if (!phone || !amount || !receipt) {
-            showWalletMessage('depositMessage', 'Please fill all fields', 'error');
-            return;
-        }
-        
-        if (amount < state.walletConfig.minDeposit) {
-            showWalletMessage('depositMessage', `Minimum deposit is ${state.walletConfig.minDeposit} ETB`, 'error');
-            return;
-        }
-        
-        if (receipt.length < 20) {
-            showWalletMessage('depositMessage', 'Please paste complete receipt text', 'error');
-            return;
-        }
-        
-        if (state.isConnected) {
-            socket.emit('submitDeposit', {
-                phone: phone,
-                amount: amount,
-                receipt: receipt
-            });
-            
-            showWalletMessage('depositMessage', '✅ Deposit request submitted! Admin will review within 1 hour.', 'success');
-            
-            // Clear form
-            document.getElementById('depositAmount').value = '';
-            document.getElementById('depositReceipt').value = '';
-        } else {
-            showWalletMessage('depositMessage', '❌ Not connected to server', 'error');
-        }
-    }
-
-    function submitWithdrawal() {
-        const phone = document.getElementById('withdrawPhone').value.trim();
-        const amount = parseFloat(document.getElementById('withdrawAmount').value);
-        
-        if (!phone || !amount) {
-            showWalletMessage('withdrawMessage', 'Please fill all fields', 'error');
-            return;
-        }
-        
-        if (amount < state.walletConfig.minWithdraw) {
-            showWalletMessage('withdrawMessage', `Minimum withdrawal is ${state.walletConfig.minWithdraw} ETB`, 'error');
-            return;
-        }
-        
-        if (amount > state.walletConfig.maxWithdraw) {
-            showWalletMessage('withdrawMessage', `Maximum withdrawal is ${state.walletConfig.maxWithdraw} ETB`, 'error');
-            return;
-        }
-        
-        if (amount > state.balance) {
-            showWalletMessage('withdrawMessage', 'Insufficient balance', 'error');
-            return;
-        }
-        
-        if (state.isConnected) {
-            socket.emit('submitWithdrawal', {
-                phone: phone,
-                amount: amount
-            });
-            
-            showWalletMessage('withdrawMessage', '✅ Withdrawal request submitted! Will be processed within 1 hour.', 'success');
-            
-            // Clear form
-            document.getElementById('withdrawAmount').value = '';
-        } else {
-            showWalletMessage('withdrawMessage', '❌ Not connected to server', 'error');
-        }
-    }
-
-    function showWalletMessage(elementId, message, type) {
-        const element = document.getElementById(elementId);
-        element.textContent = message;
-        element.className = `wallet-message ${type}`;
-        element.style.display = 'block';
-        
-        setTimeout(() => {
-            element.style.display = 'none';
-        }, 5000);
-    }
-
-    function loadTransactionHistory() {
-        if (state.isConnected) {
-            socket.emit('getTransactionHistory');
-        }
-    }
-
-    function renderTransactionHistory(type) {
-        const container = document.getElementById('historyList');
-        container.innerHTML = '';
-        
-        let transactions = [];
-        
-        if (type === 'all') {
-            transactions = [...state.depositHistory, ...state.withdrawalHistory];
-        } else if (type === 'deposits') {
-            transactions = state.depositHistory;
-        } else if (type === 'withdrawals') {
-            transactions = state.withdrawalHistory;
-        }
-        
-        if (transactions.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #64748b;">
-                    <div style="font-size: 2rem; margin-bottom: 10px;">📋</div>
-                    <div>No transactions yet</div>
-                </div>
-            `;
-            return;
-        }
-        
-        // Sort by date (newest first)
-        transactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        
-        transactions.forEach(tx => {
-            const isDeposit = tx.type === 'deposit';
-            const statusColor = {
-                'pending': '#f59e0b',
-                'approved': '#10b981',
-                'rejected': '#ef4444',
-                'cancelled': '#64748b'
-            }[tx.status] || '#94a3b8';
-            
-            const statusIcon = {
-                'pending': '⏳',
-                'approved': '✅',
-                'rejected': '❌',
-                'cancelled': '🚫'
-            }[tx.status] || '❓';
-            
-            const txElement = document.createElement('div');
-            txElement.className = `transaction-item ${isDeposit ? '' : 'withdrawal'}`;
-            
-            txElement.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="font-size: 1.2rem;">${isDeposit ? '📥' : '📤'}</div>
-                        <div style="font-weight: 700; color: white;">${isDeposit ? 'DEPOSIT' : 'WITHDRAWAL'}</div>
-                    </div>
-                    <div style="font-weight: 900; font-size: 1.1rem; color: ${isDeposit ? '#10b981' : '#f59e0b'};">${isDeposit ? '+' : '-'}${tx.amount} ETB</div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <div style="font-size: 0.8rem; color: #94a3b8;">Status:</div>
-                    <div style="font-size: 0.8rem; font-weight: 700; color: ${statusColor};">${statusIcon} ${tx.status.toUpperCase()}</div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <div style="font-size: 0.8rem; color: #94a3b8;">Date:</div>
-                    <div style="font-size: 0.8rem; color: white;">${new Date(tx.createdAt).toLocaleDateString()}</div>
-                </div>
-                
-                ${tx.adminNote ? `
-                <div style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px;">
-                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 3px;">Admin Note:</div>
-                    <div style="font-size: 0.8rem; color: white;">${tx.adminNote}</div>
-                </div>
-                ` : ''}
-            `;
-            
-            container.appendChild(txElement);
-        });
-    }
-
-    // ============================================
-    // SOCKET EVENT HANDLERS FOR WALLET
-    // ============================================
-
-    socket.on('depositSubmitted', (data) => {
-        if (data.success) {
-            showNotification('✅ Deposit request submitted! Admin will review soon.', 'success', 5000);
-            loadTransactionHistory();
-        }
-    });
-
-    socket.on('withdrawalSubmitted', (data) => {
-        if (data.success) {
-            showNotification('✅ Withdrawal request submitted! Will be processed within 1 hour.', 'success', 5000);
-            loadTransactionHistory();
-        }
-    });
-
-    socket.on('transactionHistory', (data) => {
-        state.depositHistory = data.deposits || [];
-        state.withdrawalHistory = data.withdrawals || [];
-        renderTransactionHistory('all');
-    });
-
-    socket.on('depositApproved', (data) => {
-        showNotification(`✅ Deposit of ${data.amount} ETB approved! Funds added to your account.`, 'success', 5000);
-        refreshBalance();
-        loadTransactionHistory();
-    });
-
-    socket.on('depositRejected', (data) => {
-        showNotification(`❌ Deposit of ${data.amount} ETB rejected: ${data.reason}`, 'error', 5000);
-        loadTransactionHistory();
-    });
-
-    socket.on('withdrawalApproved', (data) => {
-        showNotification(`✅ Withdrawal of ${data.amount} ETB approved! Funds sent to your Telebirr.`, 'success', 5000);
-        refreshBalance();
-        loadTransactionHistory();
-    });
-
-    socket.on('withdrawalRejected', (data) => {
-        showNotification(`❌ Withdrawal of ${data.amount} ETB rejected: ${data.reason}`, 'error', 5000);
-        loadTransactionHistory();
-    });
-
-    // ============================================
-    // EXISTING SOCKET EVENT HANDLERS
-    // ============================================
-
+    // Handle lobby updates
     socket.on('lobbyUpdate', (d) => {
         console.log('👥 Lobby update:', d);
         
@@ -2886,6 +3206,7 @@
                 info.style.color = '#94a3b8';
             }
             
+            // Also update discovery overlay if active
             const discoveryOverlay = document.getElementById('discoveryOverlay');
             if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
                 const discoveryPlayersInfo = document.getElementById('discoveryPlayersInfo');
@@ -2898,12 +3219,14 @@
         }
     });
 
+    // Handle game countdown
     socket.on('gameCountdown', (d) => {
         console.log('⏱️ Game countdown event:', d);
         
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
+            // Update waiting overlay timer
             timerElement.textContent = d.timer;
             
             if (d.timer > 0) {
@@ -2928,6 +3251,7 @@
                 showNotification('🎮 Game starting now!', 'success', 2000);
             }
             
+            // Also update discovery overlay timer if visible
             const discoveryOverlay = document.getElementById('discoveryOverlay');
             if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
                 updateDiscoveryTimer(d.timer, d.onlinePlayers);
@@ -3040,11 +3364,13 @@
         state.lastActivityTime = Date.now();
     });
 
+    // Handle room locked event
     socket.on('roomLocked', (data) => {
         console.log('🔒 Room locked event received:', data);
         
         showNotification(`🔒 ${data.message}`, 'warning', 3000);
         
+        // Show room locked overlay
         const roomLockedOverlay = document.getElementById('roomLockedOverlay');
         const roomLockedMessage = document.getElementById('roomLockedMessage');
         
@@ -3054,15 +3380,18 @@
         
         roomLockedOverlay.classList.add('active');
         
+        // Automatically return to stake selection after 3 seconds
         setTimeout(() => {
             roomLockedOverlay.classList.remove('active');
             toggleScreen('discoveryOverlay', 'stakeOverlay');
             
+            // Hide discovery timer if visible
             const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
             if (discoveryTimerContainer) {
                 discoveryTimerContainer.style.display = 'none';
             }
             
+            // Reset state
             state.stake = 0;
             state.selectedBox = null;
             state.roomSubscribed = false;
@@ -3192,6 +3521,7 @@
         }
     });
 
+    // Handle game timeout event
     socket.on('gameTimeout', (data) => {
         console.log('⏰ Game timeout event received:', data);
         
@@ -3200,6 +3530,7 @@
             
             showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'timeout', 4000);
             
+            // Reset to lobby after delay
             setTimeout(() => {
                 resetToLobby();
             }, 2000);
@@ -3220,6 +3551,7 @@
         document.getElementById('balanceVal').textContent = balance.toFixed(2);
         const stakeBal = document.getElementById('stakeBalanceVal');
         if(stakeBal) stakeBal.textContent = balance.toFixed(2);
+        document.getElementById('walletBalance').textContent = balance.toFixed(2) + ' ETB';
         
         const balancePill = document.getElementById('balancePill');
         balancePill.style.animation = 'pulse 0.5s';
@@ -3234,6 +3566,7 @@
         showNotification(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`, 'success', 5000);
         state.balance = parseFloat(data.newBalance);
         document.getElementById('balanceVal').textContent = data.newBalance.toFixed(2);
+        document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
         
         state.lastActivityTime = Date.now();
     });
