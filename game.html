@@ -51,7 +51,7 @@
                 radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
         }
 
-        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay, #roomLockedOverlay {
+        #loadingOverlay, #reconnectOverlay, .step-overlay, #winOverlay, #loseOverlay, #insufficientOverlay, #roomLockedOverlay, #walletOverlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-dark);
@@ -69,7 +69,7 @@
             visibility: hidden;
         }
 
-        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active, #roomLockedOverlay.active { 
+        .step-overlay.active, #loadingOverlay.active, #reconnectOverlay.active, #winOverlay.active, #loseOverlay.active, #insufficientOverlay.active, #roomLockedOverlay.active, #walletOverlay.active { 
             pointer-events: auto; 
             opacity: 1; 
             visibility: visible; 
@@ -78,6 +78,7 @@
         #reconnectOverlay { background: rgba(2, 6, 23, 0.8); z-index: 10001; }
         #insufficientOverlay { z-index: 10000; }
         #roomLockedOverlay { z-index: 10002; }
+        #walletOverlay { z-index: 10003; }
 
         .game-status-title {
             font-size: 3.5rem;
@@ -853,6 +854,122 @@
             background: rgba(239, 68, 68, 0.9) !important;
         }
 
+        /* Wallet styles */
+        .wallet-btn {
+            background: rgba(59, 130, 246, 0.1);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--main-color);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wallet-btn:active {
+            transform: rotate(180deg);
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .wallet-tab-content {
+            display: none;
+        }
+
+        .wallet-tab-content.active {
+            display: block;
+        }
+
+        .wallet-input {
+            width: 100%;
+            padding: 12px;
+            background: var(--card-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+
+        .wallet-input:focus {
+            outline: none;
+            border-color: var(--main-color);
+        }
+
+        .wallet-textarea {
+            width: 100%;
+            padding: 12px;
+            background: var(--card-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.9rem;
+            resize: vertical;
+            min-height: 100px;
+            margin-bottom: 15px;
+        }
+
+        .wallet-textarea:focus {
+            outline: none;
+            border-color: var(--main-color);
+        }
+
+        .wallet-message {
+            padding: 10px;
+            border-radius: 8px;
+            display: none;
+            margin-top: 10px;
+        }
+
+        .wallet-message.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .wallet-message.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .transaction-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+        }
+
+        .transaction-item.withdrawal {
+            border-left-color: #f59e0b;
+        }
+
+        .transaction-status {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .status-pending {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .status-approved {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-rejected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
             .ball-display {
@@ -993,378 +1110,6 @@
             
             .discovery-timer {
                 font-size: 2.5rem !important;
-            }
-        }
-
-        /* ========== ANIMATED CHARACTERS FOR TELEGRAM MINI APP ========== */
-        .character-container {
-            width: 100px;
-            height: 120px;
-            position: relative;
-            margin: 0 auto 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .character {
-            position: relative;
-            width: 100px;
-            height: 120px;
-        }
-
-        /* Bingo Character */
-        .bingo-character {
-            animation: bingoBounce 3s ease-in-out infinite;
-        }
-
-        .bingo-character .character-body {
-            position: absolute;
-            width: 60px;
-            height: 80px;
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            border-radius: 30px 30px 15px 15px;
-            top: 20px;
-            left: 20px;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }
-
-        .bingo-character .character-head {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background: #3b82f6;
-            border-radius: 50%;
-            top: -25px;
-            left: 5px;
-            border: 3px solid #1d4ed8;
-        }
-
-        .bingo-character .character-eye {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background: white;
-            border-radius: 50%;
-            top: 15px;
-        }
-
-        .bingo-character .left-eye {
-            left: 10px;
-            animation: blink 4s infinite;
-        }
-
-        .bingo-character .right-eye {
-            right: 10px;
-            animation: blink 4s infinite 0.5s;
-        }
-
-        .bingo-character .character-smile {
-            position: absolute;
-            width: 25px;
-            height: 12px;
-            border-bottom: 3px solid white;
-            border-radius: 0 0 25px 25px;
-            bottom: 10px;
-            left: 12.5px;
-        }
-
-        .bingo-character .character-ball {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            background: white;
-            border-radius: 50%;
-            border: 3px solid #fbbf24;
-            bottom: 10px;
-            right: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            color: #3b82f6;
-            font-size: 0.8rem;
-            animation: ballRotate 4s linear infinite;
-        }
-
-        .bingo-character .character-ball::before {
-            content: "B";
-            position: absolute;
-        }
-
-        .bingo-character .character-arm {
-            position: absolute;
-            width: 40px;
-            height: 8px;
-            background: #1d4ed8;
-            border-radius: 4px;
-            bottom: 30px;
-            left: -15px;
-            transform-origin: right center;
-            animation: waveArm 2s ease-in-out infinite;
-        }
-
-        /* Keno Character */
-        .keno-character {
-            animation: kenoShake 3s ease-in-out infinite;
-        }
-
-        .keno-character .character-body {
-            position: absolute;
-            width: 60px;
-            height: 80px;
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            border-radius: 30px 30px 15px 15px;
-            top: 20px;
-            left: 20px;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-        }
-
-        .keno-character .character-head {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background: #8b5cf6;
-            border-radius: 50%;
-            top: -25px;
-            left: 5px;
-            border: 3px solid #7c3aed;
-        }
-
-        .keno-character .character-eye {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background: white;
-            border-radius: 50%;
-            top: 15px;
-        }
-
-        .keno-character .left-eye {
-            left: 10px;
-            animation: blink 3s infinite;
-        }
-
-        .keno-character .right-eye {
-            right: 10px;
-            animation: wink 2s infinite;
-        }
-
-        .keno-character .character-wink {
-            position: absolute;
-            width: 12px;
-            height: 3px;
-            background: white;
-            border-radius: 2px;
-            top: 18px;
-            right: 10px;
-            animation: wink 2s infinite;
-        }
-
-        .keno-character .character-dice {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            background: white;
-            border-radius: 6px;
-            border: 3px solid #fbbf24;
-            bottom: 10px;
-            right: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            color: #8b5cf6;
-            font-size: 0.8rem;
-            animation: diceRoll 4s linear infinite;
-        }
-
-        .keno-character .character-dice::before {
-            content: "6";
-            position: absolute;
-            animation: diceNumber 2s infinite;
-        }
-
-        .keno-character .character-dice::after {
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(45deg, transparent 45%, rgba(139, 92, 246, 0.2) 50%, transparent 55%);
-            animation: diceShine 3s linear infinite;
-        }
-
-        .keno-character .character-arm {
-            position: absolute;
-            width: 40px;
-            height: 8px;
-            background: #7c3aed;
-            border-radius: 4px;
-            bottom: 30px;
-            left: -15px;
-            transform-origin: right center;
-            animation: kenoWave 2s ease-in-out infinite;
-        }
-
-        /* Character Animations */
-        @keyframes bingoBounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-15px);
-            }
-        }
-
-        @keyframes kenoShake {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            25% {
-                transform: rotate(3deg);
-            }
-            75% {
-                transform: rotate(-3deg);
-            }
-        }
-
-        @keyframes blink {
-            0%, 90%, 95%, 100% {
-                height: 12px;
-            }
-            92.5%, 97.5% {
-                height: 3px;
-            }
-        }
-
-        @keyframes wink {
-            0%, 70%, 100% {
-                height: 3px;
-            }
-            75%, 95% {
-                height: 12px;
-            }
-        }
-
-        @keyframes ballRotate {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes diceRoll {
-            0% {
-                transform: rotate(0deg);
-            }
-            25% {
-                transform: rotate(90deg);
-            }
-            50% {
-                transform: rotate(180deg);
-            }
-            75% {
-                transform: rotate(270deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes diceNumber {
-            0%, 25% {
-                content: "1";
-            }
-            25.1%, 50% {
-                content: "2";
-            }
-            50.1%, 75% {
-                content: "3";
-            }
-            75.1%, 100% {
-                content: "6";
-            }
-        }
-
-        @keyframes diceShine {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes waveArm {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            50% {
-                transform: rotate(-30deg);
-            }
-        }
-
-        @keyframes kenoWave {
-            0%, 100% {
-                transform: rotate(0deg);
-            }
-            25% {
-                transform: rotate(-25deg);
-            }
-            75% {
-                transform: rotate(25deg);
-            }
-        }
-
-        /* Character Hover Effects */
-        .game-card:hover .bingo-character {
-            animation: bingoBounce 1s ease-in-out infinite;
-        }
-
-        .game-card:hover .keno-character {
-            animation: kenoShake 1s ease-in-out infinite;
-        }
-
-        .game-card:hover .bingo-character .character-ball {
-            animation: ballRotate 2s linear infinite;
-        }
-
-        .game-card:hover .keno-character .character-dice {
-            animation: diceRoll 1s linear infinite;
-        }
-
-        /* Mobile adjustments for characters */
-        @media (max-width: 480px) {
-            .character-container {
-                width: 80px;
-                height: 100px;
-            }
-            
-            .character {
-                width: 80px;
-                height: 100px;
-            }
-            
-            .bingo-character .character-body,
-            .keno-character .character-body {
-                width: 50px;
-                height: 65px;
-            }
-            
-            .bingo-character .character-head,
-            .keno-character .character-head {
-                width: 40px;
-                height: 40px;
-                top: -20px;
-            }
-            
-            .bingo-character .character-ball,
-            .keno-character .character-dice {
-                width: 25px;
-                height: 25px;
-                font-size: 0.7rem;
             }
         }
     </style>
@@ -1609,12 +1354,139 @@
     </button>
 </div>
 
+<!-- Wallet Overlay -->
+<div id="walletOverlay" class="step-overlay">
+    <div style="position: relative; width: 100%; max-width: 400px; padding: 20px;">
+        <!-- Close button -->
+        <button onclick="toggleWalletOverlay()" style="position: absolute; top: 10px; right: 10px; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer;">×</button>
+        
+        <!-- Tabs -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="depositTabBtn" onclick="showWalletTab('deposit')" style="flex: 1; padding: 12px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">💰 DEPOSIT</button>
+            <button id="withdrawTabBtn" onclick="showWalletTab('withdraw')" style="flex: 1; padding: 12px; background: #475569; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">💳 WITHDRAW</button>
+            <button id="historyTabBtn" onclick="showWalletTab('history')" style="flex: 1; padding: 12px; background: #475569; color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">📋 HISTORY</button>
+        </div>
+        
+        <!-- DEPOSIT TAB -->
+        <div id="depositTabContent" class="wallet-tab-content active">
+            <h2 style="color: var(--p-gold); margin-bottom: 15px;">DEPOSIT FUNDS</h2>
+            
+            <div style="background: var(--card-glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <div style="color: #10b981; font-size: 1.5rem;">📱</div>
+                    <div style="font-weight: 700; color: #10b981;">Send via Telebirr</div>
+                </div>
+                
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
+                    1. Send money to this Telebirr number:
+                </p>
+                
+                <div style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3); margin-bottom: 15px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">Admin Telebirr Number:</div>
+                    <div id="adminPhoneNumber" style="font-size: 1.5rem; font-weight: 900; color: #10b981; letter-spacing: 1px;">+251 9** *** ***</div>
+                </div>
+                
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
+                    2. Copy the transaction receipt from SMS
+                </p>
+                
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 15px;">
+                    3. Paste receipt and enter amount below
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Your Telebirr Phone:</label>
+                <input type="text" id="depositPhone" placeholder="+2519********" class="wallet-input">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Amount (ETB):</label>
+                <input type="number" id="depositAmount" placeholder="100" min="10" step="10" class="wallet-input">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Transaction Receipt (from SMS):</label>
+                <textarea id="depositReceipt" placeholder="Paste the complete receipt text from Telebirr SMS here..." rows="4" class="wallet-textarea"></textarea>
+            </div>
+            
+            <button onclick="submitDeposit()" style="width: 100%; padding: 15px; background: linear-gradient(90deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1.1rem; cursor: pointer; margin-bottom: 10px;">
+                SUBMIT DEPOSIT REQUEST
+            </button>
+            
+            <div id="depositMessage" class="wallet-message"></div>
+        </div>
+        
+        <!-- WITHDRAW TAB -->
+        <div id="withdrawTabContent" class="wallet-tab-content">
+            <h2 style="color: var(--p-gold); margin-bottom: 15px;">WITHDRAW FUNDS</h2>
+            
+            <div style="background: var(--card-glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <div style="color: #f59e0b; font-size: 1.5rem;">💰</div>
+                    <div style="font-weight: 700; color: #f59e0b;">Withdraw to Telebirr</div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                    <div style="color: #94a3b8;">Available Balance:</div>
+                    <div style="color: var(--p-gold); font-weight: 900; font-size: 1.2rem;" id="withdrawBalance">0.00 ETB</div>
+                </div>
+                
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 10px;">
+                    Min: 10 ETB • Max: 50,000 ETB
+                </p>
+                <p style="color: #94a3b8; font-size: 0.8rem;">
+                    Withdrawals are processed within 1 hour during business hours (9AM-6PM)
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Your Telebirr Phone:</label>
+                <input type="text" id="withdrawPhone" placeholder="+2519********" class="wallet-input">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #94a3b8; margin-bottom: 5px; font-size: 0.9rem;">Amount (ETB):</label>
+                <input type="number" id="withdrawAmount" placeholder="100" min="10" step="10" class="wallet-input">
+            </div>
+            
+            <button onclick="submitWithdrawal()" style="width: 100%; padding: 15px; background: linear-gradient(90deg, #f59e0b, #d97706); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1.1rem; cursor: pointer; margin-bottom: 10px;">
+                REQUEST WITHDRAWAL
+            </button>
+            
+            <div id="withdrawMessage" class="wallet-message"></div>
+        </div>
+        
+        <!-- HISTORY TAB -->
+        <div id="historyTabContent" class="wallet-tab-content">
+            <h2 style="color: var(--p-gold); margin-bottom: 15px;">TRANSACTION HISTORY</h2>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="showHistoryType('all')" id="historyAllBtn" style="flex: 1; padding: 10px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">ALL</button>
+                <button onclick="showHistoryType('deposits')" id="historyDepositsBtn" style="flex: 1; padding: 10px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">DEPOSITS</button>
+                <button onclick="showHistoryType('withdrawals')" id="historyWithdrawalsBtn" style="flex: 1; padding: 10px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer;">WITHDRAWALS</button>
+            </div>
+            
+            <div id="historyList" style="max-height: 300px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 12px;">
+                <!-- Transactions will be loaded here -->
+                <div style="text-align: center; padding: 40px; color: #64748b;">
+                    <div style="font-size: 2rem; margin-bottom: 10px;">📋</div>
+                    <div>No transactions yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="header">
     <div class="header-left">
         <span id="userDisplay" style="font-weight: 900; font-size: 0.9rem;">PLAYER</span>
         <span id="roomDisplay" style="font-size: 0.6rem; color: #64748b;">CONNECTING...</span>
     </div>
     <div class="header-right">
+        <div class="wallet-btn" onclick="toggleWalletOverlay()" title="Wallet">
+            💰
+        </div>
         <div class="balance-pill" id="balancePill">
             <span id="balanceVal">0.00</span> <small style="font-size: 0.5rem">ETB</small>
         </div>
@@ -1721,7 +1593,15 @@
         totalPlayersCount: 0,
         isResettingLobby: false,
         discoveryTimerInterval: null,
-        currentDiscoveryTimer: 30
+        currentDiscoveryTimer: 30,
+        depositHistory: [],
+        withdrawalHistory: [],
+        walletConfig: {
+            adminPhone: '+251900000000', // This should be set from server
+            minDeposit: 10,
+            minWithdraw: 10,
+            maxWithdraw: 50000
+        }
     };
 
     // Update connection status UI
@@ -1942,7 +1822,14 @@
         saveUserInfo();
     });
 
-    // ⭐⭐ UPDATED: Handle room status updates with locked room support
+    // Handle wallet config from server
+    socket.on('walletConfig', (config) => {
+        console.log('Wallet config received:', config);
+        state.walletConfig = config;
+        document.getElementById('adminPhoneNumber').textContent = config.adminPhone || '+251900000000';
+    });
+
+    // Handle room status updates
     socket.on('roomStatus', (roomData) => {
         console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
         
@@ -1967,7 +1854,6 @@
             const prizeElement = document.getElementById(`roomPrize${stake}`);
             
             if (statusElement && playersElement && prizeElement) {
-                // Check if room is locked (game is playing)
                 const isLocked = roomInfo.locked || roomInfo.status === 'locked';
                 const status = isLocked ? 'LOCKED' : roomInfo.status.toUpperCase();
                 
@@ -2092,7 +1978,7 @@
                 updateBoxCounters(takenBoxes);
             });
             
-            // ⭐⭐ NEW: Request countdown status for discovery overlay
+            // Request countdown status for discovery overlay
             socket.emit('getRoomCountdown', { room: amt }, (response) => {
                 if (response && response.countdownActive) {
                     console.log(`⏱️ Discovery timer active: ${response.seconds} seconds, ${response.onlinePlayers} online players`);
@@ -2234,7 +2120,7 @@
         state.lastBoxCount = takenCount;
     }
 
-    // ⭐⭐ NEW: Update discovery timer
+    // Update discovery timer
     function updateDiscoveryTimer(seconds, onlinePlayers) {
         const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
         const discoveryTimer = document.getElementById('discoveryTimer');
@@ -2663,6 +2549,7 @@
         document.getElementById('loseOverlay').classList.remove('active');
         document.getElementById('insufficientOverlay').classList.remove('active');
         document.getElementById('roomLockedOverlay').classList.remove('active');
+        document.getElementById('walletOverlay').classList.remove('active');
         document.getElementById('stakeOverlay').classList.add('active');
         
         document.getElementById('btnBingo').disabled = true;
@@ -2701,7 +2588,283 @@
         console.log('✅ Lobby reset complete');
     }
 
-    // ⭐⭐ UPDATED: lobbyUpdate event handler - Also updates discovery overlay
+    // ============================================
+    // WALLET FUNCTIONS
+    // ============================================
+
+    function toggleWalletOverlay() {
+        const overlay = document.getElementById('walletOverlay');
+        overlay.classList.toggle('active');
+        
+        if (overlay.classList.contains('active')) {
+            document.getElementById('withdrawBalance').textContent = state.balance.toFixed(2) + ' ETB';
+            document.getElementById('adminPhoneNumber').textContent = state.walletConfig.adminPhone || '+251900000000';
+            loadTransactionHistory();
+        }
+    }
+
+    function showWalletTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll('.wallet-tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Reset all tab buttons
+        document.getElementById('depositTabBtn').style.background = '#475569';
+        document.getElementById('withdrawTabBtn').style.background = '#475569';
+        document.getElementById('historyTabBtn').style.background = '#475569';
+        
+        // Show selected tab
+        if (tabName === 'deposit') {
+            document.getElementById('depositTabContent').classList.add('active');
+            document.getElementById('depositTabBtn').style.background = 'var(--main-color)';
+        } else if (tabName === 'withdraw') {
+            document.getElementById('withdrawTabContent').classList.add('active');
+            document.getElementById('withdrawTabBtn').style.background = 'var(--main-color)';
+        } else if (tabName === 'history') {
+            document.getElementById('historyTabContent').classList.add('active');
+            document.getElementById('historyTabBtn').style.background = 'var(--main-color)';
+            loadTransactionHistory();
+        }
+    }
+
+    function showHistoryType(type) {
+        document.getElementById('historyAllBtn').style.background = '#475569';
+        document.getElementById('historyDepositsBtn').style.background = '#475569';
+        document.getElementById('historyWithdrawalsBtn').style.background = '#475569';
+        
+        if (type === 'all') {
+            document.getElementById('historyAllBtn').style.background = 'var(--main-color)';
+            renderTransactionHistory('all');
+        } else if (type === 'deposits') {
+            document.getElementById('historyDepositsBtn').style.background = 'var(--main-color)';
+            renderTransactionHistory('deposits');
+        } else if (type === 'withdrawals') {
+            document.getElementById('historyWithdrawalsBtn').style.background = 'var(--main-color)';
+            renderTransactionHistory('withdrawals');
+        }
+    }
+
+    function submitDeposit() {
+        const phone = document.getElementById('depositPhone').value.trim();
+        const amount = parseFloat(document.getElementById('depositAmount').value);
+        const receipt = document.getElementById('depositReceipt').value.trim();
+        
+        if (!phone || !amount || !receipt) {
+            showWalletMessage('depositMessage', 'Please fill all fields', 'error');
+            return;
+        }
+        
+        if (amount < state.walletConfig.minDeposit) {
+            showWalletMessage('depositMessage', `Minimum deposit is ${state.walletConfig.minDeposit} ETB`, 'error');
+            return;
+        }
+        
+        if (receipt.length < 20) {
+            showWalletMessage('depositMessage', 'Please paste complete receipt text', 'error');
+            return;
+        }
+        
+        if (state.isConnected) {
+            socket.emit('submitDeposit', {
+                phone: phone,
+                amount: amount,
+                receipt: receipt
+            });
+            
+            showWalletMessage('depositMessage', '✅ Deposit request submitted! Admin will review within 1 hour.', 'success');
+            
+            // Clear form
+            document.getElementById('depositAmount').value = '';
+            document.getElementById('depositReceipt').value = '';
+        } else {
+            showWalletMessage('depositMessage', '❌ Not connected to server', 'error');
+        }
+    }
+
+    function submitWithdrawal() {
+        const phone = document.getElementById('withdrawPhone').value.trim();
+        const amount = parseFloat(document.getElementById('withdrawAmount').value);
+        
+        if (!phone || !amount) {
+            showWalletMessage('withdrawMessage', 'Please fill all fields', 'error');
+            return;
+        }
+        
+        if (amount < state.walletConfig.minWithdraw) {
+            showWalletMessage('withdrawMessage', `Minimum withdrawal is ${state.walletConfig.minWithdraw} ETB`, 'error');
+            return;
+        }
+        
+        if (amount > state.walletConfig.maxWithdraw) {
+            showWalletMessage('withdrawMessage', `Maximum withdrawal is ${state.walletConfig.maxWithdraw} ETB`, 'error');
+            return;
+        }
+        
+        if (amount > state.balance) {
+            showWalletMessage('withdrawMessage', 'Insufficient balance', 'error');
+            return;
+        }
+        
+        if (state.isConnected) {
+            socket.emit('submitWithdrawal', {
+                phone: phone,
+                amount: amount
+            });
+            
+            showWalletMessage('withdrawMessage', '✅ Withdrawal request submitted! Will be processed within 1 hour.', 'success');
+            
+            // Clear form
+            document.getElementById('withdrawAmount').value = '';
+        } else {
+            showWalletMessage('withdrawMessage', '❌ Not connected to server', 'error');
+        }
+    }
+
+    function showWalletMessage(elementId, message, type) {
+        const element = document.getElementById(elementId);
+        element.textContent = message;
+        element.className = `wallet-message ${type}`;
+        element.style.display = 'block';
+        
+        setTimeout(() => {
+            element.style.display = 'none';
+        }, 5000);
+    }
+
+    function loadTransactionHistory() {
+        if (state.isConnected) {
+            socket.emit('getTransactionHistory');
+        }
+    }
+
+    function renderTransactionHistory(type) {
+        const container = document.getElementById('historyList');
+        container.innerHTML = '';
+        
+        let transactions = [];
+        
+        if (type === 'all') {
+            transactions = [...state.depositHistory, ...state.withdrawalHistory];
+        } else if (type === 'deposits') {
+            transactions = state.depositHistory;
+        } else if (type === 'withdrawals') {
+            transactions = state.withdrawalHistory;
+        }
+        
+        if (transactions.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #64748b;">
+                    <div style="font-size: 2rem; margin-bottom: 10px;">📋</div>
+                    <div>No transactions yet</div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Sort by date (newest first)
+        transactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        transactions.forEach(tx => {
+            const isDeposit = tx.type === 'deposit';
+            const statusColor = {
+                'pending': '#f59e0b',
+                'approved': '#10b981',
+                'rejected': '#ef4444',
+                'cancelled': '#64748b'
+            }[tx.status] || '#94a3b8';
+            
+            const statusIcon = {
+                'pending': '⏳',
+                'approved': '✅',
+                'rejected': '❌',
+                'cancelled': '🚫'
+            }[tx.status] || '❓';
+            
+            const txElement = document.createElement('div');
+            txElement.className = `transaction-item ${isDeposit ? '' : 'withdrawal'}`;
+            
+            txElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="font-size: 1.2rem;">${isDeposit ? '📥' : '📤'}</div>
+                        <div style="font-weight: 700; color: white;">${isDeposit ? 'DEPOSIT' : 'WITHDRAWAL'}</div>
+                    </div>
+                    <div style="font-weight: 900; font-size: 1.1rem; color: ${isDeposit ? '#10b981' : '#f59e0b'};">${isDeposit ? '+' : '-'}${tx.amount} ETB</div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <div style="font-size: 0.8rem; color: #94a3b8;">Status:</div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: ${statusColor};">${statusIcon} ${tx.status.toUpperCase()}</div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <div style="font-size: 0.8rem; color: #94a3b8;">Date:</div>
+                    <div style="font-size: 0.8rem; color: white;">${new Date(tx.createdAt).toLocaleDateString()}</div>
+                </div>
+                
+                ${tx.adminNote ? `
+                <div style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                    <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 3px;">Admin Note:</div>
+                    <div style="font-size: 0.8rem; color: white;">${tx.adminNote}</div>
+                </div>
+                ` : ''}
+            `;
+            
+            container.appendChild(txElement);
+        });
+    }
+
+    // ============================================
+    // SOCKET EVENT HANDLERS FOR WALLET
+    // ============================================
+
+    socket.on('depositSubmitted', (data) => {
+        if (data.success) {
+            showNotification('✅ Deposit request submitted! Admin will review soon.', 'success', 5000);
+            loadTransactionHistory();
+        }
+    });
+
+    socket.on('withdrawalSubmitted', (data) => {
+        if (data.success) {
+            showNotification('✅ Withdrawal request submitted! Will be processed within 1 hour.', 'success', 5000);
+            loadTransactionHistory();
+        }
+    });
+
+    socket.on('transactionHistory', (data) => {
+        state.depositHistory = data.deposits || [];
+        state.withdrawalHistory = data.withdrawals || [];
+        renderTransactionHistory('all');
+    });
+
+    socket.on('depositApproved', (data) => {
+        showNotification(`✅ Deposit of ${data.amount} ETB approved! Funds added to your account.`, 'success', 5000);
+        refreshBalance();
+        loadTransactionHistory();
+    });
+
+    socket.on('depositRejected', (data) => {
+        showNotification(`❌ Deposit of ${data.amount} ETB rejected: ${data.reason}`, 'error', 5000);
+        loadTransactionHistory();
+    });
+
+    socket.on('withdrawalApproved', (data) => {
+        showNotification(`✅ Withdrawal of ${data.amount} ETB approved! Funds sent to your Telebirr.`, 'success', 5000);
+        refreshBalance();
+        loadTransactionHistory();
+    });
+
+    socket.on('withdrawalRejected', (data) => {
+        showNotification(`❌ Withdrawal of ${data.amount} ETB rejected: ${data.reason}`, 'error', 5000);
+        loadTransactionHistory();
+    });
+
+    // ============================================
+    // EXISTING SOCKET EVENT HANDLERS
+    // ============================================
+
     socket.on('lobbyUpdate', (d) => {
         console.log('👥 Lobby update:', d);
         
@@ -2723,7 +2886,6 @@
                 info.style.color = '#94a3b8';
             }
             
-            // ⭐⭐ NEW: Also update discovery overlay if active
             const discoveryOverlay = document.getElementById('discoveryOverlay');
             if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
                 const discoveryPlayersInfo = document.getElementById('discoveryPlayersInfo');
@@ -2736,14 +2898,12 @@
         }
     });
 
-    // ⭐⭐ UPDATED: gameCountdown event handler - Updates both wait overlay and discovery overlay
     socket.on('gameCountdown', (d) => {
         console.log('⏱️ Game countdown event:', d);
         
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
             
-            // Update waiting overlay timer
             timerElement.textContent = d.timer;
             
             if (d.timer > 0) {
@@ -2768,7 +2928,6 @@
                 showNotification('🎮 Game starting now!', 'success', 2000);
             }
             
-            // ⭐⭐ NEW: Also update discovery overlay timer if visible
             const discoveryOverlay = document.getElementById('discoveryOverlay');
             if (discoveryOverlay && discoveryOverlay.classList.contains('active')) {
                 updateDiscoveryTimer(d.timer, d.onlinePlayers);
@@ -2881,13 +3040,11 @@
         state.lastActivityTime = Date.now();
     });
 
-    // ⭐⭐ NEW: Handle room locked event
     socket.on('roomLocked', (data) => {
         console.log('🔒 Room locked event received:', data);
         
         showNotification(`🔒 ${data.message}`, 'warning', 3000);
         
-        // Show room locked overlay
         const roomLockedOverlay = document.getElementById('roomLockedOverlay');
         const roomLockedMessage = document.getElementById('roomLockedMessage');
         
@@ -2897,18 +3054,15 @@
         
         roomLockedOverlay.classList.add('active');
         
-        // Automatically return to stake selection after 3 seconds
         setTimeout(() => {
             roomLockedOverlay.classList.remove('active');
             toggleScreen('discoveryOverlay', 'stakeOverlay');
             
-            // Hide discovery timer if visible
             const discoveryTimerContainer = document.getElementById('discoveryTimerContainer');
             if (discoveryTimerContainer) {
                 discoveryTimerContainer.style.display = 'none';
             }
             
-            // Reset state
             state.stake = 0;
             state.selectedBox = null;
             state.roomSubscribed = false;
@@ -3038,7 +3192,6 @@
         }
     });
 
-    // ⭐⭐ NEW: Handle game timeout event (7-minute auto-clear)
     socket.on('gameTimeout', (data) => {
         console.log('⏰ Game timeout event received:', data);
         
@@ -3047,7 +3200,6 @@
             
             showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'timeout', 4000);
             
-            // Reset to lobby after delay
             setTimeout(() => {
                 resetToLobby();
             }, 2000);
