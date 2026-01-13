@@ -190,7 +190,7 @@ app.use(helmet({
 }));
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));  // CHANGED: Serve from current directory
 
 // Custom headers for WebSocket and Telegram
 app.use((req, res, next) => {
@@ -3328,7 +3328,7 @@ app.get('/', (req, res) => {
           <h3>Access Points:</h3>
           <div>
             <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
-            <a href="/game" class="btn btn-game" target="_blank">🎮 Game Client</a>
+            <a href="/game.html" class="btn btn-game" target="_blank">🎮 Game Client</a>
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -3380,8 +3380,110 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ... [Previous routes: /telegram, /socket-test, /admin, /game, /health, /api/user/:userId, etc.] ...
-// Keep all your existing routes here
+// Add specific route for /game to serve game.html
+app.get('/game', (req, res) => {
+  res.sendFile(path.join(__dirname, 'game.html'));
+});
+
+// ========== TELEGRAM ROUTES ==========
+app.get('/telegram', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Bingo Elite - Telegram Mini App</title>
+      <meta property="og:title" content="Bingo Elite">
+      <meta property="og:description" content="Play real-time multiplayer Bingo with Four Corners Bonus!">
+      <meta property="og:image" content="https://bingo-telegram-game.onrender.com/bingo-preview.jpg">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .container { max-width: 600px; margin: 0 auto; background: rgba(255,255,255,0.1); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px); }
+        .btn { display: inline-block; padding: 15px 30px; background: #3b82f6; color: white; text-decoration: none; border-radius: 10px; margin: 20px; font-weight: bold; font-size: 1.2rem; }
+        .btn:hover { background: #2563eb; transform: translateY(-2px); }
+        .instructions { background: rgba(0,0,0,0.2); padding: 20px; border-radius: 10px; margin: 30px 0; text-align: left; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>🎮 Bingo Elite</h1>
+        <p style="font-size: 1.2rem;">Real-time multiplayer Bingo game with Four Corners Bonus!</p>
+        
+        <div class="instructions">
+          <h3>🎯 How to Play:</h3>
+          <p>1. Select a room (10, 20, 50, or 100 ETB)</p>
+          <p>2. Choose your ticket number (1-100)</p>
+          <p>3. Mark numbers as they're called</p>
+          <p>4. Win with BINGO pattern!</p>
+          <p>💰 <strong>Four Corners Bonus:</strong> Win with B1, B5, O1, O5 for +50 ETB!</p>
+        </div>
+        
+        <p style="margin: 30px 0;">
+          <a href="/game.html" class="btn">🎮 LAUNCH GAME</a>
+        </p>
+        
+        <p style="color: rgba(255,255,255,0.8);">
+          Open in Telegram for the best experience:<br>
+          <small>@ethio_games1_bot</small>
+        </p>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/socket-test', (req, res) => {
+  res.sendFile(path.join(__dirname, 'socket-test.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    connectedPlayers: connectedSockets.size,
+    socketToUser: socketToUser.size,
+    adminSockets: adminSockets.size,
+    processingClaims: processingClaims.size,
+    memoryUsage: process.memoryUsage(),
+    nodeVersion: process.version
+  });
+});
+
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findOne({ userId: req.params.userId });
+    if (user) {
+      res.json({
+        success: true,
+        user: {
+          userId: user.userId,
+          userName: user.userName,
+          balance: user.balance,
+          totalWagered: user.totalWagered || 0,
+          totalWins: user.totalWins || 0,
+          totalBingos: user.totalBingos || 0,
+          currentRoom: user.currentRoom,
+          box: user.box,
+          isOnline: user.isOnline,
+          lastSeen: user.lastSeen,
+          joinedAt: user.joinedAt,
+          telebirrPhone: user.telebirrPhone || '',
+          totalDeposited: user.totalDeposited || 0,
+          totalWithdrawn: user.totalWithdrawn || 0
+        }
+      });
+    } else {
+      res.status(404).json({ success: false, message: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ========== WALLET API ENDPOINTS ==========
 app.get('/api/payment-info', async (req, res) => {
@@ -3755,8 +3857,252 @@ app.post('/api/deposit/approve', async (req, res) => {
   }
 });
 
-// ... [Previous routes: /real-time-status, /test-connections, /debug-connections, /debug-users, /debug-room/:stake, /force-start/:stake, /debug-calculations/:stake/:players, /setup-telegram, etc.] ...
-// Keep all your existing routes here
+app.get('/real-time-status', (req, res) => {
+  res.json({
+    connectedSockets: connectedSockets.size,
+    socketToUser: Array.from(socketToUser.entries()).map(([socketId, userId]) => ({ socketId, userId })),
+    adminSockets: Array.from(adminSockets),
+    roomTimers: Array.from(roomTimers.keys()),
+    processingClaims: Array.from(processingClaims.entries()),
+    activityLog: activityLog.slice(0, 10)
+  });
+});
+
+app.get('/test-connections', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Socket.IO Connection Test</title>
+      <script src="/socket.io/socket.io.js"></script>
+      <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #00ff00; }
+        .connected { color: #00ff00; }
+        .disconnected { color: #ff0000; }
+      </style>
+    </head>
+    <body>
+      <h1>Socket.IO Connection Test</h1>
+      <div id="status">Testing connection...</div>
+      <div id="messages"></div>
+      
+      <script>
+        const socket = io();
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        
+        socket.on('connect', () => {
+          status.innerHTML = '<span class="connected">✅ CONNECTED</span>';
+          log('Connected to server with ID: ' + socket.id);
+          socket.emit('connectionTest', { test: true });
+        });
+        
+        socket.on('connectionTest', (data) => {
+          log('Server responded: ' + JSON.stringify(data));
+        });
+        
+        socket.on('disconnect', () => {
+          status.innerHTML = '<span class="disconnected">❌ DISCONNECTED</span>';
+          log('Disconnected from server');
+        });
+        
+        socket.on('connect_error', (error) => {
+          status.innerHTML = '<span class="disconnected">❌ CONNECTION ERROR</span>';
+          log('Connection error: ' + error.message);
+        });
+        
+        function log(msg) {
+          const div = document.createElement('div');
+          div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+          messages.appendChild(div);
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/debug-connections', (req, res) => {
+  res.json({
+    connectedSockets: connectedSockets.size,
+    socketToUserSize: socketToUser.size,
+    adminSocketsSize: adminSockets.size,
+    roomSubscriptions: Object.fromEntries(
+      Array.from(roomSubscriptions.entries()).map(([room, sockets]) => [room, Array.from(sockets)])
+    ),
+    connectedUsers: getConnectedUsers(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/debug-users', async (req, res) => {
+  try {
+    const users = await User.find({}).sort({ balance: -1 }).limit(50);
+    const onlineUsers = users.filter(user => user.isOnline);
+    
+    res.json({
+      totalUsers: users.length,
+      onlineUsers: onlineUsers.length,
+      users: users.map(user => ({
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        currentRoom: user.currentRoom,
+        box: user.box,
+        isOnline: user.isOnline,
+        lastSeen: user.lastSeen,
+        totalWagered: user.totalWagered,
+        totalWins: user.totalWins
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/debug-room/:stake', async (req, res) => {
+  try {
+    const stake = parseInt(req.params.stake);
+    const room = await Room.findOne({ stake: stake });
+    
+    if (!room) {
+      return res.json({ 
+        stake: stake, 
+        exists: false,
+        message: 'Room not found'
+      });
+    }
+    
+    const onlinePlayers = await getOnlinePlayersInRoom(stake);
+    
+    res.json({
+      stake: room.stake,
+      exists: true,
+      players: room.players.length,
+      onlinePlayers: onlinePlayers.length,
+      takenBoxes: room.takenBoxes.length,
+      status: room.status,
+      startTime: room.startTime,
+      endTime: room.endTime,
+      calledNumbers: room.calledNumbers.length,
+      currentBall: room.currentBall,
+      ballsDrawn: room.ballsDrawn,
+      countdownStartTime: room.countdownStartTime,
+      countdownStartedWith: room.countdownStartedWith,
+      playersList: room.players,
+      onlinePlayersList: onlinePlayers,
+      takenBoxesList: room.takenBoxes
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/force-start/:stake', async (req, res) => {
+  try {
+    const stake = parseInt(req.params.stake);
+    const room = await Room.findOne({ stake: stake });
+    
+    if (!room) {
+      return res.json({ success: false, message: 'Room not found' });
+    }
+    
+    if (room.status === 'playing') {
+      return res.json({ success: false, message: 'Room already playing' });
+    }
+    
+    room.status = 'playing';
+    room.startTime = new Date();
+    await room.save();
+    
+    await startGameTimer(room);
+    
+    res.json({ 
+      success: true, 
+      message: `Room ${stake} force started`,
+      players: room.players.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/debug-calculations/:stake/:players', (req, res) => {
+  const stake = parseInt(req.params.stake);
+  const players = parseInt(req.params.players);
+  
+  const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[stake] || 0;
+  const contributionPerPlayer = stake - commissionPerPlayer;
+  const totalPrize = contributionPerPlayer * players;
+  const houseFee = commissionPerPlayer * players;
+  const totalPrizeWithBonus = totalPrize + CONFIG.FOUR_CORNERS_BONUS;
+  
+  res.json({
+    stake: stake,
+    players: players,
+    commissionPerPlayer: commissionPerPlayer,
+    contributionPerPlayer: contributionPerPlayer,
+    totalPrize: totalPrize,
+    houseFee: houseFee,
+    totalPrizeWithBonus: totalPrizeWithBonus,
+    fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
+  });
+});
+
+app.get('/setup-telegram', (req, res) => {
+  const webhookUrl = `https://${req.headers.host}/telegram-webhook`;
+  const token = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+  
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Telegram Bot Setup</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; background: #0f172a; color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .code { background: #1e293b; padding: 20px; border-radius: 10px; font-family: monospace; margin: 20px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>🤖 Telegram Bot Setup</h1>
+        
+        <h3>1. Create a Telegram Bot via @BotFather</h3>
+        <div class="code">
+          /newbot<br>
+          Name: Bingo Elite<br>
+          Username: your_bot_username<br>
+          Copy the token: ${token ? '✅ Token already set' : '❌ Token not set'}
+        </div>
+        
+        <h3>2. Set Webhook URL</h3>
+        <div class="code">
+          curl -X POST https://api.telegram.org/bot${token}/setWebhook \<br>
+          -H "Content-Type: application/json" \<br>
+          -d '{"url": "${webhookUrl}", "drop_pending_updates": true}'
+        </div>
+        
+        <h3>3. Create Mini App</h3>
+        <div class="code">
+          Open @BotFather → /mybots → Edit Bot → Edit Mini App<br>
+          Mini App URL: https://${req.headers.host}/game.html<br>
+          Public: Yes
+        </div>
+        
+        <h3>4. Test Your Bot</h3>
+        <p>Open Telegram and search for your bot, then click "Launch Game"</p>
+        
+        <h3>Current Status:</h3>
+        <p>✅ Server: Running at ${req.headers.host}</p>
+        <p>✅ Game URL: https://${req.headers.host}/game.html</p>
+        <p>${token ? '✅ Bot Token: Configured' : '❌ Bot Token: Not configured'}</p>
+        <p>✅ Webhook URL: ${webhookUrl}</p>
+      </div>
+    </body>
+    </html>
+  `);
+});
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
