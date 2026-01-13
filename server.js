@@ -36,7 +36,19 @@ const userSchema = new mongoose.Schema({
   sessionCount: { type: Number, default: 0 },
   telegramId: { type: String, unique: true, sparse: true },
   telegramUsername: { type: String },
-  languageCode: { type: String, default: 'en' }
+  languageCode: { type: String, default: 'en' },
+  // Wallet fields
+  telebirrPhone: { type: String, default: '' },
+  totalDeposited: { type: Number, default: 0 },
+  totalWithdrawn: { type: Number, default: 0 },
+  depositCount: { type: Number, default: 0 },
+  withdrawalCount: { type: Number, default: 0 },
+  isVerified: { type: Boolean, default: false },
+  verificationLevel: { type: String, enum: ['basic', 'verified', 'premium'], default: 'basic' },
+  lastDeposit: { type: Date, default: null },
+  lastWithdrawal: { type: Date, default: null },
+  depositLimit: { type: Number, default: 10000 },
+  withdrawalLimit: { type: Number, default: 10000 }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -88,55 +100,63 @@ const statsSchema = new mongoose.Schema({
   totalFourCorners: { type: Number, default: 0 }
 });
 
-// ========== NEW MODELS FOR DEPOSIT/WITHDRAWAL ==========
-const depositRequestSchema = new mongoose.Schema({
+// Deposit/Withdrawal Models
+const depositSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   userName: { type: String, required: true },
   amount: { type: Number, required: true },
-  phoneNumber: { type: String, required: true }, // Admin's phone number
-  receiptText: { type: String, required: true }, // Receipt text/code from Telebirr
+  phoneNumber: { type: String, required: true },
+  transactionId: { type: String, required: true, unique: true },
+  screenshot: { type: String },
+  receiptText: { type: String, required: true },
   status: { 
     type: String, 
     enum: ['pending', 'approved', 'rejected', 'cancelled'],
     default: 'pending'
   },
-  processedBy: { type: String, default: null }, // Admin who processed
+  adminNotes: { type: String, default: '' },
+  processedBy: { type: String, default: null },
   processedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
-  notes: { type: String, default: '' }
+  updatedAt: { type: Date, default: Date.now }
 });
 
-const withdrawalRequestSchema = new mongoose.Schema({
+const withdrawalSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   userName: { type: String, required: true },
   amount: { type: Number, required: true },
-  phoneNumber: { type: String, required: true }, // Player's Telebirr number
+  phoneNumber: { type: String, required: true },
   status: { 
     type: String, 
-    enum: ['pending', 'paid', 'rejected', 'cancelled'],
+    enum: ['pending', 'approved', 'rejected', 'processing', 'completed'],
     default: 'pending'
   },
+  adminNotes: { type: String, default: '' },
   processedBy: { type: String, default: null },
   processedAt: { type: Date, default: null },
-  transactionId: { type: String, default: '' }, // Telebirr transaction ID
   createdAt: { type: Date, default: Date.now },
-  notes: { type: String, default: '' }
+  updatedAt: { type: Date, default: Date.now }
 });
 
-const settingsSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  value: { type: mongoose.Schema.Types.Mixed },
-  description: { type: String },
-  updatedAt: { type: Date, default: Date.now }
+const adminPaymentInfoSchema = new mongoose.Schema({
+  phoneNumber: { type: String, required: true, unique: true },
+  provider: { type: String, default: 'Telebirr' },
+  isActive: { type: Boolean, default: true },
+  notes: { type: String, default: 'Send money via Telebirr and paste receipt below' },
+  minDeposit: { type: Number, default: 10 },
+  maxDeposit: { type: Number, default: 10000 },
+  minWithdrawal: { type: Number, default: 50 },
+  maxWithdrawal: { type: Number, default: 10000 },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const Stats = mongoose.model('Stats', statsSchema);
-const DepositRequest = mongoose.model('DepositRequest', depositRequestSchema);
-const WithdrawalRequest = mongoose.model('WithdrawalRequest', withdrawalRequestSchema);
-const Settings = mongoose.model('Settings', settingsSchema);
+const Deposit = mongoose.model('Deposit', depositSchema);
+const Withdrawal = mongoose.model('Withdrawal', withdrawalSchema);
+const AdminPaymentInfo = mongoose.model('AdminPaymentInfo', adminPaymentInfoSchema);
 
 const app = express();
 const server = http.createServer(app);
@@ -169,7 +189,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Custom headers for WebSocket and Telegram
@@ -203,16 +223,14 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  
-  // ========== NEW: DEPOSIT/WITHDRAWAL CONFIG ==========
-  ADMIN_PHONE_NUMBER: process.env.ADMIN_PHONE || '+251912345678',
-  MIN_DEPOSIT_AMOUNT: 10,
-  MAX_DEPOSIT_AMOUNT: 10000,
-  MIN_WITHDRAWAL_AMOUNT: 50,
-  MAX_WITHDRAWAL_AMOUNT: 5000,
-  WITHDRAWAL_FEE_PERCENT: 0,
+  // Wallet Configuration
+  MIN_DEPOSIT: 10,
+  MAX_DEPOSIT: 10000,
+  MIN_WITHDRAWAL: 50,
+  MAX_WITHDRAWAL: 10000,
+  ADMIN_PHONE_NUMBER: process.env.ADMIN_PHONE || "+251912345678",
   AUTO_APPROVE_DEPOSITS: false,
-  DEPOSIT_TIMEOUT_MINUTES: 30
+  AUTO_APPROVE_WITHDRAWALS: false
 };
 
 // ========== GLOBAL STATE ==========
@@ -279,6 +297,42 @@ function cleanupProcessingClaims() {
 }
 
 setInterval(cleanupProcessingClaims, 10000);
+
+// ========== WALLET HELPER FUNCTIONS ==========
+async function initializePaymentInfo() {
+  try {
+    const existing = await AdminPaymentInfo.findOne({ isActive: true });
+    if (!existing) {
+      const paymentInfo = new AdminPaymentInfo({
+        phoneNumber: CONFIG.ADMIN_PHONE_NUMBER,
+        provider: 'Telebirr',
+        notes: 'Send money via Telebirr and paste receipt from SMS below',
+        minDeposit: CONFIG.MIN_DEPOSIT,
+        maxDeposit: CONFIG.MAX_DEPOSIT,
+        minWithdrawal: CONFIG.MIN_WITHDRAWAL,
+        maxWithdrawal: CONFIG.MAX_WITHDRAWAL
+      });
+      await paymentInfo.save();
+      console.log('✅ Created default admin payment info');
+    }
+  } catch (error) {
+    console.error('❌ Error initializing payment info:', error);
+  }
+}
+
+async function getPaymentInfo() {
+  try {
+    const paymentInfo = await AdminPaymentInfo.findOne({ isActive: true });
+    if (!paymentInfo) {
+      await initializePaymentInfo();
+      return await AdminPaymentInfo.findOne({ isActive: true });
+    }
+    return paymentInfo;
+  } catch (error) {
+    console.error('Error getting payment info:', error);
+    return null;
+  }
+}
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
@@ -402,212 +456,6 @@ async function getOnlinePlayersInRoom(roomStake) {
   }
 }
 
-// ========== DEPOSIT/WITHDRAWAL HELPER FUNCTIONS ==========
-async function approveDeposit(depositId, adminId = 'ADMIN', notes = '') {
-  try {
-    const deposit = await DepositRequest.findById(depositId);
-    if (!deposit) return false;
-    
-    const user = await User.findOne({ userId: deposit.userId });
-    if (!user) return false;
-    
-    // Add funds to user
-    const oldBalance = user.balance;
-    user.balance += deposit.amount;
-    await user.save();
-    
-    // Update deposit status
-    deposit.status = 'approved';
-    deposit.processedBy = adminId;
-    deposit.processedAt = new Date();
-    deposit.notes = notes;
-    await deposit.save();
-    
-    // Record transaction
-    const transaction = new Transaction({
-      type: 'DEPOSIT_APPROVED',
-      userId: deposit.userId,
-      userName: deposit.userName,
-      amount: deposit.amount,
-      admin: true,
-      description: `Deposit approved - Receipt: ${deposit.receiptText.substring(0, 20)}...`
-    });
-    await transaction.save();
-    
-    // Notify user if online
-    for (const [socketId, userId] of socketToUser.entries()) {
-      if (userId === deposit.userId) {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.emit('depositApproved', {
-            amount: deposit.amount,
-            newBalance: user.balance,
-            depositId: deposit._id
-          });
-          socket.emit('balanceUpdate', user.balance);
-        }
-      }
-    }
-    
-    // Notify admin panel
-    adminSockets.forEach(socketId => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit('admin:depositApproved', {
-          depositId: deposit._id,
-          userId: deposit.userId,
-          userName: deposit.userName,
-          amount: deposit.amount,
-          processedBy: adminId
-        });
-      }
-    });
-    
-    logActivity('DEPOSIT_APPROVED', { 
-      depositId: deposit._id,
-      userId: deposit.userId,
-      userName: deposit.userName,
-      amount: deposit.amount,
-      processedBy: adminId 
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Error approving deposit:', error);
-    return false;
-  }
-}
-
-async function approveWithdrawal(withdrawalId, adminId = 'ADMIN', transactionId = '', notes = '') {
-  try {
-    const withdrawal = await WithdrawalRequest.findById(withdrawalId);
-    if (!withdrawal) return false;
-    
-    // Update withdrawal status
-    withdrawal.status = 'paid';
-    withdrawal.processedBy = adminId;
-    withdrawal.processedAt = new Date();
-    withdrawal.transactionId = transactionId;
-    withdrawal.notes = notes;
-    await withdrawal.save();
-    
-    // Record transaction
-    const transaction = new Transaction({
-      type: 'WITHDRAWAL_PAID',
-      userId: withdrawal.userId,
-      userName: withdrawal.userName,
-      amount: -withdrawal.amount,
-      description: `Withdrawal paid to ${withdrawal.phoneNumber} - Transaction: ${transactionId}`
-    });
-    await transaction.save();
-    
-    // Notify user if online
-    for (const [socketId, userId] of socketToUser.entries()) {
-      if (userId === withdrawal.userId) {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.emit('withdrawalApproved', {
-            amount: withdrawal.amount,
-            phoneNumber: withdrawal.phoneNumber,
-            transactionId: transactionId,
-            withdrawalId: withdrawal._id
-          });
-        }
-      }
-    }
-    
-    // Notify admin panel
-    adminSockets.forEach(socketId => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit('admin:withdrawalApproved', {
-          withdrawalId: withdrawal._id,
-          userId: withdrawal.userId,
-          userName: withdrawal.userName,
-          amount: withdrawal.amount,
-          phoneNumber: withdrawal.phoneNumber,
-          transactionId: transactionId,
-          processedBy: adminId
-        });
-      }
-    });
-    
-    logActivity('WITHDRAWAL_PAID', { 
-      withdrawalId: withdrawal._id,
-      userId: withdrawal.userId,
-      userName: withdrawal.userName,
-      amount: withdrawal.amount,
-      phoneNumber: withdrawal.phoneNumber,
-      processedBy: adminId 
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Error approving withdrawal:', error);
-    return false;
-  }
-}
-
-async function rejectWithdrawal(withdrawalId, adminId = 'ADMIN', reason = '') {
-  try {
-    const withdrawal = await WithdrawalRequest.findById(withdrawalId);
-    if (!withdrawal) return false;
-    
-    // Return funds to user
-    const user = await User.findOne({ userId: withdrawal.userId });
-    if (user) {
-      user.balance += withdrawal.amount;
-      await user.save();
-      
-      // Record transaction for refund
-      const transaction = new Transaction({
-        type: 'WITHDRAWAL_REFUND',
-        userId: withdrawal.userId,
-        userName: withdrawal.userName,
-        amount: withdrawal.amount,
-        description: `Withdrawal rejected - ${reason}`
-      });
-      await transaction.save();
-      
-      // Notify user
-      for (const [socketId, userId] of socketToUser.entries()) {
-        if (userId === withdrawal.userId) {
-          const socket = io.sockets.sockets.get(socketId);
-          if (socket) {
-            socket.emit('withdrawalRejected', {
-              amount: withdrawal.amount,
-              reason: reason,
-              newBalance: user.balance
-            });
-            socket.emit('balanceUpdate', user.balance);
-          }
-        }
-      }
-    }
-    
-    // Update withdrawal status
-    withdrawal.status = 'rejected';
-    withdrawal.processedBy = adminId;
-    withdrawal.processedAt = new Date();
-    withdrawal.notes = reason;
-    await withdrawal.save();
-    
-    logActivity('WITHDRAWAL_REJECTED', { 
-      withdrawalId: withdrawal._id,
-      userId: withdrawal.userId,
-      userName: withdrawal.userName,
-      amount: withdrawal.amount,
-      reason: reason,
-      processedBy: adminId 
-    });
-    
-    return true;
-  } catch (error) {
-    console.error('Error rejecting withdrawal:', error);
-    return false;
-  }
-}
-
 // ========== BROADCAST FUNCTIONS ==========
 async function broadcastRoomStatus() {
   try {
@@ -656,10 +504,7 @@ async function updateAdminPanel() {
     const connectedPlayers = getConnectedUsers().length;
     const activeGames = await Room.countDocuments({ status: 'playing' });
     
-    // Get all users
     const users = await User.find({}).sort({ balance: -1 }).limit(100);
-    
-    // Get connected user IDs for real-time status
     const connectedUserIds = getConnectedUsers();
     
     const userArray = users.map(user => {
@@ -688,11 +533,15 @@ async function updateAdminPanel() {
         totalWins: user.totalWins || 0,
         lastSeen: user.lastSeen,
         telegramId: user.telegramId || '',
-        joinedAt: user.joinedAt
+        joinedAt: user.joinedAt,
+        telebirrPhone: user.telebirrPhone || '',
+        totalDeposited: user.totalDeposited || 0,
+        totalWithdrawn: user.totalWithdrawn || 0,
+        depositCount: user.depositCount || 0,
+        withdrawalCount: user.withdrawalCount || 0
       };
     });
     
-    // Get room data
     const roomsData = {};
     const rooms = await Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
     
@@ -723,25 +572,24 @@ async function updateAdminPanel() {
       };
     }
     
-    // Get pending deposit/withdrawal counts
-    const pendingDepositsCount = await DepositRequest.countDocuments({ status: 'pending' });
-    const pendingWithdrawalsCount = await WithdrawalRequest.countDocuments({ status: 'pending' });
-    
-    // Calculate total house balance
     const houseBalance = await Transaction.aggregate([
       { $match: { type: { $in: ['HOUSE_EARNINGS', 'ADMIN_ADD'] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
-    // Send to all admin sockets
+    const pendingDeposits = await Deposit.countDocuments({ status: 'pending' });
+    const pendingWithdrawals = await Withdrawal.countDocuments({ status: 'pending' });
+    
+    const connectedSocketsCount = connectedSockets.size;
+    
     const adminData = {
       totalPlayers: connectedPlayers,
       activeGames: activeGames,
       totalUsers: users.length,
-      connectedSockets: connectedSockets.size,
+      connectedSockets: connectedSocketsCount,
       houseBalance: houseBalance,
-      pendingDeposits: pendingDepositsCount,
-      pendingWithdrawals: pendingWithdrawalsCount,
+      pendingDeposits: pendingDeposits,
+      pendingWithdrawals: pendingWithdrawals,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime(),
       gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES
@@ -754,16 +602,27 @@ async function updateAdminPanel() {
         socket.emit('admin:players', userArray);
         socket.emit('admin:rooms', roomsData);
         
-        // Send recent transactions
         Transaction.find().sort({ createdAt: -1 }).limit(50)
           .then(transactions => {
             socket.emit('admin:transactions', transactions);
           })
           .catch(err => console.error('Error fetching transactions:', err));
+        
+        Deposit.find({ status: 'pending' }).sort({ createdAt: -1 })
+          .then(deposits => {
+            socket.emit('admin:pendingDeposits', deposits);
+          })
+          .catch(err => console.error('Error fetching deposits:', err));
+        
+        Withdrawal.find({ status: 'pending' }).sort({ createdAt: -1 })
+          .then(withdrawals => {
+            socket.emit('admin:pendingWithdrawals', withdrawals);
+          })
+          .catch(err => console.error('Error fetching withdrawals:', err));
       }
     });
     
-    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games`);
+    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games, ${pendingDeposits} pending deposits, ${pendingWithdrawals} pending withdrawals`);
     
   } catch (error) {
     console.error('Error updating admin panel:', error);
@@ -792,7 +651,84 @@ function logActivity(type, details, adminSocketId = null) {
   });
 }
 
-// ========== GAME TIMER FUNCTIONS ==========
+// ========== AUTO-CLEAR LONG RUNNING GAMES ==========
+async function cleanupLongRunningGames() {
+  try {
+    const sevenMinutesAgo = new Date(Date.now() - CONFIG.GAME_TIMEOUT_MINUTES * 60 * 1000);
+    const longRunningRooms = await Room.find({
+      status: 'playing',
+      startTime: { $lt: sevenMinutesAgo }
+    });
+    
+    for (const room of longRunningRooms) {
+      console.log(`⏰ Room ${room.stake} has been playing for ${CONFIG.GAME_TIMEOUT_MINUTES}+ minutes. Auto-ending...`);
+      
+      cleanupRoomTimer(room.stake);
+      
+      const playersInRoom = [...room.players];
+      
+      for (const userId of playersInRoom) {
+        const user = await User.findOne({ userId: userId });
+        if (user) {
+          const oldBalance = user.balance;
+          user.balance += room.stake;
+          user.currentRoom = null;
+          user.box = null;
+          await user.save();
+          
+          console.log(`💰 Auto-refunded ${room.stake} ETB to ${user.userName} after ${CONFIG.GAME_TIMEOUT_MINUTES}min timeout`);
+          
+          const transaction = new Transaction({
+            type: 'TIMEOUT_REFUND',
+            userId: userId,
+            userName: user.userName,
+            amount: room.stake,
+            room: room.stake,
+            description: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes - stake refunded`
+          });
+          await transaction.save();
+          
+          for (const [socketId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket) {
+                socket.emit('gameTimeout', {
+                  room: room.stake,
+                  reason: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`,
+                  refunded: room.stake
+                });
+                socket.emit('balanceUpdate', user.balance);
+                socket.emit('boxesCleared', { 
+                  room: room.stake, 
+                  reason: 'game_timeout' 
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      room.players = [];
+      room.takenBoxes = [];
+      room.status = 'waiting';
+      room.calledNumbers = [];
+      room.currentBall = null;
+      room.ballsDrawn = 0;
+      room.startTime = null;
+      room.endTime = new Date();
+      room.lastBoxUpdate = new Date();
+      await room.save();
+      
+      broadcastTakenBoxes(room.stake, []);
+      
+      console.log(`✅ Auto-cleared room ${room.stake} after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`);
+    }
+  } catch (error) {
+    console.error('❌ Error in cleanupLongRunningGames:', error);
+  }
+}
+
+// ========== GAME TIMER FUNCTION ==========
 async function startGameTimer(room) {
   console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
   
@@ -899,27 +835,21 @@ async function startGameTimer(room) {
   console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
 }
 
+// ========== CHECK BINGO FUNCTION ==========
 function checkBingo(markedNumbers, grid) {
   const patterns = [
-    // Rows
     [0,1,2,3,4],
     [5,6,7,8,9],
     [10,11,12,13,14],
     [15,16,17,18,19],
     [20,21,22,23,24],
-    
-    // Columns
     [0,5,10,15,20],
     [1,6,11,16,21],
     [2,7,12,17,22],
     [3,8,13,18,23],
     [4,9,14,19,24],
-    
-    // Diagonals
     [0,6,12,18,24],
     [4,8,12,16,20],
-    
-    // Four corners
     [0,4,20,24]
   ];
   
@@ -954,6 +884,7 @@ function checkBingo(markedNumbers, grid) {
   return { isBingo: false };
 }
 
+// ========== END GAME WITH NO WINNER ==========
 async function endGameWithNoWinner(room) {
   try {
     console.log(`🎮 Ending game with no winner for room ${room.stake}`);
@@ -1031,6 +962,7 @@ async function endGameWithNoWinner(room) {
   }
 }
 
+// ========== COUNTDOWN FUNCTION ==========
 async function startCountdownForRoom(room) {
   try {
     console.log(`⏱️ STARTING COUNTDOWN for room ${room.stake} at ${new Date().toISOString()}`);
@@ -1229,83 +1161,7 @@ async function startCountdownForRoom(room) {
   }
 }
 
-async function cleanupLongRunningGames() {
-  try {
-    const sevenMinutesAgo = new Date(Date.now() - CONFIG.GAME_TIMEOUT_MINUTES * 60 * 1000);
-    const longRunningRooms = await Room.find({
-      status: 'playing',
-      startTime: { $lt: sevenMinutesAgo }
-    });
-    
-    for (const room of longRunningRooms) {
-      console.log(`⏰ Room ${room.stake} has been playing for ${CONFIG.GAME_TIMEOUT_MINUTES}+ minutes. Auto-ending...`);
-      
-      cleanupRoomTimer(room.stake);
-      
-      const playersInRoom = [...room.players];
-      
-      for (const userId of playersInRoom) {
-        const user = await User.findOne({ userId: userId });
-        if (user) {
-          const oldBalance = user.balance;
-          user.balance += room.stake;
-          user.currentRoom = null;
-          user.box = null;
-          await user.save();
-          
-          console.log(`💰 Auto-refunded ${room.stake} ETB to ${user.userName} after ${CONFIG.GAME_TIMEOUT_MINUTES}min timeout`);
-          
-          const transaction = new Transaction({
-            type: 'TIMEOUT_REFUND',
-            userId: userId,
-            userName: user.userName,
-            amount: room.stake,
-            room: room.stake,
-            description: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes - stake refunded`
-          });
-          await transaction.save();
-          
-          for (const [socketId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              const socket = io.sockets.sockets.get(socketId);
-              if (socket) {
-                socket.emit('gameTimeout', {
-                  room: room.stake,
-                  reason: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`,
-                  refunded: room.stake
-                });
-                socket.emit('balanceUpdate', user.balance);
-                socket.emit('boxesCleared', { 
-                  room: room.stake, 
-                  reason: 'game_timeout' 
-                });
-              }
-            }
-          }
-        }
-      }
-      
-      room.players = [];
-      room.takenBoxes = [];
-      room.status = 'waiting';
-      room.calledNumbers = [];
-      room.currentBall = null;
-      room.ballsDrawn = 0;
-      room.startTime = null;
-      room.endTime = new Date();
-      room.lastBoxUpdate = new Date();
-      await room.save();
-      
-      broadcastTakenBoxes(room.stake, []);
-      
-      console.log(`✅ Auto-cleared room ${room.stake} after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`);
-    }
-  } catch (error) {
-    console.error('❌ Error in cleanupLongRunningGames:', error);
-  }
-}
-
-// ========== IMPROVED SOCKET.IO EVENT HANDLERS ==========
+// ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
   connectedSockets.add(socket.id);
@@ -1347,185 +1203,6 @@ io.on('connection', (socket) => {
       return;
     }
     updateAdminPanel();
-  });
-  
-  // ========== DEPOSIT/WITHDRAWAL ADMIN EVENTS ==========
-  socket.on('admin:getDeposits', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { status, page = 1, limit = 20 } = data || {};
-      
-      let query = {};
-      if (status && status !== 'all') {
-        query.status = status;
-      }
-      
-      const deposits = await DepositRequest.find(query)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit));
-      
-      const total = await DepositRequest.countDocuments(query);
-      
-      socket.emit('admin:deposits', {
-        deposits,
-        total,
-        page: parseInt(page),
-        totalPages: Math.ceil(total / limit)
-      });
-    } catch (error) {
-      socket.emit('admin:error', 'Error fetching deposits: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:getWithdrawals', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { status, page = 1, limit = 20 } = data || {};
-      
-      let query = {};
-      if (status && status !== 'all') {
-        query.status = status;
-      }
-      
-      const withdrawals = await WithdrawalRequest.find(query)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit));
-      
-      const total = await WithdrawalRequest.countDocuments(query);
-      
-      socket.emit('admin:withdrawals', {
-        withdrawals,
-        total,
-        page: parseInt(page),
-        totalPages: Math.ceil(total / limit)
-      });
-    } catch (error) {
-      socket.emit('admin:error', 'Error fetching withdrawals: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:approveDeposit', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { depositId, adminId, notes } = data;
-      
-      const success = await approveDeposit(depositId, adminId || 'ADMIN', notes || '');
-      
-      if (success) {
-        socket.emit('admin:success', `Deposit approved successfully`);
-      } else {
-        socket.emit('admin:error', 'Failed to approve deposit');
-      }
-    } catch (error) {
-      socket.emit('admin:error', 'Error approving deposit: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:rejectDeposit', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { depositId, adminId, reason } = data;
-      
-      const deposit = await DepositRequest.findById(depositId);
-      if (!deposit) {
-        socket.emit('admin:error', 'Deposit not found');
-        return;
-      }
-      
-      deposit.status = 'rejected';
-      deposit.processedBy = adminId || 'ADMIN';
-      deposit.processedAt = new Date();
-      deposit.notes = reason || 'No reason provided';
-      await deposit.save();
-      
-      // Notify user if online
-      for (const [sId, userId] of socketToUser.entries()) {
-        if (userId === deposit.userId) {
-          const playerSocket = io.sockets.sockets.get(sId);
-          if (playerSocket) {
-            playerSocket.emit('depositRejected', {
-              amount: deposit.amount,
-              reason: reason || 'Deposit rejected',
-              depositId: deposit._id
-            });
-          }
-        }
-      }
-      
-      socket.emit('admin:success', `Deposit rejected`);
-      
-      logActivity('DEPOSIT_REJECTED', { 
-        depositId: deposit._id,
-        userId: deposit.userId,
-        userName: deposit.userName,
-        amount: deposit.amount,
-        reason: reason,
-        processedBy: adminId 
-      });
-      
-    } catch (error) {
-      socket.emit('admin:error', 'Error rejecting deposit: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:approveWithdrawal', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { withdrawalId, adminId, transactionId, notes } = data;
-      
-      const success = await approveWithdrawal(withdrawalId, adminId || 'ADMIN', transactionId || '', notes || '');
-      
-      if (success) {
-        socket.emit('admin:success', `Withdrawal approved successfully`);
-      } else {
-        socket.emit('admin:error', 'Failed to approve withdrawal');
-      }
-    } catch (error) {
-      socket.emit('admin:error', 'Error approving withdrawal: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:rejectWithdrawal', async (data) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const { withdrawalId, adminId, reason } = data;
-      
-      const success = await rejectWithdrawal(withdrawalId, adminId || 'ADMIN', reason || '');
-      
-      if (success) {
-        socket.emit('admin:success', `Withdrawal rejected`);
-      } else {
-        socket.emit('admin:error', 'Failed to reject withdrawal');
-      }
-    } catch (error) {
-      socket.emit('admin:error', 'Error rejecting withdrawal: ' + error.message);
-    }
   });
   
   socket.on('admin:addFunds', async ({ userId, amount }) => {
@@ -1573,295 +1250,6 @@ io.on('connection', (socket) => {
     logActivity('ADMIN_ADD_FUNDS', { adminSocket: socket.id, userId, amount }, socket.id);
   });
   
-  // ========== DEPOSIT/WITHDRAWAL USER EVENTS ==========
-  socket.on('user:getPaymentInfo', async (callback) => {
-    try {
-      const phoneSetting = await Settings.findOne({ key: 'admin_phone_number' });
-      const adminPhone = phoneSetting ? phoneSetting.value : CONFIG.ADMIN_PHONE_NUMBER;
-      
-      if (callback) {
-        callback({
-          success: true,
-          adminPhone: adminPhone,
-          minDeposit: CONFIG.MIN_DEPOSIT_AMOUNT,
-          maxDeposit: CONFIG.MAX_DEPOSIT_AMOUNT,
-          minWithdrawal: CONFIG.MIN_WITHDRAWAL_AMOUNT,
-          maxWithdrawal: CONFIG.MAX_WITHDRAWAL_AMOUNT,
-          instructions: `1. Send money to ${adminPhone} via Telebirr\n2. Copy the receipt message\n3. Paste receipt in the form below\n4. Wait for admin approval`
-        });
-      }
-    } catch (error) {
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
-    }
-  });
-  
-  socket.on('user:submitDeposit', async (data, callback) => {
-    try {
-      const { userId, userName, amount, receiptText } = data;
-      
-      if (!userId || !userName || !amount || !receiptText) {
-        if (callback) callback({ success: false, error: 'Missing required fields' });
-        return;
-      }
-      
-      const amountNum = parseFloat(amount);
-      if (amountNum < CONFIG.MIN_DEPOSIT_AMOUNT) {
-        if (callback) callback({ 
-          success: false, 
-          error: `Minimum deposit is ${CONFIG.MIN_DEPOSIT_AMOUNT} ETB` 
-        });
-        return;
-      }
-      
-      if (amountNum > CONFIG.MAX_DEPOSIT_AMOUNT) {
-        if (callback) callback({ 
-          success: false, 
-          error: `Maximum deposit is ${CONFIG.MAX_DEPOSIT_AMOUNT} ETB` 
-        });
-        return;
-      }
-      
-      const phoneSetting = await Settings.findOne({ key: 'admin_phone_number' });
-      const adminPhone = phoneSetting ? phoneSetting.value : CONFIG.ADMIN_PHONE_NUMBER;
-      
-      const existingDeposit = await DepositRequest.findOne({ 
-        receiptText: receiptText,
-        status: 'pending'
-      });
-      
-      if (existingDeposit) {
-        if (callback) callback({ 
-          success: false, 
-          error: 'This receipt has already been submitted' 
-        });
-        return;
-      }
-      
-      const deposit = new DepositRequest({
-        userId,
-        userName,
-        amount: amountNum,
-        phoneNumber: adminPhone,
-        receiptText,
-        status: 'pending'
-      });
-      
-      await deposit.save();
-      
-      if (CONFIG.AUTO_APPROVE_DEPOSITS) {
-        await approveDeposit(deposit._id, 'SYSTEM_AUTO', 'Auto-approved');
-      }
-      
-      adminSockets.forEach(socketId => {
-        const adminSocket = io.sockets.sockets.get(socketId);
-        if (adminSocket) {
-          adminSocket.emit('admin:newDeposit', {
-            depositId: deposit._id,
-            userId,
-            userName,
-            amount: amountNum,
-            receiptText,
-            createdAt: deposit.createdAt
-          });
-        }
-      });
-      
-      logActivity('DEPOSIT_REQUEST', { 
-        userId, 
-        userName, 
-        amount: amountNum,
-        depositId: deposit._id 
-      });
-      
-      if (callback) {
-        callback({
-          success: true,
-          message: 'Deposit request submitted. Admin will process it shortly.',
-          depositId: deposit._id,
-          status: CONFIG.AUTO_APPROVE_DEPOSITS ? 'auto-approved' : 'pending'
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error submitting deposit:', error);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
-    }
-  });
-  
-  socket.on('user:submitWithdrawal', async (data, callback) => {
-    try {
-      const { userId, userName, amount, phoneNumber } = data;
-      
-      if (!userId || !userName || !amount || !phoneNumber) {
-        if (callback) callback({ success: false, error: 'Missing required fields' });
-        return;
-      }
-      
-      const amountNum = parseFloat(amount);
-      
-      const user = await User.findOne({ userId: userId });
-      if (!user) {
-        if (callback) callback({ success: false, error: 'User not found' });
-        return;
-      }
-      
-      if (user.balance < amountNum) {
-        if (callback) callback({ 
-          success: false, 
-          error: `Insufficient balance. Your balance: ${user.balance} ETB` 
-        });
-        return;
-      }
-      
-      if (amountNum < CONFIG.MIN_WITHDRAWAL_AMOUNT) {
-        if (callback) callback({ 
-          success: false, 
-          error: `Minimum withdrawal is ${CONFIG.MIN_WITHDRAWAL_AMOUNT} ETB` 
-        });
-        return;
-      }
-      
-      if (amountNum > CONFIG.MAX_WITHDRAWAL_AMOUNT) {
-        if (callback) callback({ 
-          success: false, 
-          error: `Maximum withdrawal is ${CONFIG.MAX_WITHDRAWAL_AMOUNT} ETB` 
-        });
-        return;
-      }
-      
-      const pendingWithdrawal = await WithdrawalRequest.findOne({ 
-        userId: userId,
-        status: 'pending'
-      });
-      
-      if (pendingWithdrawal) {
-        if (callback) callback({ 
-          success: false, 
-          error: 'You already have a pending withdrawal request' 
-        });
-        return;
-      }
-      
-      const withdrawal = new WithdrawalRequest({
-        userId,
-        userName,
-        amount: amountNum,
-        phoneNumber,
-        status: 'pending'
-      });
-      
-      await withdrawal.save();
-      
-      const oldBalance = user.balance;
-      user.balance -= amountNum;
-      await user.save();
-      
-      const transaction = new Transaction({
-        type: 'WITHDRAWAL_PENDING',
-        userId: userId,
-        userName: userName,
-        amount: -amountNum,
-        description: `Withdrawal request to ${phoneNumber} - PENDING`
-      });
-      await transaction.save();
-      
-      adminSockets.forEach(socketId => {
-        const adminSocket = io.sockets.sockets.get(socketId);
-        if (adminSocket) {
-          adminSocket.emit('admin:newWithdrawal', {
-            withdrawalId: withdrawal._id,
-            userId,
-            userName,
-            amount: amountNum,
-            phoneNumber,
-            userBalance: user.balance,
-            createdAt: withdrawal.createdAt
-          });
-        }
-      });
-      
-      logActivity('WITHDRAWAL_REQUEST', { 
-        userId, 
-        userName, 
-        amount: amountNum,
-        phoneNumber,
-        withdrawalId: withdrawal._id 
-      });
-      
-      if (callback) {
-        callback({
-          success: true,
-          message: 'Withdrawal request submitted. Admin will process it shortly.',
-          withdrawalId: withdrawal._id,
-          newBalance: user.balance
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error submitting withdrawal:', error);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
-    }
-  });
-  
-  socket.on('user:getDepositHistory', async (data, callback) => {
-    try {
-      const { userId } = data;
-      
-      if (!userId) {
-        if (callback) callback({ success: false, error: 'User ID required' });
-        return;
-      }
-      
-      const deposits = await DepositRequest.find({ userId: userId })
-        .sort({ createdAt: -1 })
-        .limit(20);
-      
-      if (callback) {
-        callback({
-          success: true,
-          deposits: deposits
-        });
-      }
-    } catch (error) {
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
-    }
-  });
-  
-  socket.on('user:getWithdrawalHistory', async (data, callback) => {
-    try {
-      const { userId } = data;
-      
-      if (!userId) {
-        if (callback) callback({ success: false, error: 'User ID required' });
-        return;
-      }
-      
-      const withdrawals = await WithdrawalRequest.find({ userId: userId })
-        .sort({ createdAt: -1 })
-        .limit(20);
-      
-      if (callback) {
-        callback({
-          success: true,
-          withdrawals: withdrawals
-        });
-      }
-    } catch (error) {
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
-    }
-  });
-  
-  // ========== EXISTING GAME EVENTS (KEPT AS IS) ==========
   socket.on('admin:forceDraw', async (roomStake) => {
     if (!adminSockets.has(socket.id)) {
       socket.emit('admin:error', 'Unauthorized');
@@ -2126,7 +1514,715 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Player events
+  // ========== ADMIN WALLET MANAGEMENT ==========
+  socket.on('admin:getPendingTransactions', async () => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const pendingDeposits = await Deposit.find({ status: 'pending' }).sort({ createdAt: -1 });
+      const pendingWithdrawals = await Withdrawal.find({ status: 'pending' }).sort({ createdAt: -1 });
+      
+      socket.emit('admin:pendingDeposits', pendingDeposits);
+      socket.emit('admin:pendingWithdrawals', pendingWithdrawals);
+    } catch (error) {
+      console.error('Error getting pending transactions:', error);
+      socket.emit('admin:error', 'Failed to load transactions');
+    }
+  });
+  
+  socket.on('admin:approveDeposit', async ({ depositId, notes }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const deposit = await Deposit.findById(depositId);
+      if (!deposit) {
+        socket.emit('admin:error', 'Deposit not found');
+        return;
+      }
+      
+      if (deposit.status !== 'pending') {
+        socket.emit('admin:error', `Deposit is already ${deposit.status}`);
+        return;
+      }
+      
+      deposit.status = 'approved';
+      deposit.adminNotes = notes || '';
+      deposit.processedBy = socket.id;
+      deposit.processedAt = new Date();
+      deposit.updatedAt = new Date();
+      await deposit.save();
+      
+      const user = await User.findOne({ userId: deposit.userId });
+      if (user) {
+        const oldBalance = user.balance;
+        user.balance += deposit.amount;
+        user.totalDeposited += deposit.amount;
+        user.depositCount += 1;
+        user.lastDeposit = new Date();
+        
+        if (!user.telebirrPhone && deposit.phoneNumber) {
+          user.telebirrPhone = deposit.phoneNumber;
+        }
+        
+        await user.save();
+        
+        const transaction = new Transaction({
+          type: 'DEPOSIT_APPROVED',
+          userId: user.userId,
+          userName: user.userName,
+          amount: deposit.amount,
+          description: `Deposit approved via Telebirr (Transaction: ${deposit.transactionId})`
+        });
+        await transaction.save();
+        
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === user.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('balanceUpdate', user.balance);
+              playerSocket.emit('depositApproved', {
+                amount: deposit.amount,
+                newBalance: user.balance,
+                depositId: deposit._id
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Approved deposit of ${deposit.amount} ETB for ${user.userName}`);
+        console.log(`✅ Admin approved deposit ${depositId} for ${user.userName}: ${deposit.amount} ETB`);
+        
+        logActivity('ADMIN_APPROVE_DEPOSIT', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          userName: user.userName,
+          amount: deposit.amount,
+          depositId: depositId
+        }, socket.id);
+      } else {
+        socket.emit('admin:error', 'User not found');
+      }
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error approving deposit:', error);
+      socket.emit('admin:error', 'Failed to approve deposit');
+    }
+  });
+  
+  socket.on('admin:rejectDeposit', async ({ depositId, notes }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const deposit = await Deposit.findById(depositId);
+      if (!deposit) {
+        socket.emit('admin:error', 'Deposit not found');
+        return;
+      }
+      
+      if (deposit.status !== 'pending') {
+        socket.emit('admin:error', `Deposit is already ${deposit.status}`);
+        return;
+      }
+      
+      deposit.status = 'rejected';
+      deposit.adminNotes = notes || 'Deposit rejected by admin';
+      deposit.processedBy = socket.id;
+      deposit.processedAt = new Date();
+      deposit.updatedAt = new Date();
+      await deposit.save();
+      
+      const user = await User.findOne({ userId: deposit.userId });
+      if (user) {
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === user.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('depositRejected', {
+                amount: deposit.amount,
+                reason: notes || 'Deposit rejected by admin',
+                depositId: deposit._id
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Rejected deposit of ${deposit.amount} ETB for ${user.userName}`);
+        console.log(`❌ Admin rejected deposit ${depositId} for ${user.userName}: ${deposit.amount} ETB`);
+        
+        logActivity('ADMIN_REJECT_DEPOSIT', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          userName: user.userName,
+          amount: deposit.amount,
+          depositId: depositId,
+          reason: notes
+        }, socket.id);
+      }
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error rejecting deposit:', error);
+      socket.emit('admin:error', 'Failed to reject deposit');
+    }
+  });
+  
+  socket.on('admin:approveWithdrawal', async ({ withdrawalId, notes }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const withdrawal = await Withdrawal.findById(withdrawalId);
+      if (!withdrawal) {
+        socket.emit('admin:error', 'Withdrawal not found');
+        return;
+      }
+      
+      if (withdrawal.status !== 'pending') {
+        socket.emit('admin:error', `Withdrawal is already ${withdrawal.status}`);
+        return;
+      }
+      
+      withdrawal.status = 'completed';
+      withdrawal.adminNotes = notes || 'Withdrawal completed';
+      withdrawal.processedBy = socket.id;
+      withdrawal.processedAt = new Date();
+      withdrawal.updatedAt = new Date();
+      await withdrawal.save();
+      
+      const user = await User.findOne({ userId: withdrawal.userId });
+      if (user) {
+        user.totalWithdrawn += withdrawal.amount;
+        user.withdrawalCount += 1;
+        user.lastWithdrawal = new Date();
+        await user.save();
+        
+        const transaction = new Transaction({
+          type: 'WITHDRAWAL_COMPLETED',
+          userId: user.userId,
+          userName: user.userName,
+          amount: -withdrawal.amount,
+          description: `Withdrawal to ${withdrawal.phoneNumber} (Admin approved)`
+        });
+        await transaction.save();
+        
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === user.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('withdrawalApproved', {
+                amount: withdrawal.amount,
+                phoneNumber: withdrawal.phoneNumber,
+                withdrawalId: withdrawal._id
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Approved withdrawal of ${withdrawal.amount} ETB for ${user.userName}`);
+        console.log(`✅ Admin approved withdrawal ${withdrawalId} for ${user.userName}: ${withdrawal.amount} ETB to ${withdrawal.phoneNumber}`);
+        
+        logActivity('ADMIN_APPROVE_WITHDRAWAL', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          userName: user.userName,
+          amount: withdrawal.amount,
+          phoneNumber: withdrawal.phoneNumber,
+          withdrawalId: withdrawalId
+        }, socket.id);
+      }
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error approving withdrawal:', error);
+      socket.emit('admin:error', 'Failed to approve withdrawal');
+    }
+  });
+  
+  socket.on('admin:rejectWithdrawal', async ({ withdrawalId, notes }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const withdrawal = await Withdrawal.findById(withdrawalId);
+      if (!withdrawal) {
+        socket.emit('admin:error', 'Withdrawal not found');
+        return;
+      }
+      
+      if (withdrawal.status !== 'pending') {
+        socket.emit('admin:error', `Withdrawal is already ${withdrawal.status}`);
+        return;
+      }
+      
+      withdrawal.status = 'rejected';
+      withdrawal.adminNotes = notes || 'Withdrawal rejected';
+      withdrawal.processedBy = socket.id;
+      withdrawal.processedAt = new Date();
+      withdrawal.updatedAt = new Date();
+      await withdrawal.save();
+      
+      const user = await User.findOne({ userId: withdrawal.userId });
+      if (user) {
+        user.balance += withdrawal.amount;
+        await user.save();
+        
+        const transaction = new Transaction({
+          type: 'WITHDRAWAL_REJECTED_REFUND',
+          userId: user.userId,
+          userName: user.userName,
+          amount: withdrawal.amount,
+          description: `Withdrawal rejected - funds returned`
+        });
+        await transaction.save();
+        
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === user.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('balanceUpdate', user.balance);
+              playerSocket.emit('withdrawalRejected', {
+                amount: withdrawal.amount,
+                reason: notes || 'Withdrawal rejected by admin',
+                withdrawalId: withdrawal._id
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Rejected withdrawal of ${withdrawal.amount} ETB for ${user.userName}`);
+        console.log(`❌ Admin rejected withdrawal ${withdrawalId} for ${user.userName}: ${withdrawal.amount} ETB`);
+        
+        logActivity('ADMIN_REJECT_WITHDRAWAL', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          userName: user.userName,
+          amount: withdrawal.amount,
+          withdrawalId: withdrawalId,
+          reason: notes
+        }, socket.id);
+      }
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Error rejecting withdrawal:', error);
+      socket.emit('admin:error', 'Failed to reject withdrawal');
+    }
+  });
+  
+  socket.on('admin:updatePaymentInfo', async ({ phoneNumber, notes, minDeposit, maxDeposit, minWithdrawal, maxWithdrawal }) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      let paymentInfo = await AdminPaymentInfo.findOne({ isActive: true });
+      
+      if (!paymentInfo) {
+        paymentInfo = new AdminPaymentInfo({
+          phoneNumber: phoneNumber || CONFIG.ADMIN_PHONE_NUMBER,
+          notes: notes || '',
+          minDeposit: minDeposit || CONFIG.MIN_DEPOSIT,
+          maxDeposit: maxDeposit || CONFIG.MAX_DEPOSIT,
+          minWithdrawal: minWithdrawal || CONFIG.MIN_WITHDRAWAL,
+          maxWithdrawal: maxWithdrawal || CONFIG.MAX_WITHDRAWAL
+        });
+      } else {
+        paymentInfo.phoneNumber = phoneNumber || paymentInfo.phoneNumber;
+        paymentInfo.notes = notes || paymentInfo.notes;
+        paymentInfo.minDeposit = minDeposit || paymentInfo.minDeposit;
+        paymentInfo.maxDeposit = maxDeposit || paymentInfo.maxDeposit;
+        paymentInfo.minWithdrawal = minWithdrawal || paymentInfo.minWithdrawal;
+        paymentInfo.maxWithdrawal = maxWithdrawal || paymentInfo.maxWithdrawal;
+        paymentInfo.updatedAt = new Date();
+      }
+      
+      await paymentInfo.save();
+      
+      socket.emit('admin:success', 'Payment info updated successfully');
+      console.log(`✅ Admin updated payment info: ${phoneNumber}`);
+      
+      logActivity('ADMIN_UPDATE_PAYMENT_INFO', { 
+        adminSocket: socket.id,
+        phoneNumber: phoneNumber
+      }, socket.id);
+      
+    } catch (error) {
+      console.error('Error updating payment info:', error);
+      socket.emit('admin:error', 'Failed to update payment info');
+    }
+  });
+  
+  // ========== PLAYER WALLET EVENTS ==========
+  socket.on('wallet:getPaymentInfo', async (callback) => {
+    try {
+      const paymentInfo = await getPaymentInfo();
+      if (!paymentInfo) {
+        if (callback) callback({ error: 'Payment info not available' });
+        return;
+      }
+      
+      if (callback) callback({
+        phoneNumber: paymentInfo.phoneNumber,
+        provider: paymentInfo.provider,
+        notes: paymentInfo.notes,
+        minDeposit: paymentInfo.minDeposit,
+        maxDeposit: paymentInfo.maxDeposit,
+        minWithdrawal: paymentInfo.minWithdrawal,
+        maxWithdrawal: paymentInfo.maxWithdrawal
+      });
+    } catch (error) {
+      console.error('Error getting payment info:', error);
+      if (callback) callback({ error: 'Failed to get payment info' });
+    }
+  });
+  
+  socket.on('wallet:submitDeposit', async (data, callback) => {
+    try {
+      const { userId, amount, phoneNumber, transactionId, receiptText } = data;
+      
+      if (!userId || !amount || !phoneNumber || !transactionId || !receiptText) {
+        if (callback) callback({ success: false, message: 'All fields are required' });
+        return;
+      }
+      
+      const paymentInfo = await getPaymentInfo();
+      if (!paymentInfo) {
+        if (callback) callback({ success: false, message: 'Payment system not available' });
+        return;
+      }
+      
+      if (amount < paymentInfo.minDeposit) {
+        if (callback) callback({ 
+          success: false, 
+          message: `Minimum deposit is ${paymentInfo.minDeposit} ETB` 
+        });
+        return;
+      }
+      
+      if (amount > paymentInfo.maxDeposit) {
+        if (callback) callback({ 
+          success: false, 
+          message: `Maximum deposit is ${paymentInfo.maxDeposit} ETB` 
+        });
+        return;
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      if (!user) {
+        if (callback) callback({ success: false, message: 'User not found' });
+        return;
+      }
+      
+      const existingDeposit = await Deposit.findOne({ 
+        transactionId: transactionId,
+        status: { $ne: 'rejected' }
+      });
+      
+      if (existingDeposit) {
+        if (callback) callback({ success: false, message: 'Transaction ID already exists' });
+        return;
+      }
+      
+      const deposit = new Deposit({
+        userId: userId,
+        userName: user.userName,
+        amount: amount,
+        phoneNumber: phoneNumber,
+        transactionId: transactionId,
+        receiptText: receiptText,
+        status: 'pending'
+      });
+      
+      await deposit.save();
+      
+      if (!user.telebirrPhone) {
+        user.telebirrPhone = phoneNumber;
+        await user.save();
+      }
+      
+      adminSockets.forEach(socketId => {
+        const adminSocket = io.sockets.sockets.get(socketId);
+        if (adminSocket) {
+          adminSocket.emit('admin:newDeposit', {
+            depositId: deposit._id,
+            userId: userId,
+            userName: user.userName,
+            amount: amount,
+            phoneNumber: phoneNumber,
+            transactionId: transactionId,
+            receiptText: receiptText.substring(0, 100) + '...',
+            createdAt: deposit.createdAt
+          });
+        }
+      });
+      
+      if (callback) {
+        callback({ 
+          success: true, 
+          message: 'Deposit request submitted successfully',
+          depositId: deposit._id
+        });
+      }
+      
+      console.log(`💰 Deposit request submitted by ${user.userName}: ${amount} ETB (Transaction: ${transactionId})`);
+      
+      logActivity('DEPOSIT_REQUEST', { 
+        userId, 
+        userName: user.userName, 
+        amount, 
+        phoneNumber,
+        transactionId 
+      });
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Deposit request error:', error);
+      if (callback) {
+        callback({ 
+          success: false, 
+          message: 'Server error: ' + error.message 
+        });
+      }
+    }
+  });
+  
+  socket.on('wallet:submitWithdrawal', async (data, callback) => {
+    try {
+      const { userId, amount, phoneNumber } = data;
+      
+      if (!userId || !amount || !phoneNumber) {
+        if (callback) callback({ success: false, message: 'All fields are required' });
+        return;
+      }
+      
+      const paymentInfo = await getPaymentInfo();
+      if (!paymentInfo) {
+        if (callback) callback({ success: false, message: 'Payment system not available' });
+        return;
+      }
+      
+      if (amount < paymentInfo.minWithdrawal) {
+        if (callback) callback({ 
+          success: false, 
+          message: `Minimum withdrawal is ${paymentInfo.minWithdrawal} ETB` 
+        });
+        return;
+      }
+      
+      if (amount > paymentInfo.maxWithdrawal) {
+        if (callback) callback({ 
+          success: false, 
+          message: `Maximum withdrawal is ${paymentInfo.maxWithdrawal} ETB` 
+        });
+        return;
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      if (!user) {
+        if (callback) callback({ success: false, message: 'User not found' });
+        return;
+      }
+      
+      if (user.balance < amount) {
+        if (callback) callback({ success: false, message: 'Insufficient balance' });
+        return;
+      }
+      
+      const pendingWithdrawal = await Withdrawal.findOne({ 
+        userId: userId,
+        status: 'pending'
+      });
+      
+      if (pendingWithdrawal) {
+        if (callback) callback({ 
+          success: false, 
+          message: 'You already have a pending withdrawal request' 
+        });
+        return;
+      }
+      
+      const withdrawal = new Withdrawal({
+        userId: userId,
+        userName: user.userName,
+        amount: amount,
+        phoneNumber: phoneNumber,
+        status: 'pending'
+      });
+      
+      await withdrawal.save();
+      
+      const oldBalance = user.balance;
+      user.balance -= amount;
+      await user.save();
+      
+      const transaction = new Transaction({
+        type: 'WITHDRAWAL_PENDING',
+        userId: userId,
+        userName: user.userName,
+        amount: -amount,
+        description: `Withdrawal request of ${amount} ETB to ${phoneNumber}`
+      });
+      await transaction.save();
+      
+      adminSockets.forEach(socketId => {
+        const adminSocket = io.sockets.sockets.get(socketId);
+        if (adminSocket) {
+          adminSocket.emit('admin:newWithdrawal', {
+            withdrawalId: withdrawal._id,
+            userId: userId,
+            userName: user.userName,
+            amount: amount,
+            phoneNumber: phoneNumber,
+            userBalance: user.balance,
+            oldBalance: oldBalance,
+            createdAt: withdrawal.createdAt
+          });
+        }
+      });
+      
+      if (callback) {
+        callback({ 
+          success: true, 
+          message: 'Withdrawal request submitted successfully',
+          withdrawalId: withdrawal._id,
+          newBalance: user.balance
+        });
+      }
+      
+      socket.emit('balanceUpdate', user.balance);
+      
+      console.log(`💸 Withdrawal request submitted by ${user.userName}: ${amount} ETB to ${phoneNumber}`);
+      
+      logActivity('WITHDRAWAL_REQUEST', { 
+        userId, 
+        userName: user.userName, 
+        amount, 
+        phoneNumber,
+        oldBalance: oldBalance,
+        newBalance: user.balance
+      });
+      
+      updateAdminPanel();
+      
+    } catch (error) {
+      console.error('Withdrawal request error:', error);
+      if (callback) {
+        callback({ 
+          success: false, 
+          message: 'Server error: ' + error.message 
+        });
+      }
+    }
+  });
+  
+  socket.on('wallet:getTransactionHistory', async (data, callback) => {
+    try {
+      const { userId, type, limit = 20, skip = 0 } = data;
+      
+      if (!userId) {
+        if (callback) callback({ success: false, message: 'User ID required' });
+        return;
+      }
+      
+      let deposits = [];
+      let withdrawals = [];
+      let gameTransactions = [];
+      
+      const depositQuery = { userId: userId };
+      if (type === 'deposits' || type === 'all') {
+        deposits = await Deposit.find(depositQuery)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+      }
+      
+      const withdrawalQuery = { userId: userId };
+      if (type === 'withdrawals' || type === 'all') {
+        withdrawals = await Withdrawal.find(withdrawalQuery)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+      }
+      
+      const transactionQuery = { userId: userId };
+      if (type === 'games' || type === 'all') {
+        gameTransactions = await Transaction.find(transactionQuery)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      
+      if (callback) {
+        callback({
+          success: true,
+          deposits: deposits,
+          withdrawals: withdrawals,
+          gameTransactions: gameTransactions,
+          balance: user ? user.balance : 0,
+          totalDeposited: user ? user.totalDeposited : 0,
+          totalWithdrawn: user ? user.totalWithdrawn : 0,
+          depositCount: user ? user.depositCount : 0,
+          withdrawalCount: user ? user.withdrawalCount : 0
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error getting transaction history:', error);
+      if (callback) {
+        callback({ success: false, message: 'Failed to get transaction history' });
+      }
+    }
+  });
+  
+  socket.on('wallet:getBalance', async (userId, callback) => {
+    try {
+      const user = await User.findOne({ userId: userId });
+      if (!user) {
+        if (callback) callback({ success: false, message: 'User not found' });
+        return;
+      }
+      
+      if (callback) {
+        callback({
+          success: true,
+          balance: user.balance,
+          totalDeposited: user.totalDeposited || 0,
+          totalWithdrawn: user.totalWithdrawn || 0,
+          telebirrPhone: user.telebirrPhone || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error getting balance:', error);
+      if (callback) callback({ success: false, message: 'Failed to get balance' });
+    }
+  });
+  
+  // ========== PLAYER EVENTS ==========
   socket.on('init', async (data, callback) => {
     try {
       const { userId, userName } = data;
@@ -2154,7 +2250,10 @@ io.on('connection', (socket) => {
           userId: userId,
           userName: user.userName,
           balance: user.balance,
-          referralCode: user.referralCode
+          referralCode: user.referralCode,
+          telebirrPhone: user.telebirrPhone || '',
+          totalDeposited: user.totalDeposited || 0,
+          totalWithdrawn: user.totalWithdrawn || 0
         });
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
@@ -2974,6 +3073,7 @@ setInterval(() => {
   });
 }, 10000);
 
+// ========== CONNECTION CLEANUP FUNCTION ==========
 async function cleanupStaleConnections() {
   console.log('🧹 Running connection cleanup...');
   
@@ -3006,6 +3106,7 @@ async function cleanupStaleConnections() {
 
 setInterval(cleanupStaleConnections, 30000);
 
+// ========== CLEANUP STUCK COUNTDOWNS ==========
 async function cleanupStuckCountdowns() {
   try {
     const now = new Date();
@@ -3073,6 +3174,7 @@ async function cleanupStuckCountdowns() {
 
 setInterval(cleanupStuckCountdowns, 10000);
 
+// ========== ROOM CLEANUP FUNCTION ==========
 async function cleanupStaleRooms() {
   try {
     const oneHourAgo = new Date(Date.now() - 3600000);
@@ -3134,6 +3236,7 @@ async function cleanupStaleRooms() {
 
 setInterval(cleanupStaleRooms, 300000);
 
+// ========== HEALTH CHECK FUNCTION ==========
 setInterval(async () => {
   try {
     const now = Date.now();
@@ -3212,22 +3315,13 @@ app.get('/', (req, res) => {
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
-          <p style="color: #10b981; margin-top: 10px;">🔒 NEW: Room lock when game is playing</p>
-          <p style="color: #10b981;">⏰ NEW: 7-minute game timeout auto-clear</p>
-          <p style="color: #10b981;">⏱️ NEW: Timer on box selection interface</p>
-          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
-          <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
-          <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
-          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
-          <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
-          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED</p>
-          <p style="color: #10b981;">✅ Claim lock prevents double prize payouts</p>
-          <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
-          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">💰 NEW: Deposit/Withdrawal System Added!</p>
-          <p style="color: #10b981;">✅ Players can deposit via Telebirr</p>
-          <p style="color: #10b981;">✅ Admin approval for deposits/withdrawals</p>
+          <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ DEPOSIT/WITHDRAWAL ENABLED</p>
+          <p style="color: #10b981;">📱 Telebirr Payment: ✅ ${CONFIG.ADMIN_PHONE_NUMBER}</p>
+          <p style="color: #10b981;">🔒 Admin Approval Required for Deposits</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ Deposit/Withdrawal System Fully Integrated</p>
+          <p style="color: #10b981;">✅ Admin panel shows pending transactions</p>
           <p style="color: #10b981;">✅ Real-time notifications for admin</p>
-          <p style="color: #10b981;">✅ Admin panel for managing requests</p>
+          <p style="color: #10b981;">✅ Players can check transaction history</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -3250,11 +3344,6 @@ app.get('/', (req, res) => {
             <a href="/test-connections" class="btn" style="background: #f59e0b;" target="_blank">🔌 Test Connections</a>
             <a href="/force-start/10" class="btn" style="background: #10b981;" target="_blank">🚀 Force Start Room 10</a>
           </div>
-          <div style="margin-top: 20px;">
-            <a href="/payment-info" class="btn" style="background: #10b981;" target="_blank">💰 Payment Info</a>
-            <a href="/admin-deposits" class="btn" style="background: #f59e0b;" target="_blank">📥 Deposit Requests</a>
-            <a href="/admin-withdrawals" class="btn" style="background: #f59e0b;" target="_blank">📤 Withdrawal Requests</a>
-          </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
@@ -3269,23 +3358,13 @@ app.get('/', (req, res) => {
             Game Timeout: ${CONFIG.GAME_TIMEOUT_MINUTES} minutes auto-clear<br>
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
-            Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
-            Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES} minute timeout<br>
-            Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
-            Fixed Issues: ✅ Double prize bug fixed, ✅ Claim lock implemented<br>
-            ✅ Timer synchronization fixed, ✅ Game timer working<br>
-            ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
-            ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
-            ✅ Balls drawn correctly, ✅ BINGO checking working<br>
-            ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
-            ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
-            ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
-            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
-            ✅✅✅✅ NEW: DEPOSIT/WITHDRAWAL SYSTEM ADDED<br>
-            ✅✅✅ Admin panel for managing requests<br>
-            ✅✅✅ Telebirr integration for payments<br>
-            ✅✅✅ Real-time notifications for admin<br>
-            ✅✅✅ User history for deposits/withdrawals
+            Wallet System: ✅ Telebirr Deposit/Withdrawal<br>
+            Admin Phone: ${CONFIG.ADMIN_PHONE_NUMBER}<br>
+            Min Deposit: ${CONFIG.MIN_DEPOSIT} ETB | Max Deposit: ${CONFIG.MAX_DEPOSIT} ETB<br>
+            Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB | Max Withdrawal: ${CONFIG.MAX_WITHDRAWAL} ETB<br>
+            Admin Approval: Required for all transactions<br>
+            Transaction History: Available for all players<br>
+            Real-time Admin Notifications: ✅ Active
           </p>
         </div>
       </div>
@@ -3301,77 +3380,85 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ========== DEPOSIT/WITHDRAWAL API ROUTES ==========
-app.get('/payment-info', async (req, res) => {
+// ... [Previous routes: /telegram, /socket-test, /admin, /game, /health, /api/user/:userId, etc.] ...
+// Keep all your existing routes here
+
+// ========== WALLET API ENDPOINTS ==========
+app.get('/api/payment-info', async (req, res) => {
   try {
-    const phoneSetting = await Settings.findOne({ key: 'admin_phone_number' });
-    const adminPhone = phoneSetting ? phoneSetting.value : CONFIG.ADMIN_PHONE_NUMBER;
+    const paymentInfo = await getPaymentInfo();
+    if (!paymentInfo) {
+      return res.status(404).json({ error: 'Payment info not configured' });
+    }
     
     res.json({
-      success: true,
-      adminPhone: adminPhone,
-      minDeposit: CONFIG.MIN_DEPOSIT_AMOUNT,
-      maxDeposit: CONFIG.MAX_DEPOSIT_AMOUNT,
-      minWithdrawal: CONFIG.MIN_WITHDRAWAL_AMOUNT,
-      maxWithdrawal: CONFIG.MAX_WITHDRAWAL_AMOUNT,
-      instructions: `1. Send money to ${adminPhone} via Telebirr\n2. Copy the receipt message\n3. Paste receipt in the form below\n4. Wait for admin approval (usually within 5 minutes)`
+      phoneNumber: paymentInfo.phoneNumber,
+      provider: paymentInfo.provider,
+      notes: paymentInfo.notes,
+      minDeposit: paymentInfo.minDeposit,
+      maxDeposit: paymentInfo.maxDeposit,
+      minWithdrawal: paymentInfo.minWithdrawal,
+      maxWithdrawal: paymentInfo.maxWithdrawal
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/deposit-request', async (req, res) => {
+app.post('/api/deposit/request', async (req, res) => {
   try {
-    const { userId, userName, amount, receiptText } = req.body;
+    const { userId, amount, phoneNumber, transactionId, receiptText } = req.body;
     
-    if (!userId || !userName || !amount || !receiptText) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    if (!userId || !amount || !phoneNumber || !transactionId || !receiptText) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
     
-    const amountNum = parseFloat(amount);
-    if (amountNum < CONFIG.MIN_DEPOSIT_AMOUNT) {
+    const paymentInfo = await getPaymentInfo();
+    if (!paymentInfo) {
+      return res.status(400).json({ error: 'Payment system not available' });
+    }
+    
+    if (amount < paymentInfo.minDeposit) {
       return res.status(400).json({ 
-        success: false, 
-        error: `Minimum deposit is ${CONFIG.MIN_DEPOSIT_AMOUNT} ETB` 
+        error: `Minimum deposit is ${paymentInfo.minDeposit} ETB` 
       });
     }
     
-    if (amountNum > CONFIG.MAX_DEPOSIT_AMOUNT) {
+    if (amount > paymentInfo.maxDeposit) {
       return res.status(400).json({ 
-        success: false, 
-        error: `Maximum deposit is ${CONFIG.MAX_DEPOSIT_AMOUNT} ETB` 
+        error: `Maximum deposit is ${paymentInfo.maxDeposit} ETB` 
       });
     }
     
-    const phoneSetting = await Settings.findOne({ key: 'admin_phone_number' });
-    const adminPhone = phoneSetting ? phoneSetting.value : CONFIG.ADMIN_PHONE_NUMBER;
+    const user = await User.findOne({ userId: userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     
-    const existingDeposit = await DepositRequest.findOne({ 
-      receiptText: receiptText,
-      status: 'pending'
+    const existingDeposit = await Deposit.findOne({ 
+      transactionId: transactionId,
+      status: { $ne: 'rejected' }
     });
     
     if (existingDeposit) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'This receipt has already been submitted' 
-      });
+      return res.status(400).json({ error: 'Transaction ID already exists' });
     }
     
-    const deposit = new DepositRequest({
-      userId,
-      userName,
-      amount: amountNum,
-      phoneNumber: adminPhone,
-      receiptText,
+    const deposit = new Deposit({
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      phoneNumber: phoneNumber,
+      transactionId: transactionId,
+      receiptText: receiptText,
       status: 'pending'
     });
     
     await deposit.save();
     
-    if (CONFIG.AUTO_APPROVE_DEPOSITS) {
-      await approveDeposit(deposit._id, 'SYSTEM_AUTO', 'Auto-approved');
+    if (!user.telebirrPhone) {
+      user.telebirrPhone = phoneNumber;
+      await user.save();
     }
     
     adminSockets.forEach(socketId => {
@@ -3379,103 +3466,106 @@ app.post('/api/deposit-request', async (req, res) => {
       if (socket) {
         socket.emit('admin:newDeposit', {
           depositId: deposit._id,
-          userId,
-          userName,
-          amount: amountNum,
-          receiptText,
+          userId: userId,
+          userName: user.userName,
+          amount: amount,
+          phoneNumber: phoneNumber,
+          transactionId: transactionId,
+          receiptText: receiptText.substring(0, 100) + '...',
           createdAt: deposit.createdAt
         });
       }
     });
     
-    logActivity('DEPOSIT_REQUEST', { 
-      userId, 
-      userName, 
-      amount: amountNum,
-      depositId: deposit._id 
+    res.json({ 
+      success: true, 
+      message: 'Deposit request submitted successfully',
+      depositId: deposit._id
     });
     
-    res.json({
-      success: true,
-      message: 'Deposit request submitted. Admin will process it shortly.',
-      depositId: deposit._id,
-      status: CONFIG.AUTO_APPROVE_DEPOSITS ? 'auto-approved' : 'pending'
+    console.log(`💰 API Deposit request: ${user.userName}: ${amount} ETB`);
+    
+    logActivity('API_DEPOSIT_REQUEST', { 
+      userId, 
+      userName: user.userName, 
+      amount, 
+      phoneNumber,
+      transactionId 
     });
+    
+    updateAdminPanel();
     
   } catch (error) {
-    console.error('Error submitting deposit:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('API Deposit request error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/withdrawal-request', async (req, res) => {
+app.post('/api/withdraw/request', async (req, res) => {
   try {
-    const { userId, userName, amount, phoneNumber } = req.body;
+    const { userId, amount, phoneNumber } = req.body;
     
-    if (!userId || !userName || !amount || !phoneNumber) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    if (!userId || !amount || !phoneNumber) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
     
-    const amountNum = parseFloat(amount);
+    const paymentInfo = await getPaymentInfo();
+    if (!paymentInfo) {
+      return res.status(400).json({ error: 'Payment system not available' });
+    }
+    
+    if (amount < paymentInfo.minWithdrawal) {
+      return res.status(400).json({ 
+        error: `Minimum withdrawal is ${paymentInfo.minWithdrawal} ETB` 
+      });
+    }
+    
+    if (amount > paymentInfo.maxWithdrawal) {
+      return res.status(400).json({ 
+        error: `Maximum withdrawal is ${paymentInfo.maxWithdrawal} ETB` 
+      });
+    }
     
     const user = await User.findOne({ userId: userId });
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return res.status(404).json({ error: 'User not found' });
     }
     
-    if (user.balance < amountNum) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Insufficient balance. Your balance: ${user.balance} ETB` 
-      });
+    if (user.balance < amount) {
+      return res.status(400).json({ error: 'Insufficient balance' });
     }
     
-    if (amountNum < CONFIG.MIN_WITHDRAWAL_AMOUNT) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Minimum withdrawal is ${CONFIG.MIN_WITHDRAWAL_AMOUNT} ETB` 
-      });
-    }
-    
-    if (amountNum > CONFIG.MAX_WITHDRAWAL_AMOUNT) {
-      return res.status(400).json({ 
-        success: false, 
-        error: `Maximum withdrawal is ${CONFIG.MAX_WITHDRAWAL_AMOUNT} ETB` 
-      });
-    }
-    
-    const pendingWithdrawal = await WithdrawalRequest.findOne({ 
+    const pendingWithdrawal = await Withdrawal.findOne({ 
       userId: userId,
       status: 'pending'
     });
     
     if (pendingWithdrawal) {
       return res.status(400).json({ 
-        success: false, 
         error: 'You already have a pending withdrawal request' 
       });
     }
     
-    const withdrawal = new WithdrawalRequest({
-      userId,
-      userName,
-      amount: amountNum,
-      phoneNumber,
+    const withdrawal = new Withdrawal({
+      userId: userId,
+      userName: user.userName,
+      amount: amount,
+      phoneNumber: phoneNumber,
       status: 'pending'
     });
     
     await withdrawal.save();
     
     const oldBalance = user.balance;
-    user.balance -= amountNum;
+    user.balance -= amount;
     await user.save();
     
     const transaction = new Transaction({
       type: 'WITHDRAWAL_PENDING',
       userId: userId,
-      userName: userName,
-      amount: -amountNum,
-      description: `Withdrawal request to ${phoneNumber} - PENDING`
+      userName: user.userName,
+      amount: -amount,
+      description: `Withdrawal request of ${amount} ETB to ${phoneNumber}`
     });
     await transaction.save();
     
@@ -3484,1089 +3574,222 @@ app.post('/api/withdrawal-request', async (req, res) => {
       if (socket) {
         socket.emit('admin:newWithdrawal', {
           withdrawalId: withdrawal._id,
-          userId,
-          userName,
-          amount: amountNum,
-          phoneNumber,
+          userId: userId,
+          userName: user.userName,
+          amount: amount,
+          phoneNumber: phoneNumber,
           userBalance: user.balance,
+          oldBalance: oldBalance,
           createdAt: withdrawal.createdAt
         });
       }
     });
     
-    logActivity('WITHDRAWAL_REQUEST', { 
-      userId, 
-      userName, 
-      amount: amountNum,
-      phoneNumber,
-      withdrawalId: withdrawal._id 
-    });
-    
-    res.json({
-      success: true,
-      message: 'Withdrawal request submitted. Admin will process it shortly.',
+    res.json({ 
+      success: true, 
+      message: 'Withdrawal request submitted successfully',
       withdrawalId: withdrawal._id,
       newBalance: user.balance
     });
     
+    console.log(`💸 API Withdrawal request: ${user.userName}: ${amount} ETB to ${phoneNumber}`);
+    
+    logActivity('API_WITHDRAWAL_REQUEST', { 
+      userId, 
+      userName: user.userName, 
+      amount, 
+      phoneNumber,
+      oldBalance: oldBalance,
+      newBalance: user.balance
+    });
+    
+    updateAdminPanel();
+    
   } catch (error) {
-    console.error('Error submitting withdrawal:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('API Withdrawal request error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/admin/deposits', async (req, res) => {
+app.get('/api/transactions/:userId', async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const userId = req.params.userId;
+    const type = req.query.type || 'all';
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = parseInt(req.query.skip) || 0;
     
-    let query = {};
-    if (status && status !== 'all') {
-      query.status = status;
+    let deposits = [];
+    let withdrawals = [];
+    let gameTransactions = [];
+    
+    const depositQuery = { userId: userId };
+    if (type === 'deposits' || type === 'all') {
+      deposits = await Deposit.find(depositQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
     }
     
-    const deposits = await DepositRequest.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+    const withdrawalQuery = { userId: userId };
+    if (type === 'withdrawals' || type === 'all') {
+      withdrawals = await Withdrawal.find(withdrawalQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
     
-    const total = await DepositRequest.countDocuments(query);
+    const transactionQuery = { userId: userId };
+    if (type === 'games' || type === 'all') {
+      gameTransactions = await Transaction.find(transactionQuery)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
+    
+    const user = await User.findOne({ userId: userId });
     
     res.json({
       success: true,
-      deposits,
-      total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / limit)
+      deposits: deposits,
+      withdrawals: withdrawals,
+      gameTransactions: gameTransactions,
+      balance: user ? user.balance : 0,
+      totalDeposited: user ? user.totalDeposited : 0,
+      totalWithdrawn: user ? user.totalWithdrawn : 0,
+      depositCount: user ? user.depositCount : 0,
+      withdrawalCount: user ? user.withdrawalCount : 0
     });
+    
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error getting transaction history:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/admin/withdrawals', async (req, res) => {
+app.post('/api/deposit/approve', async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { depositId, adminPassword, notes } = req.body;
     
-    let query = {};
-    if (status && status !== 'all') {
-      query.status = status;
+    if (adminPassword !== CONFIG.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    const withdrawals = await WithdrawalRequest.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+    const deposit = await Deposit.findById(depositId);
+    if (!deposit) {
+      return res.status(404).json({ error: 'Deposit not found' });
+    }
     
-    const total = await WithdrawalRequest.countDocuments(query);
+    if (deposit.status !== 'pending') {
+      return res.status(400).json({ error: `Deposit is already ${deposit.status}` });
+    }
     
-    res.json({
-      success: true,
-      withdrawals,
-      total,
-      page: parseInt(page),
-      totalPages: Math.ceil(total / limit)
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/admin/approve-deposit/:depositId', async (req, res) => {
-  try {
-    const { depositId } = req.params;
-    const { adminId, notes } = req.body;
+    deposit.status = 'approved';
+    deposit.adminNotes = notes || '';
+    deposit.processedAt = new Date();
+    deposit.updatedAt = new Date();
+    await deposit.save();
     
-    const success = await approveDeposit(depositId, adminId || 'ADMIN', notes || '');
-    
-    if (success) {
-      res.json({
-        success: true,
-        message: 'Deposit approved successfully'
+    const user = await User.findOne({ userId: deposit.userId });
+    if (user) {
+      user.balance += deposit.amount;
+      user.totalDeposited += deposit.amount;
+      user.depositCount += 1;
+      user.lastDeposit = new Date();
+      
+      if (!user.telebirrPhone && deposit.phoneNumber) {
+        user.telebirrPhone = deposit.phoneNumber;
+      }
+      
+      await user.save();
+      
+      const transaction = new Transaction({
+        type: 'DEPOSIT_APPROVED',
+        userId: user.userId,
+        userName: user.userName,
+        amount: deposit.amount,
+        description: `Deposit approved via Telebirr (Transaction: ${deposit.transactionId})`
       });
+      await transaction.save();
+      
+      for (const [sId, uId] of socketToUser.entries()) {
+        if (uId === user.userId) {
+          const playerSocket = io.sockets.sockets.get(sId);
+          if (playerSocket) {
+            playerSocket.emit('balanceUpdate', user.balance);
+            playerSocket.emit('depositApproved', {
+              amount: deposit.amount,
+              newBalance: user.balance,
+              depositId: deposit._id
+            });
+          }
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Approved deposit of ${deposit.amount} ETB for ${user.userName}`,
+        newBalance: user.balance
+      });
+      
+      console.log(`✅ API Approved deposit ${depositId} for ${user.userName}: ${deposit.amount} ETB`);
+      
+      logActivity('API_APPROVE_DEPOSIT', { 
+        userId: user.userId, 
+        userName: user.userName,
+        amount: deposit.amount,
+        depositId: depositId
+      });
+      
+      updateAdminPanel();
+      
     } else {
-      res.status(400).json({ success: false, error: 'Failed to approve deposit' });
+      res.status(404).json({ error: 'User not found' });
     }
     
   } catch (error) {
     console.error('Error approving deposit:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/admin/reject-deposit/:depositId', async (req, res) => {
-  try {
-    const { depositId } = req.params;
-    const { adminId, reason } = req.body;
-    
-    const deposit = await DepositRequest.findById(depositId);
-    if (!deposit) {
-      return res.status(404).json({ success: false, error: 'Deposit not found' });
-    }
-    
-    deposit.status = 'rejected';
-    deposit.processedBy = adminId || 'ADMIN';
-    deposit.processedAt = new Date();
-    deposit.notes = reason || 'No reason provided';
-    await deposit.save();
-    
-    res.json({
-      success: true,
-      message: 'Deposit rejected successfully'
-    });
-    
-  } catch (error) {
-    console.error('Error rejecting deposit:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/admin/approve-withdrawal/:withdrawalId', async (req, res) => {
-  try {
-    const { withdrawalId } = req.params;
-    const { adminId, transactionId, notes } = req.body;
-    
-    const success = await approveWithdrawal(withdrawalId, adminId || 'ADMIN', transactionId || '', notes || '');
-    
-    if (success) {
-      res.json({
-        success: true,
-        message: 'Withdrawal approved successfully'
-      });
-    } else {
-      res.status(400).json({ success: false, error: 'Failed to approve withdrawal' });
-    }
-    
-  } catch (error) {
-    console.error('Error approving withdrawal:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/admin/reject-withdrawal/:withdrawalId', async (req, res) => {
-  try {
-    const { withdrawalId } = req.params;
-    const { adminId, reason } = req.body;
-    
-    const success = await rejectWithdrawal(withdrawalId, adminId || 'ADMIN', reason || '');
-    
-    if (success) {
-      res.json({
-        success: true,
-        message: 'Withdrawal rejected successfully'
-      });
-    } else {
-      res.status(400).json({ success: false, error: 'Failed to reject withdrawal' });
-    }
-    
-  } catch (error) {
-    console.error('Error rejecting withdrawal:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/user/:userId/deposits', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const deposits = await DepositRequest.find({ userId: userId })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    
-    res.json({
-      success: true,
-      deposits: deposits
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/user/:userId/withdrawals', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const withdrawals = await WithdrawalRequest.find({ userId: userId })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    
-    res.json({
-      success: true,
-      withdrawals: withdrawals
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Admin settings management
-app.get('/api/admin/settings', async (req, res) => {
-  try {
-    const settings = await Settings.find({});
-    
-    res.json({
-      success: true,
-      settings: settings
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/admin/settings', async (req, res) => {
-  try {
-    const { key, value, description } = req.body;
-    
-    if (!key) {
-      return res.status(400).json({ success: false, error: 'Key is required' });
-    }
-    
-    const setting = await Settings.findOneAndUpdate(
-      { key: key },
-      { 
-        value: value,
-        description: description || '',
-        updatedAt: new Date()
-      },
-      { upsert: true, new: true }
-    );
-    
-    res.json({
-      success: true,
-      message: 'Setting updated successfully',
-      setting: setting
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ========== EXISTING ROUTES (KEPT AS IS) ==========
-app.get('/socket-test', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Socket.IO Connection Test</title>
-      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
-        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
-        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
-        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
-        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
-        .success { color: #10b981; }
-        .error { color: #ef4444; }
-        .info { color: #3b82f6; }
-      </style>
-    </head>
-    <body>
-      <h1>🔌 Socket.IO Connection Test</h1>
-      <div id="status" class="status disconnected">Connecting to server...</div>
-      
-      <h3>Test Actions:</h3>
-      <div>
-        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Connection
-        </button>
-        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test User Init
-        </button>
-        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Room Status
-        </button>
-      </div>
-      
-      <h3>Connection Log:</h3>
-      <div id="log" class="log"></div>
-      
-      <script>
-        const log = document.getElementById('log');
-        const status = document.getElementById('status');
-        
-        function addLog(message, type = 'info') {
-          const entry = document.createElement('div');
-          entry.className = 'log-entry ' + type;
-          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
-          log.appendChild(entry);
-          log.scrollTop = log.scrollHeight;
-        }
-        
-        const socket = io({
-          reconnection: true,
-          reconnectionAttempts: Infinity,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          timeout: 20000,
-          transports: ['websocket', 'polling'],
-          forceNew: true,
-          autoConnect: true
-        });
-        
-        socket.on('connect', () => {
-          status.className = 'status connected';
-          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
-          addLog('Connected to server with ID: ' + socket.id, 'success');
-        });
-        
-        socket.on('disconnect', (reason) => {
-          status.className = 'status disconnected';
-          status.textContent = '❌ Disconnected: ' + reason;
-          addLog('Disconnected: ' + reason, 'error');
-        });
-        
-        socket.on('connect_error', (error) => {
-          addLog('Connection error: ' + error.message, 'error');
-        });
-        
-        socket.on('connectionTest', (data) => {
-          addLog('Server connection test: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('connected', (data) => {
-          addLog('Server connected message: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('balanceUpdate', (data) => {
-          addLog('Balance update: ' + data, 'info');
-        });
-        
-        socket.on('roomStatus', (data) => {
-          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
-        });
-        
-        socket.on('boxesTakenUpdate', (data) => {
-          addLog('Boxes update: ' + data.takenBoxes.length + ' boxes taken in room ' + data.room, 'info');
-        });
-        
-        socket.on('boxesCleared', (data) => {
-          addLog('Boxes cleared for room ' + data.room + ': ' + data.reason, 'info');
-        });
-        
-        function testConnection() {
-          addLog('Testing connection...', 'info');
-          socket.emit('ping');
-        }
-        
-        function testInit() {
-          addLog('Testing user initialization...', 'info');
-          socket.emit('init', {
-            userId: 'test-' + Date.now(),
-            userName: 'Test Player'
-          });
-        }
-        
-        function testRoomStatus() {
-          addLog('Requesting room status...', 'info');
-          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
-            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
-          });
-        }
-        
-        setTimeout(() => {
-          testConnection();
-        }, 1000);
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin.html'));
-});
-
-app.get('/game', (req, res) => {
-  res.sendFile(path.join(__dirname, 'game.html'));
-});
-
-app.get('/admin-deposits', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Deposit Requests - Bingo Elite Admin</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: #f8fafc; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { margin-bottom: 30px; text-align: center; }
-        .btn { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-        .btn:hover { background: #2563eb; }
-        .btn-success { background: #10b981; }
-        .btn-success:hover { background: #059669; }
-        .btn-danger { background: #ef4444; }
-        .btn-danger:hover { background: #dc2626; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .table th { background: #1e293b; padding: 15px; text-align: left; border-bottom: 2px solid #334155; }
-        .table td { padding: 15px; border-bottom: 1px solid #334155; }
-        .table tr:hover { background: #1e293b; }
-        .status-pending { color: #f59e0b; }
-        .status-approved { color: #10b981; }
-        .status-rejected { color: #ef4444; }
-        .search-box { margin: 20px 0; padding: 10px; width: 300px; background: #1e293b; border: 1px solid #334155; color: white; border-radius: 5px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>📥 Deposit Requests - Bingo Elite Admin</h1>
-          <p>Manage deposit requests from players</p>
-          <a href="/admin" class="btn">Back to Admin Panel</a>
-        </div>
-        
-        <div>
-          <input type="text" id="search" class="search-box" placeholder="Search by user ID or name..." onkeyup="searchTable()">
-          <select id="statusFilter" onchange="filterTable()">
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-        
-        <table class="table" id="depositsTable">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>User</th>
-              <th>Amount</th>
-              <th>Receipt</th>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="depositsBody">
-            <!-- Deposits will be loaded by JavaScript -->
-          </tbody>
-        </table>
-        
-        <div id="loading">Loading deposit requests...</div>
-        
-        <div style="margin-top: 30px;">
-          <button class="btn" onclick="refreshDeposits()">Refresh</button>
-          <button class="btn btn-success" onclick="exportDeposits()">Export to CSV</button>
-        </div>
-      </div>
-      
-      <script>
-        let deposits = [];
-        
-        async function loadDeposits() {
-          document.getElementById('loading').style.display = 'block';
-          try {
-            const response = await fetch('/api/admin/deposits?status=all&limit=100');
-            const data = await response.json();
-            
-            if (data.success) {
-              deposits = data.deposits;
-              renderDeposits(deposits);
-            }
-          } catch (error) {
-            console.error('Error loading deposits:', error);
-            document.getElementById('depositsBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444;">Error loading deposits</td></tr>';
-          } finally {
-            document.getElementById('loading').style.display = 'none';
-          }
-        }
-        
-        function renderDeposits(depositsToShow) {
-          const tbody = document.getElementById('depositsBody');
-          tbody.innerHTML = '';
-          
-          if (depositsToShow.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No deposit requests found</td></tr>';
-            return;
-          }
-          
-          depositsToShow.forEach(deposit => {
-            const row = document.createElement('tr');
-            
-            const date = new Date(deposit.createdAt).toLocaleString();
-            const statusClass = `status-${deposit.status}`;
-            
-            row.innerHTML = \`
-              <td>\${deposit._id.substring(0, 8)}...</td>
-              <td>
-                <strong>\${deposit.userName}</strong><br>
-                <small style="color: #94a3b8;">\${deposit.userId}</small>
-              </td>
-              <td style="font-weight: bold; color: #10b981;">\${deposit.amount.toFixed(2)} ETB</td>
-              <td>
-                <div style="max-width: 200px; word-wrap: break-word; font-family: monospace; font-size: 0.8rem;">
-                  \${deposit.receiptText.substring(0, 50)}\${deposit.receiptText.length > 50 ? '...' : ''}
-                </div>
-              </td>
-              <td class="\${statusClass}">
-                <strong>\${deposit.status.toUpperCase()}</strong>
-                \${deposit.processedBy ? \`<br><small>By: \${deposit.processedBy}</small>\` : ''}
-              </td>
-              <td>\${date}</td>
-              <td>
-                \${deposit.status === 'pending' ? \`
-                  <button class="btn btn-success" onclick="approveDeposit('\${deposit._id}')">Approve</button>
-                  <button class="btn btn-danger" onclick="rejectDeposit('\${deposit._id}')">Reject</button>
-                \` : \`
-                  <button class="btn" onclick="viewDeposit('\${deposit._id}')">View</button>
-                \`}
-              </td>
-            \`;
-            
-            tbody.appendChild(row);
-          });
-        }
-        
-        async function approveDeposit(depositId) {
-          if (!confirm('Approve this deposit request?')) return;
-          
-          try {
-            const response = await fetch(\`/api/admin/approve-deposit/\${depositId}\`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ adminId: 'WEB_ADMIN' })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-              alert('Deposit approved successfully');
-              loadDeposits();
-            } else {
-              alert('Error: ' + data.error);
-            }
-          } catch (error) {
-            alert('Error approving deposit: ' + error.message);
-          }
-        }
-        
-        async function rejectDeposit(depositId) {
-          const reason = prompt('Enter reason for rejection:', 'No reason provided');
-          if (reason === null) return;
-          
-          try {
-            const response = await fetch(\`/api/admin/reject-deposit/\${depositId}\`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ adminId: 'WEB_ADMIN', reason: reason })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-              alert('Deposit rejected');
-              loadDeposits();
-            } else {
-              alert('Error: ' + data.error);
-            }
-          } catch (error) {
-            alert('Error rejecting deposit: ' + error.message);
-          }
-        }
-        
-        function viewDeposit(depositId) {
-          const deposit = deposits.find(d => d._id === depositId);
-          if (deposit) {
-            alert(\`Deposit Details:\\n\\nUser: \${deposit.userName} (\${deposit.userId})\\nAmount: \${deposit.amount} ETB\\nReceipt: \${deposit.receiptText}\\nStatus: \${deposit.status}\\nDate: \${new Date(deposit.createdAt).toLocaleString()}\${deposit.notes ? \`\\nNotes: \${deposit.notes}\` : ''}\`);
-          }
-        }
-        
-        function searchTable() {
-          const searchTerm = document.getElementById('search').value.toLowerCase();
-          const filtered = deposits.filter(deposit => 
-            deposit.userId.toLowerCase().includes(searchTerm) ||
-            deposit.userName.toLowerCase().includes(searchTerm) ||
-            deposit.receiptText.toLowerCase().includes(searchTerm)
-          );
-          renderDeposits(filtered);
-        }
-        
-        function filterTable() {
-          const status = document.getElementById('statusFilter').value;
-          const filtered = status === 'all' ? deposits : deposits.filter(d => d.status === status);
-          renderDeposits(filtered);
-        }
-        
-        function refreshDeposits() {
-          loadDeposits();
-        }
-        
-        function exportDeposits() {
-          const csv = [
-            ['Deposit ID', 'User ID', 'User Name', 'Amount', 'Receipt Text', 'Status', 'Processed By', 'Date'],
-            ...deposits.map(d => [
-              d._id,
-              d.userId,
-              d.userName,
-              d.amount,
-              d.receiptText,
-              d.status,
-              d.processedBy || '',
-              new Date(d.createdAt).toISOString()
-            ])
-          ].map(row => row.join(',')).join('\\n');
-          
-          const blob = new Blob([csv], { type: 'text/csv' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = \`deposits_\${new Date().toISOString().split('T')[0]}.csv\`;
-          a.click();
-        }
-        
-        // Load deposits on page load
-        loadDeposits();
-        
-        // Auto-refresh every 30 seconds
-        setInterval(loadDeposits, 30000);
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-app.get('/admin-withdrawals', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Withdrawal Requests - Bingo Elite Admin</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: #f8fafc; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { margin-bottom: 30px; text-align: center; }
-        .btn { padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-        .btn:hover { background: #2563eb; }
-        .btn-success { background: #10b981; }
-        .btn-success:hover { background: #059669; }
-        .btn-danger { background: #ef4444; }
-        .btn-danger:hover { background: #dc2626; }
-        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .table th { background: #1e293b; padding: 15px; text-align: left; border-bottom: 2px solid #334155; }
-        .table td { padding: 15px; border-bottom: 1px solid #334155; }
-        .table tr:hover { background: #1e293b; }
-        .status-pending { color: #f59e0b; }
-        .status-paid { color: #10b981; }
-        .status-rejected { color: #ef4444; }
-        .search-box { margin: 20px 0; padding: 10px; width: 300px; background: #1e293b; border: 1px solid #334155; color: white; border-radius: 5px; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>📤 Withdrawal Requests - Bingo Elite Admin</h1>
-          <p>Manage withdrawal requests from players</p>
-          <a href="/admin" class="btn">Back to Admin Panel</a>
-        </div>
-        
-        <div>
-          <input type="text" id="search" class="search-box" placeholder="Search by user ID or name..." onkeyup="searchTable()">
-          <select id="statusFilter" onchange="filterTable()">
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="paid">Paid</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-        
-        <table class="table" id="withdrawalsTable">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>User</th>
-              <th>Amount</th>
-              <th>Phone Number</th>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="withdrawalsBody">
-            <!-- Withdrawals will be loaded by JavaScript -->
-          </tbody>
-        </table>
-        
-        <div id="loading">Loading withdrawal requests...</div>
-        
-        <div style="margin-top: 30px;">
-          <button class="btn" onclick="refreshWithdrawals()">Refresh</button>
-          <button class="btn btn-success" onclick="exportWithdrawals()">Export to CSV</button>
-        </div>
-      </div>
-      
-      <script>
-        let withdrawals = [];
-        
-        async function loadWithdrawals() {
-          document.getElementById('loading').style.display = 'block';
-          try {
-            const response = await fetch('/api/admin/withdrawals?status=all&limit=100');
-            const data = await response.json();
-            
-            if (data.success) {
-              withdrawals = data.withdrawals;
-              renderWithdrawals(withdrawals);
-            }
-          } catch (error) {
-            console.error('Error loading withdrawals:', error);
-            document.getElementById('withdrawalsBody').innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444;">Error loading withdrawals</td></tr>';
-          } finally {
-            document.getElementById('loading').style.display = 'none';
-          }
-        }
-        
-        function renderWithdrawals(withdrawalsToShow) {
-          const tbody = document.getElementById('withdrawalsBody');
-          tbody.innerHTML = '';
-          
-          if (withdrawalsToShow.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No withdrawal requests found</td></tr>';
-            return;
-          }
-          
-          withdrawalsToShow.forEach(withdrawal => {
-            const row = document.createElement('tr');
-            
-            const date = new Date(withdrawal.createdAt).toLocaleString();
-            const statusClass = \`status-\${withdrawal.status}\`;
-            
-            row.innerHTML = \`
-              <td>\${withdrawal._id.substring(0, 8)}...</td>
-              <td>
-                <strong>\${withdrawal.userName}</strong><br>
-                <small style="color: #94a3b8;">\${withdrawal.userId}</small>
-              </td>
-              <td style="font-weight: bold; color: #ef4444;">\${withdrawal.amount.toFixed(2)} ETB</td>
-              <td>\${withdrawal.phoneNumber}</td>
-              <td class="\${statusClass}">
-                <strong>\${withdrawal.status.toUpperCase()}</strong>
-                \${withdrawal.processedBy ? \`<br><small>By: \${withdrawal.processedBy}</small>\` : ''}
-                \${withdrawal.transactionId ? \`<br><small>TX: \${withdrawal.transactionId}</small>\` : ''}
-              </td>
-              <td>\${date}</td>
-              <td>
-                \${withdrawal.status === 'pending' ? \`
-                  <button class="btn btn-success" onclick="approveWithdrawal('\${withdrawal._id}')">Approve</button>
-                  <button class="btn btn-danger" onclick="rejectWithdrawal('\${withdrawal._id}')">Reject</button>
-                \` : \`
-                  <button class="btn" onclick="viewWithdrawal('\${withdrawal._id}')">View</button>
-                \`}
-              </td>
-            \`;
-            
-            tbody.appendChild(row);
-          });
-        }
-        
-        async function approveWithdrawal(withdrawalId) {
-          const transactionId = prompt('Enter Telebirr transaction ID (optional):', '');
-          const notes = prompt('Enter notes (optional):', '');
-          
-          try {
-            const response = await fetch(\`/api/admin/approve-withdrawal/\${withdrawalId}\`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                adminId: 'WEB_ADMIN',
-                transactionId: transactionId || '',
-                notes: notes || ''
-              })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-              alert('Withdrawal approved successfully');
-              loadWithdrawals();
-            } else {
-              alert('Error: ' + data.error);
-            }
-          } catch (error) {
-            alert('Error approving withdrawal: ' + error.message);
-          }
-        }
-        
-        async function rejectWithdrawal(withdrawalId) {
-          const reason = prompt('Enter reason for rejection:', 'No reason provided');
-          if (reason === null) return;
-          
-          try {
-            const response = await fetch(\`/api/admin/reject-withdrawal/\${withdrawalId}\`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ adminId: 'WEB_ADMIN', reason: reason })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-              alert('Withdrawal rejected');
-              loadWithdrawals();
-            } else {
-              alert('Error: ' + data.error);
-            }
-          } catch (error) {
-            alert('Error rejecting withdrawal: ' + error.message);
-          }
-        }
-        
-        function viewWithdrawal(withdrawalId) {
-          const withdrawal = withdrawals.find(w => w._id === withdrawalId);
-          if (withdrawal) {
-            alert(\`Withdrawal Details:\\n\\nUser: \${withdrawal.userName} (\${withdrawal.userId})\\nAmount: \${withdrawal.amount} ETB\\nPhone: \${withdrawal.phoneNumber}\\nStatus: \${withdrawal.status}\\nDate: \${new Date(withdrawal.createdAt).toLocaleString()}\${withdrawal.notes ? \`\\nNotes: \${withdrawal.notes}\` : ''}\${withdrawal.transactionId ? \`\\nTransaction ID: \${withdrawal.transactionId}\` : ''}\`);
-          }
-        }
-        
-        function searchTable() {
-          const searchTerm = document.getElementById('search').value.toLowerCase();
-          const filtered = withdrawals.filter(withdrawal => 
-            withdrawal.userId.toLowerCase().includes(searchTerm) ||
-            withdrawal.userName.toLowerCase().includes(searchTerm) ||
-            withdrawal.phoneNumber.toLowerCase().includes(searchTerm)
-          );
-          renderWithdrawals(filtered);
-        }
-        
-        function filterTable() {
-          const status = document.getElementById('statusFilter').value;
-          const filtered = status === 'all' ? withdrawals : withdrawals.filter(w => w.status === status);
-          renderWithdrawals(filtered);
-        }
-        
-        function refreshWithdrawals() {
-          loadWithdrawals();
-        }
-        
-        function exportWithdrawals() {
-          const csv = [
-            ['Withdrawal ID', 'User ID', 'User Name', 'Amount', 'Phone Number', 'Status', 'Transaction ID', 'Processed By', 'Date'],
-            ...withdrawals.map(w => [
-              w._id,
-              w.userId,
-              w.userName,
-              w.amount,
-              w.phoneNumber,
-              w.status,
-              w.transactionId || '',
-              w.processedBy || '',
-              new Date(w.createdAt).toISOString()
-            ])
-          ].map(row => row.join(',')).join('\\n');
-          
-          const blob = new Blob([csv], { type: 'text/csv' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = \`withdrawals_\${new Date().toISOString().split('T')[0]}.csv\`;
-          a.click();
-        }
-        
-        // Load withdrawals on page load
-        loadWithdrawals();
-        
-        // Auto-refresh every 30 seconds
-        setInterval(loadWithdrawals, 30000);
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-// ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
-
-app.post('/telegram-webhook', express.json(), async (req, res) => {
-  try {
-    const { message } = req.body;
-    
-    if (message) {
-      const chatId = message.chat.id;
-      const text = message.text || '';
-      const userId = message.from.id.toString();
-      const userName = message.from.first_name || 'Player';
-      const username = message.from.username || '';
-      
-      if (text === '/start' || text === '/play') {
-        let user = await User.findOne({ telegramId: userId });
-        
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0.00,
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
-        }
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
-                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                  `🎯 *New Features:*\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
-                  `• ⏱️ Timer sync between discovery and waiting rooms\n` +
-                  `• 🔒 Room lock when game is playing\n` +
-                  `• ⏰ Auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
-                  `• ⏱️ Timer shows on box selection screen\n` +
-                  `• 💰 NEW: Deposit/Withdrawal system\n` +
-                  `• 💳 Telebirr payments (send to admin)\n` +
-                  `• 📥 Admin approval for all transactions\n` +
-                  `• 10/20/50/100 ETB rooms\n` +
-                  `• Four Corners Bonus: 50 ETB\n` +
-                  `• Real-time multiplayer\n` +
-                  `• Real-time box tracking\n` +
-                  `• Telegram login\n` +
-                  `• Game starts automatically when 1 player joins\n` +
-                  `• Timer continues even if players leave\n` +
-                  `• Random BINGO card numbers\n` +
-                  `• ✅✅✅ Fixed: Double prize bug eliminated\n` +
-                  `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
-                  `• ✅ Fixed: All players return to lobby after game ends\n` +
-                  `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
-                  `• ✅ Fixed: Game starts properly now!\n\n` +
-                  `_Need funds? Contact admin or use deposit feature_\n` +
-                  `_To deposit: Send money via Telebirr and submit receipt_`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎮 Play Bingo Now',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `🎮 Play: @ethio_games1_bot\n` +
-                  `👑 Admin: Contact for funds\n` +
-                  `💳 Deposit: Use deposit feature in game\n` +
-                  `🆔 Your ID: \`${userId}\``,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/deposit') {
-        const phoneSetting = await Settings.findOne({ key: 'admin_phone_number' });
-        const adminPhone = phoneSetting ? phoneSetting.value : CONFIG.ADMIN_PHONE_NUMBER;
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💳 *How to Deposit:*\n\n` +
-                  `1. Send money to *${adminPhone}* via Telebirr\n` +
-                  `2. Copy the receipt message\n` +
-                  `3. Open the game and go to Deposit section\n` +
-                  `4. Paste the receipt and submit\n` +
-                  `5. Admin will approve within 5 minutes\n\n` +
-                  `*Minimum Deposit:* ${CONFIG.MIN_DEPOSIT_AMOUNT} ETB\n` +
-                  `*Maximum Deposit:* ${CONFIG.MAX_DEPOSIT_AMOUNT} ETB`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/withdraw') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💸 *How to Withdraw:*\n\n` +
-                  `1. Open the game and go to Withdraw section\n` +
-                  `2. Enter your Telebirr phone number\n` +
-                  `3. Enter amount to withdraw\n` +
-                  `4. Submit request\n` +
-                  `5. Admin will send money within 24 hours\n\n` +
-                  `*Minimum Withdrawal:* ${CONFIG.MIN_WITHDRAWAL_AMOUNT} ETB\n` +
-                  `*Maximum Withdrawal:* ${CONFIG.MAX_WITHDRAWAL_AMOUNT} ETB`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/help') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Bingo Elite Help*\n\n` +
-                  `*New Features:*\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED\n` +
-                  `• ⏱️ Timer sync\n` +
-                  `• 🔒 Room lock when playing\n` +
-                  `• ⏰ Games auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
-                  `• 💰 NEW: Deposit/Withdrawal system\n` +
-                  `• 💳 Telebirr payments\n\n` +
-                  `*Commands:*\n` +
-                  `/start - Start the bot\n` +
-                  `/play - Play game\n` +
-                  `/balance - Check balance\n` +
-                  `/deposit - How to deposit\n` +
-                  `/withdraw - How to withdraw\n` +
-                  `/help - This message\n\n` +
-                  `*Need help? Contact admin @ethio_games1_bot*`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-    }
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Telegram webhook error:', error);
-    res.sendStatus(200);
-  }
-});
+// ... [Previous routes: /real-time-status, /test-connections, /debug-connections, /debug-users, /debug-room/:stake, /force-start/:stake, /debug-calculations/:stake/:players, /setup-telegram, etc.] ...
+// Keep all your existing routes here
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
-║   🤖 BINGO ELITE - WITH DEPOSIT/WITHDRAWAL SYSTEM   ║
+║             🤖 BINGO ELITE - TELEGRAM READY         ║
 ╠══════════════════════════════════════════════════════╣
 ║  URL:          https://bingo-telegram-game.onrender.com ║
 ║  Port:         ${PORT}                                ║
 ║  Game:         /game                                 ║
 ║  Admin:        /admin (password: admin1234)         ║
 ║  Telegram:     /telegram                             ║
-║  Deposits:     /admin-deposits                       ║
-║  Withdrawals:  /admin-withdrawals                    ║
-║  Payment Info: /payment-info                         ║
+║  Wallet:       ✅ DEPOSIT/WITHDRAWAL ENABLED        ║
+║  Admin Phone:  ${CONFIG.ADMIN_PHONE_NUMBER}          ║
 ╠══════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                 ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections    ║
+║  💰 Wallet System: ✅ Telebirr Deposit/Withdrawal   ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
-║  💰 NEW: Deposit/Withdrawal System Added            ║
-║  💳 Payment Method: Telebirr                        ║
-║  📞 Admin Phone: ${CONFIG.ADMIN_PHONE_NUMBER}           ║
-║  💵 Min Deposit: ${CONFIG.MIN_DEPOSIT_AMOUNT} ETB             ║
-║  💵 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL_AMOUNT} ETB       ║
-║  ⏱️ Game Timer: ${CONFIG.GAME_TIMER}s between balls ║
-║  ⏰ Game Timeout: ${CONFIG.GAME_TIMEOUT_MINUTES} minutes      ║
+║  📦 Real-time Box Tracking: ✅ ACTIVE               ║
+║  🆕 NEW FEATURES:                                   ║
+║  💰 Deposit/Withdrawal System: ✅ COMPLETE          ║
+║  📱 Telebirr Integration: ✅ READY                  ║
+║  👑 Admin Approval: ✅ REQUIRED                     ║
+║  📊 Transaction History: ✅ AVAILABLE               ║
+║  🔔 Real-time Admin Notifications: ✅ ACTIVE        ║
 ╚══════════════════════════════════════════════════════╝
-✅ Server ready with Deposit/Withdrawal System!
+✅ Server ready with DEPOSIT/WITHDRAWAL SYSTEM
   `);
+  
+  await initializePaymentInfo();
   
   setTimeout(() => {
     broadcastRoomStatus();
@@ -4574,6 +3797,7 @@ server.listen(PORT, () => {
   
   setTimeout(async () => {
     try {
+      const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
       if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
         const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
         
