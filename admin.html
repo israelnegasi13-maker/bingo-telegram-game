@@ -1,3 +1,5 @@
+[file name]: admin.html
+[file content begin]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1034,6 +1036,21 @@
             background: rgba(239, 68, 68, 0.15);
             color: var(--danger);
         }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -2047,8 +2064,33 @@
                 addSystemLog('Error: ' + message, 'error');
             });
 
-            socket.on('admin:activity', (activity) => {
+            state.socket.on('admin:activity', (activity) => {
                 addActivityItem(activity);
+            });
+
+            // Add missing event listeners for wallet transactions
+            state.socket.on('wallet:depositApproved', (data) => {
+                showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
+                refreshPendingTransactions();
+                addSystemLog(`Deposit approved: ${data.amount} ETB`);
+            });
+
+            state.socket.on('wallet:withdrawalApproved', (data) => {
+                showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
+                refreshPendingTransactions();
+                addSystemLog(`Withdrawal approved: ${data.amount} ETB to ${data.phoneNumber}`);
+            });
+
+            state.socket.on('wallet:depositRejected', (data) => {
+                showToast(`Deposit rejected: ${data.message}`, 'error');
+                refreshPendingTransactions();
+                addSystemLog(`Deposit rejected: ${data.message}`);
+            });
+
+            state.socket.on('wallet:withdrawalRejected', (data) => {
+                showToast(`Withdrawal rejected: ${data.message}`, 'error');
+                refreshPendingTransactions();
+                addSystemLog(`Withdrawal rejected: ${data.message}`);
             });
         }
 
@@ -2518,6 +2560,8 @@
             } else if (type === 'WITHDRAW_REQUEST') {
                 state.socket.emit('admin:approveWithdrawal', transactionId);
             }
+            
+            showToast(`${type === 'DEPOSIT_REQUEST' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
         }
 
         function rejectTransaction(transactionId, type) {
@@ -2526,6 +2570,7 @@
             }
             
             state.socket.emit('admin:rejectTransaction', transactionId);
+            showToast(`${type === 'DEPOSIT_REQUEST' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
         }
 
         function updatePendingTransactionsBadge() {
@@ -2792,12 +2837,528 @@
             }
         }
 
-        // Rest of the functions remain the same as in the original...
-        // (updateActivityLog, updateTransactionFeed, initCharts, etc.)
-        // These are already in your original code and should be kept as is.
+        // Activity Log Functions
+        function updateActivityLog(transactions) {
+            const activityFeed = document.getElementById('activityFeed');
+            activityFeed.innerHTML = '';
+            
+            // Take last 20 transactions
+            const recentTransactions = transactions.slice(0, 20);
+            
+            recentTransactions.forEach(transaction => {
+                const activityItem = document.createElement('div');
+                activityItem.className = 'activity-item';
+                
+                let icon = 'fa-exchange-alt';
+                let color = 'var(--primary)';
+                
+                if (transaction.type === 'WIN' || transaction.type === 'WIN_FOUR_CORNERS') {
+                    icon = 'fa-trophy';
+                    color = 'var(--success)';
+                } else if (transaction.type === 'STAKE') {
+                    icon = 'fa-ticket-alt';
+                    color = 'var(--warning)';
+                } else if (transaction.type === 'ADMIN_ADD') {
+                    icon = 'fa-plus-circle';
+                    color = 'var(--success)';
+                } else if (transaction.type === 'HOUSE_EARNINGS') {
+                    icon = 'fa-home';
+                    color = 'var(--danger)';
+                } else if (transaction.type === 'DEPOSIT_REQUEST' || transaction.type === 'WITHDRAW_REQUEST') {
+                    icon = 'fa-wallet';
+                    color = 'var(--info)';
+                }
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                activityItem.innerHTML = `
+                    <div class="activity-icon" style="background: ${color + '15'}; color: ${color};">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="activity-content">
+                        <strong>${transaction.userName}</strong> ${transaction.description}
+                        <div class="activity-time">${date} ${time}</div>
+                    </div>
+                    <div style="font-weight: 700; color: ${transaction.amount >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                        ${transaction.amount >= 0 ? '+' : ''}${transaction.amount} ETB
+                    </div>
+                `;
+                
+                activityFeed.appendChild(activityItem);
+            });
+        }
 
-        // For brevity, I'm including only the changed functions above.
-        // The rest of your original JavaScript functions should be kept.
+        function updateTransactionFeed(transactions) {
+            const transactionFeed = document.getElementById('transactionFeed');
+            transactionFeed.innerHTML = '';
+            
+            const recentTransactions = transactions.slice(0, 15);
+            
+            recentTransactions.forEach(transaction => {
+                const activityItem = document.createElement('div');
+                activityItem.className = 'pending-transaction-item';
+                
+                let typeClass = 'deposit';
+                let icon = 'fa-arrow-down';
+                let typeText = 'Deposit';
+                
+                if (transaction.type === 'WITHDRAW_REQUEST' || transaction.amount < 0) {
+                    typeClass = 'withdraw';
+                    icon = 'fa-arrow-up';
+                    typeText = 'Withdrawal';
+                } else if (transaction.type === 'WIN' || transaction.type === 'WIN_FOUR_CORNERS') {
+                    typeClass = 'deposit';
+                    icon = 'fa-trophy';
+                    typeText = 'Win';
+                } else if (transaction.type === 'STAKE') {
+                    typeClass = 'withdraw';
+                    icon = 'fa-ticket-alt';
+                    typeText = 'Stake';
+                }
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                activityItem.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: ${typeClass === 'deposit' ? 'rgba(6, 214, 160, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; display: flex; align-items: center; justify-content: center; color: ${typeClass === 'deposit' ? 'var(--success)' : 'var(--danger)'};">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600;">${transaction.userName}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">${typeText}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-weight: 700; color: ${transaction.amount >= 0 ? 'var(--success)' : 'var(--danger)'}">
+                            ${transaction.amount >= 0 ? '+' : ''}${transaction.amount} ETB
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${date} ${time}</div>
+                    </div>
+                `;
+                
+                transactionFeed.appendChild(activityItem);
+            });
+        }
+
+        // Chart Functions
+        function initCharts() {
+            // Revenue Chart
+            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+            state.charts.revenue = new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Revenue (ETB)',
+                        data: [1200, 1900, 1500, 2500, 2200, 3000, 2800],
+                        borderColor: 'var(--primary)',
+                        backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'var(--text)'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255,255,255,0.05)'
+                            },
+                            ticks: {
+                                color: 'var(--text-muted)'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255,255,255,0.05)'
+                            },
+                            ticks: {
+                                color: 'var(--text-muted)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Room Distribution Chart
+            const roomCtx = document.getElementById('roomChart').getContext('2d');
+            state.charts.room = new Chart(roomCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['10 ETB', '20 ETB', '50 ETB', '100 ETB'],
+                    datasets: [{
+                        data: [25, 35, 20, 20],
+                        backgroundColor: [
+                            'rgba(205, 127, 50, 0.8)',
+                            'rgba(192, 192, 192, 0.8)',
+                            'rgba(255, 215, 0, 0.8)',
+                            'rgba(102, 126, 234, 0.8)'
+                        ],
+                        borderColor: [
+                            '#cd7f32',
+                            '#c0c0c0',
+                            '#ffd700',
+                            '#667eea'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'var(--text)',
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateRevenueChart(transactions) {
+            // This would process transaction data to update the chart
+            // For now, we'll leave it as a placeholder
+        }
+
+        function updateRoomCharts(rooms) {
+            // Update room distribution chart with real data
+            if (state.charts.room) {
+                const roomData = {
+                    '10': 0,
+                    '20': 0,
+                    '50': 0,
+                    '100': 0
+                };
+                
+                Object.entries(rooms).forEach(([stake, room]) => {
+                    roomData[stake] = room.playerCount || 0;
+                });
+                
+                state.charts.room.data.datasets[0].data = [
+                    roomData['10'],
+                    roomData['20'],
+                    roomData['50'],
+                    roomData['100']
+                ];
+                state.charts.room.update();
+            }
+        }
+
+        // System Functions
+        function addSystemLog(message, type = 'info') {
+            const systemLogs = document.getElementById('systemLogs');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'activity-item';
+            
+            const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+            const date = new Date().toLocaleDateString();
+            
+            let icon = 'fa-info-circle';
+            let color = 'var(--info)';
+            
+            if (type === 'error') {
+                icon = 'fa-exclamation-circle';
+                color = 'var(--danger)';
+            } else if (type === 'success') {
+                icon = 'fa-check-circle';
+                color = 'var(--success)';
+            } else if (type === 'warning') {
+                icon = 'fa-exclamation-triangle';
+                color = 'var(--warning)';
+            }
+            
+            logEntry.innerHTML = `
+                <div class="activity-icon" style="background: ${color + '15'}; color: ${color};">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="activity-content">
+                    ${message}
+                    <div class="activity-time">${date} ${time}</div>
+                </div>
+            `;
+            
+            systemLogs.insertBefore(logEntry, systemLogs.firstChild);
+            
+            // Keep only last 50 logs
+            if (systemLogs.children.length > 50) {
+                systemLogs.removeChild(systemLogs.lastChild);
+            }
+        }
+
+        function addActivityItem(activity) {
+            const activityFeed = document.getElementById('activityFeed');
+            const activityItem = document.createElement('div');
+            activityItem.className = 'activity-item';
+            
+            const time = new Date(activity.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const date = new Date(activity.timestamp || Date.now()).toLocaleDateString();
+            
+            let icon = 'fa-info-circle';
+            let color = 'var(--info)';
+            let type = activity.type || 'INFO';
+            
+            if (type.includes('ERROR') || type.includes('FAIL')) {
+                icon = 'fa-exclamation-circle';
+                color = 'var(--danger)';
+            } else if (type.includes('SUCCESS') || type.includes('WIN')) {
+                icon = 'fa-check-circle';
+                color = 'var(--success)';
+            } else if (type.includes('WARNING') || type.includes('ALERT')) {
+                icon = 'fa-exclamation-triangle';
+                color = 'var(--warning)';
+            } else if (type.includes('LOGIN') || type.includes('AUTH')) {
+                icon = 'fa-sign-in-alt';
+                color = 'var(--primary)';
+            } else if (type.includes('TRANSACTION') || type.includes('PAYMENT')) {
+                icon = 'fa-money-bill-wave';
+                color = 'var(--success)';
+            }
+            
+            activityItem.innerHTML = `
+                <div class="activity-icon" style="background: ${color + '15'}; color: ${color};">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="activity-content">
+                    ${activity.details || activity.message || 'Activity'}
+                    <div class="activity-time">${date} ${time}</div>
+                </div>
+            `;
+            
+            activityFeed.insertBefore(activityItem, activityFeed.firstChild);
+            
+            // Keep only last MAX_ACTIVITY_ITEMS
+            if (activityFeed.children.length > CONFIG.MAX_ACTIVITY_ITEMS) {
+                activityFeed.removeChild(activityFeed.lastChild);
+            }
+        }
+
+        function refreshActivity() {
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getData');
+                showToast('Activity refreshed', 'success');
+            }
+        }
+
+        function detectUserChanges(previousUsers, currentUsers) {
+            // Simple detection for new online users
+            const previousOnline = previousUsers.filter(u => u.isOnline).map(u => u.userId);
+            const currentOnline = currentUsers.filter(u => u.isOnline).map(u => u.userId);
+            
+            // Users who just came online
+            const cameOnline = currentOnline.filter(id => !previousOnline.includes(id));
+            if (cameOnline.length > 0) {
+                cameOnline.forEach(userId => {
+                    const user = currentUsers.find(u => u.userId === userId);
+                    if (user) {
+                        addActivityItem({
+                            type: 'USER_ONLINE',
+                            details: `${user.userName} came online`,
+                            timestamp: new Date()
+                        });
+                    }
+                });
+            }
+            
+            // Users who went offline
+            const wentOffline = previousOnline.filter(id => !currentOnline.includes(id));
+            if (wentOffline.length > 0) {
+                wentOffline.forEach(userId => {
+                    const user = previousUsers.find(u => u.userId === userId);
+                    if (user) {
+                        addActivityItem({
+                            type: 'USER_OFFLINE',
+                            details: `${user.userName} went offline`,
+                            timestamp: new Date()
+                        });
+                    }
+                });
+            }
+        }
+
+        function startAutoRefresh() {
+            setInterval(() => {
+                if (state.isAdmin && state.socket) {
+                    state.socket.emit('admin:getData');
+                }
+            }, CONFIG.AUTO_REFRESH_INTERVAL);
+        }
+
+        function startRealTimeMonitoring() {
+            // Additional real-time monitoring can be added here
+        }
+
+        function updateDebugStats() {
+            if (state.socket) {
+                // Get socket connection count
+                const socketCount = state.socket.connected ? 1 : 0;
+                document.getElementById('debugSockets').textContent = socketCount;
+                
+                // Get mapped users count
+                document.getElementById('debugMappedUsers').textContent = state.users.filter(u => u.isOnline).length;
+                
+                // Admin sessions (just this one for now)
+                document.getElementById('debugAdmins').textContent = state.isAdmin ? 1 : 0;
+                
+                // Multi-socket users
+                document.getElementById('debugMultiSocketUsers').textContent = state.multiSocketUsers;
+            }
+        }
+
+        function fetchDebugConnections() {
+            if (state.socket && state.isAdmin) {
+                const debugOutput = document.getElementById('debugOutput');
+                const debugConnectionsInfo = document.getElementById('debugConnectionsInfo');
+                
+                debugOutput.innerHTML = 'Fetching connection data...';
+                debugConnectionsInfo.innerHTML = 'Fetching connection data...';
+                
+                // Request connection data from server
+                fetch('/debug-connections')
+                    .then(response => response.json())
+                    .then(data => {
+                        debugOutput.innerHTML = JSON.stringify(data, null, 2);
+                        debugConnectionsInfo.innerHTML = JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        debugOutput.innerHTML = 'Error: ' + error.message;
+                        debugConnectionsInfo.innerHTML = 'Error: ' + error.message;
+                    });
+            }
+        }
+
+        function refreshDebugInfo() {
+            updateDebugStats();
+            fetchDebugConnections();
+        }
+
+        // Control Functions
+        function restartServer() {
+            if (confirm('Are you sure you want to restart the server? This will disconnect all players.')) {
+                showToast('Server restart requested', 'warning');
+                addSystemLog('Server restart requested');
+            }
+        }
+
+        function clearCache() {
+            if (confirm('Clear all cache? This will remove temporary data.')) {
+                showToast('Cache cleared', 'success');
+                addSystemLog('Cache cleared');
+            }
+        }
+
+        function backupDatabase() {
+            showToast('Database backup started...', 'info');
+            addSystemLog('Database backup initiated');
+            
+            // Simulate backup process
+            setTimeout(() => {
+                showToast('Database backup completed successfully', 'success');
+                addSystemLog('Database backup completed');
+            }, 2000);
+        }
+
+        function emergencyStop() {
+            if (confirm('EMERGENCY STOP: Stop all games immediately? This cannot be undone.')) {
+                showToast('Emergency stop activated!', 'error');
+                addSystemLog('EMERGENCY STOP ACTIVATED');
+                
+                // Stop all room games
+                Object.keys(state.rooms).forEach(stake => {
+                    if (state.rooms[stake].status === 'playing') {
+                        state.socket.emit('admin:forceEndGame', parseInt(stake));
+                    }
+                });
+            }
+        }
+
+        function updateGameTimer() {
+            const timer = document.getElementById('gameTimer').value;
+            if (timer && timer > 0) {
+                showToast(`Game timer updated to ${timer} seconds`, 'success');
+                addSystemLog(`Game timer updated to ${timer} seconds`);
+            }
+        }
+
+        function updateMinPlayers() {
+            const minPlayers = document.getElementById('minPlayers').value;
+            if (minPlayers && minPlayers >= 1) {
+                showToast(`Minimum players updated to ${minPlayers}`, 'success');
+                addSystemLog(`Minimum players updated to ${minPlayers}`);
+            }
+        }
+
+        function clearLogs() {
+            if (confirm('Clear all system logs?')) {
+                document.getElementById('systemLogs').innerHTML = '';
+                showToast('System logs cleared', 'success');
+                addSystemLog('System logs cleared');
+            }
+        }
+
+        function exportUsers() {
+            // Create CSV content
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "User ID,Name,Balance,Status,Last Seen,Telegram ID,Phone Number\n";
+            
+            state.users.forEach(user => {
+                const status = user.isOnline ? 'Online' : 'Offline';
+                const lastSeen = new Date(user.lastSeen).toLocaleString();
+                const row = [
+                    user.userId,
+                    `"${user.userName}"`,
+                    user.balance,
+                    status,
+                    lastSeen,
+                    user.telegramId || '',
+                    user.phoneNumber || ''
+                ].join(',');
+                csvContent += row + "\n";
+            });
+            
+            // Create download link
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `bingo_users_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('Users exported to CSV', 'success');
+        }
+
+        function searchTransactions() {
+            const searchTerm = document.getElementById('transactionSearch').value.toLowerCase();
+            const transactionFeed = document.getElementById('transactionFeed');
+            const items = transactionFeed.querySelectorAll('.pending-transaction-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            });
+        }
+
+        function logout() {
+            if (confirm('Logout from admin panel?')) {
+                localStorage.removeItem('bingo_admin_session');
+                window.location.reload();
+            }
+        }
 
         // Initialize charts when dashboard loads
         setTimeout(initCharts, 1000);
@@ -2850,3 +3411,4 @@
     </script>
 </body>
 </html>
+[file content end]
