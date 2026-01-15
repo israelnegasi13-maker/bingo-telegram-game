@@ -17,7 +17,7 @@
             --bg-dark: #020617;
             --card-glass: rgba(30, 41, 59, 0.75);
             --border-glass: rgba(255, 255, 255, 0.1);
-            --header-h: 48px;
+            --header-h: 52px;
         }
 
         * { 
@@ -296,7 +296,7 @@
 
         .header {
             height: var(--header-h);
-            padding: 0 16px;
+            padding: 10px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -308,65 +308,81 @@
         .header-left {
             display: flex;
             flex-direction: column;
+            justify-content: center;
         }
 
         .header-right {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
 
         .balance-pill {
-            background: rgba(251, 191, 36, 0.1);
-            padding: 4px 10px;
+            background: rgba(251, 191, 36, 0.15);
+            padding: 10px 16px;
             border-radius: 50px;
-            border: 1px solid rgba(251, 191, 36, 0.3);
+            border: 1.5px solid rgba(251, 191, 36, 0.4);
             font-weight: 900;
             color: var(--p-gold);
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 8px;
             cursor: pointer;
             transition: all 0.2s;
-            height: 32px;
-            font-size: 0.8rem;
+            height: 44px;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+            margin-top: 4px;
         }
 
         .balance-pill:hover {
-            background: rgba(251, 191, 36, 0.15);
-            transform: translateY(-1px);
+            background: rgba(251, 191, 36, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(251, 191, 36, 0.2);
         }
 
         .balance-pill .wallet-icon {
-            font-size: 0.6rem;
+            font-size: 0.9rem;
             line-height: 1;
         }
 
         .balance-pill .balance-text {
-            font-size: 0.75rem;
+            font-size: 1.1rem;
             line-height: 1.2;
+            font-weight: 900;
+            letter-spacing: 0.5px;
         }
 
         .balance-pill .balance-unit {
-            font-size: 0.4rem;
+            font-size: 0.7rem;
             align-self: flex-end;
-            margin-bottom: 1px;
+            margin-bottom: 2px;
             margin-left: 1px;
+            font-weight: 700;
+        }
+
+        .balance-pill .wallet-label {
+            font-size: 0.75rem;
+            color: rgba(251, 191, 36, 0.9);
+            font-weight: 700;
+            margin-right: 4px;
+            letter-spacing: 0.3px;
         }
 
         .refresh-btn {
-            background: rgba(59, 130, 246, 0.1);
-            width: 28px;
-            height: 28px;
+            background: rgba(59, 130, 246, 0.15);
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            border: 1.5px solid rgba(59, 130, 246, 0.4);
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
         }
 
         .refresh-btn:active {
@@ -1020,16 +1036,31 @@
             }
 
             .balance-pill {
-                padding: 3px 8px;
-                height: 28px;
+                padding: 8px 12px;
+                height: 40px;
+                font-size: 0.85rem;
             }
             
             .balance-pill .balance-text {
+                font-size: 1rem;
+            }
+            
+            .balance-pill .wallet-label {
                 font-size: 0.7rem;
             }
             
             .balance-pill .wallet-icon {
-                font-size: 0.5rem;
+                font-size: 0.8rem;
+            }
+            
+            .balance-pill .balance-unit {
+                font-size: 0.6rem;
+            }
+            
+            .refresh-btn {
+                width: 34px;
+                height: 34px;
+                font-size: 0.8rem;
             }
         }
 
@@ -1099,6 +1130,20 @@
             .stake-val {
                 font-size: 1.1rem;
             }
+            
+            .balance-pill {
+                padding: 6px 10px;
+                height: 38px;
+                font-size: 0.8rem;
+            }
+            
+            .balance-pill .balance-text {
+                font-size: 0.9rem;
+            }
+            
+            .balance-pill .wallet-label {
+                font-size: 0.65rem;
+            }
         }
     </style>
 </head>
@@ -1125,6 +1170,7 @@
             <h2 style="color: var(--p-gold); font-size: 1.5rem;">💰 Wallet</h2>
             <div class="balance-pill" style="margin: 0;">
                 <span class="wallet-icon">💰</span>
+                <span class="wallet-label">Wallet:</span>
                 <span id="walletBalanceVal" class="balance-text">0.00</span>
                 <small class="balance-unit">ETB</small>
             </div>
@@ -1302,7 +1348,7 @@
 </div>
 
 <div id="stakeOverlay" class="step-overlay active">
-    <div class="balance-pill" style="position: absolute; top: 16px; right: 16px;" onclick="showWallet()">
+    <div class="balance-pill" style="position: absolute; top: 16px; right: 16px; margin-top: 0;" onclick="showWallet()">
         <span class="wallet-icon">💰</span>
         <span id="stakeBalanceVal" class="balance-text">0.00</span>
         <small class="balance-unit">ETB</small>
@@ -1448,6 +1494,7 @@
     <div class="header-right">
         <div class="balance-pill" id="balancePill" onclick="showWallet()">
             <span class="wallet-icon">💰</span>
+            <span class="wallet-label">Wallet:</span>
             <span id="balanceVal" class="balance-text">0.00</span>
             <small class="balance-unit">ETB</small>
         </div>
