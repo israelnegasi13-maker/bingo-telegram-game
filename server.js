@@ -1,5 +1,3 @@
-[file name]: server.js
-[file content begin]
 // server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION WITH WALLET SUPPORT
 require('dotenv').config();
 const express = require('express');
@@ -97,20 +95,10 @@ const statsSchema = new mongoose.Schema({
   totalFourCorners: { type: Number, default: 0 }
 });
 
-// ========== NEW: Configuration Schema for Editable Settings ==========
-const configSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  value: { type: mongoose.Schema.Types.Mixed, required: true },
-  description: { type: String },
-  updatedAt: { type: Date, default: Date.now },
-  updatedBy: { type: String }
-});
-
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const Stats = mongoose.model('Stats', statsSchema);
-const Config = mongoose.model('Config', configSchema); // NEW: Config model
 
 const app = express();
 const server = http.createServer(app);
@@ -177,7 +165,7 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  TELEBIRR_NUMBER: "0962577855", // Will be overridden by database value
+  TELEBIRR_NUMBER: "0962577855",
   MIN_WITHDRAWAL: 50,
   MAX_WITHDRAWAL: 10000
 };
@@ -190,97 +178,6 @@ let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
 let processingClaims = new Map();
-
-// ========== CONFIGURATION MANAGEMENT FUNCTIONS ==========
-async function loadConfigFromDB() {
-  try {
-    console.log('📋 Loading configuration from database...');
-    
-    // Load Telebirr number
-    const telebirrConfig = await Config.findOne({ key: 'TELEBIRR_NUMBER' });
-    if (telebirrConfig) {
-      CONFIG.TELEBIRR_NUMBER = telebirrConfig.value;
-      console.log(`✅ Telebirr number loaded from DB: ${CONFIG.TELEBIRR_NUMBER}`);
-    } else {
-      // Create default Telebirr number in DB
-      await Config.create({
-        key: 'TELEBIRR_NUMBER',
-        value: CONFIG.TELEBIRR_NUMBER,
-        description: 'Telebirr phone number for deposits'
-      });
-      console.log(`✅ Default Telebirr number saved to DB: ${CONFIG.TELEBIRR_NUMBER}`);
-    }
-    
-    // Load other config values if needed
-    const minWithdrawalConfig = await Config.findOne({ key: 'MIN_WITHDRAWAL' });
-    if (minWithdrawalConfig) {
-      CONFIG.MIN_WITHDRAWAL = minWithdrawalConfig.value;
-    }
-    
-    const maxWithdrawalConfig = await Config.findOne({ key: 'MAX_WITHDRAWAL' });
-    if (maxWithdrawalConfig) {
-      CONFIG.MAX_WITHDRAWAL = maxWithdrawalConfig.value;
-    }
-    
-    console.log('✅ Configuration loaded successfully');
-  } catch (error) {
-    console.error('❌ Error loading configuration:', error);
-  }
-}
-
-async function updateConfig(key, value, adminSocketId = null) {
-  try {
-    let config = await Config.findOne({ key: key });
-    
-    if (!config) {
-      config = new Config({
-        key: key,
-        value: value,
-        updatedBy: adminSocketId || 'system'
-      });
-    } else {
-      config.value = value;
-      config.updatedAt = new Date();
-      config.updatedBy = adminSocketId || 'system';
-    }
-    
-    await config.save();
-    
-    // Update in-memory CONFIG
-    CONFIG[key] = value;
-    
-    console.log(`✅ Config updated: ${key} = ${value}`);
-    
-    // If Telebirr number is updated, broadcast to all admin panels
-    if (key === 'TELEBIRR_NUMBER') {
-      adminSockets.forEach(socketId => {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.emit('admin:configUpdated', {
-            key: key,
-            value: value,
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
-    }
-    
-    return config;
-  } catch (error) {
-    console.error(`❌ Error updating config ${key}:`, error);
-    throw error;
-  }
-}
-
-async function getConfig(key) {
-  try {
-    const config = await Config.findOne({ key: key });
-    return config ? config.value : CONFIG[key];
-  } catch (error) {
-    console.error(`❌ Error getting config ${key}:`, error);
-    return CONFIG[key];
-  }
-}
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
 function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
@@ -600,9 +497,6 @@ async function updateAdminPanel() {
     // Get real-time connected sockets count
     const connectedSocketsCount = connectedSockets.size;
     
-    // Get current Telebirr number from config
-    const telebirrNumber = await getConfig('TELEBIRR_NUMBER');
-    
     // Send to all admin sockets
     const adminData = {
       totalPlayers: connectedPlayers,
@@ -612,10 +506,7 @@ async function updateAdminPanel() {
       houseBalance: houseBalance,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime(),
-      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES,
-      telebirrNumber: telebirrNumber, // Add Telebirr number to admin data
-      minWithdrawal: CONFIG.MIN_WITHDRAWAL,
-      maxWithdrawal: CONFIG.MAX_WITHDRAWAL
+      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES
     };
     
     adminSockets.forEach(socketId => {
@@ -631,15 +522,6 @@ async function updateAdminPanel() {
             socket.emit('admin:transactions', transactions);
           })
           .catch(err => console.error('Error fetching transactions:', err));
-        
-        // Send configuration
-        Config.find().then(configs => {
-          const configObject = {};
-          configs.forEach(config => {
-            configObject[config.key] = config.value;
-          });
-          socket.emit('admin:config', configObject);
-        }).catch(err => console.error('Error fetching config:', err));
       }
     });
     
@@ -1288,75 +1170,6 @@ io.on('connection', (socket) => {
       return;
     }
     updateAdminPanel();
-  });
-  
-  // ========== NEW: ADMIN CONFIGURATION MANAGEMENT ==========
-  socket.on('admin:updateConfig', async ({ key, value }) => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const validKeys = ['TELEBIRR_NUMBER', 'MIN_WITHDRAWAL', 'MAX_WITHDRAWAL'];
-      if (!validKeys.includes(key)) {
-        socket.emit('admin:error', `Invalid configuration key. Valid keys: ${validKeys.join(', ')}`);
-        return;
-      }
-      
-      // Validate values
-      if (key === 'TELEBIRR_NUMBER') {
-        if (!value || value.length < 10) {
-          socket.emit('admin:error', 'Telebirr number must be at least 10 digits');
-          return;
-        }
-      }
-      
-      if (key === 'MIN_WITHDRAWAL' || key === 'MAX_WITHDRAWAL') {
-        const numValue = parseFloat(value);
-        if (isNaN(numValue) || numValue < 0) {
-          socket.emit('admin:error', 'Withdrawal amount must be a positive number');
-          return;
-        }
-      }
-      
-      await updateConfig(key, value, socket.id);
-      
-      socket.emit('admin:success', `Configuration "${key}" updated to "${value}"`);
-      
-      // Update admin panel with new config
-      updateAdminPanel();
-      
-      logActivity('ADMIN_UPDATE_CONFIG', { 
-        adminSocket: socket.id, 
-        key, 
-        value 
-      }, socket.id);
-      
-    } catch (error) {
-      console.error('Error updating config:', error);
-      socket.emit('admin:error', 'Error updating configuration: ' + error.message);
-    }
-  });
-  
-  socket.on('admin:getConfig', async () => {
-    if (!adminSockets.has(socket.id)) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const configs = await Config.find();
-      const configObject = {};
-      configs.forEach(config => {
-        configObject[config.key] = config.value;
-      });
-      
-      socket.emit('admin:config', configObject);
-    } catch (error) {
-      console.error('Error getting config:', error);
-      socket.emit('admin:error', 'Error getting configuration');
-    }
   });
   
   socket.on('admin:addFunds', async ({ userId, amount }) => {
@@ -2061,17 +1874,13 @@ io.on('connection', (socket) => {
           }
         );
         
-        // Get current Telebirr number for the user
-        const telebirrNumber = await getConfig('TELEBIRR_NUMBER');
-        
         socket.emit('balanceUpdate', user.balance);
         socket.emit('userData', {
           userId: userId,
           userName: user.userName,
           balance: user.balance,
           referralCode: user.referralCode,
-          phoneNumber: user.phoneNumber || '',
-          telebirrNumber: telebirrNumber // Send Telebirr number to client
+          phoneNumber: user.phoneNumber || ''
         });
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
@@ -3241,7 +3050,6 @@ app.get('/', (req, res) => {
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED</p>
           <p style="color: #10b981;">✅ Claim lock prevents double prize payouts</p>
           <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
-          <p style="color: #10b981; margin-top: 10px;">💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER} (Editable from Admin Panel)</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -3269,7 +3077,7 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 3.0.0 (WITH WALLET SYSTEM & EDITABLE TELEBIRR) | Database: MongoDB Atlas<br>
+            Version: 2.9.0 (WITH WALLET SYSTEM) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Processing Claims: ${processingClaims.size} active<br>
@@ -3279,7 +3087,7 @@ app.get('/', (req, res) => {
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
             Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
-            Telebirr Number: ${CONFIG.TELEBIRR_NUMBER} (Editable from Admin)<br>
+            Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}<br>
             Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB<br>
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES} minute timeout<br>
@@ -3292,8 +3100,7 @@ app.get('/', (req, res) => {
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
-            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
-            ✅✅✅ TELEBIRR NUMBER NOW EDITABLE FROM ADMIN PANEL
+            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS
           </p>
         </div>
       </div>
@@ -3309,512 +3116,691 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Telegram Mini App entry point
+// Telegram Mini App entry point - UPDATED WITH ANIMATED PROFILE PICTURES
 app.get('/telegram', (req, res) => {
-  // Get current Telebirr number from config
-  getConfig('TELEBIRR_NUMBER').then(telebirrNumber => {
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-          <title>ETHIO GAMES - Telegram Mini App</title>
-          <script src="https://telegram.org/js/telegram-web-app.js"></script>
-          <style>
-              :root {
-                  --primary-color: #3b82f6;
-                  --secondary-color: #8b5cf6;
-                  --accent-color: #fbbf24;
-                  --dark-bg: #0f172a;
-                  --card-bg: #1e293b;
-                  --text-primary: #f8fafc;
-                  --text-secondary: #94a3b8;
-              }
-              
-              * {
-                  margin: 0;
-                  padding: 0;
-                  box-sizing: border-box;
-                  -webkit-tap-highlight-color: transparent;
-              }
-              
-              body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-                  background: var(--dark-bg);
-                  color: var(--text-primary);
-                  height: 100vh;
-                  overflow: hidden;
-                  padding: 0;
-                  margin: 0;
-              }
-              
-              .container {
-                  width: 100%;
-                  height: 100%;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: space-between;
-                  padding: 20px;
-                  max-width: 500px;
-                  margin: 0 auto;
-              }
-              
-              .header {
-                  width: 100%;
-                  text-align: center;
-                  padding: 15px 0;
-                  position: relative;
-              }
-              
-              .header::after {
-                  content: '';
-                  position: absolute;
-                  bottom: 0;
-                  left: 50%;
-                  transform: translateX(-50%);
-                  width: 60px;
-                  height: 4px;
-                  background: var(--accent-color);
-                  border-radius: 2px;
-              }
-              
-              .logo-container {
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  margin-bottom: 15px;
-                  gap: 15px;
-              }
-              
-              .animated-logo {
-                  width: 60px;
-                  height: 60px;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  position: relative;
-                  overflow: hidden;
-                  animation: float 3s ease-in-out infinite;
-              }
-              
-              .bingo-logo {
-                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
-              }
-              
-              .keno-logo {
-                  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                  box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
-              }
-              
-              .logo-emoji {
-                  font-size: 2.5rem;
-                  z-index: 2;
-              }
-              
-              .logo-glow {
-                  position: absolute;
-                  width: 100%;
-                  height: 100%;
-                  border-radius: 50%;
-                  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 70%);
-                  animation: pulse 2s infinite;
-              }
-              
-              .welcome-text {
-                  font-size: 1.8rem;
-                  font-weight: 700;
-                  margin-bottom: 5px;
-                  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-              }
-              
-              .subtitle {
-                  color: var(--text-secondary);
-                  font-size: 0.9rem;
-                  margin-bottom: 20px;
-              }
-              
-              .games-grid {
-                  width: 100%;
-                  display: grid;
-                  grid-template-columns: 1fr;
-                  gap: 15px;
-                  flex: 1;
-                  overflow-y: auto;
-                  padding: 10px 0;
-              }
-              
-              .game-card {
-                  background: var(--card-bg);
-                  border-radius: 16px;
-                  padding: 20px;
-                  text-align: center;
-                  transition: all 0.3s ease;
-                  border: 2px solid transparent;
-                  position: relative;
-                  overflow: hidden;
-                  cursor: pointer;
-              }
-              
-              .game-card::before {
-                  content: '';
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  right: 0;
-                  height: 4px;
-                  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-              }
-              
-              .game-card:hover {
-                  transform: translateY(-5px);
-                  border-color: rgba(59, 130, 246, 0.3);
-                  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-              }
-              
-              .game-card:active {
-                  transform: translateY(-2px);
-              }
-              
-              .game-icon {
-                  font-size: 2.5rem;
-                  margin-bottom: 12px;
-                  display: block;
-              }
-              
-              .bingo-icon {
-                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-                  animation: pulse 2s infinite;
-              }
-              
-              .keno-icon {
-                  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-              }
-              
-              .game-title {
-                  font-size: 1.3rem;
-                  font-weight: 700;
-                  margin-bottom: 8px;
-              }
-              
-              .game-description {
-                  color: var(--text-secondary);
-                  font-size: 0.8rem;
-                  line-height: 1.4;
-                  margin-bottom: 12px;
-                  min-height: 40px;
-              }
-              
-              .features {
-                  display: flex;
-                  justify-content: center;
-                  gap: 6px;
-                  margin-bottom: 15px;
-                  flex-wrap: wrap;
-              }
-              
-              .feature-tag {
-                  background: rgba(59, 130, 246, 0.1);
-                  color: #60a5fa;
-                  padding: 3px 8px;
-                  border-radius: 12px;
-                  font-size: 0.65rem;
-                  font-weight: 600;
-                  border: 1px solid rgba(59, 130, 246, 0.2);
-              }
-              
-              .play-btn {
-                  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-                  color: white;
-                  border: none;
-                  padding: 12px 16px;
-                  border-radius: 10px;
-                  font-size: 0.9rem;
-                  font-weight: 700;
-                  width: 100%;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
-              }
-              
-              .play-btn:hover {
-                  transform: scale(1.02);
-                  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-              }
-              
-              .play-btn:active {
-                  transform: scale(0.98);
-              }
-              
-              .coming-soon {
-                  background: linear-gradient(90deg, #64748b, #475569);
-                  opacity: 0.7;
-                  cursor: not-allowed;
-              }
-              
-              .coming-soon:hover {
-                  transform: none;
-                  box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
-              }
-              
-              .footer {
-                  width: 100%;
-                  text-align: center;
-                  padding: 15px 0;
-                  color: var(--text-secondary);
-                  font-size: 0.8rem;
-                  border-top: 1px solid rgba(255, 255, 255, 0.05);
-              }
-              
-              .balance-pill {
-                  background: rgba(251, 191, 36, 0.1);
-                  padding: 8px 16px;
-                  border-radius: 50px;
-                  border: 1px solid rgba(251, 191, 36, 0.3);
-                  font-weight: 700;
-                  color: var(--accent-color);
-                  display: inline-flex;
-                  align-items: center;
-                  gap: 6px;
-                  margin-top: 10px;
-              }
-              
-              @keyframes pulse {
-                  0% { transform: scale(1); }
-                  50% { transform: scale(1.05); }
-                  100% { transform: scale(1); }
-              }
-              
-              @keyframes float {
-                  0% { transform: translateY(0px); }
-                  50% { transform: translateY(-10px); }
-                  100% { transform: translateY(0px); }
-              }
-              
-              @keyframes slideIn {
-                  from { opacity: 0; transform: translateY(20px); }
-                  to { opacity: 1; transform: translateY(0); }
-              }
-              
-              @media (max-width: 480px) {
-                  .container {
-                      padding: 15px;
-                  }
-                  
-                  .game-card {
-                      padding: 16px;
-                  }
-                  
-                  .game-icon {
-                      font-size: 2rem;
-                  }
-                  
-                  .welcome-text {
-                      font-size: 1.5rem;
-                  }
-                  
-                  .animated-logo {
-                      width: 50px;
-                      height: 50px;
-                  }
-                  
-                  .logo-emoji {
-                      font-size: 2rem;
-                  }
-              }
-              
-              @media (max-width: 380px) {
-                  .games-grid {
-                      gap: 12px;
-                  }
-                  
-                  .game-card {
-                      padding: 14px;
-                  }
-                  
-                  .game-title {
-                      font-size: 1.1rem;
-                  }
-              }
-              
-              .user-info {
-                  position: absolute;
-                  top: 15px;
-                  right: 0;
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  font-size: 0.8rem;
-                  color: var(--text-secondary);
-              }
-              
-              .user-avatar {
-                  width: 32px;
-                  height: 32px;
-                  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-weight: 700;
-                  color: white;
-                  animation: pulse 2s infinite;
-              }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <div class="header">
-                  <div class="logo-container">
-                      <div class="animated-logo bingo-logo">
-                          <div class="logo-glow"></div>
-                          <div class="logo-emoji">🎱</div>
-                      </div>
-                      <div class="animated-logo keno-logo">
-                          <div class="logo-glow"></div>
-                          <div class="logo-emoji">🎲</div>
-                      </div>
-                  </div>
-                  <h1 class="welcome-text">ETHIO GAMES</h1>
-                  <p class="subtitle">Premium gaming experience on Telegram</p>
-                  
-                  <div id="userInfo" class="user-info" style="display: none;">
-                      <div class="user-avatar" id="userAvatar">U</div>
-                      <span id="userName">User</span>
-                  </div>
-              </div>
-              
-              <div class="games-grid">
-                  <div class="game-card" onclick="launchGame('bingo')">
-                      <div class="game-icon bingo-icon">🎱</div>
-                      <h2 class="game-title">BINGO ELITE</h2>
-                      <p class="game-description">
-                          Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus!
-                      </p>
-                      
-                      <div class="features">
-                          <span class="feature-tag">🎯 50 ETB Bonus</span>
-                          <span class="feature-tag">👥 100 Players</span>
-                          <span class="feature-tag">💰 Real Money</span>
-                          <span class="feature-tag">⚡ Real-time</span>
-                      </div>
-                      
-                      <button class="play-btn" id="bingoBtn">
-                          🎮 PLAY BINGO
-                      </button>
-                  </div>
-                  
-                  <div class="game-card" onclick="launchGame('keno')">
-                      <div class="game-icon keno-icon">🎲</div>
-                      <h2 class="game-title">KENO ULTRA</h2>
-                      <p class="game-description">
-                          Fast-paced number selection game with instant wins. Coming soon!
-                      </p>
-                      
-                      <div class="features">
-                          <span class="feature-tag">🎰 Instant Wins</span>
-                          <span class="feature-tag">⚡ Fast Gameplay</span>
-                          <span class="feature-tag">💰 High Payouts</span>
-                          <span class="feature-tag">🔜 Coming Soon</span>
-                      </div>
-                      
-                      <button class="play-btn coming-soon" id="kenoBtn" disabled>
-                          🎯 COMING SOON
-                      </button>
-                  </div>
-              </div>
-              
-              <div class="footer">
-                  <div class="balance-pill" id="balancePill" style="display: none;">
-                      <span>💰 Balance: </span>
-                      <span id="balanceAmount">0.00</span>
-                      <span> ETB</span>
-                  </div>
-                  <p style="margin-top: 10px;">Powered by Telegram • Play responsibly</p>
-                  <p style="font-size: 0.7rem; color: #64748b; margin-top: 5px;">
-                      💳 Deposit to Telebirr: ${telebirrNumber}<br>
-                      Need funds? Contact admin @ethio_games1_bot
-                  </p>
-              </div>
-          </div>
-          
-          <script>
-              const tg = window.Telegram.WebApp;
-              
-              tg.ready();
-              tg.expand();
-              
-              tg.setHeaderColor('#3b82f6');
-              tg.setBackgroundColor('#0f172a');
-              
-              const user = tg.initDataUnsafe?.user;
-              let userBalance = 0.00;
-              
-              function getFirstLetter(name) {
-                  return name ? name.charAt(0).toUpperCase() : 'U';
-              }
-              
-              if (user) {
-                  document.getElementById('userInfo').style.display = 'flex';
-                  document.getElementById('userName').textContent = user.first_name || 'User';
-                  document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
-                  
-                  localStorage.setItem('telegramUser', JSON.stringify({
-                      id: user.id,
-                      firstName: user.first_name,
-                      username: user.username,
-                      languageCode: user.language_code
-                  }));
-              }
-              
-              function launchGame(game) {
-                  if (tg && tg.HapticFeedback) {
-                      tg.HapticFeedback.impactOccurred('light');
-                  }
-                  
-                  if (game === 'bingo') {
-                      window.location.href = '/game';
-                  } else if (game === 'keno') {
-                      tg.showPopup({
-                          title: 'Coming Soon',
-                          message: 'KENO ULTRA is under development and will be available soon!',
-                          buttons: [{ type: 'ok' }]
-                      });
-                  }
-              }
-              
-              document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
-              document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
-              
-              if (tg && tg.MainButton) {
-                  tg.MainButton.setText('🎮 PLAY BINGO');
-                  tg.MainButton.show();
-                  tg.MainButton.onClick(function() {
-                      launchGame('bingo');
-                  });
-              }
-              
-              document.querySelectorAll('.game-card').forEach((card, index) => {
-                  card.style.animation = \`slideIn 0.5s ease \${index * 0.1}s forwards\`;
-                  card.style.opacity = '0';
-              });
-          </script>
-      </body>
-      </html>
-    `);
-  }).catch(error => {
-    res.status(500).send('Error loading configuration');
-  });
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        <title>ETHIO GAMES - Telegram Mini App</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            :root {
+                --primary-color: #3b82f6;
+                --secondary-color: #8b5cf6;
+                --accent-color: #fbbf24;
+                --dark-bg: #0f172a;
+                --card-bg: #1e293b;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --game-card-height: 180px;
+            }
+            
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                background: var(--dark-bg);
+                color: var(--text-primary);
+                height: 100vh;
+                overflow: hidden;
+                padding: 0;
+                margin: 0;
+            }
+            
+            .container {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: space-between;
+                padding: 15px;
+                max-width: 500px;
+                margin: 0 auto;
+            }
+            
+            .header {
+                width: 100%;
+                text-align: center;
+                padding: 12px 0;
+                position: relative;
+            }
+            
+            .header::after {
+                content: '';
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 60px;
+                height: 3px;
+                background: var(--accent-color);
+                border-radius: 2px;
+            }
+            
+            .logo {
+                font-size: 2.2rem;
+                margin-bottom: 8px;
+                color: var(--accent-color);
+            }
+            
+            .welcome-text {
+                font-size: 1.5rem;
+                font-weight: 700;
+                margin-bottom: 4px;
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }
+            
+            .subtitle {
+                color: var(--text-secondary);
+                font-size: 0.85rem;
+                margin-bottom: 15px;
+            }
+            
+            .games-grid {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 15px;
+                flex: 1;
+                overflow-y: auto;
+                padding: 8px 0;
+            }
+            
+            .game-card {
+                background: var(--card-bg);
+                border-radius: 16px;
+                padding: 18px;
+                text-align: center;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+                position: relative;
+                overflow: hidden;
+                cursor: pointer;
+                height: var(--game-card-height);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+            }
+            
+            .game-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 3px;
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            }
+            
+            .game-card:hover {
+                transform: translateY(-3px);
+                border-color: rgba(59, 130, 246, 0.3);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            }
+            
+            .game-card:active {
+                transform: translateY(-1px);
+            }
+            
+            .game-icon-container {
+                position: relative;
+                width: 60px;
+                height: 60px;
+                margin: 0 auto 12px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }
+            
+            .bingo-icon-container {
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+            }
+            
+            .keno-icon-container {
+                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+            }
+            
+            .game-icon {
+                font-size: 2.5rem;
+                position: relative;
+                z-index: 2;
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+            }
+            
+            .bingo-icon {
+                color: white;
+                animation: bingoSpin 4s ease-in-out infinite;
+            }
+            
+            .keno-icon {
+                color: white;
+                animation: kenoShake 3s ease-in-out infinite;
+            }
+            
+            .game-icon-container::before {
+                content: '';
+                position: absolute;
+                top: -10px;
+                left: -10px;
+                right: -10px;
+                bottom: -10px;
+                background: conic-gradient(
+                    from 0deg,
+                    transparent 0%,
+                    rgba(255, 255, 255, 0.3) 10%,
+                    transparent 20%,
+                    transparent 100%
+                );
+                animation: iconRotate 6s linear infinite;
+                z-index: 1;
+            }
+            
+            .game-title {
+                font-size: 1.3rem;
+                font-weight: 700;
+                margin-bottom: 6px;
+                letter-spacing: 0.5px;
+            }
+            
+            .game-description {
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                line-height: 1.3;
+                margin-bottom: 10px;
+                min-height: 35px;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+            
+            .features {
+                display: flex;
+                justify-content: center;
+                gap: 6px;
+                margin-bottom: 12px;
+                flex-wrap: wrap;
+            }
+            
+            .feature-tag {
+                background: rgba(59, 130, 246, 0.15);
+                color: #60a5fa;
+                padding: 3px 8px;
+                border-radius: 12px;
+                font-size: 0.65rem;
+                font-weight: 600;
+                border: 1px solid rgba(59, 130, 246, 0.25);
+            }
+            
+            .play-btn {
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                color: white;
+                border: none;
+                padding: 12px 16px;
+                border-radius: 10px;
+                font-size: 0.9rem;
+                font-weight: 700;
+                width: 100%;
+                cursor: pointer;
+                transition: all 0.2s;
+                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+                letter-spacing: 0.5px;
+            }
+            
+            .play-btn:hover {
+                transform: scale(1.02);
+                box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            }
+            
+            .play-btn:active {
+                transform: scale(0.98);
+            }
+            
+            .coming-soon {
+                background: linear-gradient(90deg, #64748b, #475569);
+                opacity: 0.7;
+                cursor: not-allowed;
+            }
+            
+            .coming-soon:hover {
+                transform: none;
+                box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+            }
+            
+            .footer {
+                width: 100%;
+                text-align: center;
+                padding: 12px 0;
+                color: var(--text-secondary);
+                font-size: 0.75rem;
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            
+            .balance-pill {
+                background: rgba(251, 191, 36, 0.1);
+                padding: 6px 12px;
+                border-radius: 20px;
+                border: 1px solid rgba(251, 191, 36, 0.2);
+                font-weight: 700;
+                color: var(--accent-color);
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                margin-top: 8px;
+                font-size: 0.8rem;
+            }
+            
+            @keyframes bingoSpin {
+                0% { transform: rotateY(0deg); }
+                50% { transform: rotateY(180deg); }
+                100% { transform: rotateY(360deg); }
+            }
+            
+            @keyframes kenoShake {
+                0%, 100% { transform: translateX(0) rotate(0deg); }
+                25% { transform: translateX(-3px) rotate(-2deg); }
+                75% { transform: translateX(3px) rotate(2deg); }
+            }
+            
+            @keyframes iconRotate {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            @keyframes slideIn {
+                from { opacity: 0; transform: translateY(15px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            
+            @keyframes pulse {
+                0% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.05); opacity: 0.8; }
+                100% { transform: scale(1); opacity: 1; }
+            }
+            
+            @keyframes float {
+                0%, 100% { transform: translateY(0px); }
+                50% { transform: translateY(-5px); }
+            }
+            
+            .online-indicator {
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                width: 8px;
+                height: 8px;
+                background: #10b981;
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+                z-index: 10;
+            }
+            
+            .badge {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: #ef4444;
+                color: white;
+                font-size: 0.65rem;
+                padding: 2px 6px;
+                border-radius: 10px;
+                font-weight: 700;
+                z-index: 10;
+                animation: pulse 1.5s infinite;
+            }
+            
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-top: 8px;
+            }
+            
+            .stat-item {
+                background: rgba(255, 255, 255, 0.05);
+                padding: 6px;
+                border-radius: 8px;
+                text-align: center;
+            }
+            
+            .stat-value {
+                font-size: 1rem;
+                font-weight: 700;
+                color: var(--accent-color);
+            }
+            
+            .stat-label {
+                font-size: 0.65rem;
+                color: var(--text-secondary);
+                margin-top: 2px;
+            }
+            
+            @media (max-width: 480px) {
+                .container {
+                    padding: 12px;
+                }
+                
+                .game-card {
+                    padding: 15px;
+                    height: 170px;
+                }
+                
+                .game-icon-container {
+                    width: 50px;
+                    height: 50px;
+                }
+                
+                .game-icon {
+                    font-size: 2rem;
+                }
+                
+                .welcome-text {
+                    font-size: 1.3rem;
+                }
+                
+                .game-title {
+                    font-size: 1.2rem;
+                }
+            }
+            
+            @media (max-width: 380px) {
+                .games-grid {
+                    gap: 12px;
+                }
+                
+                .game-card {
+                    padding: 12px;
+                    height: 165px;
+                }
+                
+                .play-btn {
+                    padding: 10px 14px;
+                    font-size: 0.85rem;
+                }
+            }
+            
+            .user-info {
+                position: absolute;
+                top: 12px;
+                right: 0;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+            }
+            
+            .user-avatar {
+                width: 28px;
+                height: 28px;
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                color: white;
+                font-size: 0.85rem;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+            
+            .bingo-badge {
+                background: linear-gradient(45deg, #f59e0b, #fbbf24);
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.6rem;
+                font-weight: 900;
+                color: #0f172a;
+                animation: float 2s ease-in-out infinite;
+            }
+            
+            .premium-badge {
+                background: linear-gradient(45deg, #fbbf24, #f59e0b);
+                color: #0f172a;
+                font-size: 0.55rem;
+                font-weight: 900;
+                padding: 1px 5px;
+                border-radius: 8px;
+                margin-left: 5px;
+                animation: pulse 2s infinite;
+            }
+            
+            .game-stats {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 8px;
+                font-size: 0.7rem;
+                color: var(--text-secondary);
+            }
+            
+            .stat {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
+            
+            .hot-badge {
+                background: #ef4444;
+                color: white;
+                font-size: 0.6rem;
+                padding: 1px 4px;
+                border-radius: 4px;
+                animation: pulse 1s infinite;
+                margin-left: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">🎮</div>
+                <h1 class="welcome-text">ETHIO GAMES</h1>
+                <p class="subtitle">Premium gaming experience on Telegram</p>
+                
+                <div id="userInfo" class="user-info" style="display: none;">
+                    <div class="user-avatar" id="userAvatar">U</div>
+                    <span id="userName">User</span>
+                </div>
+            </div>
+            
+            <div class="games-grid">
+                <div class="game-card" onclick="launchGame('bingo')">
+                    <div class="online-indicator"></div>
+                    <div class="badge">🔥 HOT</div>
+                    
+                    <div class="game-icon-container bingo-icon-container">
+                        <div class="game-icon bingo-icon">🎱</div>
+                        <div class="bingo-badge">B</div>
+                    </div>
+                    
+                    <div>
+                        <h2 class="game-title">
+                            BINGO ELITE 
+                            <span class="premium-badge">PREMIUM</span>
+                        </h2>
+                        
+                        <p class="game-description">
+                            Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus!
+                        </p>
+                        
+                        <div class="features">
+                            <span class="feature-tag">🎯 50 ETB Bonus</span>
+                            <span class="feature-tag">⚡ Real-time</span>
+                            <span class="feature-tag">💳 Wallet</span>
+                        </div>
+                        
+                        <div class="game-stats">
+                            <div class="stat">
+                                <span>👥</span>
+                                <span>100+ Players</span>
+                            </div>
+                            <div class="stat">
+                                <span>💰</span>
+                                <span>High Payout</span>
+                                <span class="hot-badge">HOT</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="play-btn" id="bingoBtn">
+                        🎮 PLAY NOW
+                    </button>
+                </div>
+                
+                <div class="game-card" onclick="launchGame('keno')">
+                    <div class="game-icon-container keno-icon-container">
+                        <div class="game-icon keno-icon">🎲</div>
+                    </div>
+                    
+                    <div>
+                        <h2 class="game-title">
+                            KENO ULTRA
+                            <span style="opacity: 0.7; font-size: 0.6rem; color: #94a3b8;">COMING SOON</span>
+                        </h2>
+                        
+                        <p class="game-description">
+                            Fast-paced number selection game with instant wins. High volatility, huge payouts!
+                        </p>
+                        
+                        <div class="features">
+                            <span class="feature-tag">🎰 Instant Wins</span>
+                            <span class="feature-tag">⚡ Fast Gameplay</span>
+                            <span class="feature-tag">💰 High Payouts</span>
+                        </div>
+                        
+                        <div class="game-stats">
+                            <div class="stat">
+                                <span>⚡</span>
+                                <span>Fast Games</span>
+                            </div>
+                            <div class="stat">
+                                <span>🎰</span>
+                                <span>Instant Win</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="play-btn coming-soon" id="kenoBtn" disabled>
+                        🎯 COMING SOON
+                    </button>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <div class="balance-pill" id="balancePill" style="display: none;">
+                    <span>💰 Balance: </span>
+                    <span id="balanceAmount">0.00</span>
+                    <span> ETB</span>
+                </div>
+                <p style="margin-top: 8px; font-size: 0.7rem;">Powered by Telegram • Play responsibly</p>
+                <p style="font-size: 0.65rem; color: #64748b; margin-top: 4px;">
+                    💳 Deposit: ${CONFIG.TELEBIRR_NUMBER}<br>
+                    Need funds? Contact admin @ethio_games1_bot
+                </p>
+            </div>
+        </div>
+        
+        <script>
+            const tg = window.Telegram.WebApp;
+            
+            tg.ready();
+            tg.expand();
+            
+            tg.setHeaderColor('#3b82f6');
+            tg.setBackgroundColor('#0f172a');
+            
+            const user = tg.initDataUnsafe?.user;
+            let userBalance = 0.00;
+            
+            function getFirstLetter(name) {
+                return name ? name.charAt(0).toUpperCase() : 'U';
+            }
+            
+            if (user) {
+                document.getElementById('userInfo').style.display = 'flex';
+                const firstName = user.first_name || 'User';
+                const userName = firstName.length > 8 ? firstName.substring(0, 8) + '...' : firstName;
+                document.getElementById('userName').textContent = userName;
+                document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
+                
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                }));
+            }
+            
+            function launchGame(game) {
+                if (tg && tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
+                
+                if (game === 'bingo') {
+                    window.location.href = '/game';
+                } else if (game === 'keno') {
+                    tg.showPopup({
+                        title: 'Coming Soon',
+                        message: 'KENO ULTRA is under development and will be available soon!',
+                        buttons: [{ type: 'ok' }]
+                    });
+                }
+            }
+            
+            document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
+            document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
+            
+            if (tg && tg.MainButton) {
+                tg.MainButton.setText('🎮 PLAY BINGO');
+                tg.MainButton.show();
+                tg.MainButton.onClick(function() {
+                    launchGame('bingo');
+                });
+            }
+            
+            // Add animations to cards
+            document.querySelectorAll('.game-card').forEach((card, index) => {
+                card.style.animation = \`slideIn 0.5s ease \${index * 0.1}s forwards\`;
+                card.style.opacity = '0';
+            });
+            
+            // Add subtle floating animation to Bingo card
+            const bingoCard = document.querySelector('.game-card');
+            if (bingoCard) {
+                setInterval(() => {
+                    bingoCard.style.transform = 'translateY(-3px)';
+                    setTimeout(() => {
+                        bingoCard.style.transform = 'translateY(0px)';
+                    }, 1000);
+                }, 2000);
+            }
+        </script>
+    </body>
+    </html>
+  `);
 });
 
 app.get('/socket-test', (req, res) => {
@@ -3978,9 +3964,6 @@ app.get('/health', async (req, res) => {
       };
     }));
     
-    // Get Telebirr number from config
-    const telebirrNumber = await getConfig('TELEBIRR_NUMBER');
-    
     res.json({
       status: 'ok',
       database: 'connected',
@@ -4005,22 +3988,17 @@ app.get('/health', async (req, res) => {
       realTimeBoxUpdates: 'active',
       boxClearing: 'enabled',
       walletSystem: 'active',
-      telebirrNumber: telebirrNumber,
-      minWithdrawal: CONFIG.MIN_WITHDRAWAL,
-      maxWithdrawal: CONFIG.MAX_WITHDRAWAL,
+      telebirrNumber: CONFIG.TELEBIRR_NUMBER,
       gameTimer: CONFIG.GAME_TIMER + ' seconds',
       countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
       gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES + ' minutes',
       minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       roomLockFeature: 'enabled',
       boxSelectionTimer: 'synced with waiting room',
-      editableSettings: 'Telebirr number, withdrawal limits',
       newFeatures: [
         'wallet_system_with_deposit_and_withdraw',
         'telebirr_integration',
         'admin_transaction_approval',
-        'editable_telebirr_number',
-        'editable_withdrawal_limits',
         'double_prize_bug_fixed_with_claim_lock',
         'timer_synchronization_between_discovery_and_waiting',
         'room_lock_when_playing',
@@ -4393,9 +4371,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const userName = message.from.first_name || 'Player';
       const username = message.from.username || '';
       
-      // Get current Telebirr number from config
-      const telebirrNumber = await getConfig('TELEBIRR_NUMBER');
-      
       if (text === '/start' || text === '/play') {
         let user = await User.findOne({ telegramId: userId });
         
@@ -4422,7 +4397,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM ADDED** - Deposit/Withdraw\n` +
-                  `• ⚙️ **ADMIN EDITABLE TELEBIRR NUMBER**\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Room lock when game is playing\n` +
@@ -4442,7 +4416,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
                   `• ✅ Fixed: Game starts properly now!\n\n` +
                   `💳 *Deposit Instructions:*\n` +
-                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
+                  `1. Send money to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
                   `2. Enter receipt number in game wallet\n` +
                   `3. Admin will approve within 24 hours\n\n` +
                   `_Need help? Contact admin_`,
@@ -4468,7 +4442,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `💳 *Deposit to:* ${telebirrNumber}\n` +
+                  `💳 *Deposit to:* ${CONFIG.TELEBIRR_NUMBER}\n` +
                   `🎮 Play: @ethio_games1_bot\n` +
                   `👑 Admin: Contact for funds\n` +
                   `🆔 Your ID: \`${userId}\``,
@@ -4484,7 +4458,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             chat_id: chatId,
             text: `💳 *Bingo Elite Wallet*\n\n` +
                   `*How to Deposit:*\n` +
-                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
+                  `1. Send money to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
                   `2. Open game and go to Wallet (💰 button)\n` +
                   `3. Enter receipt number and amount\n` +
                   `4. Admin will approve within 24 hours\n\n` +
@@ -4515,7 +4489,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *Bingo Elite Help*\n\n` +
                   `*New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM** - Deposit/Withdraw funds\n` +
-                  `• ⚙️ **ADMIN EDITABLE TELEBIRR NUMBER**\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Rooms lock when game is playing\n` +
@@ -4549,7 +4522,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*✅ Fixed:* All players return to lobby after game ends\n` +
                   `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
                   `💳 *Wallet:*\n` +
-                  `Deposit to Telebirr: *${telebirrNumber}*\n` +
+                  `Deposit to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
                   `Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
@@ -4591,9 +4564,6 @@ app.get('/setup-telegram', async (req, res) => {
       })
     });
     
-    // Get current Telebirr number
-    const telebirrNumber = await getConfig('TELEBIRR_NUMBER');
-    
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -4619,17 +4589,15 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> admin1234</p>
-            <p><strong>Telebirr Number:</strong> ${telebirrNumber} (Editable from Admin Panel)</p>
             <p><strong>New Features & Fixes Added:</strong></p>
             <p>1. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
-            <p>2. ⚙️ <strong>EDITABLE TELEBIRR NUMBER:</strong> Change Telebirr number from Admin Panel</p>
-            <p>3. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
-            <p>4. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
-            <p>5. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>6. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>7. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
+            <p>3. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>4. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>5. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p><strong>Wallet Features:</strong></p>
-            <p>• Telebirr Number: ${telebirrNumber} (Editable)</p>
+            <p>• Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}</p>
             <p>• Minimum Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</p>
             <p>• Admin approval for all transactions</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
@@ -4641,7 +4609,6 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
-            <p><strong>✅✅✅ TELEBIRR NUMBER NOW EDITABLE FROM ADMIN PANEL</strong></p>
           </div>
           
           <div>
@@ -4667,17 +4634,9 @@ app.get('/setup-telegram', async (req, res) => {
               <li>OR Approve pending deposit/withdrawal requests</li>
             </ol>
             
-            <h4>To Change Telebirr Number:</h4>
-            <ol>
-              <li>Open Admin Panel</li>
-              <li>Go to Configuration section</li>
-              <li>Edit Telebirr Number field</li>
-              <li>Click Save - changes take effect immediately</li>
-            </ol>
-            
             <h4>Wallet Instructions for Players:</h4>
             <ol>
-              <li>Send money to Telebirr: ${telebirrNumber}</li>
+              <li>Send money to Telebirr: ${CONFIG.TELEBIRR_NUMBER}</li>
               <li>In game, click Wallet (💰 button)</li>
               <li>Enter receipt number and amount</li>
               <li>Admin approves in Admin Panel</li>
@@ -4699,14 +4658,8 @@ app.get('/setup-telegram', async (req, res) => {
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
-
-async function startServer() {
-  try {
-    // Load configuration from database
-    await loadConfigFromDB();
-    
-    server.listen(PORT, () => {
-      console.log(`
+server.listen(PORT, () => {
+  console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║             🤖 BINGO ELITE - TELEGRAM READY                   ║
 ╠════════════════════════════════════════════════════════════════╣
@@ -4730,12 +4683,10 @@ async function startServer() {
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
-║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER} (Editable)     ║
+║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}                ║
 ║  💸 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB              ║
-║  ⚙️ NEW: Telebirr Number Editable from Admin Panel           ║
 ║  🆕 NEW FEATURES & FIXES:                                     ║
 ║  💳 WALLET SYSTEM: ✅ Deposit/Withdraw with Telebirr          ║
-║  ⚙️ EDITABLE TELEBIRR: ✅ Change from Admin Panel            ║
 ║  🔒 DOUBLE PRIZE BUG: ✅ FIXED WITH CLAIM LOCK               ║
 ║  ⏱️ Timer Sync: ✅ Discovery ↔ Waiting Room                  ║
 ║  🔒 Room Lock: ✅ When game is playing                        ║
@@ -4752,43 +4703,37 @@ async function startServer() {
 ║         ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS       ║
 ║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS       ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS    ║
+║         🎨 NEW: Animated profile pictures for games           ║
+║         🎨 NEW: Professional game card design                 ║
 ╚════════════════════════════════════════════════════════════════╝
-✅ Server ready with WALLET SYSTEM, EDITABLE TELEBIRR, DOUBLE PRIZE FIX and Timer Synchronization
-      `);
-      
-      // Initial broadcast
-      setTimeout(() => {
-        broadcastRoomStatus();
-      }, 1000);
-      
-      // Setup Telegram bot after server starts
-      setTimeout(async () => {
-        try {
-          if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
-            const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
-            
-            const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                url: webhookUrl,
-                drop_pending_updates: true
-              })
-            });
-            
-            const webhookResult = await webhookResponse.json();
-            console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
-          }
-        } catch (error) {
-          console.log('⚠️ Telegram auto-setup skipped or failed');
-        }
-      }, 3000);
-    });
-  } catch (error) {
-    console.error('❌ Error starting server:', error);
-    process.exit(1);
-  }
-}
-
-startServer();
-[file content end]
+✅ Server ready with WALLET SYSTEM, DOUBLE PRIZE FIX, Timer Synchronization & Animated Icons
+  `);
+  
+  // Initial broadcast
+  setTimeout(() => {
+    broadcastRoomStatus();
+  }, 1000);
+  
+  // Setup Telegram bot after server starts
+  setTimeout(async () => {
+    try {
+      if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
+        const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
+        
+        const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: webhookUrl,
+            drop_pending_updates: true
+          })
+        });
+        
+        const webhookResult = await webhookResponse.json();
+        console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
+      }
+    } catch (error) {
+      console.log('⚠️ Telegram auto-setup skipped or failed');
+    }
+  }, 3000);
+});
