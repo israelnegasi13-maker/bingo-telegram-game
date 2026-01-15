@@ -1,5 +1,3 @@
-[file name]: server.js
-[file content begin]
 // server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION WITH WALLET SUPPORT
 require('dotenv').config();
 const express = require('express');
@@ -4789,6 +4787,3 @@ async function startServer() {
     process.exit(1);
   }
 }
-
-startServer();
-[file content end]
