@@ -2053,7 +2053,7 @@ io.on('connection', (socket) => {
           players: [],
           takenBoxes: [],
           status: 'waiting',
-          lastBoxUpdate: new Date()
+          lastBoxUpdate = new Date()
         });
         await roomData.save();
       }
@@ -3119,815 +3119,844 @@ app.get('/', (req, res) => {
 // Telegram Mini App entry point
 app.get('/telegram', (req, res) => {
   res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-        <title>BINGO ELITE | Premium Telegram Games</title>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <style>
-            :root {
-                --primary: #8B5CF6;
-                --primary-dark: #7C3AED;
-                --secondary: #10B981;
-                --accent: #F59E0B;
-                --dark: #0F172A;
-                --dark-card: #1E293B;
-                --light: #F8FAFC;
-                --gray: #64748B;
-                --gray-light: #94A3B8;
-                --red: #EF4444;
-                --green: #10B981;
-                --gradient: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
-                --gradient-dark: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ETHIO GAMES - Premium Telegram Gaming</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --accent-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gold-gradient: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            --green-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --purple-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            --dark-bg: #0f172a;
+            --darker-bg: #020617;
+            --card-bg: rgba(30, 41, 59, 0.9);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-accent: #60a5fa;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            padding: 0;
+            margin: 0;
+            background-image: 
+                radial-gradient(at 20% 20%, rgba(76, 29, 149, 0.15) 0px, transparent 50%),
+                radial-gradient(at 80% 80%, rgba(124, 58, 237, 0.1) 0px, transparent 50%);
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px;
+            max-width: 480px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        /* Decorative Elements */
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+        
+        /* Header */
+        .header {
+            width: 100%;
+            text-align: center;
+            padding: 16px 0 12px 0;
+            position: relative;
+            margin-bottom: 16px;
+        }
+        
+        .logo-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        .logo-text {
+            font-size: 1.75rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+        
+        .tagline {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            background: rgba(96, 165, 250, 0.1);
+            color: var(--text-accent);
+            border-radius: 16px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border: 1px solid rgba(96, 165, 250, 0.2);
+        }
+        
+        /* Games Grid */
+        .games-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px;
+            margin-bottom: 12px;
+        }
+        
+        .game-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 130px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .game-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(102, 126, 234, 0.3);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-card:active {
+            transform: translateY(-1px);
+        }
+        
+        .game-card.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 12px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .game-card.featured {
+            grid-column: span 2;
+            height: 140px;
+        }
+        
+        .game-content {
+            padding: 16px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .game-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .game-logo {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .bingo-logo {
+            background: var(--green-gradient);
+        }
+        
+        .keno-logo {
+            background: var(--purple-gradient);
+        }
+        
+        .game-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+        
+        .game-badge {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            padding: 3px 8px;
+            border-radius: 16px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        
+        .game-description {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            line-height: 1.4;
+            margin-bottom: 8px;
+            flex: 1;
+        }
+        
+        .game-features {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        
+        .feature-chip {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .play-button {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.3);
+            width: 100%;
+        }
+        
+        .play-button:hover {
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+        
+        .play-button.coming-soon {
+            background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .play-button.coming-soon:hover {
+            transform: none;
+        }
+        
+        /* Animated Bingo Picture */
+        .bingo-animation {
+            position: absolute;
+            top: 50%;
+            right: 16px;
+            transform: translateY(-50%);
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .bingo-balls {
+            position: relative;
+            width: 70px;
+            height: 70px;
+        }
+        
+        .bingo-ball {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--gold-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 900;
+            color: #000;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+        }
+        
+        .ball-1 {
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: bounceBall 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+            animation-delay: 0s;
+        }
+        
+        .ball-2 {
+            top: 20px;
+            left: 10px;
+            animation: bounceBall 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            animation-delay: 0.2s;
+        }
+        
+        .ball-3 {
+            top: 20px;
+            right: 10px;
+            animation: bounceBall 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            animation-delay: 0.4s;
+        }
+        
+        .ball-4 {
+            bottom: 20px;
+            left: 10px;
+            animation: bounceBall 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            animation-delay: 0.6s;
+        }
+        
+        .ball-5 {
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: bounceBall 1.5s infinite ease-in-out;
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            animation-delay: 0.8s;
+        }
+        
+        /* Footer */
+        .footer {
+            width: 100%;
+            text-align: center;
+            padding: 12px 0 8px 0;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 8px;
+        }
+        
+        .footer-link {
+            color: var(--text-accent);
+            text-decoration: none;
+            font-size: 0.7rem;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .footer-link:hover {
+            opacity: 0.8;
+        }
+        
+        /* Animations */
+        @keyframes bounceBall {
+            0%, 100% {
+                transform: translateY(0) scale(1);
             }
-            
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-                -webkit-tap-highlight-color: transparent;
+            50% {
+                transform: translateY(-10px) scale(1.1);
             }
-            
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'SF Pro Display', sans-serif;
-                background: var(--dark);
-                color: var(--light);
-                min-height: 100vh;
-                overflow-x: hidden;
-                padding: 0;
-                margin: 0;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
             }
-            
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Responsive */
+        @media (max-width: 480px) {
             .container {
-                width: 100%;
-                min-height: 100vh;
-                padding: 20px;
-                padding-bottom: 100px;
-                background: var(--gradient-dark);
-                position: relative;
-            }
-            
-            /* Decorative Elements */
-            .bg-pattern {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                opacity: 0.03;
-                background-image: 
-                    radial-gradient(circle at 20% 30%, var(--primary) 1px, transparent 1px),
-                    radial-gradient(circle at 80% 70%, var(--secondary) 1px, transparent 1px),
-                    radial-gradient(circle at 40% 80%, var(--accent) 1px, transparent 1px);
-                background-size: 50px 50px;
-                pointer-events: none;
-                z-index: 1;
-            }
-            
-            .header {
-                position: relative;
-                z-index: 2;
-                text-align: center;
-                padding: 20px 0 30px;
-                margin-bottom: 20px;
-            }
-            
-            .logo-container {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
-                margin-bottom: 15px;
-            }
-            
-            .logo-icon {
-                width: 48px;
-                height: 48px;
-                background: var(--gradient);
-                border-radius: 14px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
-                box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
-                animation: float 3s ease-in-out infinite;
-            }
-            
-            .logo-text {
-                font-size: 28px;
-                font-weight: 800;
-                background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                letter-spacing: -0.5px;
-            }
-            
-            .logo-subtitle {
-                font-size: 14px;
-                color: var(--gray-light);
-                font-weight: 500;
-                letter-spacing: 1px;
-                text-transform: uppercase;
-                margin-top: 5px;
-            }
-            
-            .user-info {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                background: rgba(255, 255, 255, 0.05);
-                backdrop-filter: blur(10px);
-                padding: 8px 12px;
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            
-            .user-avatar {
-                width: 32px;
-                height: 32px;
-                background: var(--gradient);
-                border-radius: 10px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: 700;
-                color: white;
-                font-size: 14px;
-            }
-            
-            .user-name {
-                font-size: 12px;
-                font-weight: 600;
-                color: var(--light);
-            }
-            
-            .balance-card {
-                background: rgba(255, 255, 255, 0.05);
-                backdrop-filter: blur(10px);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 20px;
-                padding: 20px;
-                margin: 0 auto 30px;
-                max-width: 400px;
-                position: relative;
-                overflow: hidden;
-                z-index: 2;
-            }
-            
-            .balance-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: var(--gradient);
-            }
-            
-            .balance-label {
-                font-size: 12px;
-                color: var(--gray-light);
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                margin-bottom: 5px;
-                display: block;
-            }
-            
-            .balance-amount {
-                font-size: 36px;
-                font-weight: 800;
-                background: linear-gradient(135deg, var(--light) 0%, var(--gray-light) 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                line-height: 1;
-                margin-bottom: 10px;
-            }
-            
-            .balance-subtext {
-                font-size: 12px;
-                color: var(--gray);
-                display: flex;
-                align-items: center;
-                gap: 5px;
-            }
-            
-            .balance-subtext::before {
-                content: '💰';
-                font-size: 10px;
+                padding: 10px;
             }
             
             .games-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: 20px;
-                max-width: 1200px;
-                margin: 0 auto;
-                position: relative;
-                z-index: 2;
+                gap: 8px;
             }
             
             .game-card {
-                background: var(--dark-card);
-                border-radius: 24px;
-                padding: 25px;
-                position: relative;
-                overflow: hidden;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                cursor: pointer;
-                height: 320px;
-                display: flex;
-                flex-direction: column;
-            }
-            
-            .game-card:hover {
-                transform: translateY(-8px);
-                border-color: rgba(139, 92, 246, 0.3);
-                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            }
-            
-            .game-card:active {
-                transform: translateY(-4px);
+                height: 120px;
             }
             
             .game-card.featured {
-                background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
-                border: 1px solid rgba(139, 92, 246, 0.2);
+                height: 130px;
             }
             
-            .game-badge {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                background: var(--accent);
-                color: var(--dark);
-                padding: 4px 10px;
-                border-radius: 20px;
-                font-size: 10px;
-                font-weight: 800;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+            .game-content {
+                padding: 14px;
             }
             
-            .game-badge.coming-soon {
-                background: var(--gray);
-            }
-            
-            .game-icon {
-                width: 70px;
-                height: 70px;
-                border-radius: 20px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-bottom: 20px;
-                font-size: 32px;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .game-icon.bingo {
-                background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-                box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3);
-            }
-            
-            .game-icon.keno {
-                background: linear-gradient(135deg, var(--secondary) 0%, #0CA678 100%);
-                box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-            }
-            
-            .game-icon::before {
-                content: '';
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
-                transform: translate(-50%, -50%) rotate(45deg);
-                animation: shine 3s infinite;
+            .game-logo {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
             }
             
             .game-title {
-                font-size: 22px;
-                font-weight: 800;
-                margin-bottom: 8px;
-                color: var(--light);
+                font-size: 1rem;
             }
             
-            .game-subtitle {
-                font-size: 14px;
-                color: var(--gray-light);
-                margin-bottom: 15px;
-                line-height: 1.5;
-                flex-grow: 1;
+            .bingo-animation {
+                width: 70px;
+                height: 70px;
             }
             
-            .game-features {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-bottom: 20px;
+            .bingo-balls {
+                width: 60px;
+                height: 60px;
             }
             
-            .feature-tag {
-                background: rgba(255, 255, 255, 0.07);
-                color: var(--gray-light);
-                padding: 4px 10px;
-                border-radius: 12px;
+            .bingo-ball {
+                width: 20px;
+                height: 20px;
                 font-size: 10px;
-                font-weight: 600;
-                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+        }
+        
+        @media (max-width: 380px) {
+            .game-card {
+                height: 115px;
             }
             
-            .feature-tag.highlight {
-                background: rgba(139, 92, 246, 0.2);
-                color: var(--primary);
-                border-color: rgba(139, 92, 246, 0.3);
+            .game-content {
+                padding: 12px;
             }
             
-            .play-button {
-                background: var(--gradient);
-                color: white;
-                border: none;
-                padding: 14px 24px;
-                border-radius: 14px;
-                font-size: 15px;
-                font-weight: 700;
-                width: 100%;
-                cursor: pointer;
-                transition: all 0.2s;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                letter-spacing: 0.5px;
-                box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
+            .game-description {
+                font-size: 0.7rem;
             }
             
-            .play-button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 12px 30px rgba(139, 92, 246, 0.4);
+            .feature-chip {
+                font-size: 0.6rem;
+                padding: 2px 6px;
             }
-            
-            .play-button:active {
-                transform: translateY(0);
-            }
-            
-            .play-button.coming-soon {
-                background: var(--gray);
-                box-shadow: 0 8px 25px rgba(100, 116, 139, 0.3);
-                cursor: not-allowed;
-                opacity: 0.7;
-            }
-            
-            .play-button.coming-soon:hover {
-                transform: none;
-                box-shadow: 0 8px 25px rgba(100, 116, 139, 0.3);
-            }
-            
-            .footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: rgba(15, 23, 42, 0.95);
-                backdrop-filter: blur(20px);
-                border-top: 1px solid rgba(255, 255, 255, 0.05);
-                padding: 15px 20px;
-                z-index: 100;
-            }
-            
-            .footer-content {
-                max-width: 800px;
-                margin: 0 auto;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 15px;
-            }
-            
-            .footer-info {
-                font-size: 11px;
-                color: var(--gray);
-                text-align: center;
-                flex: 1;
-            }
-            
-            .footer-button {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                color: var(--light);
-                padding: 10px 16px;
-                border-radius: 12px;
-                font-size: 13px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                white-space: nowrap;
-            }
-            
-            .footer-button:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-            
-            .deposit-info {
-                background: rgba(16, 185, 129, 0.1);
-                border: 1px solid rgba(16, 185, 129, 0.2);
-                border-radius: 16px;
-                padding: 15px;
-                margin: 30px auto;
-                max-width: 600px;
-                position: relative;
-                z-index: 2;
-            }
-            
-            .deposit-title {
-                font-size: 14px;
-                font-weight: 700;
-                color: var(--secondary);
-                margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .deposit-title::before {
-                content: '💳';
-                font-size: 12px;
-            }
-            
-            .deposit-text {
-                font-size: 12px;
-                color: var(--gray-light);
-                line-height: 1.5;
-                margin-bottom: 10px;
-            }
-            
-            .telebirr-number {
-                background: rgba(255, 255, 255, 0.05);
-                padding: 10px 15px;
-                border-radius: 12px;
-                font-family: 'Courier New', monospace;
-                font-size: 14px;
-                font-weight: 700;
-                color: var(--accent);
-                text-align: center;
-                border: 1px dashed rgba(245, 158, 11, 0.3);
-                margin-top: 10px;
-            }
-            
-            /* Animations */
-            @keyframes float {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-10px); }
-            }
-            
-            @keyframes shine {
-                0% { transform: translate(-50%, -50%) rotate(45deg) translateX(-150%); }
-                100% { transform: translate(-50%, -50%) rotate(45deg) translateX(150%); }
-            }
-            
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            .fade-in {
-                animation: fadeIn 0.6s ease forwards;
-            }
-            
-            .delay-1 { animation-delay: 0.1s; opacity: 0; }
-            .delay-2 { animation-delay: 0.2s; opacity: 0; }
-            .delay-3 { animation-delay: 0.3s; opacity: 0; }
-            
-            /* Responsive */
-            @media (max-width: 768px) {
-                .container {
-                    padding: 15px;
-                    padding-bottom: 90px;
-                }
-                
-                .games-grid {
-                    grid-template-columns: 1fr;
-                    gap: 15px;
-                }
-                
-                .game-card {
-                    height: 300px;
-                    padding: 20px;
-                }
-                
-                .logo-icon {
-                    width: 42px;
-                    height: 42px;
-                    font-size: 20px;
-                }
-                
-                .logo-text {
-                    font-size: 24px;
-                }
-                
-                .balance-amount {
-                    font-size: 32px;
-                }
-                
-                .footer-content {
-                    flex-direction: column;
-                    gap: 10px;
-                    text-align: center;
-                }
-                
-                .footer-button {
-                    width: 100%;
-                    justify-content: center;
-                }
-            }
-            
-            @media (max-width: 380px) {
-                .game-card {
-                    height: 280px;
-                }
-                
-                .game-icon {
-                    width: 60px;
-                    height: 60px;
-                    font-size: 28px;
-                }
-                
-                .game-title {
-                    font-size: 20px;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="bg-pattern"></div>
-        <div class="container">
-            <div class="header">
-                <div class="logo-container">
-                    <div class="logo-icon">🎮</div>
-                    <div>
-                        <div class="logo-text">BINGO ELITE</div>
-                        <div class="logo-subtitle">Premium Telegram Games</div>
+        }
+        
+        /* User Info */
+        .user-info {
+            position: absolute;
+            top: 16px;
+            right: 12px;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            z-index: 10;
+        }
+        
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            background: var(--primary-gradient);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            font-size: 0.75rem;
+        }
+        
+        .user-name {
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="bg-grid"></div>
+    
+    <div class="container">
+        <div class="user-info" id="userInfo">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <span class="user-name" id="userName">User</span>
+        </div>
+        
+        <div class="header">
+            <div class="logo-wrapper">
+                <div class="logo-icon">🎮</div>
+                <h1 class="logo-text">ETHIO GAMES</h1>
+            </div>
+            <p class="tagline">Premium Gaming Experience</p>
+            <div class="badge">Powered by Telegram</div>
+        </div>
+        
+        <div class="games-grid">
+            <!-- Bingo Elite Card (Featured) -->
+            <div class="game-card featured active" onclick="launchGame('bingo')">
+                <div class="game-content">
+                    <div class="game-header">
+                        <div class="game-logo bingo-logo">
+                            <i class="fas fa-bingo"></i>
+                        </div>
+                        <div style="flex: 1; margin-left: 12px;">
+                            <h2 class="game-title">BINGO ELITE</h2>
+                            <div class="game-features">
+                                <span class="feature-chip">🎯 50 ETB Bonus</span>
+                                <span class="feature-chip">👥 100 Players</span>
+                                <span class="feature-chip">⚡ Real-time</span>
+                            </div>
+                        </div>
+                        <div class="game-badge">🔥 HOT</div>
                     </div>
-                </div>
-                
-                <div id="userInfo" class="user-info" style="display: none;">
-                    <div class="user-avatar" id="userAvatar">U</div>
-                    <span class="user-name" id="userName">User</span>
-                </div>
-            </div>
-            
-            <div id="balanceCard" class="balance-card" style="display: none;">
-                <span class="balance-label">Available Balance</span>
-                <div class="balance-amount" id="balanceAmount">0.00 ETB</div>
-                <span class="balance-subtext">Minimum withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</span>
-            </div>
-            
-            <div class="deposit-info fade-in">
-                <div class="deposit-title">Deposit Funds via Telebirr</div>
-                <div class="deposit-text">Send money to the number below, then enter receipt number in Wallet section</div>
-                <div class="telebirr-number">${CONFIG.TELEBIRR_NUMBER}</div>
-            </div>
-            
-            <div class="games-grid">
-                <!-- BINGO ELITE Card -->
-                <div class="game-card featured fade-in delay-1" onclick="launchGame('bingo')">
-                    <div class="game-badge">🔥 Featured</div>
-                    <div class="game-icon bingo">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M6 4V20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <h2 class="game-title">BINGO ELITE</h2>
-                    <p class="game-subtitle">Real-time multiplayer Bingo with instant wins, Four Corners bonus, and real-time box tracking. Join thousands of players!</p>
                     
-                    <div class="game-features">
-                        <span class="feature-tag highlight">🎯 50 ETB Bonus</span>
-                        <span class="feature-tag">💰 Real Money</span>
-                        <span class="feature-tag">⚡ Real-time</span>
-                        <span class="feature-tag">👥 100 Players</span>
-                        <span class="feature-tag">🔒 Secure</span>
-                        <span class="feature-tag">💳 Wallet</span>
-                    </div>
+                    <p class="game-description">
+                        Real-time multiplayer bingo with instant wins & huge jackpots. Join the action now!
+                    </p>
                     
                     <button class="play-button" id="bingoBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 17L12 22L22 17" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M2 12L12 17L22 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
+                        <i class="fas fa-play-circle"></i>
                         PLAY NOW
                     </button>
                 </div>
                 
-                <!-- KENO ULTRA Card -->
-                <div class="game-card fade-in delay-2" onclick="launchGame('keno')">
-                    <div class="game-badge coming-soon">🔜 Coming Soon</div>
-                    <div class="game-icon keno">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2"/>
-                            <circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>
-                            <path d="M12 2V22" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M2 12H22" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M4.93 4.93L19.07 19.07" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M4.93 19.07L19.07 4.93" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
+                <!-- Animated Bingo Picture -->
+                <div class="bingo-animation">
+                    <div class="bingo-balls">
+                        <div class="bingo-ball ball-1">B</div>
+                        <div class="bingo-ball ball-2">I</div>
+                        <div class="bingo-ball ball-3">N</div>
+                        <div class="bingo-ball ball-4">G</div>
+                        <div class="bingo-ball ball-5">O</div>
                     </div>
-                    <h2 class="game-title">KENO ULTRA</h2>
-                    <p class="game-subtitle">Fast-paced number selection game with instant wins and high payout ratios. Coming soon with revolutionary gameplay!</p>
+                </div>
+            </div>
+            
+            <!-- Keno Ultra Card -->
+            <div class="game-card" onclick="launchGame('keno')">
+                <div class="game-content">
+                    <div class="game-header">
+                        <div class="game-logo keno-logo">
+                            <i class="fas fa-dice"></i>
+                        </div>
+                        <div style="flex: 1; margin-left: 10px;">
+                            <h2 class="game-title">KENO ULTRA</h2>
+                            <div class="game-features">
+                                <span class="feature-chip">🎰 Instant Wins</span>
+                                <span class="feature-chip">💰 High Payouts</span>
+                            </div>
+                        </div>
+                        <div class="game-badge" style="background: rgba(251, 191, 36, 0.1); color: #fbbf24; border-color: rgba(251, 191, 36, 0.2);">SOON</div>
+                    </div>
                     
-                    <div class="game-features">
-                        <span class="feature-tag">🎰 Instant Wins</span>
-                        <span class="feature-tag">⚡ Fast Payouts</span>
-                        <span class="feature-tag">💰 High RTP</span>
-                        <span class="feature-tag">🎯 Easy to Play</span>
-                        <span class="feature-tag">🔜 Coming Soon</span>
-                    </div>
+                    <p class="game-description">
+                        Fast number selection game with instant wins and progressive jackpots.
+                    </p>
                     
                     <button class="play-button coming-soon" id="kenoBtn" disabled>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="12" cy="12" r="10" stroke="white" stroke-width="2"/>
-                            <circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>
-                        </svg>
+                        <i class="fas fa-clock"></i>
                         COMING SOON
                     </button>
                 </div>
             </div>
             
-            <div class="footer">
-                <div class="footer-content">
-                    <div class="footer-info">
-                        © 2024 Bingo Elite • Play responsibly • Powered by Telegram
-                        <div style="font-size: 10px; margin-top: 3px; color: #475569;">
-                            Need help? Contact admin @ethio_games1_bot
+            <!-- Other Game Cards (Future Expansion) -->
+            <div class="game-card" onclick="showComingSoon('poker')">
+                <div class="game-content">
+                    <div class="game-header">
+                        <div class="game-logo" style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);">
+                            <i class="fas fa-spade"></i>
+                        </div>
+                        <div style="margin-left: 8px;">
+                            <h2 class="game-title" style="font-size: 0.95rem;">TEXAS POKER</h2>
+                            <div class="game-badge" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);">NEW</div>
                         </div>
                     </div>
-                    <button class="footer-button" onclick="openWallet()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M21 12V7H5C3.89543 7 3 6.10457 3 5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V5C21 5 21 4 21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M3 9V18C3 19.1046 3.89543 20 5 20H19C20.1046 20 21 19.1046 21 18V12" stroke="currentColor" stroke-width="2"/>
-                            <rect x="15" y="12" width="6" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        Wallet
+                    
+                    <p class="game-description" style="font-size: 0.7rem;">
+                        Classic poker with real opponents. Bluff your way to victory!
+                    </p>
+                    
+                    <button class="play-button coming-soon" disabled>
+                        <i class="fas fa-lock"></i>
+                        LOCKED
+                    </button>
+                </div>
+            </div>
+            
+            <div class="game-card" onclick="showComingSoon('slots')">
+                <div class="game-content">
+                    <div class="game-header">
+                        <div class="game-logo" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div style="margin-left: 8px;">
+                            <h2 class="game-title" style="font-size: 0.95rem;">GOLD SLOTS</h2>
+                            <div class="game-badge" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-color: rgba(245, 158, 11, 0.2);">VIP</div>
+                        </div>
+                    </div>
+                    
+                    <p class="game-description" style="font-size: 0.7rem;">
+                        Spin to win! Classic slot machines with huge progressive jackpots.
+                    </p>
+                    
+                    <button class="play-button coming-soon" disabled>
+                        <i class="fas fa-lock"></i>
+                        LOCKED
                     </button>
                 </div>
             </div>
         </div>
         
-        <script>
-            const tg = window.Telegram.WebApp;
-            
-            // Initialize Telegram Web App
-            tg.ready();
-            tg.expand();
-            
-            // Set Telegram theme
-            tg.setHeaderColor('#8B5CF6');
-            tg.setBackgroundColor('#0F172A');
-            
-            // Get user data from Telegram
-            const user = tg.initDataUnsafe?.user;
-            let userBalance = 0.00;
-            
-            function getFirstLetter(name) {
-                return name ? name.charAt(0).toUpperCase() : 'U';
+        <div class="footer">
+            <p>© 2024 ETHIO GAMES • Play Responsibly</p>
+            <div class="footer-links">
+                <a href="#" class="footer-link" onclick="showWalletInfo()">
+                    <i class="fas fa-wallet"></i> Wallet
+                </a>
+                <a href="#" class="footer-link" onclick="showSupport()">
+                    <i class="fas fa-headset"></i> Support
+                </a>
+                <a href="#" class="footer-link" onclick="showRules()">
+                    <i class="fas fa-book"></i> Rules
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const tg = window.Telegram.WebApp;
+        const CONFIG = {
+            TELEBIRR_NUMBER: "${CONFIG.TELEBIRR_NUMBER}",
+            MIN_WITHDRAWAL: ${CONFIG.MIN_WITHDRAWAL},
+            MAX_WITHDRAWAL: ${CONFIG.MAX_WITHDRAWAL}
+        };
+        
+        tg.ready();
+        tg.expand();
+        
+        tg.setHeaderColor('#667eea');
+        tg.setBackgroundColor('#0f172a');
+        
+        const user = tg.initDataUnsafe?.user;
+        
+        function getFirstLetter(name) {
+            return name ? name.charAt(0).toUpperCase() : 'U';
+        }
+        
+        function loadUserData() {
+            if (user) {
+                document.getElementById('userInfo').style.display = 'flex';
+                document.getElementById('userName').textContent = user.first_name || 'User';
+                document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
+                
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username,
+                    languageCode: user.language_code
+                }));
             }
             
-            function formatBalance(amount) {
-                return parseFloat(amount).toFixed(2) + ' ETB';
+            // Animate game cards on load
+            document.querySelectorAll('.game-card').forEach((card, index) => {
+                card.style.animation = \`fadeIn 0.5s ease \${index * 0.1}s forwards\`;
+                card.style.opacity = '0';
+            });
+        }
+        
+        function launchGame(game) {
+            if (tg && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
             }
             
-            // Initialize user interface
-            function initUserInterface() {
-                if (user) {
-                    // Show user info
-                    document.getElementById('userInfo').style.display = 'flex';
-                    document.getElementById('userName').textContent = user.first_name || 'User';
-                    document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
-                    
-                    // Show balance card
-                    document.getElementById('balanceCard').style.display = 'block';
-                    
-                    // Store user data in localStorage for game
-                    localStorage.setItem('telegramUser', JSON.stringify({
-                        id: user.id,
-                        firstName: user.first_name,
-                        username: user.username,
-                        languageCode: user.language_code
-                    }));
-                    
-                    // Generate userId for game
-                    const userId = 'tg_' + user.id;
-                    localStorage.setItem('gameUserId', userId);
-                    
-                    console.log('Telegram user initialized:', user.first_name);
-                } else {
-                    // Demo mode for testing
-                    setTimeout(() => {
-                        document.getElementById('balanceCard').style.display = 'block';
-                        document.getElementById('balanceAmount').textContent = '0.00 ETB';
-                    }, 1000);
-                }
-            }
+            const card = document.querySelector('.game-card.featured');
+            card.style.transform = 'scale(0.98)';
             
-            // Launch game function
-            function launchGame(game) {
-                if (tg && tg.HapticFeedback) {
-                    tg.HapticFeedback.impactOccurred('light');
-                }
+            setTimeout(() => {
+                card.style.transform = '';
                 
                 if (game === 'bingo') {
-                    // Navigate to game
-                    window.location.href = '/game?source=telegram&userId=' + 
-                        (user ? 'tg_' + user.id : 'demo_' + Date.now());
-                } else if (game === 'keno') {
-                    // Show coming soon message
-                    tg.showPopup({
-                        title: 'Coming Soon',
-                        message: 'KENO ULTRA is currently in development and will be available soon! Stay tuned for updates.',
-                        buttons: [{ type: 'ok' }]
-                    });
-                }
-            }
-            
-            // Open wallet function
-            function openWallet() {
-                if (tg && tg.HapticFeedback) {
-                    tg.HapticFeedback.impactOccurred('soft');
-                }
-                
-                tg.showPopup({
-                    title: 'Wallet & Banking',
-                    message: '💳 *Deposit:* Send to Telebirr ${CONFIG.TELEBIRR_NUMBER}\\n\\n' +
-                            '💰 *Withdrawal:* Min ${CONFIG.MIN_WITHDRAWAL} ETB\\n\\n' +
-                            '📱 *Access:* Open game and click Wallet button\\n\\n' +
-                            '_All transactions require admin approval_',
-                    buttons: [{ type: 'ok' }]
-                });
-            }
-            
-            // Initialize main button if available
-            if (tg && tg.MainButton) {
-                tg.MainButton.setText('🎮 PLAY BINGO');
-                tg.MainButton.show();
-                tg.MainButton.onClick(function() {
-                    launchGame('bingo');
-                });
-            }
-            
-            // Event listeners
-            document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
-            document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
-            
-            // Initialize on load
-            document.addEventListener('DOMContentLoaded', function() {
-                initUserInterface();
-                
-                // Animate cards on load
-                const cards = document.querySelectorAll('.fade-in');
-                cards.forEach((card, index) => {
-                    card.style.animationDelay = (index * 0.1) + 's';
-                });
-                
-                // Add click effects
-                document.querySelectorAll('.game-card').forEach(card => {
-                    card.addEventListener('mousedown', function() {
-                        this.style.transform = 'translateY(-2px)';
+                    if (tg && tg.MainButton) {
+                        tg.MainButton.setText('🎮 Launching Bingo Elite...');
+                        tg.MainButton.show();
+                    }
+                    
+                    // Add loading animation to balls
+                    document.querySelectorAll('.bingo-ball').forEach(ball => {
+                        ball.style.animation = 'bounceBall 0.3s infinite alternate';
                     });
                     
-                    card.addEventListener('mouseup', function() {
-                        this.style.transform = 'translateY(-8px)';
-                    });
-                    
-                    card.addEventListener('mouseleave', function() {
-                        this.style.transform = 'translateY(0)';
-                    });
-                });
-            });
+                    setTimeout(() => {
+                        window.location.href = '/game';
+                    }, 800);
+                }
+            }, 150);
+        }
+        
+        function showComingSoon(game) {
+            const messages = {
+                poker: 'Texas Hold\\'em Poker is coming soon! Practice your bluffing skills.',
+                slots: 'Gold Slots with progressive jackpots is in development. Stay tuned!',
+                keno: 'KENO ULTRA is under development and will be available soon!'
+            };
             
-            // Telegram back button handling
-            tg.BackButton.show();
-            tg.BackButton.onClick(function() {
-                tg.close();
+            tg.showPopup({
+                title: '🚀 Coming Soon!',
+                message: messages[game] || 'This game is under development and will be available soon!',
+                buttons: [{ type: 'ok' }]
             });
-        </script>
-    </body>
-    </html>
+        }
+        
+        function showWalletInfo() {
+            tg.showPopup({
+                title: '💳 Wallet Information',
+                message: \`Deposit to Telebirr: \${CONFIG.TELEBIRR_NUMBER}\\n\\n• Min withdrawal: \${CONFIG.MIN_WITHDRAWAL} ETB\\n• Max withdrawal: \${CONFIG.MAX_WITHDRAWAL} ETB\\n• Deposits approved within 24h\\n• Instant withdrawals to phone\`,
+                buttons: [{ type: 'ok' }]
+            });
+        }
+        
+        function showSupport() {
+            tg.showPopup({
+                title: '🆘 Support Center',
+                message: 'Need help? We\\'re here 24/7!\\n\\n• Game issues: @ethio_games1_bot\\n• Deposits/Withdrawals: Contact admin\\n• Technical support: In-game chat\\n• Suggestions: Feedback button',
+                buttons: [
+                    { id: 'contact', type: 'default', text: 'Contact Admin' },
+                    { type: 'cancel' }
+                ]
+            }).then(btnId => {
+                if (btnId === 'contact') {
+                    tg.openTelegramLink('https://t.me/ethio_games1_bot');
+                }
+            });
+        }
+        
+        function showRules() {
+            tg.showPopup({
+                title: '📖 Game Rules',
+                message: 'How to play Bingo Elite:\\n\\n1. Choose room (10-100 ETB)\\n2. Pick ticket (1-100)\\n3. Wait for countdown (30s)\\n4. Game starts automatically\\n5. Mark called numbers\\n6. Claim BINGO to win!\\n\\n🎯 Four Corners Bonus: 50 ETB',
+                buttons: [{ type: 'ok' }]
+            });
+        }
+        
+        document.getElementById('bingoBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            launchGame('bingo');
+        });
+        
+        document.getElementById('kenoBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            showComingSoon('keno');
+        });
+        
+        if (tg && tg.MainButton) {
+            tg.MainButton.setText('🎮 PLAY BINGO');
+            tg.MainButton.color = '#667eea';
+            tg.MainButton.textColor = '#ffffff';
+            tg.MainButton.show();
+            tg.MainButton.onClick(function() {
+                launchGame('bingo');
+            });
+        }
+        
+        window.addEventListener('load', loadUserData);
+    </script>
+</body>
+</html>
   `);
 });
 
