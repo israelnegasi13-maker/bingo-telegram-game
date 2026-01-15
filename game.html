@@ -17,7 +17,7 @@
             --bg-dark: #020617;
             --card-glass: rgba(30, 41, 59, 0.75);
             --border-glass: rgba(255, 255, 255, 0.1);
-            --header-h: 56px;
+            --header-h: 48px;
         }
 
         * { 
@@ -60,7 +60,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 24px;
+            padding: 20px;
             backdrop-filter: blur(20px);
             text-align: center;
             pointer-events: none;
@@ -80,9 +80,9 @@
         #roomLockedOverlay { z-index: 10002; }
 
         .game-status-title {
-            font-size: 3.5rem;
+            font-size: 2.8rem;
             font-weight: 900;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .win-gradient {
@@ -135,15 +135,16 @@
         .stake-grid { 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
-            gap: 12px; 
+            gap: 10px; 
             width: 100%; 
-            max-width: 350px; 
+            max-width: 320px; 
+            margin-bottom: 20px;
         }
         
         .stake-btn { 
             background: var(--card-glass); 
-            padding: 20px 10px; 
-            border-radius: 20px; 
+            padding: 16px 8px; 
+            border-radius: 16px; 
             border: 1px solid var(--border-glass); 
             transition: transform 0.1s;
             position: relative;
@@ -152,16 +153,16 @@
         }
         
         .stake-btn:active { transform: scale(0.95); }
-        .stake-val { display: block; font-size: 1.4rem; font-weight: 900; color: var(--p-gold); }
-        .stake-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .stake-val { display: block; font-size: 1.2rem; font-weight: 900; color: var(--p-gold); }
+        .stake-label { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
         
         .room-status {
             position: absolute;
-            top: 8px;
-            right: 8px;
-            font-size: 0.6rem;
-            padding: 2px 6px;
-            border-radius: 10px;
+            top: 6px;
+            right: 6px;
+            font-size: 0.5rem;
+            padding: 2px 5px;
+            border-radius: 8px;
             font-weight: 700;
         }
         
@@ -190,8 +191,8 @@
         }
         
         .player-count {
-            margin-top: 8px;
-            font-size: 0.7rem;
+            margin-top: 6px;
+            font-size: 0.6rem;
             color: #94a3b8;
         }
         
@@ -201,8 +202,8 @@
         }
         
         .player-count .prize-info {
-            margin-top: 4px;
-            font-size: 0.6rem;
+            margin-top: 3px;
+            font-size: 0.55rem;
             line-height: 1.2;
         }
         
@@ -221,7 +222,7 @@
             align-items: center;
             justify-content: center;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             font-weight: 700;
             color: #ef4444;
         }
@@ -229,19 +230,19 @@
         .discovery-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
+            gap: 6px;
             width: 100%;
             max-height: 50vh;
             overflow-y: auto;
-            padding: 10px;
-            border-radius: 20px;
+            padding: 8px;
+            border-radius: 16px;
             background: rgba(0,0,0,0.3);
         }
 
         .box-number {
             aspect-ratio: 1;
             background: #1e293b;
-            border-radius: 12px;
+            border-radius: 10px;
             display: flex; 
             align-items: center; 
             justify-content: center;
@@ -281,7 +282,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             color: #ef4444;
             opacity: 0.5;
         }
@@ -295,7 +296,7 @@
 
         .header {
             height: var(--header-h);
-            padding: 0 20px;
+            padding: 0 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -312,22 +313,23 @@
         .header-right {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .balance-pill {
             background: rgba(251, 191, 36, 0.1);
-            padding: 5px 12px;
+            padding: 4px 10px;
             border-radius: 50px;
             border: 1px solid rgba(251, 191, 36, 0.3);
             font-weight: 900;
             color: var(--p-gold);
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             cursor: pointer;
             transition: all 0.2s;
-            height: 36px;
+            height: 32px;
+            font-size: 0.8rem;
         }
 
         .balance-pill:hover {
@@ -336,26 +338,26 @@
         }
 
         .balance-pill .wallet-icon {
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             line-height: 1;
         }
 
         .balance-pill .balance-text {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             line-height: 1.2;
         }
 
         .balance-pill .balance-unit {
-            font-size: 0.45rem;
+            font-size: 0.4rem;
             align-self: flex-end;
-            margin-bottom: 2px;
+            margin-bottom: 1px;
             margin-left: 1px;
         }
 
         .refresh-btn {
             background: rgba(59, 130, 246, 0.1);
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             border: 1px solid rgba(59, 130, 246, 0.3);
             display: flex;
@@ -364,6 +366,7 @@
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
+            font-size: 0.8rem;
         }
 
         .refresh-btn:active {
@@ -376,7 +379,7 @@
         }
 
         .ball-area {
-            padding: 8px 0;
+            padding: 6px 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -384,8 +387,8 @@
         }
 
         .ball-display {
-            width: 80px; 
-            height: 80px;
+            width: 70px; 
+            height: 70px;
             background: radial-gradient(circle at 35% 35%, #fff, #cbd5e1);
             border-radius: 50%;
             display: flex; 
@@ -394,35 +397,35 @@
             justify-content: center;
             color: #0f172a; 
             font-weight: 900; 
-            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
             border: 3px solid #fff;
             position: relative;
             overflow: hidden;
         }
 
         .ball-letter {
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             font-weight: 900;
             position: absolute;
-            top: 8px;
-            height: 25px;
+            top: 6px;
+            height: 20px;
             width: 100%;
             text-align: center;
             color: var(--main-color) !important;
         }
 
         .ball-number {
-            font-size: 2.2rem;
-            margin-top: 20px;
+            font-size: 1.8rem;
+            margin-top: 15px;
         }
 
         .history-strip {
             display: flex; 
-            gap: 6px;
+            gap: 5px;
             overflow-x: auto; 
             overflow-y: hidden;
-            padding: 5px 15px;
-            height: 45px;
+            padding: 4px 12px;
+            height: 40px;
             align-items: center;
             margin-top: -5px;
             scrollbar-width: none;
@@ -431,9 +434,9 @@
         .history-strip::-webkit-scrollbar { display: none; }
         
         .history-ball {
-            min-width: 32px;
-            width: 32px;
-            height: 32px;
+            min-width: 28px;
+            width: 28px;
+            height: 28px;
             background: rgba(255,255,255,0.05);
             border-radius: 50%;
             display: flex; 
@@ -450,63 +453,63 @@
 
         .history-letter {
             position: absolute;
-            top: 2px;
-            font-size: 0.55rem;
+            top: 1px;
+            font-size: 0.5rem;
             font-weight: 900;
             line-height: 1;
             color: var(--main-color) !important;
         }
 
         .history-number {
-            margin-top: 10px;
-            font-size: 0.75rem;
+            margin-top: 8px;
+            font-size: 0.65rem;
             line-height: 1;
         }
 
         .bingo-container {
             width: 95%;
-            max-width: 320px;
+            max-width: 300px;
             background: var(--card-glass);
-            padding: 8px;
-            border-radius: 16px;
+            padding: 6px;
+            border-radius: 14px;
             border: 1px solid var(--border-glass);
         }
 
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
-            margin-bottom: 4px;
+            gap: 3px;
+            margin-bottom: 3px;
         }
 
         .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(255,255,255,0.05);
-            border-radius: 8px;
+            border-radius: 7px;
             display: flex; 
             align-items: center; 
             justify-content: center;
             font-weight: 900; 
-            font-size: 1.2rem;
+            font-size: 1rem;
             color: var(--main-color) !important;
         }
 
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
+            gap: 3px;
         }
 
         .cell {
             aspect-ratio: 1;
             background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 8px;
+            border-radius: 7px;
             display: flex; 
             align-items: center; 
             justify-content: center;
             font-weight: 900; 
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: var(--main-color) !important;
             cursor: pointer;
             position: relative;
@@ -530,7 +533,7 @@
             color: white !important;
             border: none;
             font-weight: 900;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
         }
 
         .cell.corner {
@@ -540,14 +543,14 @@
         .cell.corner::before {
             content: "★";
             position: absolute;
-            top: 3px;
-            right: 3px;
-            font-size: 0.6rem;
+            top: 2px;
+            right: 2px;
+            font-size: 0.5rem;
             color: var(--p-gold);
         }
 
         .claim-area { 
-            padding: 30px 20px 80px 20px;
+            padding: 20px 16px 60px 16px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -557,8 +560,8 @@
 
         .btn-bingo {
             background: linear-gradient(90deg, var(--main-color), #1d4ed8);
-            color: white; padding: 18px; border-radius: 16px;
-            font-weight: 900; font-size: 1.2rem; width: 100%; border: none;
+            color: white; padding: 16px; border-radius: 14px;
+            font-weight: 900; font-size: 1.1rem; width: 100%; border: none;
             box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
             transition: 0.2s;
             margin-bottom: 20px;
@@ -572,31 +575,31 @@
 
         .admin-info {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
-            font-size: 0.6rem;
+            bottom: 8px;
+            right: 8px;
+            font-size: 0.5rem;
             color: #64748b;
             z-index: 1000;
         }
 
         .timer-display {
-            font-size: 5rem;
+            font-size: 4rem;
             font-weight: 900;
             color: var(--p-gold);
             text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         /* Smaller timer for discovery overlay */
         .discovery-timer {
-            font-size: 3.5rem !important;
-            margin-bottom: 5px !important;
+            font-size: 2.8rem !important;
+            margin-bottom: 4px !important;
         }
 
         .players-waiting {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: #94a3b8;
-            margin-top: 5px;
+            margin-top: 4px;
         }
 
         .players-waiting span {
@@ -607,49 +610,49 @@
         .bingo-info {
             display: flex;
             justify-content: center;
-            gap: 15px;
-            margin: 15px 0;
+            gap: 12px;
+            margin: 12px 0;
             flex-wrap: wrap;
         }
 
         .letter-info {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 0.7rem;
+            gap: 4px;
+            font-size: 0.6rem;
             color: #94a3b8;
         }
 
         .letter-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background: var(--main-color) !important;
         }
 
         .bonus-message {
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: var(--p-gold);
             font-weight: 700;
-            margin-top: 10px;
+            margin-top: 8px;
             text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
         }
 
         .prize-breakdown {
-            margin-top: 15px;
-            padding: 15px;
+            margin-top: 12px;
+            padding: 12px;
             background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            font-size: 0.9rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
             text-align: left;
-            max-width: 300px;
+            max-width: 280px;
         }
 
         .prize-item {
             display: flex;
             justify-content: space-between;
-            margin: 5px 0;
-            padding: 5px 0;
+            margin: 4px 0;
+            padding: 4px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
@@ -665,10 +668,10 @@
         .prize-total {
             display: flex;
             justify-content: space-between;
-            margin-top: 10px;
-            padding-top: 10px;
+            margin-top: 8px;
+            padding-top: 8px;
             border-top: 2px solid var(--p-gold);
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 900;
         }
 
@@ -682,36 +685,36 @@
 
         .four-corners-badge {
             position: absolute;
-            top: -5px;
-            right: -5px;
+            top: -4px;
+            right: -4px;
             background: var(--p-gold);
             color: #000;
-            font-size: 0.5rem;
+            font-size: 0.45rem;
             font-weight: 900;
-            padding: 2px 4px;
-            border-radius: 4px;
+            padding: 1px 3px;
+            border-radius: 3px;
             animation: pulse 1s infinite;
         }
 
         .connection-status {
             position: fixed;
-            top: 10px;
-            left: 10px;
+            top: 8px;
+            left: 8px;
             z-index: 1000;
             display: flex;
             align-items: center;
-            gap: 5px;
-            padding: 5px 10px;
+            gap: 4px;
+            padding: 4px 8px;
             background: rgba(15, 23, 42, 0.9);
-            border-radius: 20px;
+            border-radius: 16px;
             border: 1px solid var(--border-glass);
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             color: #94a3b8;
         }
 
         .connection-dot {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
             background: #ef4444;
         }
@@ -723,12 +726,12 @@
 
         .notification {
             position: fixed;
-            top: 70px;
+            top: 60px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 10000;
             width: 90%;
-            max-width: 350px;
+            max-width: 320px;
             animation: slideDown 0.3s ease-out;
         }
 
@@ -736,11 +739,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 15px;
+            padding: 8px 12px;
             background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-            margin: 15px 0;
-            font-size: 0.8rem;
+            border-radius: 10px;
+            margin: 12px 0;
+            font-size: 0.7rem;
             width: 100%;
         }
 
@@ -762,14 +765,14 @@
         #boxUpdateAlert {
             display: none;
             position: fixed;
-            bottom: 20px;
+            bottom: 16px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(59, 130, 246, 0.9);
             color: white;
-            padding: 10px 20px;
-            border-radius: 12px;
-            font-size: 0.8rem;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.7rem;
             z-index: 1000;
             backdrop-filter: blur(10px);
             animation: slideDown 0.3s ease-out;
@@ -777,14 +780,14 @@
 
         #confirmBoxBtn {
             grid-column: 1 / span 5;
-            margin-top: 15px;
-            padding: 12px;
+            margin-top: 12px;
+            padding: 10px;
             background: linear-gradient(90deg, var(--main-color), #1d4ed8);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-weight: 900;
-            font-size: 1rem;
+            font-size: 0.9rem;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
             transition: all 0.2s;
@@ -796,13 +799,13 @@
 
         .live-box-counter {
             position: fixed;
-            top: 100px;
-            right: 20px;
+            top: 90px;
+            right: 16px;
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 10px 15px;
-            font-size: 0.8rem;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 0.7rem;
             z-index: 100;
             backdrop-filter: blur(10px);
             display: none;
@@ -814,7 +817,7 @@
         }
 
         .live-box-counter .count {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 900;
             color: var(--p-gold);
             text-align: center;
@@ -823,7 +826,7 @@
 
         .live-box-counter .label {
             color: #94a3b8;
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             text-align: center;
             display: block;
         }
@@ -836,14 +839,14 @@
         .online-indicator {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.6rem;
+            gap: 3px;
+            font-size: 0.5rem;
             color: #94a3b8;
         }
 
         .online-dot {
-            width: 6px;
-            height: 6px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
             background: #10b981;
             animation: pulse 2s infinite;
@@ -860,8 +863,8 @@
 
         /* Locked room overlay */
         .locked-room-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
+            font-size: 3.5rem;
+            margin-bottom: 16px;
             color: #ef4444;
             animation: pulse 1.5s infinite;
         }
@@ -869,7 +872,7 @@
         /* Discovery timer container */
         .discovery-timer-container {
             display: none;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             text-align: center;
             width: 100%;
         }
@@ -879,16 +882,16 @@
             background: rgba(239, 68, 68, 0.9) !important;
         }
 
-        /* Wallet Styles */
+        /* Wallet Styles - COMPACT VERSION */
         .wallet-tab-btn {
             flex: 1;
-            padding: 12px;
+            padding: 10px;
             background: transparent;
             border: none;
             color: #94a3b8;
             font-weight: 700;
-            font-size: 0.9rem;
-            border-radius: 8px;
+            font-size: 0.8rem;
+            border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -909,13 +912,13 @@
         }
 
         .amount-btn {
-            padding: 15px 10px;
+            padding: 12px 8px;
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 12px;
+            border-radius: 10px;
             color: var(--main-color);
             font-weight: 900;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -932,148 +935,80 @@
         /* Mobile-specific adjustments */
         @media (max-width: 480px) {
             .ball-display {
-                width: 70px;
-                height: 70px;
+                width: 60px;
+                height: 60px;
             }
             
             .ball-letter {
-                font-size: 1.2rem;
-                top: 6px;
+                font-size: 1rem;
+                top: 4px;
             }
             
             .ball-number {
-                font-size: 1.8rem;
-                margin-top: 15px;
+                font-size: 1.5rem;
+                margin-top: 12px;
             }
             
             .history-strip {
-                height: 40px;
-                padding: 4px 12px;
-                gap: 5px;
-            }
-            
-            .history-ball {
-                min-width: 28px;
-                width: 28px;
-                height: 28px;
-            }
-            
-            .history-letter {
-                font-size: 0.5rem;
-                top: 1px;
-            }
-            
-            .history-number {
-                font-size: 0.65rem;
-                margin-top: 8px;
-            }
-            
-            .bingo-container {
-                max-width: 300px;
-                padding: 6px;
-            }
-            
-            .cell {
-                font-size: 0.9rem;
-            }
-            
-            .bingo-letter-cell {
-                font-size: 1rem;
-            }
-            
-            .btn-bingo {
-                padding: 16px;
-                font-size: 1.1rem;
-            }
-            
-            .connection-status {
-                top: 5px;
-                left: 5px;
-                padding: 3px 8px;
-                font-size: 0.5rem;
-            }
-            
-            .availability-indicator {
-                padding: 8px 12px;
-                font-size: 0.7rem;
-            }
-            
-            .notification {
-                top: 60px;
-                max-width: 300px;
-            }
-            
-            .prize-breakdown {
-                padding: 10px;
-                font-size: 0.8rem;
-            }
-            
-            .timer-display {
-                font-size: 4rem;
-            }
-            
-            .discovery-timer {
-                font-size: 3rem !important;
-            }
-
-            .balance-pill {
-                padding: 4px 10px;
-                height: 32px;
-            }
-            
-            .balance-pill .balance-text {
-                font-size: 0.75rem;
-            }
-            
-            .balance-pill .wallet-icon {
-                font-size: 0.6rem;
-            }
-        }
-
-        /* Very small phones */
-        @media (max-width: 360px) {
-            .history-strip {
-                height: 38px;
+                height: 36px;
                 padding: 3px 10px;
                 gap: 4px;
             }
             
             .history-ball {
-                min-width: 26px;
-                width: 26px;
-                height: 26px;
+                min-width: 24px;
+                width: 24px;
+                height: 24px;
             }
             
             .history-letter {
                 font-size: 0.45rem;
+                top: 1px;
             }
             
             .history-number {
                 font-size: 0.6rem;
-                margin-top: 7px;
+                margin-top: 6px;
             }
             
             .bingo-container {
                 max-width: 280px;
+                padding: 5px;
             }
             
             .cell {
-                font-size: 0.85rem;
+                font-size: 0.8rem;
             }
             
-            .ball-display {
-                width: 65px;
-                height: 65px;
+            .bingo-letter-cell {
+                font-size: 0.9rem;
             }
             
-            .ball-number {
-                font-size: 1.6rem;
+            .btn-bingo {
+                padding: 14px;
+                font-size: 1rem;
+            }
+            
+            .connection-status {
+                top: 4px;
+                left: 4px;
+                padding: 2px 6px;
+                font-size: 0.45rem;
             }
             
             .availability-indicator {
-                flex-direction: column;
-                gap: 5px;
-                text-align: center;
+                padding: 6px 10px;
+                font-size: 0.65rem;
+            }
+            
+            .notification {
+                top: 50px;
+                max-width: 280px;
+            }
+            
+            .prize-breakdown {
+                padding: 8px;
+                font-size: 0.75rem;
             }
             
             .timer-display {
@@ -1082,6 +1017,87 @@
             
             .discovery-timer {
                 font-size: 2.5rem !important;
+            }
+
+            .balance-pill {
+                padding: 3px 8px;
+                height: 28px;
+            }
+            
+            .balance-pill .balance-text {
+                font-size: 0.7rem;
+            }
+            
+            .balance-pill .wallet-icon {
+                font-size: 0.5rem;
+            }
+        }
+
+        /* Very small phones */
+        @media (max-width: 360px) {
+            .history-strip {
+                height: 34px;
+                padding: 2px 8px;
+                gap: 3px;
+            }
+            
+            .history-ball {
+                min-width: 22px;
+                width: 22px;
+                height: 22px;
+            }
+            
+            .history-letter {
+                font-size: 0.4rem;
+            }
+            
+            .history-number {
+                font-size: 0.55rem;
+                margin-top: 5px;
+            }
+            
+            .bingo-container {
+                max-width: 260px;
+            }
+            
+            .cell {
+                font-size: 0.75rem;
+            }
+            
+            .ball-display {
+                width: 55px;
+                height: 55px;
+            }
+            
+            .ball-number {
+                font-size: 1.3rem;
+            }
+            
+            .availability-indicator {
+                flex-direction: column;
+                gap: 4px;
+                text-align: center;
+            }
+            
+            .timer-display {
+                font-size: 3rem;
+            }
+            
+            .discovery-timer {
+                font-size: 2.2rem !important;
+            }
+            
+            .stake-grid {
+                gap: 8px;
+                max-width: 300px;
+            }
+            
+            .stake-btn {
+                padding: 14px 6px;
+            }
+            
+            .stake-val {
+                font-size: 1.1rem;
             }
         }
     </style>
@@ -1102,11 +1118,11 @@
     <span class="label">BOXES TAKEN</span>
 </div>
 
-<!-- Wallet Overlay -->
+<!-- Wallet Overlay - COMPACT VERSION -->
 <div id="walletOverlay" class="step-overlay">
-    <div style="width: 100%; max-width: 400px; background: var(--card-glass); border-radius: 20px; padding: 20px; border: 1px solid var(--border-glass);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: var(--p-gold); font-size: 1.8rem;">💰 Wallet</h2>
+    <div style="width: 100%; max-width: 360px; background: var(--card-glass); border-radius: 16px; padding: 16px; border: 1px solid var(--border-glass); overflow-y: auto; max-height: 90vh;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="color: var(--p-gold); font-size: 1.5rem;">💰 Wallet</h2>
             <div class="balance-pill" style="margin: 0;">
                 <span class="wallet-icon">💰</span>
                 <span id="walletBalanceVal" class="balance-text">0.00</span>
@@ -1115,58 +1131,56 @@
         </div>
         
         <!-- Wallet Tabs -->
-        <div style="display: flex; gap: 5px; margin-bottom: 25px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 12px;">
+        <div style="display: flex; gap: 4px; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 3px; border-radius: 10px;">
             <button id="depositTabBtn" class="wallet-tab-btn active" onclick="switchWalletTab('deposit')">Deposit</button>
             <button id="withdrawTabBtn" class="wallet-tab-btn" onclick="switchWalletTab('withdraw')">Withdraw</button>
         </div>
         
-        <!-- Deposit Tab -->
+        <!-- Deposit Tab - COMPACT -->
         <div id="depositTab" class="wallet-tab active">
-            <h3 style="text-align: center; margin-bottom: 15px; color: white;">Deposit Funds</h3>
-            <p style="text-align: center; color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">
-                Send money to the Telebirr number below and provide the receipt number
+            <h3 style="text-align: center; margin-bottom: 12px; color: white; font-size: 1.1rem;">Deposit Funds</h3>
+            <p style="text-align: center; color: #94a3b8; margin-bottom: 16px; font-size: 0.8rem;">
+                Send money to Telebirr number below
             </p>
             
-            <div style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3); text-align: center; margin-bottom: 20px;">
-                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 5px;">Telebirr Number</p>
-                <p style="font-size: 1.5rem; font-weight: 900; color: white; letter-spacing: 2px;">0962577855</p>
-                <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 10px;">Send any amount to this number</p>
+            <div style="background: rgba(59, 130, 246, 0.1); padding: 12px; border-radius: 10px; border: 1px solid rgba(59, 130, 246, 0.3); text-align: center; margin-bottom: 16px;">
+                <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Telebirr Number</p>
+                <p style="font-size: 1.3rem; font-weight: 900; color: white; letter-spacing: 1px;">0962577855</p>
             </div>
             
-            <div style="background: rgba(251, 191, 36, 0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.3); margin-bottom: 20px;">
-                <p style="font-size: 0.9rem; color: #fbbf24; margin-bottom: 10px;">Instructions:</p>
-                <ol style="font-size: 0.8rem; color: #cbd5e1; padding-left: 20px; line-height: 1.5;">
-                    <li>Send money to Telebirr number: <strong>0962577855</strong></li>
-                    <li>Save your receipt number</li>
-                    <li>Enter receipt number below</li>
-                    <li>Admin will verify and add funds</li>
+            <div style="background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 10px; border: 1px solid rgba(251, 191, 36, 0.3); margin-bottom: 16px; font-size: 0.75rem;">
+                <p style="color: #fbbf24; margin-bottom: 6px; font-size: 0.8rem;">Instructions:</p>
+                <ol style="color: #cbd5e1; padding-left: 16px; line-height: 1.4; margin: 0;">
+                    <li>Send money to Telebirr: 0962577855</li>
+                    <li>Enter receipt number & amount below</li>
+                    <li>Admin will verify & add funds</li>
                 </ol>
             </div>
             
-            <input type="text" id="receiptNumber" placeholder="Enter receipt number from Telebirr" 
-                   style="width: 100%; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 12px; color: white; margin-bottom: 15px; font-size: 0.9rem;">
+            <input type="text" id="receiptNumber" placeholder="Receipt number" 
+                   style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 10px; color: white; margin-bottom: 12px; font-size: 0.85rem;">
             
-            <input type="number" id="depositAmount" placeholder="Enter amount sent (ETB)" 
-                   style="width: 100%; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 12px; color: white; margin-bottom: 20px; font-size: 0.9rem;">
+            <input type="number" id="depositAmount" placeholder="Amount sent (ETB)" 
+                   style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 10px; color: white; margin-bottom: 16px; font-size: 0.85rem;">
             
-            <button onclick="submitDeposit()" style="width: 100%; padding: 16px; background: linear-gradient(90deg, #10b981, #059669); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1rem; cursor: pointer; margin-bottom: 15px;">
+            <button onclick="submitDeposit()" style="width: 100%; padding: 14px; background: linear-gradient(90deg, #10b981, #059669); color: white; border: none; border-radius: 10px; font-weight: 900; font-size: 0.9rem; cursor: pointer; margin-bottom: 12px;">
                 Submit Deposit Request
             </button>
             
-            <p style="text-align: center; color: #64748b; font-size: 0.8rem;">
-                Funds will be added within 24 hours after verification
+            <p style="text-align: center; color: #64748b; font-size: 0.7rem;">
+                Funds added within 24 hours after verification
             </p>
         </div>
         
-        <!-- Withdraw Tab -->
+        <!-- Withdraw Tab - COMPACT -->
         <div id="withdrawTab" class="wallet-tab">
-            <h3 style="text-align: center; margin-bottom: 15px; color: white;">Withdraw Funds</h3>
-            <p style="text-align: center; color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">
-                Select amount to withdraw and provide your phone number
+            <h3 style="text-align: center; margin-bottom: 12px; color: white; font-size: 1.1rem;">Withdraw Funds</h3>
+            <p style="text-align: center; color: #94a3b8; margin-bottom: 16px; font-size: 0.8rem;">
+                Select amount to withdraw
             </p>
             
             <!-- Quick Amount Buttons -->
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;">
                 <button onclick="selectWithdrawAmount(50)" class="amount-btn">50 ETB</button>
                 <button onclick="selectWithdrawAmount(100)" class="amount-btn">100 ETB</button>
                 <button onclick="selectWithdrawAmount(200)" class="amount-btn">200 ETB</button>
@@ -1175,37 +1189,36 @@
             </div>
             
             <!-- Custom Amount -->
-            <input type="number" id="customAmount" placeholder="Or enter custom amount" 
+            <input type="number" id="customAmount" placeholder="Custom amount" 
                    oninput="updateCustomAmount()"
-                   style="width: 100%; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 12px; color: white; margin-bottom: 20px; font-size: 0.9rem;">
+                   style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 10px; color: white; margin-bottom: 16px; font-size: 0.85rem;">
             
             <!-- Selected Amount Display -->
-            <div style="background: rgba(251, 191, 36, 0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.3); text-align: center; margin-bottom: 20px;">
-                <p style="font-size: 0.9rem; color: #fbbf24;">Selected Amount</p>
-                <p id="selectedWithdrawAmount" style="font-size: 1.5rem; font-weight: 900; color: white; letter-spacing: 2px;">0 ETB</p>
+            <div style="background: rgba(251, 191, 36, 0.1); padding: 10px; border-radius: 10px; border: 1px solid rgba(251, 191, 36, 0.3); text-align: center; margin-bottom: 16px;">
+                <p style="font-size: 0.8rem; color: #fbbf24;">Selected Amount</p>
+                <p id="selectedWithdrawAmount" style="font-size: 1.3rem; font-weight: 900; color: white; letter-spacing: 1px;">0 ETB</p>
             </div>
             
             <!-- Phone Number Input -->
-            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 8px;">Phone Number to Receive Money</p>
-            <input type="tel" id="withdrawPhoneNumber" placeholder="Enter your phone number (e.g., 0912345678)" 
-                   style="width: 100%; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 12px; color: white; margin-bottom: 20px; font-size: 0.9rem;">
+            <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 6px;">Phone Number</p>
+            <input type="tel" id="withdrawPhoneNumber" placeholder="e.g., 0912345678" 
+                   style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); border-radius: 10px; color: white; margin-bottom: 16px; font-size: 0.85rem;">
             
-            <button onclick="submitWithdrawal()" id="withdrawSubmitBtn" style="width: 100%; padding: 16px; background: linear-gradient(90deg, #3b82f6, #1d4ed8); color: white; border: none; border-radius: 12px; font-weight: 900; font-size: 1rem; cursor: pointer; margin-bottom: 15px;">
-                Submit Withdrawal Request
+            <button onclick="submitWithdrawal()" id="withdrawSubmitBtn" style="width: 100%; padding: 14px; background: linear-gradient(90deg, #3b82f6, #1d4ed8); color: white; border: none; border-radius: 10px; font-weight: 900; font-size: 0.9rem; cursor: pointer; margin-bottom: 12px;">
+                Submit Withdrawal
             </button>
             
-            <div style="background: rgba(239, 68, 68, 0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3); margin-top: 15px;">
-                <p style="font-size: 0.9rem; color: #ef4444; margin-bottom: 5px;">⚠️ Important:</p>
-                <ul style="font-size: 0.8rem; color: #cbd5e1; padding-left: 20px; line-height: 1.5;">
-                    <li>Amount will be deducted immediately</li>
-                    <li>Withdrawals processed within 24 hours</li>
-                    <li>Minimum withdrawal: 50 ETB</li>
+            <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.3); margin-top: 12px; font-size: 0.7rem;">
+                <p style="color: #ef4444; margin-bottom: 4px; font-size: 0.75rem;">⚠️ Important:</p>
+                <ul style="color: #cbd5e1; padding-left: 16px; line-height: 1.4; margin: 0;">
+                    <li>Min withdrawal: 50 ETB</li>
+                    <li>Processed within 24 hours</li>
                     <li>Ensure phone number is correct</li>
                 </ul>
             </div>
         </div>
         
-        <button onclick="hideWallet()" style="width: 100%; padding: 12px; background: none; border: 1px solid var(--border-glass); color: #94a3b8; border-radius: 12px; margin-top: 20px; font-weight: 700; cursor: pointer;">
+        <button onclick="hideWallet()" style="width: 100%; padding: 10px; background: none; border: 1px solid var(--border-glass); color: #94a3b8; border-radius: 10px; margin-top: 16px; font-weight: 700; cursor: pointer; font-size: 0.85rem;">
             Back to Game
         </button>
     </div>
@@ -1214,21 +1227,21 @@
 <!-- Room Locked Overlay -->
 <div id="roomLockedOverlay">
     <div class="locked-room-icon">🔒</div>
-    <div class="game-status-title lose-gradient" style="font-size: 2.5rem;">ROOM LOCKED</div>
-    <div id="roomLockedMessage" style="font-weight: 900; color: white; font-size: 1.2rem; margin: 20px 0; line-height: 1.4;">
+    <div class="game-status-title lose-gradient" style="font-size: 2rem;">ROOM LOCKED</div>
+    <div id="roomLockedMessage" style="font-weight: 900; color: white; font-size: 1rem; margin: 16px 0; line-height: 1.4;">
         Game is in progress. Please wait for the current game to finish.
     </div>
-    <p style="color: #94a3b8; margin-top: 10px; font-size: 0.8rem;">Returning to room selection...</p>
+    <p style="color: #94a3b8; margin-top: 8px; font-size: 0.7rem;">Returning to room selection...</p>
 </div>
 
 <div id="reconnectOverlay">
-    <div style="width: 40px; height: 40px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p style="margin-top: 20px; font-weight: 900; color: var(--p-gold); letter-spacing: 1px;">RECONNECTING...</p>
+    <div style="width: 36px; height: 36px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p style="margin-top: 16px; font-weight: 900; color: var(--p-gold); letter-spacing: 1px; font-size: 0.9rem;">RECONNECTING...</p>
 </div>
 
 <div id="winOverlay">
     <div class="game-status-title win-gradient">BINGO!</div>
-    <div id="winPrize" style="font-weight: 900; color: white; font-size: 2.2rem; margin: 10px 0; line-height: 1.4;">+0.00 ETB</div>
+    <div id="winPrize" style="font-weight: 900; color: white; font-size: 1.8rem; margin: 8px 0; line-height: 1.4;">+0.00 ETB</div>
     
     <div class="prize-breakdown" id="prizeBreakdown" style="display: none;">
         <div class="prize-item">
@@ -1246,12 +1259,12 @@
     </div>
     
     <div id="bonusMessage" class="bonus-message" style="display: none;"></div>
-    <p style="color: #94a3b8; margin-top: 20px;">RETURNING TO LOBBY...</p>
+    <p style="color: #94a3b8; margin-top: 16px; font-size: 0.8rem;">RETURNING TO LOBBY...</p>
 </div>
 
 <div id="loseOverlay">
     <div class="game-status-title lose-gradient">GAME OVER</div>
-    <div id="loseMessage" style="font-weight: 900; color: white; font-size: 1.2rem; margin: 10px 0; line-height: 1.4;">Someone else won!</div>
+    <div id="loseMessage" style="font-weight: 900; color: white; font-size: 1rem; margin: 8px 0; line-height: 1.4;">Someone else won!</div>
     
     <div class="prize-breakdown" id="losePrizeBreakdown" style="display: none;">
         <div class="prize-item">
@@ -1273,30 +1286,30 @@
     </div>
     
     <div id="specialWinMessage" class="bonus-message" style="display: none;"></div>
-    <p style="color: #94a3b8; margin-top: 20px;">RETURNING TO LOBBY...</p>
+    <p style="color: #94a3b8; margin-top: 16px; font-size: 0.8rem;">RETURNING TO LOBBY...</p>
 </div>
 
 <div id="insufficientOverlay">
-    <div class="game-status-title lose-gradient" style="font-size: 2.5rem; line-height: 1;">INSUFFICIENT<br>FUNDS</div>
-    <div id="insufficientMessage" style="font-weight: 900; color: white; font-size: 1.2rem; margin-top: 20px;">Required: 10 ETB</div>
-    <p style="color: #94a3b8; margin-top: 10px; font-size: 0.8rem;">PLEASE TOP UP TO PLAY</p>
-    <p style="color: #fbbf24; margin-top: 20px; font-size: 0.7rem; max-width: 300px;">💰 Contact admin to add funds to your account</p>
+    <div class="game-status-title lose-gradient" style="font-size: 2rem; line-height: 1;">INSUFFICIENT<br>FUNDS</div>
+    <div id="insufficientMessage" style="font-weight: 900; color: white; font-size: 1rem; margin-top: 16px;">Required: 10 ETB</div>
+    <p style="color: #94a3b8; margin-top: 8px; font-size: 0.7rem;">PLEASE TOP UP TO PLAY</p>
+    <p style="color: #fbbf24; margin-top: 16px; font-size: 0.65rem; max-width: 280px;">💰 Contact admin to add funds to your account</p>
 </div>
 
 <div id="loadingOverlay" class="active">
-    <div style="width: 50px; height: 50px; border: 4px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p id="loadingText" style="margin-top: 20px; font-weight: 900; color: var(--main-color); font-size: 0.8rem; letter-spacing: 2px;">CONNECTING TO SERVER...</p>
+    <div style="width: 40px; height: 40px; border: 3px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p id="loadingText" style="margin-top: 16px; font-weight: 900; color: var(--main-color); font-size: 0.7rem; letter-spacing: 1px;">CONNECTING TO SERVER...</p>
 </div>
 
-<div id="stakeOverlay" class="step-overlay">
-    <div class="balance-pill" style="position: absolute; top: 20px; right: 20px;" onclick="showWallet()">
+<div id="stakeOverlay" class="step-overlay active">
+    <div class="balance-pill" style="position: absolute; top: 16px; right: 16px;" onclick="showWallet()">
         <span class="wallet-icon">💰</span>
         <span id="stakeBalanceVal" class="balance-text">0.00</span>
         <small class="balance-unit">ETB</small>
     </div>
 
-    <h1 style="color: var(--p-gold); font-size: 2rem; font-weight: 900; margin-bottom: 30px;">BINGO ELITE</h1>
-    <p style="color: #94a3b8; margin-bottom: 20px; font-size: 0.9rem;">Select a room to join. Game starts when 1 online player joins!</p>
+    <h1 style="color: var(--p-gold); font-size: 1.5rem; font-weight: 900; margin-bottom: 20px;">BINGO ELITE</h1>
+    <p style="color: #94a3b8; margin-bottom: 16px; font-size: 0.8rem; max-width: 300px;">Select a room to join. Game starts with 1 player!</p>
     
     <div class="stake-grid">
         <div class="stake-btn" onclick="selectStake(10)">
@@ -1345,7 +1358,7 @@
         </div>
     </div>
     
-    <p style="color: #64748b; margin-top: 30px; font-size: 0.8rem; max-width: 300px; text-align: center;">
+    <p style="color: #64748b; margin-top: 20px; font-size: 0.7rem; max-width: 280px; text-align: center;">
         💰 <strong>Need funds?</strong><br>
         Contact admin to add ETB to your account
     </p>
@@ -1358,35 +1371,25 @@
         <div class="letter-info"><div class="letter-dot"></div> O: 61-75</div>
     </div>
     
-    <div style="margin-top: 20px; padding: 15px; background: rgba(251, 191, 36, 0.1); border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.3); max-width: 300px;">
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <div style="color: var(--p-gold); font-size: 1.5rem;">🎯</div>
-            <div style="font-weight: 700; color: var(--p-gold);">SPECIAL BONUS!</div>
-        </div>
-        <p style="font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
-            Win with <strong>Four Corners</strong> pattern (B1, B5, O1, O5) and get <strong>+50 ETB BONUS</strong> from the house!
-        </p>
-    </div>
-
-    <div class="online-indicator" style="margin-top: 20px;">
+    <div class="online-indicator" style="margin-top: 16px;">
         <div class="online-dot"></div>
         <span>Only <span class="online-count" id="globalOnlineCount">0</span> online players counted</span>
     </div>
 </div>
 
 <div id="discoveryOverlay" class="step-overlay">
-    <h2 style="margin-bottom: 10px;">SELECT TICKET</h2>
-    <p style="color: #94a3b8; margin-bottom: 15px; font-size: 0.8rem;">
+    <h2 style="margin-bottom: 8px; font-size: 1.2rem;">SELECT TICKET</h2>
+    <p style="color: #94a3b8; margin-bottom: 12px; font-size: 0.75rem;">
         Available tickets for <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span> room
     </p>
     
     <!-- Discovery Timer Container -->
     <div class="discovery-timer-container" id="discoveryTimerContainer">
         <div class="timer-display discovery-timer" id="discoveryTimer">30</div>
-        <div style="font-size: 0.9rem; color: #94a3b8; margin-top: -10px;">
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: -8px;">
             Game starts in <span id="discoveryTimerSeconds">30</span> seconds
         </div>
-        <div class="players-waiting" id="discoveryPlayersInfo" style="margin-top: 5px;"></div>
+        <div class="players-waiting" id="discoveryPlayersInfo" style="margin-top: 4px;"></div>
     </div>
     
     <!-- Real-time counter -->
@@ -1397,50 +1400,50 @@
         <div>
             <span class="taken" id="takenCount">0</span> boxes taken
         </div>
-        <div style="color: #94a3b8; font-size: 0.7rem;">
+        <div style="color: #94a3b8; font-size: 0.65rem;">
             <span class="live-indicator" id="liveIndicator">●</span> LIVE
         </div>
     </div>
 
-    <div class="online-indicator" style="margin: 10px 0;">
+    <div class="online-indicator" style="margin: 8px 0;">
         <div class="online-dot"></div>
         <span>Countdown starts with <span class="online-count">1</span> online player</span>
     </div>
     
     <div id="discoveryGrid" class="discovery-grid"></div>
     
-    <button onclick="leaveDiscovery()" style="background: none; border: none; color: #475569; margin-top: 20px; font-weight: 900; padding: 10px 20px;">
+    <button onclick="leaveDiscovery()" style="background: none; border: none; color: #475569; margin-top: 16px; font-weight: 900; padding: 8px 16px; font-size: 0.8rem;">
         ← BACK TO ROOMS
     </button>
     
     <!-- Real-time notification -->
-    <div id="boxUpdateAlert" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(59, 130, 246, 0.9); color: white; padding: 10px 20px; border-radius: 12px; font-size: 0.8rem; z-index: 1000; backdrop-filter: blur(10px);">
+    <div id="boxUpdateAlert" style="display: none; position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(59, 130, 246, 0.9); color: white; padding: 8px 16px; border-radius: 10px; font-size: 0.7rem; z-index: 1000; backdrop-filter: blur(10px);">
         <span id="boxUpdateMessage">New box taken!</span>
     </div>
 </div>
 
 <div id="waitOverlay" class="step-overlay">
     <div class="timer-display" id="waitTimer">30</div>
-    <h2 id="lobbyStatus" style="font-size: 1rem;">WAITING FOR PLAYERS...</h2>
-    <p style="margin-top: 10px; font-weight: 900; color: #64748b;">
+    <h2 id="lobbyStatus" style="font-size: 0.9rem;">WAITING FOR PLAYERS...</h2>
+    <p style="margin-top: 8px; font-weight: 900; color: #64748b; font-size: 0.8rem;">
         <span id="playerCount" style="color: var(--p-gold);">1</span> ONLINE PLAYERS IN ARENA
     </p>
     <div class="players-waiting" id="playersWaitingInfo">Game starts with 1 online player after 30 seconds</div>
     
-    <div class="online-indicator" style="margin-top: 20px;">
+    <div class="online-indicator" style="margin-top: 16px;">
         <div class="online-dot"></div>
         <span>Only online players are counted</span>
     </div>
     
-    <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 10px 20px; border-radius: 12px; margin-top: 30px; font-weight: 700; font-size: 0.9rem;">
+    <button onclick="leaveLobby()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 8px 16px; border-radius: 10px; margin-top: 24px; font-weight: 700; font-size: 0.8rem;">
         LEAVE LOBBY
     </button>
 </div>
 
 <div class="header">
     <div class="header-left">
-        <span id="userDisplay" style="font-weight: 900; font-size: 0.9rem;">PLAYER</span>
-        <span id="roomDisplay" style="font-size: 0.6rem; color: #64748b;">CONNECTING...</span>
+        <span id="userDisplay" style="font-weight: 900; font-size: 0.8rem;">PLAYER</span>
+        <span id="roomDisplay" style="font-size: 0.55rem; color: #64748b;">CONNECTING...</span>
     </div>
     <div class="header-right">
         <div class="balance-pill" id="balancePill" onclick="showWallet()">
@@ -1463,7 +1466,7 @@
 
 <div class="history-strip" id="ballHistory"></div>
 
-<div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px;">
+<div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px;">
     <div class="bingo-container">
         <div class="bingo-header">
             <div class="bingo-letter-cell">B</div>
@@ -1651,8 +1654,16 @@
         }
     }
 
-    // Show notification
+    // Show notification - REMOVED IN-GAME NOTIFICATIONS
     function showNotification(message, type = 'info', duration = 3000) {
+        // Don't show in-game notifications for marking numbers
+        if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) {
+            return;
+        }
+        if (type === 'error' && message.includes("hasn't been called")) {
+            return;
+        }
+        
         const notification = document.createElement('div');
         notification.className = 'notification';
         
@@ -1663,7 +1674,7 @@
         if (type === 'timeout') bgColor = 'rgba(239, 68, 68, 0.9)';
         
         notification.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; background: ${bgColor}; border-radius: 12px; color: white; font-weight: 600; font-size: 0.9rem; backdrop-filter: blur(10px);">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: ${bgColor}; border-radius: 10px; color: white; font-weight: 600; font-size: 0.8rem; backdrop-filter: blur(10px);">
                 <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'timeout' ? '⏰' : '📦'}</div>
                 <div>${message}</div>
             </div>
@@ -2096,8 +2107,8 @@
         const header = document.createElement('div');
         header.style.gridColumn = '1 / span 5';
         header.style.textAlign = 'center';
-        header.style.padding = '10px';
-        header.style.fontSize = '0.9rem';
+        header.style.padding = '8px';
+        header.style.fontSize = '0.8rem';
         header.style.color = '#94a3b8';
         header.innerHTML = `Select your ticket number (1-100)`;
         grid.appendChild(header);
@@ -2112,7 +2123,7 @@
             b.dataset.number = i;
             
             if (isTaken) {
-                b.innerHTML = `<div>${i}</div><div style="font-size:0.6rem;margin-top:2px;">TAKEN</div>`;
+                b.innerHTML = `<div>${i}</div><div style="font-size:0.5rem;margin-top:1px;">TAKEN</div>`;
                 
                 if (!state.previousTakenBoxes || !state.previousTakenBoxes.includes(i)) {
                     b.classList.add('newly-taken');
@@ -2155,14 +2166,14 @@
                 confirmBtn.id = 'confirmBoxBtn';
                 confirmBtn.textContent = `CONFIRM BOX ${boxNumber}`;
                 confirmBtn.style.gridColumn = '1 / span 5';
-                confirmBtn.style.marginTop = '15px';
-                confirmBtn.style.padding = '12px';
+                confirmBtn.style.marginTop = '12px';
+                confirmBtn.style.padding = '10px';
                 confirmBtn.style.background = 'linear-gradient(90deg, #3b82f6, #1d4ed8)';
                 confirmBtn.style.color = 'white';
                 confirmBtn.style.border = 'none';
-                confirmBtn.style.borderRadius = '12px';
+                confirmBtn.style.borderRadius = '10px';
                 confirmBtn.style.fontWeight = '900';
-                confirmBtn.style.fontSize = '1rem';
+                confirmBtn.style.fontSize = '0.9rem';
                 confirmBtn.style.cursor = 'pointer';
                 confirmBtn.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
                 
@@ -2547,15 +2558,14 @@
                         if(checkWinningPattern()) {
                             document.getElementById('btnBingo').disabled = false;
                             showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-                        } else {
-                            showNotification(`✅ Marked ${val}`, 'success', 1000);
                         }
+                        // REMOVED: Notification for marking numbers
                     } else {
                         cell.classList.remove('marked');
                         state.markedNumbers.delete(isFree ? 'FREE' : val);
                     }
                 } else {
-                    showNotification(`❌ ${val} hasn't been called yet!`, 'error', 2000);
+                    // REMOVED: Notification for unselected numbers
                 }
                 
                 state.lastActivityTime = Date.now();
@@ -2946,7 +2956,7 @@
                 prizeBreakdown.style.display = 'block';
                 
                 document.getElementById('winPrize').innerHTML = `
-                    🏆 <strong style="font-size: 2.2rem;">${d.prize.toFixed(2)} ETB</strong>
+                    🏆 <strong style="font-size: 1.8rem;">${d.prize.toFixed(2)} ETB</strong>
                 `;
                 
                 winOverlay.classList.add('active');
