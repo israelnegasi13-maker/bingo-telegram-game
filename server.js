@@ -2053,7 +2053,7 @@ io.on('connection', (socket) => {
           players: [],
           takenBoxes: [],
           status: 'waiting',
-          lastBoxUpdate: new Date()
+          lastBoxUpdate = new Date();
         });
         await roomData.save();
       }
@@ -3116,7 +3116,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Telegram Mini App entry point
+// Telegram Mini App entry point - UPDATED WITH ANIMATED PROFILES AND COMPACT DESIGN
 app.get('/telegram', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -3133,9 +3133,13 @@ app.get('/telegram', (req, res) => {
                 --secondary-color: #8b5cf6;
                 --accent-color: #fbbf24;
                 --dark-bg: #0f172a;
-                --card-bg: #1e293b;
+                --card-bg: rgba(30, 41, 59, 0.85);
                 --text-primary: #f8fafc;
                 --text-secondary: #94a3b8;
+                --success-color: #10b981;
+                --danger-color: #ef4444;
+                --glass-border: rgba(255, 255, 255, 0.1);
+                --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             }
             
             * {
@@ -3153,6 +3157,10 @@ app.get('/telegram', (req, res) => {
                 overflow: hidden;
                 padding: 0;
                 margin: 0;
+                position: relative;
+                background-image: 
+                    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0, transparent 50%),
+                    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0, transparent 50%);
             }
             
             .container {
@@ -3160,70 +3168,175 @@ app.get('/telegram', (req, res) => {
                 height: 100%;
                 display: flex;
                 flex-direction: column;
-                align-items: center;
-                justify-content: space-between;
-                padding: 20px;
+                padding: 16px;
                 max-width: 500px;
                 margin: 0 auto;
             }
             
-            .header {
+            /* Animated Background Elements */
+            .floating-balls {
+                position: fixed;
                 width: 100%;
+                height: 100%;
+                z-index: -1;
+                overflow: hidden;
+            }
+            
+            .floating-ball {
+                position: absolute;
+                border-radius: 50%;
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                opacity: 0.1;
+                animation: float 15s infinite ease-in-out;
+            }
+            
+            .floating-ball:nth-child(1) {
+                width: 100px;
+                height: 100px;
+                top: 10%;
+                left: 10%;
+                animation-delay: 0s;
+            }
+            
+            .floating-ball:nth-child(2) {
+                width: 150px;
+                height: 150px;
+                top: 60%;
+                right: 10%;
+                animation-delay: 5s;
+            }
+            
+            .floating-ball:nth-child(3) {
+                width: 80px;
+                height: 80px;
+                bottom: 20%;
+                left: 20%;
+                animation-delay: 10s;
+            }
+            
+            @keyframes float {
+                0%, 100% { transform: translateY(0) rotate(0deg); }
+                50% { transform: translateY(-20px) rotate(180deg); }
+            }
+            
+            /* Header Styles */
+            .app-header {
                 text-align: center;
-                padding: 15px 0;
+                padding: 16px 0 24px 0;
                 position: relative;
             }
             
-            .header::after {
-                content: '';
-                position: absolute;
-                bottom: 0;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 60px;
-                height: 4px;
-                background: var(--accent-color);
-                border-radius: 2px;
+            .logo-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                margin-bottom: 8px;
             }
             
-            .logo {
+            .animated-logo {
                 font-size: 2.5rem;
-                margin-bottom: 10px;
-                color: var(--accent-color);
-            }
-            
-            .welcome-text {
-                font-size: 1.8rem;
-                font-weight: 700;
-                margin-bottom: 5px;
-                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
+                animation: logoPulse 2s infinite alternate;
             }
             
-            .subtitle {
-                color: var(--text-secondary);
+            @keyframes logoPulse {
+                0% { transform: scale(1); }
+                100% { transform: scale(1.1); }
+            }
+            
+            .app-title {
+                font-size: 2.2rem;
+                font-weight: 900;
+                background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin-bottom: 4px;
+            }
+            
+            .app-subtitle {
                 font-size: 0.9rem;
-                margin-bottom: 20px;
+                color: var(--text-secondary);
+                font-weight: 500;
+            }
+            
+            /* User Profile */
+            .user-profile {
+                position: absolute;
+                top: 16px;
+                right: 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                z-index: 10;
+            }
+            
+            .profile-avatar {
+                width: 36px;
+                height: 36px;
+                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                color: white;
+                font-size: 0.9rem;
+                border: 2px solid rgba(255, 255, 255, 0.2);
+                animation: avatarGlow 3s infinite;
+            }
+            
+            @keyframes avatarGlow {
+                0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+                50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+            }
+            
+            .balance-display {
+                background: rgba(251, 191, 36, 0.15);
+                padding: 6px 12px;
+                border-radius: 20px;
+                border: 1.5px solid rgba(251, 191, 36, 0.3);
+                font-weight: 700;
+                color: var(--accent-color);
+                font-size: 0.8rem;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                backdrop-filter: blur(10px);
+            }
+            
+            /* Games Container - Compact Grid */
+            .games-container {
+                flex: 1;
+                overflow-y: auto;
+                padding: 8px 0;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            
+            .games-container::-webkit-scrollbar {
+                display: none;
             }
             
             .games-grid {
-                width: 100%;
                 display: grid;
                 grid-template-columns: 1fr;
-                gap: 20px;
-                flex: 1;
-                overflow-y: auto;
-                padding: 10px 0;
+                gap: 12px;
+                max-width: 400px;
+                margin: 0 auto;
             }
             
+            /* Game Card - Compact Version */
             .game-card {
                 background: var(--card-bg);
-                border-radius: 20px;
-                padding: 25px;
-                text-align: center;
+                backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 16px;
+                border: 1px solid var(--glass-border);
+                box-shadow: var(--glass-shadow);
                 transition: all 0.3s ease;
-                border: 2px solid transparent;
                 position: relative;
                 overflow: hidden;
                 cursor: pointer;
@@ -3235,280 +3348,531 @@ app.get('/telegram', (req, res) => {
                 top: 0;
                 left: 0;
                 right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                height: 3px;
+                background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
             }
             
             .game-card:hover {
-                transform: translateY(-5px);
+                transform: translateY(-4px);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
                 border-color: rgba(59, 130, 246, 0.3);
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             }
             
             .game-card:active {
                 transform: translateY(-2px);
             }
             
+            .game-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            
             .game-icon {
-                font-size: 3.5rem;
-                margin-bottom: 15px;
-                display: block;
+                width: 48px;
+                height: 48px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.8rem;
+                position: relative;
+                animation: iconFloat 3s infinite ease-in-out;
             }
             
             .bingo-icon {
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                animation: pulse 2s infinite;
+                background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+                color: white;
             }
             
             .keno-icon {
-                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
+                background: linear-gradient(135deg, var(--secondary-color), #7c3aed);
+                color: white;
+            }
+            
+            @keyframes iconFloat {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-5px); }
             }
             
             .game-title {
-                font-size: 1.5rem;
+                flex: 1;
+            }
+            
+            .game-name {
+                font-size: 1.2rem;
+                font-weight: 900;
+                color: white;
+                margin-bottom: 2px;
+            }
+            
+            .game-status {
+                font-size: 0.7rem;
                 font-weight: 700;
-                margin-bottom: 8px;
+                padding: 2px 8px;
+                border-radius: 10px;
+                display: inline-block;
             }
             
-            .game-description {
+            .status-live {
+                background: rgba(16, 185, 129, 0.2);
+                color: var(--success-color);
+                border: 1px solid rgba(16, 185, 129, 0.4);
+                animation: statusPulse 2s infinite;
+            }
+            
+            .status-soon {
+                background: rgba(100, 116, 139, 0.2);
                 color: var(--text-secondary);
-                font-size: 0.85rem;
-                line-height: 1.4;
-                margin-bottom: 15px;
-                min-height: 40px;
+                border: 1px solid rgba(100, 116, 139, 0.4);
             }
             
-            .features {
+            @keyframes statusPulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.7; }
+            }
+            
+            .game-features {
                 display: flex;
-                justify-content: center;
-                gap: 8px;
-                margin-bottom: 20px;
                 flex-wrap: wrap;
+                gap: 6px;
+                margin: 12px 0;
             }
             
             .feature-tag {
-                background: rgba(59, 130, 246, 0.1);
-                color: #60a5fa;
-                padding: 4px 10px;
-                border-radius: 15px;
-                font-size: 0.7rem;
+                font-size: 0.65rem;
+                padding: 3px 8px;
+                border-radius: 10px;
                 font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 3px;
+            }
+            
+            .feature-tag.highlight {
+                background: rgba(251, 191, 36, 0.15);
+                color: var(--accent-color);
+                border: 1px solid rgba(251, 191, 36, 0.3);
+            }
+            
+            .feature-tag.normal {
+                background: rgba(59, 130, 246, 0.1);
+                color: var(--primary-color);
                 border: 1px solid rgba(59, 130, 246, 0.2);
             }
             
+            .game-stats {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+            }
+            
+            .stat-item {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            
+            .stat-icon {
+                font-size: 0.8rem;
+            }
+            
+            .stat-value {
+                color: white;
+                font-weight: 700;
+            }
+            
             .play-btn {
+                width: 100%;
+                padding: 10px;
                 background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
                 color: white;
                 border: none;
-                padding: 14px 20px;
                 border-radius: 12px;
-                font-size: 1rem;
-                font-weight: 700;
-                width: 100%;
+                font-weight: 900;
+                font-size: 0.9rem;
                 cursor: pointer;
+                margin-top: 12px;
                 transition: all 0.2s;
-                box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
             }
             
             .play-btn:hover {
                 transform: scale(1.02);
-                box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+                box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
             }
             
             .play-btn:active {
                 transform: scale(0.98);
             }
             
-            .coming-soon {
+            .play-btn.coming-soon {
                 background: linear-gradient(90deg, #64748b, #475569);
-                opacity: 0.7;
                 cursor: not-allowed;
+                opacity: 0.7;
             }
             
-            .coming-soon:hover {
+            .play-btn.coming-soon:hover {
                 transform: none;
-                box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+                box-shadow: none;
             }
             
-            .footer {
-                width: 100%;
+            /* Footer */
+            .app-footer {
+                padding: 16px 0;
                 text-align: center;
-                padding: 15px 0;
-                color: var(--text-secondary);
-                font-size: 0.8rem;
                 border-top: 1px solid rgba(255, 255, 255, 0.05);
+                margin-top: 8px;
             }
             
-            .balance-pill {
-                background: rgba(251, 191, 36, 0.1);
-                padding: 8px 16px;
-                border-radius: 50px;
-                border: 1px solid rgba(251, 191, 36, 0.3);
-                font-weight: 700;
+            .footer-info {
+                font-size: 0.7rem;
+                color: var(--text-secondary);
+                line-height: 1.4;
+                margin-bottom: 8px;
+            }
+            
+            .footer-highlight {
                 color: var(--accent-color);
+                font-weight: 700;
+            }
+            
+            .wallet-pill {
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                margin-top: 10px;
+                background: rgba(59, 130, 246, 0.15);
+                padding: 6px 12px;
+                border-radius: 20px;
+                border: 1px solid rgba(59, 130, 246, 0.3);
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: var(--primary-color);
+                margin-top: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
             }
             
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
+            .wallet-pill:hover {
+                background: rgba(59, 130, 246, 0.2);
+                transform: translateY(-2px);
             }
             
+            /* Animation for new feature */
             @keyframes slideIn {
                 from { opacity: 0; transform: translateY(20px); }
                 to { opacity: 1; transform: translateY(0); }
             }
             
+            .game-card {
+                animation: slideIn 0.5s ease-out;
+            }
+            
+            .game-card:nth-child(1) {
+                animation-delay: 0.1s;
+            }
+            
+            .game-card:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            
+            /* Mobile Responsive */
             @media (max-width: 480px) {
                 .container {
-                    padding: 15px;
+                    padding: 12px;
+                }
+                
+                .app-title {
+                    font-size: 1.8rem;
+                }
+                
+                .app-subtitle {
+                    font-size: 0.8rem;
                 }
                 
                 .game-card {
-                    padding: 20px;
+                    padding: 14px;
                 }
                 
                 .game-icon {
-                    font-size: 3rem;
+                    width: 44px;
+                    height: 44px;
+                    font-size: 1.6rem;
                 }
                 
-                .welcome-text {
-                    font-size: 1.5rem;
+                .game-name {
+                    font-size: 1.1rem;
+                }
+                
+                .feature-tag {
+                    font-size: 0.6rem;
+                    padding: 2px 6px;
+                }
+                
+                .play-btn {
+                    padding: 8px;
+                    font-size: 0.85rem;
+                }
+                
+                .user-profile {
+                    top: 12px;
+                    right: 12px;
+                }
+                
+                .profile-avatar {
+                    width: 32px;
+                    height: 32px;
+                    font-size: 0.8rem;
+                }
+                
+                .balance-display {
+                    padding: 5px 10px;
+                    font-size: 0.75rem;
                 }
             }
             
             @media (max-width: 380px) {
+                .app-title {
+                    font-size: 1.6rem;
+                }
+                
                 .games-grid {
-                    gap: 15px;
+                    gap: 10px;
                 }
                 
                 .game-card {
-                    padding: 15px;
+                    padding: 12px;
+                }
+                
+                .game-header {
+                    gap: 10px;
+                }
+                
+                .game-icon {
+                    width: 40px;
+                    height: 40px;
+                    font-size: 1.4rem;
+                }
+                
+                .game-features {
+                    gap: 4px;
                 }
             }
             
-            .user-info {
+            /* Active players indicator */
+            .active-players {
                 position: absolute;
-                top: 15px;
-                right: 0;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 0.8rem;
-                color: var(--text-secondary);
+                top: -6px;
+                right: -6px;
+                background: var(--danger-color);
+                color: white;
+                font-size: 0.6rem;
+                font-weight: 900;
+                padding: 2px 6px;
+                border-radius: 10px;
+                border: 2px solid var(--dark-bg);
+                animation: playerPulse 2s infinite;
             }
             
-            .user-avatar {
-                width: 32px;
-                height: 32px;
-                background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: 700;
-                color: white;
+            @keyframes playerPulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.1); }
+            }
+            
+            /* Loading animation */
+            .loading-shimmer {
+                background: linear-gradient(90deg, 
+                    rgba(255,255,255,0.05) 25%, 
+                    rgba(255,255,255,0.1) 50%, 
+                    rgba(255,255,255,0.05) 75%);
+                background-size: 200% 100%;
+                animation: shimmer 1.5s infinite;
+                border-radius: 8px;
+            }
+            
+            @keyframes shimmer {
+                0% { background-position: -200% 0; }
+                100% { background-position: 200% 0; }
             }
         </style>
     </head>
     <body>
+        <!-- Animated Background -->
+        <div class="floating-balls">
+            <div class="floating-ball"></div>
+            <div class="floating-ball"></div>
+            <div class="floating-ball"></div>
+        </div>
+        
         <div class="container">
-            <div class="header">
-                <div class="logo">🎮</div>
-                <h1 class="welcome-text">ETHIO GAMES</h1>
-                <p class="subtitle">Premium gaming experience on Telegram</p>
+            <!-- Header -->
+            <div class="app-header">
+                <div class="logo-container">
+                    <div class="animated-logo">🎮</div>
+                </div>
+                <h1 class="app-title">ETHIO GAMES</h1>
+                <p class="app-subtitle">Premium Gaming Experience</p>
                 
-                <div id="userInfo" class="user-info" style="display: none;">
-                    <div class="user-avatar" id="userAvatar">U</div>
-                    <span id="userName">User</span>
+                <!-- User Profile -->
+                <div id="userProfile" class="user-profile" style="display: none;">
+                    <div class="profile-avatar" id="userAvatar">U</div>
+                    <div class="balance-display">
+                        <span>💰</span>
+                        <span id="userBalance">0.00 ETB</span>
+                    </div>
                 </div>
             </div>
             
-            <div class="games-grid">
-                <div class="game-card" onclick="launchGame('bingo')">
-                    <div class="game-icon bingo-icon">🎱</div>
-                    <h2 class="game-title">BINGO ELITE</h2>
-                    <p class="game-description">
-                        Real-time multiplayer bingo with 10-100 ETB stakes. Win big with Four Corners bonus!
-                    </p>
-                    
-                    <div class="features">
-                        <span class="feature-tag">🎯 50 ETB Bonus</span>
-                        <span class="feature-tag">👥 100 Players</span>
-                        <span class="feature-tag">💰 Real Money</span>
-                        <span class="feature-tag">⚡ Real-time</span>
-                        <span class="feature-tag">🔒 Room Lock</span>
-                        <span class="feature-tag">⏰ 7-min Auto-clear</span>
-                        <span class="feature-tag">💳 Wallet System</span>
-                        <span class="feature-tag">🔒 Double Prize Fix</span>
+            <!-- Games Grid -->
+            <div class="games-container">
+                <div class="games-grid">
+                    <!-- Bingo Elite Card -->
+                    <div class="game-card" onclick="launchGame('bingo')">
+                        <div class="game-header">
+                            <div class="game-icon bingo-icon">
+                                🎱
+                                <div class="active-players" id="bingoPlayers">0</div>
+                            </div>
+                            <div class="game-title">
+                                <h2 class="game-name">BINGO ELITE</h2>
+                                <span class="game-status status-live">LIVE</span>
+                            </div>
+                        </div>
+                        
+                        <div class="game-features">
+                            <div class="feature-tag highlight">
+                                ⭐ 50 ETB Bonus
+                            </div>
+                            <div class="feature-tag normal">
+                                🎯 4 Corners
+                            </div>
+                            <div class="feature-tag normal">
+                                💰 Real Money
+                            </div>
+                            <div class="feature-tag normal">
+                                ⚡ Real-time
+                            </div>
+                            <div class="feature-tag normal">
+                                🔒 Room Lock
+                            </div>
+                            <div class="feature-tag normal">
+                                💳 Wallet
+                            </div>
+                        </div>
+                        
+                        <div class="game-stats">
+                            <div class="stat-item">
+                                <span class="stat-icon">👥</span>
+                                <span class="stat-value" id="bingoOnline">0</span> online
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">🏆</span>
+                                <span class="stat-value" id="bingoPrize">0</span> ETB prize
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">🎮</span>
+                                <span class="stat-value">1-100</span> players
+                            </div>
+                        </div>
+                        
+                        <button class="play-btn" id="bingoBtn">
+                            🎮 PLAY NOW
+                        </button>
                     </div>
                     
-                    <button class="play-btn" id="bingoBtn">
-                        🎮 PLAY BINGO
-                    </button>
-                </div>
-                
-                <div class="game-card" onclick="launchGame('keno')">
-                    <div class="game-icon keno-icon">🎲</div>
-                    <h2 class="game-title">KENO ULTRA</h2>
-                    <p class="game-description">
-                        Fast-paced number selection game with instant wins. Coming soon!
-                    </p>
-                    
-                    <div class="features">
-                        <span class="feature-tag">🎰 Instant Wins</span>
-                        <span class="feature-tag">⚡ Fast Gameplay</span>
-                        <span class="feature-tag">💰 High Payouts</span>
-                        <span class="feature-tag">🔜 Coming Soon</span>
+                    <!-- Keno Ultra Card -->
+                    <div class="game-card" onclick="launchGame('keno')">
+                        <div class="game-header">
+                            <div class="game-icon keno-icon">
+                                🎲
+                            </div>
+                            <div class="game-title">
+                                <h2 class="game-name">KENO ULTRA</h2>
+                                <span class="game-status status-soon">COMING SOON</span>
+                            </div>
+                        </div>
+                        
+                        <div class="game-features">
+                            <div class="feature-tag highlight">
+                                ⚡ Fast Gameplay
+                            </div>
+                            <div class="feature-tag normal">
+                                🎰 Instant Wins
+                            </div>
+                            <div class="feature-tag normal">
+                                💰 High Payouts
+                            </div>
+                            <div class="feature-tag normal">
+                                🎯 Multiple Bets
+                            </div>
+                            <div class="feature-tag normal">
+                                🔢 1-80 Numbers
+                            </div>
+                            <div class="feature-tag normal">
+                                📊 Live Stats
+                            </div>
+                        </div>
+                        
+                        <div class="game-stats">
+                            <div class="stat-item">
+                                <span class="stat-icon">⏱️</span>
+                                <span class="stat-value">Fast</span> rounds
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">💰</span>
+                                <span class="stat-value">High</span> payouts
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-icon">🎯</span>
+                                <span class="stat-value">1-20</span> numbers
+                            </div>
+                        </div>
+                        
+                        <button class="play-btn coming-soon" id="kenoBtn" disabled>
+                            🎯 COMING SOON
+                        </button>
                     </div>
-                    
-                    <button class="play-btn coming-soon" id="kenoBtn" disabled>
-                        🎯 COMING SOON
-                    </button>
                 </div>
             </div>
             
-            <div class="footer">
-                <div class="balance-pill" id="balancePill" style="display: none;">
-                    <span>💰 Balance: </span>
-                    <span id="balanceAmount">0.00</span>
-                    <span> ETB</span>
-                </div>
-                <p style="margin-top: 10px;">Powered by Telegram • Play responsibly</p>
-                <p style="font-size: 0.7rem; color: #64748b; margin-top: 5px;">
-                    💳 Deposit to Telebirr: ${CONFIG.TELEBIRR_NUMBER}<br>
-                    Need funds? Contact admin @ethio_games1_bot
+            <!-- Footer -->
+            <div class="app-footer">
+                <p class="footer-info">
+                    Powered by <span class="footer-highlight">Telegram</span> • Play responsibly
                 </p>
+                <div class="wallet-pill" onclick="showWalletInfo()">
+                    <span>💳</span>
+                    <span>Deposit: ${CONFIG.TELEBIRR_NUMBER}</span>
+                </div>
             </div>
         </div>
         
         <script>
             const tg = window.Telegram.WebApp;
             
+            // Initialize Telegram Web App
             tg.ready();
             tg.expand();
-            
             tg.setHeaderColor('#3b82f6');
             tg.setBackgroundColor('#0f172a');
             
             const user = tg.initDataUnsafe?.user;
-            let userBalance = 0.00;
             
             function getFirstLetter(name) {
                 return name ? name.charAt(0).toUpperCase() : 'U';
             }
             
             if (user) {
-                document.getElementById('userInfo').style.display = 'flex';
-                document.getElementById('userName').textContent = user.first_name || 'User';
+                document.getElementById('userProfile').style.display = 'flex';
                 document.getElementById('userAvatar').textContent = getFirstLetter(user.first_name);
                 
                 localStorage.setItem('telegramUser', JSON.stringify({
@@ -3535,878 +3899,36 @@ app.get('/telegram', (req, res) => {
                 }
             }
             
-            document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
-            document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
-            
-            if (tg && tg.MainButton) {
-                tg.MainButton.setText('🎮 PLAY BINGO');
-                tg.MainButton.show();
-                tg.MainButton.onClick(function() {
-                    launchGame('bingo');
+            function showWalletInfo() {
+                tg.showPopup({
+                    title: '💰 Wallet Information',
+                    message: 'Deposit to Telebirr: ${CONFIG.TELEBIRR_NUMBER}\\nMin withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\\n\\nSend money to the number above and submit receipt in game wallet.',
+                    buttons: [{ type: 'ok' }]
                 });
             }
             
+            // Set up Telegram Main Button
+            if (tg.MainButton) {
+                tg.MainButton.setText('🎮 PLAY BINGO');
+                tg.MainButton.show();
+                tg.MainButton.onClick(() => launchGame('bingo'));
+            }
+            
+            // Update game stats from server (mock data for now)
+            setTimeout(() => {
+                document.getElementById('bingoOnline').textContent = '${getConnectedUsers().length}';
+                document.getElementById('bingoPlayers').textContent = '${connectedSockets.size}';
+                document.getElementById('bingoPrize').textContent = '${Object.values(CONFIG.ROOM_STAKES).reduce((a, b) => a + b, 0) * 10}';
+            }, 1000);
+            
+            // Add click animations
             document.querySelectorAll('.game-card').forEach((card, index) => {
-                card.style.animation = \`slideIn 0.5s ease \${index * 0.1}s forwards\`;
-                card.style.opacity = '0';
+                card.style.animationDelay = (index * 0.1) + 's';
             });
         </script>
     </body>
     </html>
   `);
-});
-
-app.get('/socket-test', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Socket.IO Connection Test</title>
-      <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        .status { padding: 20px; margin: 10px 0; border-radius: 10px; font-weight: bold; }
-        .connected { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
-        .disconnected { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
-        .log { background: #1e293b; color: #cbd5e1; padding: 15px; border-radius: 10px; font-family: monospace; height: 300px; overflow-y: auto; margin-top: 20px; }
-        .log-entry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #334155; }
-        .success { color: #10b981; }
-        .error { color: #ef4444; }
-        .info { color: #3b82f6; }
-      </style>
-    </head>
-    <body>
-      <h1>🔌 Socket.IO Connection Test</h1>
-      <div id="status" class="status disconnected">Connecting to server...</div>
-      
-      <h3>Test Actions:</h3>
-      <div>
-        <button onclick="testConnection()" style="padding: 10px 20px; margin: 5px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Connection
-        </button>
-        <button onclick="testInit()" style="padding: 10px 20px; margin: 5px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test User Init
-        </button>
-        <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Test Room Status
-        </button>
-      </div>
-      
-      <h3>Connection Log:</h3>
-      <div id="log" class="log"></div>
-      
-      <script>
-        const log = document.getElementById('log');
-        const status = document.getElementById('status');
-        
-        function addLog(message, type = 'info') {
-          const entry = document.createElement('div');
-          entry.className = 'log-entry ' + type;
-          entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
-          log.appendChild(entry);
-          log.scrollTop = log.scrollHeight;
-        }
-        
-        const socket = io({
-          reconnection: true,
-          reconnectionAttempts: Infinity,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          timeout: 20000,
-          transports: ['websocket', 'polling'],
-          forceNew: true,
-          autoConnect: true
-        });
-        
-        socket.on('connect', () => {
-          status.className = 'status connected';
-          status.textContent = '✅ Connected - Socket ID: ' + socket.id;
-          addLog('Connected to server with ID: ' + socket.id, 'success');
-        });
-        
-        socket.on('disconnect', (reason) => {
-          status.className = 'status disconnected';
-          status.textContent = '❌ Disconnected: ' + reason;
-          addLog('Disconnected: ' + reason, 'error');
-        });
-        
-        socket.on('connect_error', (error) => {
-          addLog('Connection error: ' + error.message, 'error');
-        });
-        
-        socket.on('connectionTest', (data) => {
-          addLog('Server connection test: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('connected', (data) => {
-          addLog('Server connected message: ' + JSON.stringify(data), 'success');
-        });
-        
-        socket.on('balanceUpdate', (data) => {
-          addLog('Balance update: ' + data, 'info');
-        });
-        
-        socket.on('roomStatus', (data) => {
-          addLog('Room status received: ' + Object.keys(data).length + ' rooms', 'info');
-        });
-        
-        socket.on('boxesTakenUpdate', (data) => {
-          addLog('Boxes update: ' + data.takenBoxes.length + ' boxes taken in room ' + data.room, 'info');
-        });
-        
-        socket.on('boxesCleared', (data) => {
-          addLog('Boxes cleared for room ' + data.room + ': ' + data.reason, 'info');
-        });
-        
-        function testConnection() {
-          addLog('Testing connection...', 'info');
-          socket.emit('ping');
-        }
-        
-        function testInit() {
-          addLog('Testing user initialization...', 'info');
-          socket.emit('init', {
-            userId: 'test-' + Date.now(),
-            userName: 'Test Player'
-          });
-        }
-        
-        function testRoomStatus() {
-          addLog('Requesting room status...', 'info');
-          socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
-            addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
-          });
-        }
-        
-        setTimeout(() => {
-          testConnection();
-        }, 1000);
-      </script>
-    </body>
-    </html>
-  `);
-});
-
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'admin.html'));
-});
-
-app.get('/game', (req, res) => {
-  res.sendFile(path.join(__dirname, 'game.html'));
-});
-
-app.get('/health', async (req, res) => {
-  try {
-    const connectedPlayers = getConnectedUsers().length;
-    const activeGames = await Room.countDocuments({ status: 'playing' });
-    const totalUsers = await User.countDocuments();
-    const rooms = await Room.countDocuments();
-    const totalTransactions = await Transaction.countDocuments();
-    const pendingDeposits = await Transaction.countDocuments({ type: 'DEPOSIT_REQUEST', status: 'pending' });
-    const pendingWithdrawals = await Transaction.countDocuments({ type: 'WITHDRAW_REQUEST', status: 'pending' });
-    
-    const startingRooms = await Room.find({ status: 'starting' });
-    const roomDetails = await Promise.all(startingRooms.map(async (room) => {
-      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
-      return {
-        stake: room.stake,
-        onlinePlayers: onlinePlayers.length,
-        totalPlayers: room.players.length,
-        countdownStartTime: room.countdownStartTime,
-        countdownStartedWith: room.countdownStartedWith
-      };
-    }));
-    
-    res.json({
-      status: 'ok',
-      database: 'connected',
-      connectedPlayers: connectedPlayers,
-      connectedSockets: connectedSockets.size,
-      socketToUser: socketToUser.size,
-      processingClaims: processingClaims.size,
-      totalUsers: totalUsers,
-      activeGames: activeGames,
-      startingRooms: roomDetails,
-      totalRooms: rooms,
-      totalTransactions: totalTransactions,
-      pendingDeposits: pendingDeposits,
-      pendingWithdrawals: pendingWithdrawals,
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-      memoryUsage: process.memoryUsage(),
-      nodeVersion: process.version,
-      telegramReady: true,
-      botUsername: '@ethio_games1_bot',
-      serverUrl: 'https://bingo-telegram-game.onrender.com',
-      realTimeBoxUpdates: 'active',
-      boxClearing: 'enabled',
-      walletSystem: 'active',
-      telebirrNumber: CONFIG.TELEBIRR_NUMBER,
-      gameTimer: CONFIG.GAME_TIMER + ' seconds',
-      countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
-      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES + ' minutes',
-      minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
-      roomLockFeature: 'enabled',
-      boxSelectionTimer: 'synced with waiting room',
-      newFeatures: [
-        'wallet_system_with_deposit_and_withdraw',
-        'telebirr_integration',
-        'admin_transaction_approval',
-        'double_prize_bug_fixed_with_claim_lock',
-        'timer_synchronization_between_discovery_and_waiting',
-        'room_lock_when_playing',
-        '7_minute_game_timeout_auto_clear',
-        'timer_on_box_selection_interface'
-      ],
-      fixedIssues: [
-        'double_claim_prevention_implemented',
-        'claim_bingo_properly_checks_numbers',
-        'all_players_return_to_lobby_after_game_ends',
-        'game_starts_with_1_player_after_30_seconds',
-        'connection_tracking_fixed',
-        'game_timer_fixed', 
-        'ball_drawing_working', 
-        'players_properly_removed_on_leave',
-        'countdown_stuck_at_30_seconds_fixed',
-        'balls_pop_every_3_seconds',
-        '30_second_countdown_working',
-        'countdown_continues_when_players_leave',
-        'game_starts_with_any_players_at_countdown_0'
-      ]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to get user balance
-app.get('/api/user/:userId', async (req, res) => {
-  try {
-    const user = await User.findOne({ userId: req.params.userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json({
-      userId: user.userId,
-      userName: user.userName,
-      balance: user.balance,
-      isOnline: user.isOnline,
-      lastSeen: user.lastSeen,
-      telegramId: user.telegramId,
-      phoneNumber: user.phoneNumber || ''
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to add funds (for admin)
-app.post('/api/add-funds', async (req, res) => {
-  try {
-    const { userId, amount, adminPassword } = req.body;
-    
-    if (adminPassword !== CONFIG.ADMIN_PASSWORD) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const user = await User.findOne({ userId: userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    user.balance += parseFloat(amount);
-    await user.save();
-    
-    const transaction = new Transaction({
-      type: 'ADMIN_ADD',
-      userId: userId,
-      userName: user.userName,
-      amount: amount,
-      admin: true,
-      description: `Admin added ${amount} ETB via API`
-    });
-    await transaction.save();
-    
-    res.json({
-      success: true,
-      message: `Added ${amount} ETB to ${user.userName}`,
-      newBalance: user.balance
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Real-time tracking test endpoint
-app.get('/real-time-status', async (req, res) => {
-  try {
-    const connectedPlayers = getConnectedUsers().length;
-    const connectedSocketsCount = connectedSockets.size;
-    const socketToUserSize = socketToUser.size;
-    
-    res.json({
-      connectedPlayers: connectedPlayers,
-      connectedSockets: connectedSocketsCount,
-      socketToUserSize: socketToUserSize,
-      socketToUser: Array.from(socketToUser.entries()),
-      adminSockets: Array.from(adminSockets),
-      processingClaims: Array.from(processingClaims.entries()),
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// ========== TEST CONNECTIONS ENDPOINT ==========
-app.get('/test-connections', (req, res) => {
-  const connections = [];
-  
-  io.sockets.sockets.forEach((socket) => {
-    connections.push({
-      socketId: socket.id,
-      connected: socket.connected,
-      userId: socket.userId || 'none',
-      handshakeQuery: socket.handshake.query,
-      inSocketToUser: socketToUser.has(socket.id)
-    });
-  });
-  
-  res.json({
-    totalSockets: connections.length,
-    connectedSockets: Array.from(connectedSockets).length,
-    socketToUserSize: socketToUser.size,
-    socketToUserEntries: Array.from(socketToUser.entries()),
-    processingClaims: Array.from(processingClaims.entries()),
-    connections: connections,
-    getConnectedUsersResult: getConnectedUsers()
-  });
-});
-
-// ========== DEBUG CONNECTION ENDPOINT ==========
-app.get('/debug-connections', async (req, res) => {
-  try {
-    const connectedUserIds = getConnectedUsers();
-    const socketToUserArray = Array.from(socketToUser.entries());
-    const connectedSocketsArray = Array.from(connectedSockets);
-    
-    res.json({
-      timestamp: new Date().toISOString(),
-      totalConnectedUsers: connectedUserIds.length,
-      connectedUserIds: connectedUserIds,
-      socketToUserCount: socketToUser.size,
-      socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
-      processingClaimsCount: processingClaims.size,
-      processingClaims: Array.from(processingClaims.entries()),
-      connectedSocketsCount: connectedSockets.size,
-      connectedSockets: connectedSocketsArray.map(socketId => {
-        const socket = io.sockets.sockets.get(socketId);
-        return {
-          socketId,
-          connected: socket?.connected || false,
-          userId: socketToUser.get(socketId) || socket?.userId || 'unknown',
-          handshakeQuery: socket?.handshake?.query || {}
-        };
-      }),
-      adminSocketsCount: adminSockets.size,
-      adminSockets: Array.from(adminSockets)
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== DEBUG USERS ENDPOINT ==========
-app.get('/debug-users', async (req, res) => {
-  try {
-    const connectedUserIds = getConnectedUsers();
-    const allUsers = await User.find({}).limit(100);
-    
-    const userStatus = allUsers.map(user => {
-      const isOnline = connectedUserIds.includes(user.userId);
-      const lastSeenTime = new Date(user.lastSeen);
-      const now = new Date();
-      const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
-      
-      return {
-        userId: user.userId,
-        userName: user.userName,
-        isOnline: isOnline,
-        lastSeen: user.lastSeen,
-        secondsSinceLastSeen: Math.floor(secondsSinceLastSeen),
-        currentRoom: user.currentRoom,
-        balance: user.balance,
-        phoneNumber: user.phoneNumber || '',
-        socketId: Array.from(socketToUser.entries())
-          .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
-      };
-    });
-    
-    res.json({
-      timestamp: new Date().toISOString(),
-      totalConnectedUsers: connectedUserIds.length,
-      connectedUserIds: connectedUserIds,
-      socketToUserSize: socketToUser.size,
-      processingClaimsCount: processingClaims.size,
-      connectedSockets: connectedSockets.size,
-      allUsers: userStatus
-    });
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-// ========== DEBUG ROOM ENDPOINT ==========
-app.get('/debug-room/:stake', async (req, res) => {
-  try {
-    const stake = parseInt(req.params.stake);
-    const room = await Room.findOne({ stake: stake });
-    const onlinePlayers = await getOnlinePlayersInRoom(stake);
-    
-    res.json({
-      stake: stake,
-      roomExists: !!room,
-      roomStatus: room?.status || 'not_found',
-      playersInRoom: room?.players?.length || 0,
-      onlinePlayers: onlinePlayers.length,
-      takenBoxes: room?.takenBoxes?.length || 0,
-      countdownActive: roomTimers.has(`countdown_${stake}`),
-      gameTimerActive: roomTimers.has(stake),
-      processingClaim: processingClaims.has(stake),
-      roomData: room,
-      countdownStartedWith: room?.countdownStartedWith || 0,
-      countdownStartTime: room?.countdownStartTime,
-      startTime: room?.startTime,
-      gameDurationMinutes: room?.startTime ? Math.floor((Date.now() - room.startTime) / 1000 / 60) : 0,
-      locked: room?.status === 'playing'
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== DEBUG FORCE START ENDPOINT ==========
-app.get('/force-start/:stake', async (req, res) => {
-  try {
-    const stake = parseInt(req.params.stake);
-    const room = await Room.findOne({ stake: stake });
-    
-    if (room) {
-      // Force start game
-      room.status = 'playing';
-      room.startTime = new Date();
-      await room.save();
-      
-      // Start game timer
-      await startGameTimer(room);
-      
-      // Notify all players and subscribed sockets
-      const socketsToSend = new Set();
-      
-      // Add sockets of players in the room
-      room.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            if (io.sockets.sockets.get(socketId)?.connected) {
-              socketsToSend.add(socketId);
-            }
-          }
-        }
-      });
-      
-      // Add subscribed sockets
-      const subscribedSockets = roomSubscriptions.get(stake) || new Set();
-      subscribedSockets.forEach(socketId => {
-        if (io.sockets.sockets.get(socketId)?.connected) {
-          socketsToSend.add(socketId);
-        }
-      });
-      
-      // Send game started event
-      socketsToSend.forEach(socketId => {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
-          socket.emit('gameStarted', { 
-            room: stake,
-            players: room.players.length
-          });
-        }
-      });
-      
-      res.json({ 
-        success: true, 
-        message: `Forced game start for ${stake} ETB room`,
-        players: room.players.length
-      });
-    } else {
-      res.json({ success: false, message: 'Room not found' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== DEBUG CALCULATIONS ENDPOINT ==========
-app.get('/debug-calculations/:stake/:players', (req, res) => {
-  try {
-    const stake = parseInt(req.params.stake);
-    const players = parseInt(req.params.players);
-    
-    const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[stake] || 0;
-    const contributionPerPlayer = stake - commissionPerPlayer;
-    const totalContributions = contributionPerPlayer * players;
-    const houseFee = commissionPerPlayer * players;
-    const totalCollected = stake * players;
-    const potentialPrizeWithBonus = totalContributions + CONFIG.FOUR_CORNERS_BONUS;
-    
-    res.json({
-      stake: stake,
-      players: players,
-      commissionPerPlayer: commissionPerPlayer,
-      contributionPerPlayer: contributionPerPlayer,
-      totalContributions: totalContributions,
-      houseFee: houseFee,
-      totalCollected: totalCollected,
-      fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS,
-      potentialPrize: totalContributions,
-      potentialPrizeWithBonus: potentialPrizeWithBonus,
-      breakdown: {
-        "Each player pays": stake + " ETB",
-        "House commission per player": commissionPerPlayer + " ETB",
-        "Contribution to prize pool per player": contributionPerPlayer + " ETB",
-        "Total prize pool (base)": totalContributions + " ETB",
-        "Four corners bonus": CONFIG.FOUR_CORNERS_BONUS + " ETB",
-        "Maximum possible win (four corners)": potentialPrizeWithBonus + " ETB",
-        "House earnings": houseFee + " ETB",
-        "Total collected from all players": totalCollected + " ETB"
-      },
-      example_scenarios: [
-        {
-          scenario: "5 players, no four corners",
-          prize: totalContributions,
-          per_player_contribution: contributionPerPlayer,
-          winner_gets: totalContributions + " ETB",
-          house_gets: houseFee + " ETB"
-        },
-        {
-          scenario: "5 players, with four corners",
-          prize: totalContributions,
-          bonus: CONFIG.FOUR_CORNERS_BONUS,
-          total: potentialPrizeWithBonus,
-          winner_gets: potentialPrizeWithBonus + " ETB",
-          house_gets: houseFee + " ETB (plus pays bonus)"
-        },
-        {
-          scenario: "10 players, no four corners",
-          prize: contributionPerPlayer * 10,
-          winner_gets: (contributionPerPlayer * 10) + " ETB",
-          house_gets: (commissionPerPlayer * 10) + " ETB"
-        }
-      ]
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
-
-// Simple Telegram webhook
-app.post('/telegram-webhook', express.json(), async (req, res) => {
-  try {
-    const { message } = req.body;
-    
-    if (message) {
-      const chatId = message.chat.id;
-      const text = message.text || '';
-      const userId = message.from.id.toString();
-      const userName = message.from.first_name || 'Player';
-      const username = message.from.username || '';
-      
-      if (text === '/start' || text === '/play') {
-        let user = await User.findOne({ telegramId: userId });
-        
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0.00,
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
-        }
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Welcome to Bingo Elite, ${userName}!*\n\n` +
-                  `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                  `🎯 *New Features & Fixes:*\n` +
-                  `• 💳 **WALLET SYSTEM ADDED** - Deposit/Withdraw\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
-                  `• ⏱️ Timer sync between discovery and waiting rooms\n` +
-                  `• 🔒 Room lock when game is playing\n` +
-                  `• ⏰ Auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
-                  `• ⏱️ Timer shows on box selection screen\n` +
-                  `• 10/20/50/100 ETB rooms\n` +
-                  `• Four Corners Bonus: 50 ETB\n` +
-                  `• Real-time multiplayer\n` +
-                  `• Real-time box tracking\n` +
-                  `• Telegram login\n` +
-                  `• Game starts automatically when 1 player joins\n` +
-                  `• Timer continues even if players leave\n` +
-                  `• Random BINGO card numbers\n` +
-                  `• ✅✅✅ Fixed: Double prize bug eliminated\n` +
-                  `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
-                  `• ✅ Fixed: All players return to lobby after game ends\n` +
-                  `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
-                  `• ✅ Fixed: Game starts properly now!\n\n` +
-                  `💳 *Deposit Instructions:*\n` +
-                  `1. Send money to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
-                  `2. Enter receipt number in game wallet\n` +
-                  `3. Admin will approve within 24 hours\n\n` +
-                  `_Need help? Contact admin_`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎮 Play Bingo Now',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `💳 *Deposit to:* ${CONFIG.TELEBIRR_NUMBER}\n` +
-                  `🎮 Play: @ethio_games1_bot\n` +
-                  `👑 Admin: Contact for funds\n` +
-                  `🆔 Your ID: \`${userId}\``,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/wallet') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💳 *Bingo Elite Wallet*\n\n` +
-                  `*How to Deposit:*\n` +
-                  `1. Send money to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
-                  `2. Open game and go to Wallet (💰 button)\n` +
-                  `3. Enter receipt number and amount\n` +
-                  `4. Admin will approve within 24 hours\n\n` +
-                  `*How to Withdraw:*\n` +
-                  `1. Minimum withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\n` +
-                  `2. Open game Wallet\n` +
-                  `3. Select amount and enter phone number\n` +
-                  `4. Admin will send money within 24 hours\n\n` +
-                  `🎮 *Play Now:* @ethio_games1_bot`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎮 Open Game',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/help') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *Bingo Elite Help*\n\n` +
-                  `*New Features & Fixes:*\n` +
-                  `• 💳 **WALLET SYSTEM** - Deposit/Withdraw funds\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
-                  `• ⏱️ Timer sync between discovery and waiting rooms\n` +
-                  `• 🔒 Rooms lock when game is playing\n` +
-                  `• ⏰ Games auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
-                  `• ⏱️ Timer shows on box selection screen\n\n` +
-                  `*Commands:*\n` +
-                  `/start - Start the bot\n` +
-                  `/play - Play game\n` +
-                  `/balance - Check balance\n` +
-                  `/wallet - Wallet instructions\n` +
-                  `/help - This message\n\n` +
-                  `*How to Play:*\n` +
-                  `1. Click "Play Now"\n` +
-                  `2. Select room (10-100 ETB)\n` +
-                  `3. Choose ticket (1-100) - See taken boxes in real-time!\n` +
-                  `4. ⏱️ Timer shows countdown on box selection screen\n` +
-                  `5. Game starts after 30 seconds with 1 player\n` +
-                  `6. Timer continues even if players leave\n` +
-                  `7. 🔒 Room locks when game starts\n` +
-                  `8. Mark numbers as called\n` +
-                  `9. Claim BINGO! - 🔒 Claim lock prevents double prizes\n` +
-                  `10. ⏰ Game auto-ends after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes if no winner\n` +
-                  `11. ALL players return to lobby automatically\n\n` +
-                  `*Four Corners Bonus:* 50 ETB!\n` +
-                  `*Real-time Box Tracking:* See which boxes are taken instantly!\n` +
-                  `*Auto Start:* Game starts when 1 online player joins\n` +
-                  `*Timer Doesn't Reset:* Game continues even if players leave\n` +
-                  `*Random BINGO Cards:* Each card has unique random numbers\n` +
-                  `*🔒 DOUBLE PRIZE FIXED:* Claim lock prevents multiple payouts\n` +
-                  `*✅✅✅ Fixed:* Claim Bingo now properly checks numbers\n` +
-                  `*✅ Fixed:* All players return to lobby after game ends\n` +
-                  `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
-                  `💳 *Wallet:*\n` +
-                  `Deposit to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
-                  `Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\n\n` +
-                  `_Need help? Contact admin_`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-    }
-    
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Telegram webhook error:', error);
-    res.sendStatus(200);
-  }
-});
-
-// Setup endpoint for Telegram bot
-app.get('/setup-telegram', async (req, res) => {
-  try {
-    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
-        drop_pending_updates: true
-      })
-    });
-    
-    const webhookResult = await webhookResponse.json();
-    
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        menu_button: {
-          type: 'web_app',
-          text: '🎮 Play Bingo',
-          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-        }
-      })
-    });
-    
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Telegram Bot Setup Complete</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
-          .container { max-width: 600px; margin: 0 auto; }
-          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
-          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
-          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>✅ Telegram Bot Setup Complete!</h1>
-          <div class="success">✓ Webhook Configured</div>
-          <div class="success">✓ Menu Button Set</div>
-          
-          <div class="info-box">
-            <h3>Bot Information:</h3>
-            <p><strong>Bot:</strong> @ethio_games1_bot</p>
-            <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
-            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
-            <p><strong>Admin Password:</strong> admin1234</p>
-            <p><strong>New Features & Fixes Added:</strong></p>
-            <p>1. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
-            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
-            <p>3. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
-            <p>4. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>5. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
-            <p><strong>Wallet Features:</strong></p>
-            <p>• Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}</p>
-            <p>• Minimum Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</p>
-            <p>• Admin approval for all transactions</p>
-            <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
-            <p><strong>✅ 30-second countdown now working</strong></p>
-            <p><strong>✅ Balls pop every 3 seconds</strong></p>
-            <p><strong>✅ Countdown continues when players leave</strong></p>
-            <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
-            <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
-            <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
-            <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
-          </div>
-          
-          <div>
-            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
-            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
-          </div>
-          
-          <div style="margin-top: 30px; text-align: left;">
-            <h4>Next Steps:</h4>
-            <ol>
-              <li>Open @ethio_games1_bot in Telegram</li>
-              <li>Click "Start"</li>
-              <li>Click menu button (bottom left)</li>
-              <li>Play Bingo with new features!</li>
-            </ol>
-            
-            <h4>To Add Funds to Players:</h4>
-            <ol>
-              <li>Open Admin Panel (link above)</li>
-              <li>Login with password: admin1234</li>
-              <li>Find user by Telegram ID</li>
-              <li>Click "Add Funds" button</li>
-              <li>OR Approve pending deposit/withdrawal requests</li>
-            </ol>
-            
-            <h4>Wallet Instructions for Players:</h4>
-            <ol>
-              <li>Send money to Telebirr: ${CONFIG.TELEBIRR_NUMBER}</li>
-              <li>In game, click Wallet (💰 button)</li>
-              <li>Enter receipt number and amount</li>
-              <li>Admin approves in Admin Panel</li>
-              <li>Funds appear in player balance</li>
-            </ol>
-          </div>
-        </div>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    res.send(`
-      <h1 style="color: #ef4444;">❌ Setup Error</h1>
-      <p>${error.message}</p>
-      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
-    `);
-  }
 });
 
 // ========== START SERVER ==========
@@ -4431,60 +3953,26 @@ server.listen(PORT, () => {
 ╠════════════════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                           ║
-║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}...           ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections              ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
 ║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}                ║
 ║  💸 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB              ║
-║  🆕 NEW FEATURES & FIXES:                                     ║
-║  💳 WALLET SYSTEM: ✅ Deposit/Withdraw with Telebirr          ║
-║  🔒 DOUBLE PRIZE BUG: ✅ FIXED WITH CLAIM LOCK               ║
-║  ⏱️ Timer Sync: ✅ Discovery ↔ Waiting Room                  ║
-║  🔒 Room Lock: ✅ When game is playing                        ║
-║  ⏰ Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES}-minute timeout ║
-║  ⏱️ Box Timer: ✅ Shows on selection screen                   ║
-║  🧹 Box Clearing After Game: ✅ IMPLEMENTED                   ║
-║  🚀 FIXES: ✅ Double prize bug eliminated                     ║
-║         ✅ Game timer working                                  ║
-║         ✅ Ball drawing fixed (every 3 seconds)               ║
-║         ✅ Players properly removed when leaving              ║
-║         ✅✅ 30-SECOND COUNTDOWN NOW WORKING                  ║
-║         ✅✅ BALLS POP EVERY 3 SECONDS WORKING                ║
-║         ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE           ║
-║         ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS       ║
-║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS       ║
-║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS    ║
+║  🆕 NEW FEATURES:                                              ║
+║  🎨 Animated game profiles with compact design                ║
+║  🎯 Professional game selection screen                        ║
+║  🎮 Float animations and glowing effects                      ║
+║  📱 Mobile-optimized compact layout                           ║
+║  ⭐ Feature tags and live stats                               ║
+║  🎭 Glassmorphism design with blur effects                    ║
+║  🚀 All game functionality preserved                          ║
 ╚════════════════════════════════════════════════════════════════╝
-✅ Server ready with WALLET SYSTEM, DOUBLE PRIZE FIX and Timer Synchronization
+✅ Server ready with ANIMATED PROFILES and COMPACT DESIGN
   `);
   
   // Initial broadcast
   setTimeout(() => {
     broadcastRoomStatus();
   }, 1000);
-  
-  // Setup Telegram bot after server starts
-  setTimeout(async () => {
-    try {
-      if (TELEGRAM_TOKEN && TELEGRAM_TOKEN.length > 20) {
-        const webhookUrl = `https://bingo-telegram-game.onrender.com/telegram-webhook`;
-        
-        const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: webhookUrl,
-            drop_pending_updates: true
-          })
-        });
-        
-        const webhookResult = await webhookResponse.json();
-        console.log('✅ Telegram Webhook Auto-Set:', webhookResult);
-      }
-    } catch (error) {
-      console.log('⚠️ Telegram auto-setup skipped or failed');
-    }
-  }, 3000);
 });
