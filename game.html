@@ -158,7 +158,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             width: 100%;
         }
 
@@ -168,6 +168,33 @@
             justify-content: center;
             gap: 16px;
             width: 100%;
+            position: relative;
+            height: 100px;
+        }
+
+        /* Timer in Ball Container */
+        .ball-timer-display {
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: var(--accent-gold);
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            animation: timerPulse 2s infinite;
+            display: none;
+            text-align: center;
+            width: 100px;
+            height: 100px;
+            line-height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05));
+            border: 3px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .ball-timer-display.warning {
+            animation: timerWarning 1s infinite;
+        }
+
+        .ball-timer-display.critical {
+            animation: timerCritical 0.5s infinite;
         }
 
         .current-ball {
@@ -198,8 +225,6 @@
             color: #0f172a;
             margin-top: 12px;
         }
-
-        /* Timer Section Removed from here - Moved to wait overlay */
 
         .ball-history {
             flex: 1;
@@ -950,6 +975,12 @@
             100% { color: var(--error); transform: scale(1); }
         }
 
+        @keyframes timerPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         /* ===== UTILITY CLASSES ===== */
         .hidden {
             display: none !important;
@@ -981,6 +1012,13 @@
             .current-ball {
                 width: 64px;
                 height: 64px;
+            }
+            
+            .ball-timer-display {
+                width: 80px;
+                height: 80px;
+                line-height: 80px;
+                font-size: 2.8rem;
             }
             
             .ball-number {
@@ -1032,6 +1070,13 @@
             
             .ball-number {
                 font-size: 1.4rem;
+            }
+            
+            .ball-timer-display {
+                width: 70px;
+                height: 70px;
+                line-height: 70px;
+                font-size: 2.4rem;
             }
         }
 
@@ -1315,7 +1360,16 @@
             <!-- Current Ball Section with Timer -->
             <div class="game-board">
                 <div class="current-ball-section">
+                    <!-- Timer Status Message -->
+                    <div id="lobbyStatusInGame" class="waiting-status" style="text-align: center; margin-bottom: 8px; display: none;">
+                        WAITING FOR PLAYERS
+                    </div>
+                    
                     <div class="ball-container">
+                        <!-- Timer Display (shown when waiting) -->
+                        <div id="ballTimerDisplay" class="ball-timer-display">30</div>
+                        
+                        <!-- Current Ball (shown when game is active) -->
                         <div class="current-ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
@@ -1597,7 +1651,6 @@
         isResettingLobby: false,
         discoveryTimerInterval: null,
         currentDiscoveryTimer: 30,
-        // Removed ball timer related states
     };
 
     // Wallet state
@@ -1606,7 +1659,70 @@
         activeTab: 'deposit'
     };
 
-    // Timer Functions - Removed ball timer functions
+    // Timer Functions for ball interface
+    function showBallTimer(seconds) {
+        const timerDisplay = document.getElementById('ballTimerDisplay');
+        const ballDisplay = document.getElementById('lastBall');
+        const statusDisplay = document.getElementById('lobbyStatusInGame');
+        
+        if (timerDisplay && ballDisplay && statusDisplay) {
+            timerDisplay.style.display = 'block';
+            ballDisplay.style.display = 'none';
+            statusDisplay.style.display = 'block';
+            timerDisplay.textContent = seconds;
+            
+            // Remove previous timer classes
+            timerDisplay.classList.remove('warning', 'critical');
+            
+            // Add warning/critical styles
+            if (seconds <= 10) {
+                timerDisplay.classList.add('critical');
+            } else if (seconds <= 20) {
+                timerDisplay.classList.add('warning');
+            }
+            
+            if (seconds > 0) {
+                statusDisplay.textContent = `GAME STARTING IN ${seconds} SECONDS`;
+            } else {
+                statusDisplay.textContent = 'WAITING FOR PLAYERS';
+            }
+        }
+    }
+
+    function hideBallTimer() {
+        const timerDisplay = document.getElementById('ballTimerDisplay');
+        const ballDisplay = document.getElementById('lastBall');
+        const statusDisplay = document.getElementById('lobbyStatusInGame');
+        
+        if (timerDisplay && ballDisplay && statusDisplay) {
+            timerDisplay.style.display = 'none';
+            ballDisplay.style.display = 'flex';
+            statusDisplay.style.display = 'none';
+            timerDisplay.classList.remove('warning', 'critical');
+        }
+    }
+
+    function updateBallTimer(seconds) {
+        const timerDisplay = document.getElementById('ballTimerDisplay');
+        const statusDisplay = document.getElementById('lobbyStatusInGame');
+        
+        if (timerDisplay && timerDisplay.style.display !== 'none') {
+            timerDisplay.textContent = seconds;
+            
+            // Update styles based on time
+            timerDisplay.classList.remove('warning', 'critical');
+            
+            if (seconds <= 10) {
+                timerDisplay.classList.add('critical');
+            } else if (seconds <= 20) {
+                timerDisplay.classList.add('warning');
+            }
+            
+            if (seconds > 0 && statusDisplay) {
+                statusDisplay.textContent = `GAME STARTING IN ${seconds} SECONDS`;
+            }
+        }
+    }
 
     // Update connection status UI
     function updateConnectionStatus(connected, message) {
@@ -2111,6 +2227,9 @@
         // Update room display
         document.getElementById('roomDisplay').textContent = `${state.stake} ETB ARENA`;
         
+        // Show timer initially (waiting for game to start)
+        showBallTimer(30);
+        
         if(state.isConnected) {
             socket.emit('joinRoom', { 
                 room: state.stake, 
@@ -2144,6 +2263,9 @@
                 timestamp: Date.now()
             });
         }
+        
+        // Hide timer before leaving
+        hideBallTimer();
         
         document.getElementById('gameInterface').classList.add('hidden');
         showOverlay('lobbyOverlay');
@@ -2385,6 +2507,9 @@
         if (state.isResettingLobby) return;
         state.isResettingLobby = true;
         
+        // Hide timer
+        hideBallTimer();
+        
         state.stake = 0;
         state.grid = [];
         state.calledNumbers.clear();
@@ -2447,17 +2572,8 @@
 
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
-            const timerElement = document.getElementById('waitTimer');
-            if (timerElement) {
-                timerElement.textContent = d.timer;
-            }
-            
-            if (d.timer > 0) {
-                document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
-            } else {
-                document.getElementById('lobbyStatus').textContent = "GAME STARTING NOW!";
-                showNotification('🎮 Game starting now!', 'success', 2000);
-            }
+            // Update the timer in the ball section
+            updateBallTimer(d.timer);
             
             state.lastActivityTime = Date.now();
         }
@@ -2466,6 +2582,17 @@
     socket.on('countdownStopped', (data) => {
         if (data.room === state.stake) {
             console.log('Countdown stopped:', data.reason);
+            
+            // Update timer to show waiting
+            const timerDisplay = document.getElementById('ballTimerDisplay');
+            const statusDisplay = document.getElementById('lobbyStatusInGame');
+            
+            if (timerDisplay && statusDisplay) {
+                if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
+                    statusDisplay.textContent = 'WAITING FOR PLAYERS';
+                    timerDisplay.classList.remove('warning', 'critical');
+                }
+            }
             
             if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
                 showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
@@ -2478,8 +2605,13 @@
     socket.on('gameStarted', (d) => {
         if(d.room === state.stake) {
             console.log(`✅ Game started in our room ${state.stake}`);
-            hideOverlay('waitOverlay');
+            
+            // Hide the timer and show the ball
+            hideBallTimer();
+            
+            // Initialize the game board
             initGameBoard();
+            
             showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
             
             try { 
@@ -2510,6 +2642,9 @@
         console.log('🔒 Room locked event received:', data);
         showNotification(`🔒 ${data.message}`, 'warning', 3000);
         showOverlay('roomLockedOverlay');
+        
+        // Hide timer if visible
+        hideBallTimer();
         
         setTimeout(() => {
             hideOverlay('roomLockedOverlay');
