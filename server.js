@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION WITH WALLET SUPPORT
+// server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION WITH WALLET SUPPORT AND BOT SQUAD INTEGRATION
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -38,7 +38,9 @@ const userSchema = new mongoose.Schema({
   telegramId: { type: String, unique: true, sparse: true },
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' },
-  phoneNumber: { type: String }
+  phoneNumber: { type: String },
+  isBot: { type: Boolean, default: false },
+  botPersonality: { type: String, default: '' }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -148,6 +150,7 @@ app.use((req, res, next) => {
 const CONFIG = {
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "admin1234",
   INITIAL_BALANCE: 0.00,
+  BOT_INITIAL_BALANCE: 10000.00, // Bots start with 10,000 ETB
   ROOM_STAKES: [10, 20, 50, 100],
   MAX_PLAYERS_PER_ROOM: 100,
   GAME_TIMER: 3,
@@ -263,12 +266,16 @@ async function getUser(userId, userName) {
     let user = await User.findOne({ userId: userId });
     
     if (!user) {
+      const isBot = userId.startsWith('eth_bot_');
+      
       user = new User({
         userId: userId,
         userName: userName || 'Guest',
-        balance: CONFIG.INITIAL_BALANCE,
+        balance: isBot ? CONFIG.BOT_INITIAL_BALANCE : CONFIG.INITIAL_BALANCE,
         referralCode: generateReferralCode(userId),
-        telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null
+        telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null,
+        isBot: isBot,
+        botPersonality: isBot ? userName.split(' ')[0] : ''
       });
       await user.save();
       
@@ -278,9 +285,13 @@ async function getUser(userId, userName) {
         userId: userId,
         userName: userName || 'Guest',
         amount: 0,
-        description: 'New user registered'
+        description: `New ${isBot ? 'bot' : 'user'} registered`
       });
       await transaction.save();
+      
+      if (isBot) {
+        console.log(`🤖 New bot created: ${userName} with ${CONFIG.BOT_INITIAL_BALANCE} ETB balance`);
+      }
     } else {
       user.lastSeen = new Date();
       user.sessionCount = (user.sessionCount || 0) + 1;
@@ -448,6 +459,7 @@ async function updateAdminPanel() {
         currentRoom: user.currentRoom,
         box: user.box,
         isOnline: isOnline,
+        isBot: user.isBot || false,
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
         lastSeen: user.lastSeen,
@@ -1880,7 +1892,8 @@ io.on('connection', (socket) => {
           userName: user.userName,
           balance: user.balance,
           referralCode: user.referralCode,
-          phoneNumber: user.phoneNumber || ''
+          phoneNumber: user.phoneNumber || '',
+          isBot: user.isBot || false
         });
         
         socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
@@ -1891,13 +1904,13 @@ io.on('connection', (socket) => {
         }
         
         // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId})`);
+        console.log(`✅ User connected successfully: ${userName} (${userId})${user.isBot ? ' 🤖 BOT' : ''}`);
         
         // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
+        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id, isBot: user.isBot || false });
       } else {
         if (callback) {
           callback({ success: false, message: 'Failed to initialize user' });
@@ -3015,6 +3028,8 @@ app.get('/', (req, res) => {
         .btn-admin:hover { background: #dc2626; }
         .btn-game { background: #10b981; }
         .btn-game:hover { background: #059669; }
+        .btn-bot { background: #8b5cf6; }
+        .btn-bot:hover { background: #7c3aed; }
       </style>
     </head>
     <body>
@@ -3042,7 +3057,8 @@ app.get('/', (req, res) => {
           <p style="color: #10b981;">🔒 NEW: Room lock when game is playing</p>
           <p style="color: #10b981;">⏰ NEW: 7-minute game timeout auto-clear</p>
           <p style="color: #10b981;">⏱️ NEW: Timer on box selection interface</p>
-          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
+          <p style="color: #10b981; margin-top: 10px;">🤖 BOT SQUAD: ✅ INTEGRATED - 10 Ethiopian AI Players</p>
+          <p style="color: #10b981;">✅ FIXED: Game timer and ball drawing issues resolved</p>
           <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
@@ -3057,6 +3073,7 @@ app.get('/', (req, res) => {
           <div>
             <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
             <a href="/game" class="btn btn-game" target="_blank">🎮 Game Client</a>
+            <a href="/bot-squad" class="btn btn-bot" target="_blank">🤖 Bot Squad Control</a>
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -3077,7 +3094,7 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.9.0 (WITH WALLET SYSTEM) | Database: MongoDB Atlas<br>
+            Version: 3.0.0 (WITH WALLET SYSTEM + BOT SQUAD) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
             SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
             Processing Claims: ${processingClaims.size} active<br>
@@ -3100,7 +3117,11 @@ app.get('/', (req, res) => {
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
-            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS
+            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
+            🤖 BOT SQUAD: ✅ INTEGRATED - 10 Ethiopian AI Players<br>
+            🤖 Bot Balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each<br>
+            🤖 Bot Features: Auto-join, Auto-win, Real-time strategy<br>
+            🤖 Bot Control: Complete control panel available
           </p>
         </div>
       </div>
@@ -3114,6 +3135,19 @@ app.get('/', (req, res) => {
     </body>
     </html>
   `);
+});
+
+// ========== BOT SQUAD CONTROL PANEL ==========
+app.get('/bot-squad', (req, res) => {
+  res.sendFile(path.join(__dirname, 'bot.html'));
+});
+
+app.get('/bot-panel', (req, res) => {
+  res.sendFile(path.join(__dirname, 'bot.html'));
+});
+
+app.get('/bots', (req, res) => {
+  res.sendFile(path.join(__dirname, 'bot.html'));
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE - PROFESSIONAL UX ==========
@@ -3902,7 +3936,10 @@ app.get('/health', async (req, res) => {
       minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       roomLockFeature: 'enabled',
       boxSelectionTimer: 'synced with waiting room',
+      botSquadIntegrated: true,
+      botInitialBalance: CONFIG.BOT_INITIAL_BALANCE + ' ETB',
       newFeatures: [
+        'bot_squad_integration',
         'wallet_system_with_deposit_and_withdraw',
         'telebirr_integration',
         'admin_transaction_approval',
@@ -3947,7 +3984,8 @@ app.get('/api/user/:userId', async (req, res) => {
       isOnline: user.isOnline,
       lastSeen: user.lastSeen,
       telegramId: user.telegramId,
-      phoneNumber: user.phoneNumber || ''
+      phoneNumber: user.phoneNumber || '',
+      isBot: user.isBot || false
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -4091,6 +4129,7 @@ app.get('/debug-users', async (req, res) => {
         currentRoom: user.currentRoom,
         balance: user.balance,
         phoneNumber: user.phoneNumber || '',
+        isBot: user.isBot || false,
         socketId: Array.from(socketToUser.entries())
           .find(([_, uid]) => uid === user.userId)?.[0] || 'none'
       };
@@ -4304,6 +4343,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM ADDED** - Deposit/Withdraw\n` +
+                  `• 🤖 **BOT SQUAD INTEGRATED** - 10 Ethiopian AI Players\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Room lock when game is playing\n` +
@@ -4396,6 +4436,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *Bingo Elite Help*\n\n` +
                   `*New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM** - Deposit/Withdraw funds\n` +
+                  `• 🤖 **BOT SQUAD** - 10 Ethiopian AI Players for testing\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Rooms lock when game is playing\n` +
@@ -4431,6 +4472,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💳 *Wallet:*\n` +
                   `Deposit to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
                   `Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\n\n` +
+                  `🤖 *Bot Squad:*\n` +
+                  `Access bot control panel: /bot-squad\n` +
+                  `For testing and development\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -4482,6 +4526,8 @@ app.get('/setup-telegram', async (req, res) => {
           .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
           .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
           .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+          .btn-bot { background: #8b5cf6; }
+          .btn-bot:hover { background: #7c3aed; }
         </style>
       </head>
       <body>
@@ -4495,14 +4541,23 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Bot:</strong> @ethio_games1_bot</p>
             <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Bot Squad Panel:</strong> https://bingo-telegram-game.onrender.com/bot-squad</p>
             <p><strong>Admin Password:</strong> admin1234</p>
             <p><strong>New Features & Fixes Added:</strong></p>
-            <p>1. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
-            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
-            <p>3. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
-            <p>4. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>5. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p>1. 🤖 <strong>BOT SQUAD INTEGRATED:</strong> 10 Ethiopian AI Players with control panel</p>
+            <p>2. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
+            <p>3. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
+            <p>4. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>5. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>6. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>7. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p><strong>Bot Squad Features:</strong></p>
+            <p>• 10 Ethiopian AI players with personalities</p>
+            <p>• Auto-join rooms and select boxes</p>
+            <p>• Auto-win with configurable timing</p>
+            <p>• Real-time bot status tracking</p>
+            <p>• Advanced controls (force wins, crash game, etc.)</p>
+            <p>• Bot initial balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}</p>
             <p>• Minimum Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</p>
@@ -4516,11 +4571,13 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
+            <p><strong>🤖 BOT SQUAD READY FOR TESTING</strong></p>
           </div>
           
           <div>
             <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
+            <a href="/bot-squad" class="btn btn-bot" target="_blank">🤖 Bot Squad Control</a>
           </div>
           
           <div style="margin-top: 30px; text-align: left;">
@@ -4530,6 +4587,15 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
               <li>Play Bingo with new features!</li>
+            </ol>
+            
+            <h4>To Use Bot Squad:</h4>
+            <ol>
+              <li>Open Bot Squad Control Panel (link above)</li>
+              <li>Set server URL to your deployment URL</li>
+              <li>Configure bot settings (room, timing, etc.)</li>
+              <li>Click "ETHIOPIAN BOT SQUAD ACTIVE"</li>
+              <li>Watch bots join and play automatically</li>
             </ol>
             
             <h4>To Add Funds to Players:</h4>
@@ -4574,6 +4640,7 @@ server.listen(PORT, () => {
 ║  Port:         ${PORT}                                        ║
 ║  Game:         /game                                          ║
 ║  Admin:        /admin (password: admin1234)                   ║
+║  Bot Squad:    /bot-squad                                     ║
 ║  Telegram:     /telegram                                      ║
 ║  Bot Setup:    /setup-telegram                                ║
 ║  Real-Time:    /real-time-status                              ║
@@ -4592,7 +4659,10 @@ server.listen(PORT, () => {
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
 ║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}                ║
 ║  💸 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB              ║
+║  🤖 Bot Squad: ✅ INTEGRATED - 10 Ethiopian AI Players        ║
+║  🤖 Bot Balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each       ║
 ║  🆕 NEW FEATURES & FIXES:                                     ║
+║  🤖 BOT SQUAD: ✅ 10 Ethiopian AI Players with control panel  ║
 ║  💳 WALLET SYSTEM: ✅ Deposit/Withdraw with Telebirr          ║
 ║  🔒 DOUBLE PRIZE BUG: ✅ FIXED WITH CLAIM LOCK               ║
 ║  ⏱️ Timer Sync: ✅ Discovery ↔ Waiting Room                  ║
@@ -4611,7 +4681,7 @@ server.listen(PORT, () => {
 ║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS       ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS    ║
 ╚════════════════════════════════════════════════════════════════╝
-✅ Server ready with WALLET SYSTEM, DOUBLE PRIZE FIX and Timer Synchronization
+✅ Server ready with BOT SQUAD, WALLET SYSTEM, DOUBLE PRIZE FIX and Timer Synchronization
   `);
   
   // Initial broadcast
