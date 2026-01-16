@@ -145,6 +145,45 @@
             flex-direction: column;
         }
 
+        /* Timer Styles for Game Interface */
+        .game-timer-container {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 16px;
+            display: none; /* Hidden by default */
+        }
+        
+        .game-timer-container.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .timer-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .timer-display {
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--accent-gold);
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            font-family: 'Inter', monospace;
+        }
+        
+        .timer-display.warning {
+            animation: timerWarning 1s infinite;
+        }
+        
+        .timer-display.critical {
+            animation: timerCritical 0.8s infinite;
+            color: var(--error);
+        }
+
         /* Game Board */
         .game-board {
             display: flex;
@@ -198,8 +237,6 @@
             color: #0f172a;
             margin-top: 12px;
         }
-
-        /* Timer Section Removed from here - Moved to wait overlay */
 
         .ball-history {
             flex: 1;
@@ -706,14 +743,6 @@
             text-align: center;
         }
 
-        .countdown-timer {
-            font-size: 4rem;
-            font-weight: 900;
-            color: var(--accent-gold);
-            margin: 20px 0;
-            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
-        }
-
         .waiting-status {
             font-size: 1.1rem;
             font-weight: 700;
@@ -939,9 +968,9 @@
         }
 
         @keyframes timerWarning {
-            0% { color: var(--accent-gold); }
-            50% { color: var(--error); transform: scale(1.05); }
-            100% { color: var(--accent-gold); }
+            0% { color: var(--accent-gold); transform: scale(1); }
+            50% { color: var(--warning); transform: scale(1.05); }
+            100% { color: var(--accent-gold); transform: scale(1); }
         }
 
         @keyframes timerCritical {
@@ -1008,8 +1037,8 @@
                 padding: 20px;
             }
             
-            .countdown-timer {
-                font-size: 3.5rem;
+            .timer-display {
+                font-size: 2rem;
             }
             
             .result-title {
@@ -1026,8 +1055,8 @@
                 font-size: 0.65rem;
             }
             
-            .countdown-timer {
-                font-size: 3rem;
+            .timer-display {
+                font-size: 1.8rem;
             }
             
             .ball-number {
@@ -1275,7 +1304,6 @@
     <div class="overlay-content">
         <div class="waiting-container">
             <div class="waiting-status" id="lobbyStatus">WAITING FOR PLAYERS</div>
-            <div class="countdown-timer" id="waitTimer">30</div>
             <div class="player-count">
                 <span class="number" id="playerCount">1</span> online player in arena
             </div>
@@ -1313,6 +1341,12 @@
         
         <!-- Main Content -->
         <div class="main-content">
+            <!-- Game Timer Container - Added Here -->
+            <div class="game-timer-container" id="gameTimerContainer">
+                <div class="timer-label">Game starts in</div>
+                <div class="timer-display" id="gameTimer">30</div>
+            </div>
+            
             <!-- Current Ball Section with Timer -->
             <div class="game-board">
                 <div class="current-ball-section">
@@ -1598,7 +1632,8 @@
         isResettingLobby: false,
         discoveryTimerInterval: null,
         currentDiscoveryTimer: 30,
-        // Removed ball timer related states
+        gameCountdownInterval: null,
+        gameCountdownValue: 30
     };
 
     // Wallet state
@@ -1607,7 +1642,75 @@
         activeTab: 'deposit'
     };
 
-    // Timer Functions - Removed ball timer functions
+    // Timer Functions for Game Interface
+    function startGameCountdown(seconds) {
+        clearGameCountdown();
+        state.gameCountdownValue = seconds;
+        
+        // Show the timer container
+        const timerContainer = document.getElementById('gameTimerContainer');
+        const timerDisplay = document.getElementById('gameTimer');
+        
+        if (timerContainer) {
+            timerContainer.classList.add('active');
+        }
+        
+        if (timerDisplay) {
+            timerDisplay.textContent = seconds;
+            timerDisplay.className = 'timer-display';
+            
+            // Add warning/critical classes based on time
+            if (seconds <= 10) {
+                timerDisplay.classList.add('warning');
+            }
+            if (seconds <= 5) {
+                timerDisplay.classList.remove('warning');
+                timerDisplay.classList.add('critical');
+            }
+        }
+        
+        state.gameCountdownInterval = setInterval(() => {
+            state.gameCountdownValue--;
+            
+            if (state.gameCountdownValue <= 0) {
+                clearGameCountdown();
+                return;
+            }
+            
+            if (timerDisplay) {
+                timerDisplay.textContent = state.gameCountdownValue;
+                
+                // Update styling based on time remaining
+                if (state.gameCountdownValue <= 10) {
+                    timerDisplay.classList.add('warning');
+                }
+                if (state.gameCountdownValue <= 5) {
+                    timerDisplay.classList.remove('warning');
+                    timerDisplay.classList.add('critical');
+                }
+            }
+        }, 1000);
+    }
+    
+    function clearGameCountdown() {
+        if (state.gameCountdownInterval) {
+            clearInterval(state.gameCountdownInterval);
+            state.gameCountdownInterval = null;
+        }
+        
+        const timerContainer = document.getElementById('gameTimerContainer');
+        const timerDisplay = document.getElementById('gameTimer');
+        
+        if (timerContainer) {
+            timerContainer.classList.remove('active');
+        }
+        
+        if (timerDisplay) {
+            timerDisplay.className = 'timer-display';
+        }
+        
+        state.gameCountdownValue = 30;
+    }
 
     // Update connection status UI
     function updateConnectionStatus(connected, message) {
@@ -2112,6 +2215,9 @@
         // Update room display
         document.getElementById('roomDisplay').textContent = `${state.stake} ETB ARENA`;
         
+        // Clear any existing game timer
+        clearGameCountdown();
+        
         if(state.isConnected) {
             socket.emit('joinRoom', { 
                 room: state.stake, 
@@ -2138,6 +2244,9 @@
     }
     
     function leaveLobby() {
+        // Clear the game timer
+        clearGameCountdown();
+        
         if(state.isConnected) {
             socket.emit('player:leaveRoom', { 
                 action: 'left_lobby',
@@ -2147,13 +2256,8 @@
         }
         
         document.getElementById('gameInterface').classList.add('hidden');
-        hideOverlay('waitOverlay'); // HIDE WAIT OVERLAY
         showOverlay('lobbyOverlay');
         document.getElementById('roomDisplay').textContent = 'LOBBY';
-        
-        // Reset the timer display
-        document.getElementById('waitTimer').textContent = '30';
-        document.getElementById('lobbyStatus').textContent = 'WAITING FOR PLAYERS';
         
         showNotification('Left lobby successfully', 'info', 2000);
     }
@@ -2402,6 +2506,9 @@
         state.onlinePlayersCount = 0;
         state.totalPlayersCount = 0;
         
+        // Clear the game timer
+        clearGameCountdown();
+        
         if (state.isConnected && state.roomSubscribed) {
             socket.emit('unsubscribeFromRoom', { room: state.stake });
             state.roomSubscribed = false;
@@ -2417,11 +2524,6 @@
         document.getElementById('liveCounter').classList.remove('active');
         document.getElementById('bonusBadge').classList.add('hidden');
         
-        // Reset the wait timer display
-        document.getElementById('waitTimer').textContent = '30';
-        document.getElementById('lobbyStatus').textContent = 'WAITING FOR PLAYERS';
-        
-        hideOverlay('waitOverlay'); // ADD THIS LINE
         showOverlay('lobbyOverlay');
         updateRoomDisplay();
         
@@ -2458,11 +2560,10 @@
 
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
-            const timerElement = document.getElementById('waitTimer');
-            if (timerElement) {
-                timerElement.textContent = d.timer;
-            }
+            // Start the game timer in the main interface
+            startGameCountdown(d.timer);
             
+            // Update wait overlay status if visible
             if (d.timer > 0) {
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
             } else {
@@ -2478,6 +2579,9 @@
         if (data.room === state.stake) {
             console.log('Countdown stopped:', data.reason);
             
+            // Clear the game timer
+            clearGameCountdown();
+            
             if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
                 showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
             }
@@ -2489,6 +2593,10 @@
     socket.on('gameStarted', (d) => {
         if(d.room === state.stake) {
             console.log(`✅ Game started in our room ${state.stake}`);
+            
+            // Clear the game timer
+            clearGameCountdown();
+            
             hideOverlay('waitOverlay');
             initGameBoard();
             showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
@@ -2529,6 +2637,7 @@
             state.selectedBox = null;
             state.roomSubscribed = false;
             document.getElementById('liveCounter').classList.remove('active');
+            clearGameCountdown();
         }, 3000);
     });
 
@@ -2540,6 +2649,7 @@
         }, 3000);
         hideOverlay('waitOverlay');
         showOverlay('lobbyOverlay');
+        clearGameCountdown();
         state.lastActivityTime = Date.now();
     });
 
