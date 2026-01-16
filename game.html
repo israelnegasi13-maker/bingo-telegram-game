@@ -15,9 +15,9 @@
             --main-light: #60a5fa;
             --p-gold: #fbbf24;
             --bg-dark: #020617;
-            --card-glass: rgba(30, 41, 59, 0.85);
-            --border-glass: rgba(255, 255, 255, 0.1);
-            --header-h: 44px;
+            --card-glass: rgba(30, 41, 59, 0.9);
+            --border-glass: rgba(255, 255, 255, 0.15);
+            --header-h: 50px;
             --compact-padding: 12px;
         }
 
@@ -36,7 +36,7 @@
             height: 100%;
             width: 100%;
             position: fixed;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         body {
@@ -49,8 +49,8 @@
             top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
             background: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.1) 0, transparent 50%);
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
         }
 
         /* Overlays */
@@ -78,14 +78,14 @@
             visibility: visible; 
         }
 
-        #reconnectOverlay { background: rgba(2, 6, 23, 0.8); z-index: 10001; }
+        #reconnectOverlay { background: rgba(2, 6, 23, 0.9); z-index: 10001; }
         #insufficientOverlay { z-index: 10000; }
         #roomLockedOverlay { z-index: 10002; }
 
         .game-status-title {
-            font-size: 2rem;
+            font-size: 3rem;
             font-weight: 900;
-            margin-bottom: 6px;
+            margin-bottom: 10px;
         }
 
         .win-gradient {
@@ -103,23 +103,23 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes pulse { 
             0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            50% { transform: scale(1.08); }
             100% { transform: scale(1); }
         }
         @keyframes slideIn {
             from { transform: translateY(-10px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
-        @keyframes takenPulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(0.9); }
-            100% { transform: scale(1); }
+        @keyframes ballPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
         }
 
-        /* Compact Header */
+        /* LARGER Header */
         .header {
             height: var(--header-h);
-            padding: 8px 12px;
+            padding: 10px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -137,28 +137,29 @@
 
         .user-name {
             font-weight: 900;
-            font-size: 0.75rem;
+            font-size: 0.9rem;
             color: white;
         }
 
         .room-info {
-            font-size: 0.6rem;
+            font-size: 0.7rem;
             color: #64748b;
         }
 
         .balance-compact {
             display: flex;
             align-items: center;
-            gap: 6px;
-            background: rgba(251, 191, 36, 0.15);
-            padding: 6px 10px;
-            border-radius: 20px;
-            border: 1px solid rgba(251, 191, 36, 0.3);
+            gap: 8px;
+            background: rgba(251, 191, 36, 0.2);
+            padding: 8px 14px;
+            border-radius: 25px;
+            border: 1.5px solid rgba(251, 191, 36, 0.4);
             font-weight: 900;
             color: var(--p-gold);
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             cursor: pointer;
             transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
         }
 
         .balance-compact:active {
@@ -171,34 +172,35 @@
         }
 
         .wallet-icon {
-            font-size: 0.7rem;
+            font-size: 0.8rem;
         }
 
-        /* Compact Main Game Area */
+        /* LARGER Main Game Area */
         .game-container {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 10px;
+            padding: 15px;
             overflow-y: auto;
-            gap: 10px;
+            gap: 15px;
         }
 
-        /* Compact Ball Display */
+        /* LARGER Ball Display */
         .ball-section {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
-            padding: 8px;
+            gap: 10px;
+            padding: 12px;
             background: var(--card-glass);
-            border-radius: 12px;
+            border-radius: 16px;
             border: 1px solid var(--border-glass);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         }
 
         .ball-display {
-            width: 50px;
-            height: 50px;
+            width: 70px;
+            height: 70px;
             background: radial-gradient(circle at 35% 35%, #fff, #cbd5e1);
             border-radius: 50%;
             display: flex;
@@ -207,32 +209,32 @@
             justify-content: center;
             color: #0f172a;
             font-weight: 900;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            border: 2px solid #fff;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            border: 3px solid #fff;
             position: relative;
         }
 
         .ball-letter {
-            font-size: 0.8rem;
+            font-size: 1rem;
             font-weight: 900;
             position: absolute;
-            top: 4px;
-            height: 16px;
+            top: 8px;
+            height: 18px;
             width: 100%;
             text-align: center;
             color: var(--main-color);
         }
 
         .ball-number {
-            font-size: 1.2rem;
-            margin-top: 10px;
+            font-size: 1.8rem;
+            margin-top: 15px;
         }
 
         .ball-history {
             display: flex;
-            gap: 4px;
+            gap: 6px;
             overflow-x: auto;
-            padding: 4px;
+            padding: 6px;
             max-width: 100%;
             scrollbar-width: none;
         }
@@ -242,9 +244,9 @@
         }
 
         .history-ball {
-            min-width: 22px;
-            height: 22px;
-            background: rgba(255,255,255,0.05);
+            min-width: 28px;
+            height: 28px;
+            background: rgba(255,255,255,0.08);
             border-radius: 50%;
             display: flex;
             flex-direction: column;
@@ -255,65 +257,66 @@
             border: 1px solid var(--border-glass);
             flex-shrink: 0;
             position: relative;
-            font-size: 0.6rem;
+            font-size: 0.7rem;
         }
 
         .history-letter {
             position: absolute;
-            top: 1px;
-            font-size: 0.45rem;
+            top: 2px;
+            font-size: 0.6rem;
             font-weight: 900;
             color: var(--main-color);
         }
 
         .history-number {
-            margin-top: 8px;
-            font-size: 0.55rem;
+            margin-top: 10px;
+            font-size: 0.7rem;
         }
 
-        /* Compact Bingo Grid */
+        /* MUCH LARGER Bingo Grid */
         .bingo-section {
             background: var(--card-glass);
-            padding: 6px;
-            border-radius: 10px;
+            padding: 10px;
+            border-radius: 14px;
             border: 1px solid var(--border-glass);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         }
 
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-            margin-bottom: 2px;
+            gap: 4px;
+            margin-bottom: 4px;
         }
 
         .bingo-letter-cell {
             aspect-ratio: 1;
-            background: rgba(255,255,255,0.05);
-            border-radius: 5px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 0.8rem;
+            font-size: 1rem;
             color: var(--main-color);
         }
 
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
+            gap: 4px;
         }
 
         .cell {
             aspect-ratio: 1;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 5px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 0.7rem;
+            font-size: 1rem;
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.1s;
@@ -328,35 +331,36 @@
             background: linear-gradient(135deg, var(--main-color), #60a5fa);
             color: white;
             border: none;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         .cell.free {
             background: linear-gradient(135deg, #f59e0b, #fbbf24);
             color: white;
-            font-size: 0.6rem;
+            font-size: 0.8rem;
         }
 
         .cell.corner::before {
             content: "★";
             position: absolute;
-            top: 1px;
-            right: 1px;
-            font-size: 0.4rem;
+            top: 2px;
+            right: 2px;
+            font-size: 0.6rem;
             color: var(--p-gold);
         }
 
-        /* Compact Stake Selection */
+        /* LARGER Stake Selection */
         .stake-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin: 8px 0;
+            gap: 12px;
+            margin: 12px 0;
         }
 
         .stake-card {
             background: var(--card-glass);
-            padding: 10px 6px;
-            border-radius: 10px;
+            padding: 16px 10px;
+            border-radius: 14px;
             border: 1px solid var(--border-glass);
             display: flex;
             flex-direction: column;
@@ -364,6 +368,7 @@
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
         }
 
         .stake-card:active {
@@ -371,27 +376,28 @@
         }
 
         .stake-name {
-            font-size: 0.6rem;
+            font-size: 0.8rem;
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .stake-value {
-            font-size: 0.9rem;
+            font-size: 1.3rem;
             font-weight: 900;
             color: var(--p-gold);
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            text-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
         }
 
         .room-status {
             position: absolute;
-            top: 6px;
-            right: 6px;
-            font-size: 0.5rem;
-            padding: 2px 4px;
-            border-radius: 4px;
+            top: 8px;
+            right: 8px;
+            font-size: 0.6rem;
+            padding: 3px 6px;
+            border-radius: 6px;
             font-weight: 700;
         }
 
@@ -420,7 +426,7 @@
         }
 
         .player-count {
-            font-size: 0.55rem;
+            font-size: 0.7rem;
             color: #94a3b8;
             text-align: center;
         }
@@ -428,22 +434,23 @@
         .player-count .count {
             color: var(--p-gold);
             font-weight: 700;
+            font-size: 0.8rem;
         }
 
-        /* Compact Discovery Grid */
+        /* LARGER Discovery Grid */
         .discovery-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
-            margin: 8px 0;
-            max-height: 40vh;
+            gap: 6px;
+            margin: 12px 0;
+            max-height: 50vh;
             overflow-y: auto;
         }
 
         .box-item {
             aspect-ratio: 1;
             background: #1e293b;
-            border-radius: 6px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -451,8 +458,9 @@
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             position: relative;
+            border: 1px solid rgba(255,255,255,0.05);
         }
 
         .box-item:not(.taken):active {
@@ -464,26 +472,30 @@
             color: #ef4444;
             cursor: not-allowed;
             opacity: 0.5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
         .box-item.selected {
             background: var(--main-color);
             color: white;
             animation: pulse 0.5s infinite;
+            border: 1px solid var(--main-light);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
         }
 
-        /* Compact Buttons */
+        /* LARGER Buttons */
         .btn-primary {
             background: linear-gradient(90deg, var(--main-color), var(--main-dark));
             color: white;
-            padding: 10px;
-            border-radius: 10px;
+            padding: 14px;
+            border-radius: 12px;
             border: none;
             font-weight: 900;
-            font-size: 0.8rem;
+            font-size: 1rem;
             cursor: pointer;
             transition: all 0.2s;
             width: 100%;
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
         }
 
         .btn-primary:active {
@@ -497,13 +509,13 @@
         }
 
         .btn-secondary {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.08);
             color: #94a3b8;
-            padding: 8px;
-            border-radius: 8px;
+            padding: 10px 16px;
+            border-radius: 10px;
             border: 1px solid var(--border-glass);
             font-weight: 700;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -512,79 +524,81 @@
             transform: scale(0.98);
         }
 
-        /* Compact Overlay Content */
+        /* LARGER Overlay Content */
         .overlay-content {
             width: 100%;
-            max-width: 300px;
+            max-width: 340px;
             background: var(--card-glass);
-            border-radius: 12px;
-            padding: 16px;
+            border-radius: 16px;
+            padding: 20px;
             border: 1px solid var(--border-glass);
             animation: slideIn 0.3s ease;
             max-height: 90vh;
             overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
         }
 
-        /* Compact Timer */
+        /* LARGER Timer */
         .timer-compact {
-            font-size: 2.5rem;
+            font-size: 3.5rem;
             font-weight: 900;
             color: var(--p-gold);
-            margin: 8px 0;
+            margin: 12px 0;
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
         }
 
         /* Status Indicators */
         .online-indicator {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.6rem;
+            gap: 6px;
+            font-size: 0.7rem;
             color: #94a3b8;
             justify-content: center;
-            margin: 8px 0;
+            margin: 12px 0;
         }
 
         .online-dot {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background: #10b981;
             animation: pulse 2s infinite;
         }
 
-        /* Quick Info Bar */
+        /* LARGER Quick Info Bar */
         .quick-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 6px 8px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 8px;
-            font-size: 0.65rem;
-            margin: 8px 0;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            font-size: 0.75rem;
+            margin: 12px 0;
         }
 
         /* Connection Status */
         .connection-status {
             position: fixed;
-            top: 4px;
+            top: 6px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
-            padding: 3px 8px;
+            padding: 4px 12px;
             background: rgba(15, 23, 42, 0.9);
-            border-radius: 12px;
+            border-radius: 16px;
             border: 1px solid var(--border-glass);
-            font-size: 0.5rem;
+            font-size: 0.6rem;
             color: #94a3b8;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
         }
 
         .connection-dot {
-            width: 4px;
-            height: 4px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: #ef4444;
         }
@@ -593,47 +607,48 @@
             background: #10b981;
         }
 
-        /* Compact Wallet */
+        /* LARGER Wallet */
         .wallet-tabs {
             display: flex;
-            gap: 4px;
-            margin-bottom: 12px;
-            background: rgba(255,255,255,0.05);
-            padding: 2px;
-            border-radius: 8px;
+            gap: 6px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.08);
+            padding: 3px;
+            border-radius: 10px;
         }
 
         .wallet-tab {
             flex: 1;
-            padding: 6px;
+            padding: 8px;
             border: none;
             background: transparent;
             color: #94a3b8;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             font-weight: 700;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
         }
 
         .wallet-tab.active {
-            background: rgba(59, 130, 246, 0.2);
+            background: rgba(59, 130, 246, 0.25);
             color: var(--main-color);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
         }
 
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 6px;
-            margin: 8px 0;
+            gap: 8px;
+            margin: 12px 0;
         }
 
         .amount-btn {
-            padding: 8px;
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 8px;
+            padding: 10px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            border-radius: 10px;
             color: var(--main-color);
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             font-weight: 700;
             cursor: pointer;
         }
@@ -644,25 +659,25 @@
 
         .input-compact {
             width: 100%;
-            padding: 8px;
-            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            background: rgba(255,255,255,0.08);
             border: 1px solid var(--border-glass);
-            border-radius: 8px;
+            border-radius: 10px;
             color: white;
-            font-size: 0.75rem;
-            margin: 6px 0;
+            font-size: 0.85rem;
+            margin: 8px 0;
         }
 
         /* Live Box Counter */
         .live-box-counter {
             position: fixed;
-            top: 50px;
-            right: 8px;
+            top: 55px;
+            right: 12px;
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid var(--border-glass);
-            border-radius: 8px;
-            padding: 6px 8px;
-            font-size: 0.6rem;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 0.7rem;
             z-index: 100;
             backdrop-filter: blur(10px);
             display: none;
@@ -673,7 +688,7 @@
         }
 
         .live-box-counter .count {
-            font-size: 1rem;
+            font-size: 1.2rem;
             font-weight: 900;
             color: var(--p-gold);
             text-align: center;
@@ -682,7 +697,7 @@
 
         .live-box-counter .label {
             color: #94a3b8;
-            font-size: 0.5rem;
+            font-size: 0.6rem;
             text-align: center;
             display: block;
         }
@@ -690,21 +705,22 @@
         /* Notification */
         .notification {
             position: fixed;
-            top: 50px;
+            top: 55px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 10000;
             width: 90%;
-            max-width: 280px;
+            max-width: 320px;
             background: rgba(59, 130, 246, 0.9);
             color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 0.7rem;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 0.8rem;
             text-align: center;
             backdrop-filter: blur(10px);
             animation: slideIn 0.3s ease-out;
             display: none;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
         }
 
         .notification.show {
@@ -715,57 +731,62 @@
         /* Mobile Optimizations */
         @media (max-width: 360px) {
             :root {
-                --header-h: 40px;
-                --compact-padding: 8px;
+                --header-h: 45px;
+                --compact-padding: 10px;
             }
             
             .ball-display {
-                width: 45px;
-                height: 45px;
+                width: 65px;
+                height: 65px;
             }
             
             .ball-number {
-                font-size: 1rem;
+                font-size: 1.6rem;
             }
             
             .cell {
-                font-size: 0.65rem;
+                font-size: 0.9rem;
             }
             
             .stake-grid {
-                gap: 6px;
+                gap: 10px;
             }
             
             .stake-card {
-                padding: 8px 4px;
+                padding: 14px 8px;
             }
             
             .stake-value {
-                font-size: 0.8rem;
+                font-size: 1.2rem;
             }
             
             .timer-compact {
-                font-size: 2rem;
+                font-size: 3rem;
             }
             
             .overlay-content {
-                padding: 12px;
+                padding: 16px;
+                max-width: 320px;
             }
         }
 
         /* Fix for very small screens */
         @media (max-height: 600px) {
             .game-container {
-                gap: 6px;
-                padding: 8px;
+                gap: 10px;
+                padding: 12px;
             }
             
             .ball-section {
-                padding: 6px;
+                padding: 10px;
             }
             
             .bingo-section {
-                padding: 4px;
+                padding: 8px;
+            }
+            
+            .stake-grid {
+                gap: 8px;
             }
         }
     </style>
@@ -791,23 +812,23 @@
 
 <!-- Loading Overlay -->
 <div id="loadingOverlay" class="active">
-    <div style="width: 30px; height: 30px; border: 2px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p style="margin-top: 12px; font-weight: 900; color: var(--main-color); font-size: 0.7rem;">LOADING...</p>
+    <div style="width: 40px; height: 40px; border: 3px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p style="margin-top: 16px; font-weight: 900; color: var(--main-color); font-size: 0.8rem;">LOADING...</p>
 </div>
 
 <!-- Reconnect Overlay -->
 <div id="reconnectOverlay">
-    <div style="width: 30px; height: 30px; border: 2px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p style="margin-top: 12px; font-weight: 900; color: var(--p-gold); font-size: 0.7rem;">RECONNECTING...</p>
+    <div style="width: 40px; height: 40px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p style="margin-top: 16px; font-weight: 900; color: var(--p-gold); font-size: 0.8rem;">RECONNECTING...</p>
 </div>
 
-<!-- Room Selection -->
+<!-- Room Selection - LARGER -->
 <div id="stakeOverlay" class="step-overlay active">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
-                <h1 style="color: var(--p-gold); font-size: 1.2rem; font-weight: 900;">BINGO ELITE</h1>
-                <p style="color: #94a3b8; font-size: 0.65rem; margin-top: 2px;">Select a room to join</p>
+                <h1 style="color: var(--p-gold); font-size: 1.4rem; font-weight: 900;">BINGO ELITE</h1>
+                <p style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px;">Select a room to join</p>
             </div>
             <div class="balance-compact" id="stakeBalance" onclick="showWallet()">
                 <span class="wallet-icon">💰</span>
@@ -824,20 +845,20 @@
             <span>Only online players counted</span>
         </div>
         
-        <button class="btn-secondary" onclick="refreshBalance()" style="margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+        <button class="btn-secondary" onclick="refreshBalance()" style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px;">
             <span>🔄</span> Refresh Balance
         </button>
     </div>
 </div>
 
-<!-- Ticket Selection -->
+<!-- Ticket Selection - LARGER -->
 <div id="discoveryOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <div>
-                <h2 style="font-size: 0.9rem; color: white;">SELECT TICKET</h2>
-                <p style="color: #94a3b8; font-size: 0.65rem;">
-                    Room: <span id="selectedRoomStake" style="color: var(--p-gold);">10 ETB</span>
+                <h2 style="font-size: 1.1rem; color: white; font-weight: 900;">SELECT TICKET</h2>
+                <p style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px;">
+                    Room: <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span>
                 </p>
             </div>
             <div class="balance-compact" onclick="showWallet()">
@@ -848,12 +869,12 @@
         
         <div class="quick-info">
             <div>
-                <span style="color: #10b981; font-weight: 700;" id="availableCount">100</span> available
+                <span style="color: #10b981; font-weight: 700; font-size: 0.8rem;" id="availableCount">100</span> available
             </div>
             <div>
-                <span style="color: #ef4444; font-weight: 700;" id="takenCount">0</span> taken
+                <span style="color: #ef4444; font-weight: 700; font-size: 0.8rem;" id="takenCount">0</span> taken
             </div>
-            <div style="color: #10b981; font-size: 0.6rem;">
+            <div style="color: #10b981; font-size: 0.7rem; font-weight: 700;">
                 ● LIVE
             </div>
         </div>
@@ -862,27 +883,27 @@
             <!-- Tickets populated by JS -->
         </div>
         
-        <div id="confirmBoxBtn" style="display: none; margin-top: 8px;">
+        <div id="confirmBoxBtn" style="display: none; margin-top: 12px;">
             <button class="btn-primary" onclick="joinLobby()">
                 CONFIRM SELECTION
             </button>
         </div>
         
-        <button class="btn-secondary" onclick="leaveDiscovery()" style="margin-top: 8px;">
+        <button class="btn-secondary" onclick="leaveDiscovery()" style="margin-top: 12px; padding: 10px 16px;">
             ← Back to Rooms
         </button>
     </div>
 </div>
 
-<!-- Lobby Waiting -->
+<!-- Lobby Waiting - LARGER -->
 <div id="waitOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="timer-compact" id="waitTimer">30</div>
-        <p style="color: white; font-weight: 700; font-size: 0.8rem; margin-bottom: 4px;" id="lobbyStatus">
+        <p style="color: white; font-weight: 900; font-size: 0.9rem; margin-bottom: 6px;" id="lobbyStatus">
             WAITING FOR PLAYERS
         </p>
-        <p style="color: #94a3b8; font-size: 0.65rem; margin-bottom: 12px;" id="playersWaitingInfo">
-            <span id="playerCount" style="color: var(--p-gold);">0</span> online players waiting
+        <p style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 16px;" id="playersWaitingInfo">
+            <span id="playerCount" style="color: var(--p-gold); font-weight: 700; font-size: 0.9rem;">0</span> online players waiting
         </p>
         
         <div class="online-indicator">
@@ -890,13 +911,13 @@
             <span>Game starts with 1 online player</span>
         </div>
         
-        <button class="btn-secondary" onclick="leaveLobby()" style="margin-top: 12px;">
+        <button class="btn-secondary" onclick="leaveLobby()" style="margin-top: 16px; padding: 10px 16px;">
             Leave Lobby
         </button>
     </div>
 </div>
 
-<!-- Main Game Interface -->
+<!-- Main Game Interface - LARGER -->
 <div id="gameScreen" class="step-overlay">
     <div class="header">
         <div class="user-info">
@@ -935,11 +956,11 @@
     </div>
 </div>
 
-<!-- Wallet Overlay -->
+<!-- Wallet Overlay - LARGER -->
 <div id="walletOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h2 style="color: var(--p-gold); font-size: 1rem;">💰 WALLET</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="color: var(--p-gold); font-size: 1.2rem; font-weight: 900;">💰 WALLET</h2>
             <div class="balance-compact">
                 <span class="wallet-icon">💰</span>
                 <span id="walletBalanceVal">0.00</span>
@@ -952,24 +973,24 @@
         </div>
         
         <div id="depositTab" style="display: block;">
-            <p style="color: #94a3b8; font-size: 0.7rem; text-align: center; margin-bottom: 12px;">
+            <p style="color: #94a3b8; font-size: 0.8rem; text-align: center; margin-bottom: 16px;">
                 Send money to Telebirr: 0962577855
             </p>
             
             <input type="text" class="input-compact" id="receiptNumber" placeholder="Receipt number">
             <input type="number" class="input-compact" id="depositAmount" placeholder="Amount sent (ETB)">
             
-            <button class="btn-primary" onclick="submitDeposit()" style="margin-top: 8px;">
+            <button class="btn-primary" onclick="submitDeposit()" style="margin-top: 12px;">
                 Submit Deposit Request
             </button>
             
-            <p style="color: #64748b; font-size: 0.65rem; text-align: center; margin-top: 12px;">
+            <p style="color: #64748b; font-size: 0.7rem; text-align: center; margin-top: 16px;">
                 Funds added within 24 hours after verification
             </p>
         </div>
         
         <div id="withdrawTab" style="display: none;">
-            <p style="color: #94a3b8; font-size: 0.7rem; text-align: center; margin-bottom: 12px;">
+            <p style="color: #94a3b8; font-size: 0.8rem; text-align: center; margin-bottom: 16px;">
                 Select amount to withdraw
             </p>
             
@@ -982,20 +1003,20 @@
             
             <input type="number" class="input-compact" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
             
-            <div style="background: rgba(251, 191, 36, 0.1); padding: 8px; border-radius: 8px; text-align: center; margin: 8px 0;">
-                <p style="color: #fbbf24; font-size: 0.65rem; margin-bottom: 2px;">Selected Amount</p>
-                <p id="selectedWithdrawAmount" style="font-size: 1rem; font-weight: 900; color: white;">0 ETB</p>
+            <div style="background: rgba(251, 191, 36, 0.15); padding: 12px; border-radius: 10px; text-align: center; margin: 12px 0;">
+                <p style="color: #fbbf24; font-size: 0.75rem; margin-bottom: 4px;">Selected Amount</p>
+                <p id="selectedWithdrawAmount" style="font-size: 1.2rem; font-weight: 900; color: white;">0 ETB</p>
             </div>
             
             <input type="tel" class="input-compact" id="withdrawPhoneNumber" placeholder="Phone number (0912345678)">
             
-            <button class="btn-primary" onclick="submitWithdrawal()" style="margin-top: 8px;">
+            <button class="btn-primary" onclick="submitWithdrawal()" style="margin-top: 12px;">
                 Submit Withdrawal
             </button>
             
-            <div style="background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 8px; margin-top: 12px; font-size: 0.65rem;">
-                <p style="color: #ef4444; margin-bottom: 4px;">⚠️ Important:</p>
-                <ul style="color: #cbd5e1; padding-left: 16px; line-height: 1.4;">
+            <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; border-radius: 10px; margin-top: 16px; font-size: 0.7rem;">
+                <p style="color: #ef4444; margin-bottom: 6px; font-weight: 700;">⚠️ Important:</p>
+                <ul style="color: #cbd5e1; padding-left: 18px; line-height: 1.5;">
                     <li>Min withdrawal: 50 ETB</li>
                     <li>Processed within 24 hours</li>
                     <li>Ensure phone number is correct</li>
@@ -1003,53 +1024,53 @@
             </div>
         </div>
         
-        <button class="btn-secondary" onclick="hideWallet()" style="margin-top: 12px;">
+        <button class="btn-secondary" onclick="hideWallet()" style="margin-top: 16px; padding: 10px 16px;">
             Back to Game
         </button>
     </div>
 </div>
 
-<!-- Room Locked Overlay -->
+<!-- Room Locked Overlay - LARGER -->
 <div id="roomLockedOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="font-size: 2.5rem; margin-bottom: 12px;">🔒</div>
-        <div class="game-status-title lose-gradient" style="font-size: 1.5rem;">ROOM LOCKED</div>
-        <p id="roomLockedMessage" style="color: white; font-size: 0.8rem; margin: 12px 0;">
+        <div style="font-size: 3rem; margin-bottom: 16px;">🔒</div>
+        <div class="game-status-title lose-gradient" style="font-size: 1.8rem;">ROOM LOCKED</div>
+        <p id="roomLockedMessage" style="color: white; font-size: 0.9rem; margin: 16px 0;">
             Game is in progress. Please wait for the current game to finish.
         </p>
-        <p style="color: #94a3b8; font-size: 0.7rem;">Returning to room selection...</p>
+        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to room selection...</p>
     </div>
 </div>
 
-<!-- Insufficient Funds Overlay -->
+<!-- Insufficient Funds Overlay - LARGER -->
 <div id="insufficientOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div class="game-status-title lose-gradient" style="font-size: 1.5rem;">INSUFFICIENT FUNDS</div>
-        <p id="insufficientMessage" style="color: white; font-size: 0.9rem; margin: 12px 0;">
+        <div class="game-status-title lose-gradient" style="font-size: 1.8rem;">INSUFFICIENT FUNDS</div>
+        <p id="insufficientMessage" style="color: white; font-size: 1rem; margin: 16px 0; font-weight: 700;">
             Required: 10 ETB
         </p>
-        <p style="color: #94a3b8; font-size: 0.7rem;">PLEASE TOP UP TO PLAY</p>
-        <button class="btn-secondary" onclick="showWallet()" style="margin-top: 12px;">
+        <p style="color: #94a3b8; font-size: 0.8rem;">PLEASE TOP UP TO PLAY</p>
+        <button class="btn-secondary" onclick="showWallet()" style="margin-top: 16px; padding: 10px 16px;">
             💰 Go to Wallet
         </button>
     </div>
 </div>
 
-<!-- Win Overlay -->
+<!-- Win Overlay - LARGER -->
 <div id="winOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="game-status-title win-gradient">BINGO!</div>
-        <p id="winPrize" style="color: white; font-size: 1.2rem; font-weight: 900; margin: 8px 0;">+0.00 ETB</p>
-        <p style="color: #94a3b8; font-size: 0.7rem;">Returning to lobby...</p>
+        <p id="winPrize" style="color: white; font-size: 1.5rem; font-weight: 900; margin: 12px 0;">+0.00 ETB</p>
+        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to lobby...</p>
     </div>
 </div>
 
-<!-- Lose Overlay -->
+<!-- Lose Overlay - LARGER -->
 <div id="loseOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="game-status-title lose-gradient">GAME OVER</div>
-        <p id="loseMessage" style="color: white; font-size: 0.8rem; margin: 8px 0;">Someone else won!</p>
-        <p style="color: #94a3b8; font-size: 0.7rem;">Returning to lobby...</p>
+        <p id="loseMessage" style="color: white; font-size: 0.9rem; margin: 12px 0;">Someone else won!</p>
+        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to lobby...</p>
     </div>
 </div>
 
@@ -1295,9 +1316,14 @@
         if (data.room === state.stake) {
             console.log(`🎱 Ball drawn: ${data.letter}-${data.num}`);
             
-            // Update ball display
+            // Update ball display with animation
+            const ballDisplay = document.getElementById('lastBall');
             document.getElementById('ballLetter').textContent = data.letter;
             document.getElementById('ballNumber').textContent = data.num;
+            
+            ballDisplay.style.animation = 'none';
+            void ballDisplay.offsetWidth;
+            ballDisplay.style.animation = 'ballPop 0.8s ease-out';
             
             // Add to history
             const history = document.getElementById('ballHistory');
@@ -1326,6 +1352,13 @@
                         cells[i].classList.add('marked');
                         state.markedNumbers.add(data.num);
                         checkBingo();
+                        
+                        // Haptic feedback for matching number
+                        try {
+                            if (tg && tg.HapticFeedback) {
+                                tg.HapticFeedback.impactOccurred('light');
+                            }
+                        } catch(e){}
                     }
                 }
             }
@@ -1435,7 +1468,7 @@
                 <div class="room-status ${getStatusClass(status)}">${statusText}</div>
                 <div class="player-count">
                     <span class="count">${room.playerCount || 0}</span>/100 players
-                    <div style="font-size: 0.5rem; color: #10b981; margin-top: 2px;">
+                    <div style="font-size: 0.65rem; color: #10b981; margin-top: 4px;">
                         Prize: ${room.potentialPrize || 0} ETB
                     </div>
                 </div>
