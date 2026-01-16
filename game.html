@@ -199,28 +199,7 @@
             margin-top: 12px;
         }
 
-        /* Ball Timer Section */
-        .ball-timer-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            min-width: 80px;
-        }
-
-        .ball-timer {
-            font-size: 1.5rem;
-            font-weight: 900;
-            color: var(--accent-gold);
-            text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
-        }
-
-        .ball-timer-label {
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+        /* Timer Section Removed from here - Moved to wait overlay */
 
         .ball-history {
             flex: 1;
@@ -1008,10 +987,6 @@
                 font-size: 1.6rem;
             }
             
-            .ball-timer {
-                font-size: 1.3rem;
-            }
-            
             .history-ball {
                 min-width: 32px;
                 height: 32px;
@@ -1057,10 +1032,6 @@
             
             .ball-number {
                 font-size: 1.4rem;
-            }
-            
-            .ball-timer {
-                font-size: 1.1rem;
             }
         }
 
@@ -1303,7 +1274,6 @@
 <div id="waitOverlay" class="overlay">
     <div class="overlay-content">
         <div class="waiting-container">
-            <div class="countdown-timer" id="waitTimer">30</div>
             <div class="waiting-status" id="lobbyStatus">WAITING FOR PLAYERS</div>
             <div class="player-count">
                 <span class="number" id="playerCount">1</span> online player in arena
@@ -1349,10 +1319,6 @@
                         <div class="current-ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
-                        </div>
-                        <div class="ball-timer-section">
-                            <div class="ball-timer" id="ballTimer">30</div>
-                            <div class="ball-timer-label">SECONDS</div>
                         </div>
                     </div>
                     <div class="ball-history" id="ballHistory"></div>
@@ -1631,8 +1597,7 @@
         isResettingLobby: false,
         discoveryTimerInterval: null,
         currentDiscoveryTimer: 30,
-        ballTimerInterval: null, // Add ball timer interval
-        ballTimerValue: 30 // Add ball timer value
+        // Removed ball timer related states
     };
 
     // Wallet state
@@ -1641,57 +1606,7 @@
         activeTab: 'deposit'
     };
 
-    // Ball Timer Functions
-    function startBallTimer() {
-        stopBallTimer(); // Clear any existing timer
-        
-        state.ballTimerValue = 30;
-        updateBallTimerDisplay();
-        
-        state.ballTimerInterval = setInterval(() => {
-            state.ballTimerValue--;
-            updateBallTimerDisplay();
-            
-            if (state.ballTimerValue <= 0) {
-                stopBallTimer();
-                // Timer reached 0 - optional: show notification
-                if (state.ballTimerValue === 0) {
-                    showNotification('⏰ Ball timer expired!', 'warning', 2000);
-                }
-            }
-        }, 1000);
-    }
-    
-    function stopBallTimer() {
-        if (state.ballTimerInterval) {
-            clearInterval(state.ballTimerInterval);
-            state.ballTimerInterval = null;
-        }
-    }
-    
-    function resetBallTimer() {
-        state.ballTimerValue = 30;
-        updateBallTimerDisplay();
-    }
-    
-    function updateBallTimerDisplay() {
-        const timerElement = document.getElementById('ballTimer');
-        if (timerElement) {
-            timerElement.textContent = state.ballTimerValue;
-            
-            // Update color based on timer value
-            if (state.ballTimerValue > 10) {
-                timerElement.style.color = 'var(--accent-gold)';
-                timerElement.style.animation = '';
-            } else if (state.ballTimerValue > 5) {
-                timerElement.style.color = 'var(--warning)';
-                timerElement.style.animation = 'timerWarning 1s infinite';
-            } else {
-                timerElement.style.color = 'var(--error)';
-                timerElement.style.animation = 'timerCritical 0.5s infinite';
-            }
-        }
-    }
+    // Timer Functions - Removed ball timer functions
 
     // Update connection status UI
     function updateConnectionStatus(connected, message) {
@@ -1958,8 +1873,6 @@
         
         updateConnectionStatus(false, 'DISCONNECTED');
         showOverlay('reconnectOverlay');
-        
-        stopBallTimer(); // Stop ball timer on disconnect
         
         state.connectionAttempts++;
         
@@ -2332,9 +2245,6 @@
         void ballDisplay.offsetWidth;
         ballDisplay.style.animation = 'ballPop 0.8s ease-out';
 
-        // Start the 30-second ball timer
-        startBallTimer();
-        
         state.history.unshift({ num, letter });
         const h = document.getElementById('ballHistory');
         h.innerHTML = '';
@@ -2475,9 +2385,6 @@
         if (state.isResettingLobby) return;
         state.isResettingLobby = true;
         
-        // Stop ball timer
-        stopBallTimer();
-        
         state.stake = 0;
         state.grid = [];
         state.calledNumbers.clear();
@@ -2488,7 +2395,6 @@
         state.selectedBox = null;
         state.onlinePlayersCount = 0;
         state.totalPlayersCount = 0;
-        state.ballTimerValue = 30;
         
         if (state.isConnected && state.roomSubscribed) {
             socket.emit('unsubscribeFromRoom', { room: state.stake });
@@ -2504,11 +2410,6 @@
         document.getElementById('roomDisplay').textContent = 'LOBBY';
         document.getElementById('liveCounter').classList.remove('active');
         document.getElementById('bonusBadge').classList.add('hidden');
-        
-        // Reset ball timer display
-        document.getElementById('ballTimer').textContent = '30';
-        document.getElementById('ballTimer').style.color = 'var(--accent-gold)';
-        document.getElementById('ballTimer').style.animation = '';
         
         showOverlay('lobbyOverlay');
         updateRoomDisplay();
@@ -2547,7 +2448,9 @@
     socket.on('gameCountdown', (d) => {
         if(d.room === state.stake) {
             const timerElement = document.getElementById('waitTimer');
-            timerElement.textContent = d.timer;
+            if (timerElement) {
+                timerElement.textContent = d.timer;
+            }
             
             if (d.timer > 0) {
                 document.getElementById('lobbyStatus').textContent = "GAME STARTING IN " + d.timer + " SECONDS!";
@@ -2578,9 +2481,6 @@
             hideOverlay('waitOverlay');
             initGameBoard();
             showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
-            
-            // Start ball timer with initial value
-            resetBallTimer();
             
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
