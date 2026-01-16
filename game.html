@@ -15,10 +15,10 @@
             --main-light: #60a5fa;
             --p-gold: #fbbf24;
             --bg-dark: #020617;
-            --card-glass: rgba(30, 41, 59, 0.9);
-            --border-glass: rgba(255, 255, 255, 0.15);
-            --header-h: 50px;
-            --compact-padding: 12px;
+            --card-glass: rgba(30, 41, 59, 0.95);
+            --border-glass: rgba(255, 255, 255, 0.2);
+            --header-h: 55px;
+            --compact-padding: 15px;
         }
 
         * { 
@@ -36,7 +36,7 @@
             height: 100%;
             width: 100%;
             position: fixed;
-            font-size: 16px;
+            font-size: 17px;
         }
 
         body {
@@ -49,8 +49,8 @@
             top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
             background: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.15) 0, transparent 50%);
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.2) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.2) 0, transparent 50%);
         }
 
         /* Overlays */
@@ -64,7 +64,7 @@
             justify-content: center;
             align-items: center;
             padding: var(--compact-padding);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             text-align: center;
             pointer-events: none;
             opacity: 0;
@@ -78,14 +78,14 @@
             visibility: visible; 
         }
 
-        #reconnectOverlay { background: rgba(2, 6, 23, 0.9); z-index: 10001; }
+        #reconnectOverlay { background: rgba(2, 6, 23, 0.95); z-index: 10001; }
         #insufficientOverlay { z-index: 10000; }
         #roomLockedOverlay { z-index: 10002; }
 
         .game-status-title {
-            font-size: 3rem;
+            font-size: 3.5rem;
             font-weight: 900;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
 
         .win-gradient {
@@ -103,30 +103,30 @@
         @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes pulse { 
             0% { transform: scale(1); }
-            50% { transform: scale(1.08); }
+            50% { transform: scale(1.1); }
             100% { transform: scale(1); }
         }
         @keyframes slideIn {
-            from { transform: translateY(-10px); opacity: 0; }
+            from { transform: translateY(-15px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
         @keyframes ballPop {
-            0% { transform: scale(0.8); opacity: 0; }
-            50% { transform: scale(1.1); opacity: 1; }
+            0% { transform: scale(0.7); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
         }
 
-        /* LARGER Header */
+        /* Header */
         .header {
             height: var(--header-h);
-            padding: 10px 16px;
+            padding: 12px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(15, 23, 42, 0.95);
-            border-bottom: 1px solid var(--border-glass);
+            background: rgba(15, 23, 42, 0.98);
+            border-bottom: 2px solid var(--border-glass);
             flex-shrink: 0;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
         }
 
         .user-info {
@@ -137,29 +137,29 @@
 
         .user-name {
             font-weight: 900;
-            font-size: 0.9rem;
+            font-size: 1rem;
             color: white;
         }
 
         .room-info {
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             color: #64748b;
         }
 
         .balance-compact {
             display: flex;
             align-items: center;
-            gap: 8px;
-            background: rgba(251, 191, 36, 0.2);
-            padding: 8px 14px;
-            border-radius: 25px;
-            border: 1.5px solid rgba(251, 191, 36, 0.4);
+            gap: 10px;
+            background: rgba(251, 191, 36, 0.25);
+            padding: 10px 18px;
+            border-radius: 30px;
+            border: 2px solid rgba(251, 191, 36, 0.5);
             font-weight: 900;
             color: var(--p-gold);
-            font-size: 0.9rem;
+            font-size: 1rem;
             cursor: pointer;
             transition: all 0.2s;
-            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+            box-shadow: 0 6px 20px rgba(251, 191, 36, 0.2);
         }
 
         .balance-compact:active {
@@ -172,35 +172,35 @@
         }
 
         .wallet-icon {
-            font-size: 0.8rem;
+            font-size: 0.9rem;
         }
 
-        /* LARGER Main Game Area */
+        /* Main Game Area */
         .game-container {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 15px;
+            padding: 18px;
             overflow-y: auto;
-            gap: 15px;
+            gap: 18px;
         }
 
-        /* LARGER Ball Display */
+        /* Ball Display */
         .ball-section {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
-            padding: 12px;
+            gap: 12px;
+            padding: 15px;
             background: var(--card-glass);
-            border-radius: 16px;
-            border: 1px solid var(--border-glass);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            border: 2px solid var(--border-glass);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
         }
 
         .ball-display {
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             background: radial-gradient(circle at 35% 35%, #fff, #cbd5e1);
             border-radius: 50%;
             display: flex;
@@ -209,32 +209,32 @@
             justify-content: center;
             color: #0f172a;
             font-weight: 900;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             border: 3px solid #fff;
             position: relative;
         }
 
         .ball-letter {
-            font-size: 1rem;
+            font-size: 1.2rem;
             font-weight: 900;
             position: absolute;
-            top: 8px;
-            height: 18px;
+            top: 10px;
+            height: 20px;
             width: 100%;
             text-align: center;
             color: var(--main-color);
         }
 
         .ball-number {
-            font-size: 1.8rem;
-            margin-top: 15px;
+            font-size: 2.2rem;
+            margin-top: 18px;
         }
 
         .ball-history {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             overflow-x: auto;
-            padding: 6px;
+            padding: 8px;
             max-width: 100%;
             scrollbar-width: none;
         }
@@ -244,9 +244,9 @@
         }
 
         .history-ball {
-            min-width: 28px;
-            height: 28px;
-            background: rgba(255,255,255,0.08);
+            min-width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.1);
             border-radius: 50%;
             display: flex;
             flex-direction: column;
@@ -254,69 +254,69 @@
             justify-content: center;
             font-weight: 900;
             color: #94a3b8;
-            border: 1px solid var(--border-glass);
+            border: 2px solid var(--border-glass);
             flex-shrink: 0;
             position: relative;
-            font-size: 0.7rem;
+            font-size: 0.8rem;
         }
 
         .history-letter {
             position: absolute;
-            top: 2px;
-            font-size: 0.6rem;
+            top: 3px;
+            font-size: 0.7rem;
             font-weight: 900;
             color: var(--main-color);
         }
 
         .history-number {
-            margin-top: 10px;
-            font-size: 0.7rem;
+            margin-top: 12px;
+            font-size: 0.8rem;
         }
 
-        /* MUCH LARGER Bingo Grid */
+        /* Bingo Grid - EVEN BIGGER */
         .bingo-section {
             background: var(--card-glass);
-            padding: 10px;
-            border-radius: 14px;
-            border: 1px solid var(--border-glass);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 18px;
+            border: 2px solid var(--border-glass);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
         }
 
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
-            margin-bottom: 4px;
+            gap: 6px;
+            margin-bottom: 6px;
         }
 
         .bingo-letter-cell {
             aspect-ratio: 1;
-            background: rgba(255,255,255,0.08);
-            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 1rem;
+            font-size: 1.2rem;
             color: var(--main-color);
         }
 
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
+            gap: 6px;
         }
 
         .cell {
             aspect-ratio: 1;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 1rem;
+            font-size: 1.3rem;
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.1s;
@@ -331,44 +331,44 @@
             background: linear-gradient(135deg, var(--main-color), #60a5fa);
             color: white;
             border: none;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
         }
 
         .cell.free {
             background: linear-gradient(135deg, #f59e0b, #fbbf24);
             color: white;
-            font-size: 0.8rem;
+            font-size: 1rem;
         }
 
         .cell.corner::before {
             content: "★";
             position: absolute;
-            top: 2px;
-            right: 2px;
-            font-size: 0.6rem;
+            top: 3px;
+            right: 3px;
+            font-size: 0.7rem;
             color: var(--p-gold);
         }
 
-        /* LARGER Stake Selection */
+        /* Stake Selection - BIGGER */
         .stake-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin: 12px 0;
+            gap: 15px;
+            margin: 15px 0;
         }
 
         .stake-card {
             background: var(--card-glass);
-            padding: 16px 10px;
-            border-radius: 14px;
-            border: 1px solid var(--border-glass);
+            padding: 20px 12px;
+            border-radius: 16px;
+            border: 2px solid var(--border-glass);
             display: flex;
             flex-direction: column;
             align-items: center;
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
         }
 
         .stake-card:active {
@@ -376,57 +376,57 @@
         }
 
         .stake-name {
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
 
         .stake-value {
-            font-size: 1.3rem;
+            font-size: 1.6rem;
             font-weight: 900;
             color: var(--p-gold);
-            margin-bottom: 6px;
-            text-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+            margin-bottom: 8px;
+            text-shadow: 0 3px 12px rgba(251, 191, 36, 0.4);
         }
 
         .room-status {
             position: absolute;
-            top: 8px;
-            right: 8px;
-            font-size: 0.6rem;
-            padding: 3px 6px;
-            border-radius: 6px;
+            top: 10px;
+            right: 10px;
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 8px;
             font-weight: 700;
         }
 
         .status-waiting {
-            background: rgba(59, 130, 246, 0.2);
+            background: rgba(59, 130, 246, 0.25);
             color: var(--main-color);
-            border: 1px solid rgba(59, 130, 246, 0.4);
+            border: 1px solid rgba(59, 130, 246, 0.5);
         }
         
         .status-starting {
-            background: rgba(251, 191, 36, 0.2);
+            background: rgba(251, 191, 36, 0.25);
             color: var(--p-gold);
-            border: 1px solid rgba(251, 191, 36, 0.4);
+            border: 1px solid rgba(251, 191, 36, 0.5);
         }
         
         .status-playing, .status-locked {
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.25);
             color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.4);
+            border: 1px solid rgba(239, 68, 68, 0.5);
         }
         
         .status-ended {
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.25);
             color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.4);
+            border: 1px solid rgba(239, 68, 68, 0.5);
         }
 
         .player-count {
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             color: #94a3b8;
             text-align: center;
         }
@@ -434,23 +434,23 @@
         .player-count .count {
             color: var(--p-gold);
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
         }
 
-        /* LARGER Discovery Grid */
+        /* Discovery Grid */
         .discovery-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
-            margin: 12px 0;
-            max-height: 50vh;
+            gap: 7px;
+            margin: 15px 0;
+            max-height: 55vh;
             overflow-y: auto;
         }
 
         .box-item {
             aspect-ratio: 1;
             background: #1e293b;
-            border-radius: 8px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -458,9 +458,9 @@
             color: var(--main-color);
             cursor: pointer;
             transition: all 0.2s;
-            font-size: 0.9rem;
+            font-size: 1rem;
             position: relative;
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.08);
         }
 
         .box-item:not(.taken):active {
@@ -468,34 +468,34 @@
         }
 
         .box-item.taken {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(239, 68, 68, 0.15);
             color: #ef4444;
             cursor: not-allowed;
             opacity: 0.5;
-            border: 1px solid rgba(239, 68, 68, 0.2);
+            border: 2px solid rgba(239, 68, 68, 0.3);
         }
 
         .box-item.selected {
             background: var(--main-color);
             color: white;
             animation: pulse 0.5s infinite;
-            border: 1px solid var(--main-light);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            border: 2px solid var(--main-light);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
         }
 
-        /* LARGER Buttons */
+        /* Buttons */
         .btn-primary {
             background: linear-gradient(90deg, var(--main-color), var(--main-dark));
             color: white;
-            padding: 14px;
-            border-radius: 12px;
+            padding: 18px;
+            border-radius: 16px;
             border: none;
             font-weight: 900;
-            font-size: 1rem;
+            font-size: 1.1rem;
             cursor: pointer;
             transition: all 0.2s;
             width: 100%;
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 8px 28px rgba(59, 130, 246, 0.5);
         }
 
         .btn-primary:active {
@@ -509,13 +509,13 @@
         }
 
         .btn-secondary {
-            background: rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.1);
             color: #94a3b8;
-            padding: 10px 16px;
-            border-radius: 10px;
-            border: 1px solid var(--border-glass);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 2px solid var(--border-glass);
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -524,81 +524,81 @@
             transform: scale(0.98);
         }
 
-        /* LARGER Overlay Content */
+        /* Overlay Content */
         .overlay-content {
             width: 100%;
-            max-width: 340px;
+            max-width: 380px;
             background: var(--card-glass);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 25px;
+            border: 2px solid var(--border-glass);
             animation: slideIn 0.3s ease;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
         }
 
-        /* LARGER Timer */
+        /* Timer */
         .timer-compact {
-            font-size: 3.5rem;
+            font-size: 4rem;
             font-weight: 900;
             color: var(--p-gold);
-            margin: 12px 0;
-            text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            margin: 15px 0;
+            text-shadow: 0 0 25px rgba(251, 191, 36, 0.6);
         }
 
         /* Status Indicators */
         .online-indicator {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 0.7rem;
+            gap: 8px;
+            font-size: 0.8rem;
             color: #94a3b8;
             justify-content: center;
-            margin: 12px 0;
+            margin: 15px 0;
         }
 
         .online-dot {
-            width: 8px;
-            height: 8px;
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
             background: #10b981;
             animation: pulse 2s infinite;
         }
 
-        /* LARGER Quick Info Bar */
+        /* Quick Info Bar */
         .quick-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 12px;
+            padding: 12px 15px;
             background: rgba(0,0,0,0.4);
-            border-radius: 10px;
-            font-size: 0.75rem;
-            margin: 12px 0;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin: 15px 0;
         }
 
         /* Connection Status */
         .connection-status {
             position: fixed;
-            top: 6px;
+            top: 8px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
-            padding: 4px 12px;
-            background: rgba(15, 23, 42, 0.9);
-            border-radius: 16px;
-            border: 1px solid var(--border-glass);
-            font-size: 0.6rem;
+            padding: 5px 15px;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 20px;
+            border: 2px solid var(--border-glass);
+            font-size: 0.7rem;
             color: #94a3b8;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
         }
 
         .connection-dot {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
             background: #ef4444;
         }
@@ -607,48 +607,48 @@
             background: #10b981;
         }
 
-        /* LARGER Wallet */
+        /* Wallet */
         .wallet-tabs {
             display: flex;
-            gap: 6px;
-            margin-bottom: 16px;
-            background: rgba(255,255,255,0.08);
-            padding: 3px;
-            border-radius: 10px;
+            gap: 8px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.1);
+            padding: 4px;
+            border-radius: 12px;
         }
 
         .wallet-tab {
             flex: 1;
-            padding: 8px;
+            padding: 10px;
             border: none;
             background: transparent;
             color: #94a3b8;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             font-weight: 700;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
         }
 
         .wallet-tab.active {
-            background: rgba(59, 130, 246, 0.25);
+            background: rgba(59, 130, 246, 0.3);
             color: var(--main-color);
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+            box-shadow: 0 3px 12px rgba(59, 130, 246, 0.3);
         }
 
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin: 12px 0;
+            gap: 10px;
+            margin: 15px 0;
         }
 
         .amount-btn {
-            padding: 10px;
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.4);
-            border-radius: 10px;
+            padding: 12px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid rgba(59, 130, 246, 0.5);
+            border-radius: 12px;
             color: var(--main-color);
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             font-weight: 700;
             cursor: pointer;
         }
@@ -659,27 +659,27 @@
 
         .input-compact {
             width: 100%;
-            padding: 12px;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid var(--border-glass);
-            border-radius: 10px;
+            padding: 14px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid var(--border-glass);
+            border-radius: 12px;
             color: white;
-            font-size: 0.85rem;
-            margin: 8px 0;
+            font-size: 0.95rem;
+            margin: 10px 0;
         }
 
         /* Live Box Counter */
         .live-box-counter {
             position: fixed;
-            top: 55px;
-            right: 12px;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid var(--border-glass);
-            border-radius: 10px;
-            padding: 8px 12px;
-            font-size: 0.7rem;
+            top: 60px;
+            right: 15px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 2px solid var(--border-glass);
+            border-radius: 12px;
+            padding: 10px 15px;
+            font-size: 0.8rem;
             z-index: 100;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             display: none;
         }
 
@@ -688,7 +688,7 @@
         }
 
         .live-box-counter .count {
-            font-size: 1.2rem;
+            font-size: 1.4rem;
             font-weight: 900;
             color: var(--p-gold);
             text-align: center;
@@ -697,7 +697,7 @@
 
         .live-box-counter .label {
             color: #94a3b8;
-            font-size: 0.6rem;
+            font-size: 0.7rem;
             text-align: center;
             display: block;
         }
@@ -705,22 +705,22 @@
         /* Notification */
         .notification {
             position: fixed;
-            top: 55px;
+            top: 60px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 10000;
             width: 90%;
-            max-width: 320px;
-            background: rgba(59, 130, 246, 0.9);
+            max-width: 350px;
+            background: rgba(59, 130, 246, 0.95);
             color: white;
-            padding: 10px 16px;
-            border-radius: 10px;
-            font-size: 0.8rem;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 0.9rem;
             text-align: center;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             animation: slideIn 0.3s ease-out;
             display: none;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
         }
 
         .notification.show {
@@ -731,62 +731,65 @@
         /* Mobile Optimizations */
         @media (max-width: 360px) {
             :root {
-                --header-h: 45px;
-                --compact-padding: 10px;
+                --header-h: 50px;
+                --compact-padding: 12px;
             }
             
             .ball-display {
-                width: 65px;
-                height: 65px;
+                width: 75px;
+                height: 75px;
             }
             
             .ball-number {
-                font-size: 1.6rem;
+                font-size: 2rem;
             }
             
             .cell {
-                font-size: 0.9rem;
+                font-size: 1.1rem;
             }
             
             .stake-grid {
-                gap: 10px;
+                gap: 12px;
             }
             
             .stake-card {
-                padding: 14px 8px;
+                padding: 18px 10px;
             }
             
             .stake-value {
-                font-size: 1.2rem;
+                font-size: 1.4rem;
             }
             
             .timer-compact {
-                font-size: 3rem;
+                font-size: 3.5rem;
             }
             
             .overlay-content {
-                padding: 16px;
-                max-width: 320px;
+                padding: 20px;
+                max-width: 340px;
             }
         }
 
-        /* Fix for very small screens */
-        @media (max-height: 600px) {
+        @media (max-height: 700px) {
             .game-container {
-                gap: 10px;
-                padding: 12px;
+                gap: 15px;
+                padding: 15px;
             }
             
             .ball-section {
-                padding: 10px;
+                padding: 12px;
             }
             
             .bingo-section {
-                padding: 8px;
+                padding: 10px;
             }
             
             .stake-grid {
-                gap: 8px;
+                gap: 12px;
+            }
+            
+            .discovery-grid {
+                max-height: 50vh;
             }
         }
     </style>
@@ -812,23 +815,23 @@
 
 <!-- Loading Overlay -->
 <div id="loadingOverlay" class="active">
-    <div style="width: 40px; height: 40px; border: 3px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p style="margin-top: 16px; font-weight: 900; color: var(--main-color); font-size: 0.8rem;">LOADING...</p>
+    <div style="width: 45px; height: 45px; border: 3px solid var(--main-color); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p style="margin-top: 18px; font-weight: 900; color: var(--main-color); font-size: 0.9rem;">LOADING...</p>
 </div>
 
 <!-- Reconnect Overlay -->
 <div id="reconnectOverlay">
-    <div style="width: 40px; height: 40px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-    <p style="margin-top: 16px; font-weight: 900; color: var(--p-gold); font-size: 0.8rem;">RECONNECTING...</p>
+    <div style="width: 45px; height: 45px; border: 3px solid var(--p-gold); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <p style="margin-top: 18px; font-weight: 900; color: var(--p-gold); font-size: 0.9rem;">RECONNECTING...</p>
 </div>
 
-<!-- Room Selection - LARGER -->
+<!-- Room Selection -->
 <div id="stakeOverlay" class="step-overlay active">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
             <div>
-                <h1 style="color: var(--p-gold); font-size: 1.4rem; font-weight: 900;">BINGO ELITE</h1>
-                <p style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px;">Select a room to join</p>
+                <h1 style="color: var(--p-gold); font-size: 1.6rem; font-weight: 900;">BINGO ELITE</h1>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 5px;">Select a room to join</p>
             </div>
             <div class="balance-compact" id="stakeBalance" onclick="showWallet()">
                 <span class="wallet-icon">💰</span>
@@ -845,20 +848,20 @@
             <span>Only online players counted</span>
         </div>
         
-        <button class="btn-secondary" onclick="refreshBalance()" style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px;">
+        <button class="btn-secondary" onclick="refreshBalance()" style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px;">
             <span>🔄</span> Refresh Balance
         </button>
     </div>
 </div>
 
-<!-- Ticket Selection - LARGER -->
+<!-- Ticket Selection -->
 <div id="discoveryOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
-                <h2 style="font-size: 1.1rem; color: white; font-weight: 900;">SELECT TICKET</h2>
-                <p style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px;">
-                    Room: <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700;">10 ETB</span>
+                <h2 style="font-size: 1.3rem; color: white; font-weight: 900;">SELECT TICKET</h2>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 5px;">
+                    Room: <span id="selectedRoomStake" style="color: var(--p-gold); font-weight: 700; font-size: 1rem;">10 ETB</span>
                 </p>
             </div>
             <div class="balance-compact" onclick="showWallet()">
@@ -869,12 +872,12 @@
         
         <div class="quick-info">
             <div>
-                <span style="color: #10b981; font-weight: 700; font-size: 0.8rem;" id="availableCount">100</span> available
+                <span style="color: #10b981; font-weight: 700; font-size: 0.9rem;" id="availableCount">100</span> available
             </div>
             <div>
-                <span style="color: #ef4444; font-weight: 700; font-size: 0.8rem;" id="takenCount">0</span> taken
+                <span style="color: #ef4444; font-weight: 700; font-size: 0.9rem;" id="takenCount">0</span> taken
             </div>
-            <div style="color: #10b981; font-size: 0.7rem; font-weight: 700;">
+            <div style="color: #10b981; font-size: 0.8rem; font-weight: 700;">
                 ● LIVE
             </div>
         </div>
@@ -883,27 +886,27 @@
             <!-- Tickets populated by JS -->
         </div>
         
-        <div id="confirmBoxBtn" style="display: none; margin-top: 12px;">
+        <div id="confirmBoxBtn" style="display: none; margin-top: 15px;">
             <button class="btn-primary" onclick="joinLobby()">
                 CONFIRM SELECTION
             </button>
         </div>
         
-        <button class="btn-secondary" onclick="leaveDiscovery()" style="margin-top: 12px; padding: 10px 16px;">
+        <button class="btn-secondary" onclick="leaveDiscovery()" style="margin-top: 15px; padding: 12px 20px;">
             ← Back to Rooms
         </button>
     </div>
 </div>
 
-<!-- Lobby Waiting - LARGER -->
+<!-- Lobby Waiting -->
 <div id="waitOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="timer-compact" id="waitTimer">30</div>
-        <p style="color: white; font-weight: 900; font-size: 0.9rem; margin-bottom: 6px;" id="lobbyStatus">
+        <p style="color: white; font-weight: 900; font-size: 1rem; margin-bottom: 8px;" id="lobbyStatus">
             WAITING FOR PLAYERS
         </p>
-        <p style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 16px;" id="playersWaitingInfo">
-            <span id="playerCount" style="color: var(--p-gold); font-weight: 700; font-size: 0.9rem;">0</span> online players waiting
+        <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px;" id="playersWaitingInfo">
+            <span id="playerCount" style="color: var(--p-gold); font-weight: 700; font-size: 1rem;">0</span> online players waiting
         </p>
         
         <div class="online-indicator">
@@ -911,13 +914,13 @@
             <span>Game starts with 1 online player</span>
         </div>
         
-        <button class="btn-secondary" onclick="leaveLobby()" style="margin-top: 16px; padding: 10px 16px;">
+        <button class="btn-secondary" onclick="leaveLobby()" style="margin-top: 20px; padding: 12px 20px;">
             Leave Lobby
         </button>
     </div>
 </div>
 
-<!-- Main Game Interface - LARGER -->
+<!-- Main Game Interface -->
 <div id="gameScreen" class="step-overlay">
     <div class="header">
         <div class="user-info">
@@ -956,11 +959,11 @@
     </div>
 </div>
 
-<!-- Wallet Overlay - LARGER -->
+<!-- Wallet Overlay -->
 <div id="walletOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: var(--p-gold); font-size: 1.2rem; font-weight: 900;">💰 WALLET</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="color: var(--p-gold); font-size: 1.4rem; font-weight: 900;">💰 WALLET</h2>
             <div class="balance-compact">
                 <span class="wallet-icon">💰</span>
                 <span id="walletBalanceVal">0.00</span>
@@ -973,24 +976,24 @@
         </div>
         
         <div id="depositTab" style="display: block;">
-            <p style="color: #94a3b8; font-size: 0.8rem; text-align: center; margin-bottom: 16px;">
+            <p style="color: #94a3b8; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
                 Send money to Telebirr: 0962577855
             </p>
             
             <input type="text" class="input-compact" id="receiptNumber" placeholder="Receipt number">
             <input type="number" class="input-compact" id="depositAmount" placeholder="Amount sent (ETB)">
             
-            <button class="btn-primary" onclick="submitDeposit()" style="margin-top: 12px;">
+            <button class="btn-primary" onclick="submitDeposit()" style="margin-top: 15px;">
                 Submit Deposit Request
             </button>
             
-            <p style="color: #64748b; font-size: 0.7rem; text-align: center; margin-top: 16px;">
+            <p style="color: #64748b; font-size: 0.8rem; text-align: center; margin-top: 20px;">
                 Funds added within 24 hours after verification
             </p>
         </div>
         
         <div id="withdrawTab" style="display: none;">
-            <p style="color: #94a3b8; font-size: 0.8rem; text-align: center; margin-bottom: 16px;">
+            <p style="color: #94a3b8; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
                 Select amount to withdraw
             </p>
             
@@ -1003,20 +1006,20 @@
             
             <input type="number" class="input-compact" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
             
-            <div style="background: rgba(251, 191, 36, 0.15); padding: 12px; border-radius: 10px; text-align: center; margin: 12px 0;">
-                <p style="color: #fbbf24; font-size: 0.75rem; margin-bottom: 4px;">Selected Amount</p>
-                <p id="selectedWithdrawAmount" style="font-size: 1.2rem; font-weight: 900; color: white;">0 ETB</p>
+            <div style="background: rgba(251, 191, 36, 0.2); padding: 15px; border-radius: 12px; text-align: center; margin: 15px 0;">
+                <p style="color: #fbbf24; font-size: 0.85rem; margin-bottom: 5px;">Selected Amount</p>
+                <p id="selectedWithdrawAmount" style="font-size: 1.4rem; font-weight: 900; color: white;">0 ETB</p>
             </div>
             
             <input type="tel" class="input-compact" id="withdrawPhoneNumber" placeholder="Phone number (0912345678)">
             
-            <button class="btn-primary" onclick="submitWithdrawal()" style="margin-top: 12px;">
+            <button class="btn-primary" onclick="submitWithdrawal()" style="margin-top: 15px;">
                 Submit Withdrawal
             </button>
             
-            <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; border-radius: 10px; margin-top: 16px; font-size: 0.7rem;">
-                <p style="color: #ef4444; margin-bottom: 6px; font-weight: 700;">⚠️ Important:</p>
-                <ul style="color: #cbd5e1; padding-left: 18px; line-height: 1.5;">
+            <div style="background: rgba(239, 68, 68, 0.2); padding: 15px; border-radius: 12px; margin-top: 20px; font-size: 0.8rem;">
+                <p style="color: #ef4444; margin-bottom: 8px; font-weight: 700;">⚠️ Important:</p>
+                <ul style="color: #cbd5e1; padding-left: 20px; line-height: 1.6;">
                     <li>Min withdrawal: 50 ETB</li>
                     <li>Processed within 24 hours</li>
                     <li>Ensure phone number is correct</li>
@@ -1024,53 +1027,53 @@
             </div>
         </div>
         
-        <button class="btn-secondary" onclick="hideWallet()" style="margin-top: 16px; padding: 10px 16px;">
+        <button class="btn-secondary" onclick="hideWallet()" style="margin-top: 20px; padding: 12px 20px;">
             Back to Game
         </button>
     </div>
 </div>
 
-<!-- Room Locked Overlay - LARGER -->
+<!-- Room Locked Overlay -->
 <div id="roomLockedOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div style="font-size: 3rem; margin-bottom: 16px;">🔒</div>
-        <div class="game-status-title lose-gradient" style="font-size: 1.8rem;">ROOM LOCKED</div>
-        <p id="roomLockedMessage" style="color: white; font-size: 0.9rem; margin: 16px 0;">
+        <div style="font-size: 3.5rem; margin-bottom: 20px;">🔒</div>
+        <div class="game-status-title lose-gradient" style="font-size: 2.2rem;">ROOM LOCKED</div>
+        <p id="roomLockedMessage" style="color: white; font-size: 1rem; margin: 20px 0; line-height: 1.4;">
             Game is in progress. Please wait for the current game to finish.
         </p>
-        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to room selection...</p>
+        <p style="color: #94a3b8; font-size: 0.9rem;">Returning to room selection...</p>
     </div>
 </div>
 
-<!-- Insufficient Funds Overlay - LARGER -->
+<!-- Insufficient Funds Overlay -->
 <div id="insufficientOverlay" class="step-overlay">
     <div class="overlay-content">
-        <div class="game-status-title lose-gradient" style="font-size: 1.8rem;">INSUFFICIENT FUNDS</div>
-        <p id="insufficientMessage" style="color: white; font-size: 1rem; margin: 16px 0; font-weight: 700;">
+        <div class="game-status-title lose-gradient" style="font-size: 2.2rem;">INSUFFICIENT FUNDS</div>
+        <p id="insufficientMessage" style="color: white; font-size: 1.2rem; margin: 20px 0; font-weight: 700;">
             Required: 10 ETB
         </p>
-        <p style="color: #94a3b8; font-size: 0.8rem;">PLEASE TOP UP TO PLAY</p>
-        <button class="btn-secondary" onclick="showWallet()" style="margin-top: 16px; padding: 10px 16px;">
+        <p style="color: #94a3b8; font-size: 0.9rem;">PLEASE TOP UP TO PLAY</p>
+        <button class="btn-secondary" onclick="showWallet()" style="margin-top: 20px; padding: 12px 20px;">
             💰 Go to Wallet
         </button>
     </div>
 </div>
 
-<!-- Win Overlay - LARGER -->
+<!-- Win Overlay -->
 <div id="winOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="game-status-title win-gradient">BINGO!</div>
-        <p id="winPrize" style="color: white; font-size: 1.5rem; font-weight: 900; margin: 12px 0;">+0.00 ETB</p>
-        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to lobby...</p>
+        <p id="winPrize" style="color: white; font-size: 1.8rem; font-weight: 900; margin: 15px 0;">+0.00 ETB</p>
+        <p style="color: #94a3b8; font-size: 0.9rem;">Returning to lobby...</p>
     </div>
 </div>
 
-<!-- Lose Overlay - LARGER -->
+<!-- Lose Overlay -->
 <div id="loseOverlay" class="step-overlay">
     <div class="overlay-content">
         <div class="game-status-title lose-gradient">GAME OVER</div>
-        <p id="loseMessage" style="color: white; font-size: 0.9rem; margin: 12px 0;">Someone else won!</p>
-        <p style="color: #94a3b8; font-size: 0.8rem;">Returning to lobby...</p>
+        <p id="loseMessage" style="color: white; font-size: 1rem; margin: 15px 0;">Someone else won!</p>
+        <p style="color: #94a3b8; font-size: 0.9rem;">Returning to lobby...</p>
     </div>
 </div>
 
@@ -1468,7 +1471,7 @@
                 <div class="room-status ${getStatusClass(status)}">${statusText}</div>
                 <div class="player-count">
                     <span class="count">${room.playerCount || 0}</span>/100 players
-                    <div style="font-size: 0.65rem; color: #10b981; margin-top: 4px;">
+                    <div style="font-size: 0.75rem; color: #10b981; margin-top: 6px;">
                         Prize: ${room.potentialPrize || 0} ETB
                     </div>
                 </div>
@@ -2018,10 +2021,10 @@
         const notification = document.getElementById('notification');
         notification.textContent = message;
         
-        let bgColor = 'rgba(59, 130, 246, 0.9)';
-        if (type === 'success') bgColor = 'rgba(16, 185, 129, 0.9)';
-        if (type === 'error') bgColor = 'rgba(239, 68, 68, 0.9)';
-        if (type === 'warning') bgColor = 'rgba(245, 158, 11, 0.9)';
+        let bgColor = 'rgba(59, 130, 246, 0.95)';
+        if (type === 'success') bgColor = 'rgba(16, 185, 129, 0.95)';
+        if (type === 'error') bgColor = 'rgba(239, 68, 68, 0.95)';
+        if (type === 'warning') bgColor = 'rgba(245, 158, 11, 0.95)';
         
         notification.style.background = bgColor;
         notification.classList.add('show');
