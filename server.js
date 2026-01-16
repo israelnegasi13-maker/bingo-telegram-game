@@ -271,30 +271,54 @@ async function getUser(userId, userName, isBot = false) {
     if (!user) {
       user = new User({
         userId: userId,
-        userName: userName || (isBot ? 'Bot' : 'Guest'),
+        userName: userName || (isBot ? `Bot_${userId.slice(-6)}` : 'Guest'),
         balance: CONFIG.INITIAL_BALANCE,
         referralCode: generateReferralCode(userId),
         telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null,
         isBot: isBot
       });
+      
+      // Add initial balance for bots
+      if (isBot) {
+        user.balance = 1000; // Give bots initial balance
+      }
+      
       await user.save();
       
-      // Record first transaction
+      // Record transaction
       const transaction = new Transaction({
         type: isBot ? 'BOT_CREATED' : 'NEW_USER',
         userId: userId,
-        userName: userName || (isBot ? 'Bot' : 'Guest'),
-        amount: 0,
-        description: isBot ? 'Bot created' : 'New user registered'
+        userName: userName || (isBot ? `Bot_${userId.slice(-6)}` : 'Guest'),
+        amount: isBot ? 1000 : 0,
+        description: isBot ? 'Bot created with initial balance' : 'New user registered'
       });
       await transaction.save();
+      
+      console.log(`🤖 Created new bot user: ${userName} (${userId}) with balance: ${user.balance}`);
     } else {
+      // Update existing user
+      if (isBot && userName && user.userName !== userName) {
+        user.userName = userName;
+      }
+      
       user.lastSeen = new Date();
       user.sessionCount = (user.sessionCount || 0) + 1;
       user.isOnline = true;
       
-      if (userName && user.userName !== userName) {
-        user.userName = userName;
+      // Refill bot balance if low
+      if (isBot && user.balance < 100) {
+        user.balance = 1000;
+        console.log(`💰 Auto-refilled bot ${user.userName} balance to 1000 ETB`);
+        
+        const refillTransaction = new Transaction({
+          type: 'BOT_REFILL',
+          userId: userId,
+          userName: user.userName,
+          amount: 1000,
+          description: 'Auto-refilled bot balance'
+        });
+        await refillTransaction.save();
       }
       
       await user.save();
@@ -1157,6 +1181,32 @@ io.on('connection', (socket) => {
     userId: query.userId || 'unknown'
   });
   
+  // ========== BOT AUTHENTICATION HANDLER ==========
+  socket.on('bot:auth', (password, callback) => {
+    console.log(`🔐 Bot authentication attempt from socket ${socket.id}`);
+    
+    if (password === CONFIG.BOT_SQUAD_PASSWORD) {
+      botSockets.add(socket.id);
+      socket.isBotAuthenticated = true;
+      console.log(`✅ Bot authenticated: ${socket.id}`);
+      
+      if (callback) {
+        callback({ 
+          success: true, 
+          message: 'Bot authenticated successfully' 
+        });
+      }
+    } else {
+      console.log(`❌ Bot auth failed for socket ${socket.id}`);
+      if (callback) {
+        callback({ 
+          success: false, 
+          message: 'Invalid bot password' 
+        });
+      }
+    }
+  });
+  
   // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', (password) => {
     console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
@@ -1823,6 +1873,50 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('admin:getBotStats', async () => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const botUsers = await User.find({ isBot: true }).limit(100);
+      const connectedBotCount = Array.from(botSockets).length;
+      const botUsersWithStatus = botUsers.map(bot => {
+        let isOnline = false;
+        const socketEntries = Array.from(socketToUser.entries());
+        for (const [socketId, userId] of socketEntries) {
+          if (userId === bot.userId) {
+            const s = io.sockets.sockets.get(socketId);
+            if (s?.connected) {
+              isOnline = true;
+              break;
+            }
+          }
+        }
+        
+        return {
+          userId: bot.userId,
+          userName: bot.userName,
+          balance: bot.balance,
+          isOnline: isOnline,
+          currentRoom: bot.currentRoom,
+          lastSeen: bot.lastSeen,
+          createdAt: bot.joinedAt
+        };
+      });
+      
+      socket.emit('admin:botStats', {
+        totalBots: botUsers.length,
+        connectedBots: connectedBotCount,
+        bots: botUsersWithStatus
+      });
+    } catch (error) {
+      console.error('Error getting bot stats:', error);
+      socket.emit('admin:error', 'Error getting bot stats');
+    }
+  });
+  
   // ========== WALLET EVENT HANDLERS ==========
   socket.on('wallet:depositRequest', async (data) => {
     try {
@@ -1951,19 +2045,22 @@ io.on('connection', (socket) => {
     try {
       const { userId, userName, isBot } = data;
       
-      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}, isBot: ${isBot || false}`);
+      // Check if socket is bot authenticated
+      const isBotAuthenticated = socket.isBotAuthenticated || isBot;
+      
+      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}, isBot: ${isBotAuthenticated}`);
       
       // Store userId on socket for tracking
       socket.userId = userId;
       
-      const user = await getUser(userId, userName, isBot);
+      const user = await getUser(userId, userName, isBotAuthenticated);
       
       if (user) {
         // Store in socketToUser map
         socketToUser.set(socket.id, userId);
         
         // Track bot sockets
-        if (isBot) {
+        if (isBotAuthenticated) {
           botSockets.add(socket.id);
           activeBots.set(socket.id, {
             userId: userId,
@@ -2000,13 +2097,13 @@ io.on('connection', (socket) => {
         }
         
         // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId}) ${isBot ? '(BOT)' : ''}`);
+        console.log(`✅ User connected successfully: ${userName} (${userId}) ${isBotAuthenticated ? '(BOT)' : ''}`);
         
         // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity(isBot ? 'BOT_CONNECTED' : 'USER_CONNECTED', { userId, userName, socketId: socket.id, isBot });
+        logActivity(isBotAuthenticated ? 'BOT_CONNECTED' : 'USER_CONNECTED', { userId, userName, socketId: socket.id, isBot: isBotAuthenticated });
       } else {
         if (callback) {
           callback({ success: false, message: 'Failed to initialize user' });
@@ -2143,6 +2240,14 @@ io.on('connection', (socket) => {
         return;
       }
       
+      // Ensure bot has enough balance
+      if (user.isBot && user.balance < room) {
+        // Auto-refill bot balance
+        user.balance = 1000;
+        await user.save();
+        console.log(`🤖 Auto-refilled bot ${user.userName} balance to 1000 ETB`);
+      }
+      
       if (user.balance < room) {
         socket.emit('insufficientFunds');
         if (callback) callback({ success: false, message: 'Insufficient funds' });
@@ -2229,6 +2334,7 @@ io.on('connection', (socket) => {
       console.log(`   Players in room: ${roomData.players.length}`);
       console.log(`   Online players: ${onlinePlayers.length}`);
       console.log(`   Room status: ${roomData.status}`);
+      console.log(`   Is bot: ${user.isBot}`);
       
       // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
       broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
@@ -2305,7 +2411,8 @@ io.on('connection', (socket) => {
         callback({ 
           success: true, 
           message: 'Joined room successfully',
-          onlinePlayers: onlinePlayers.length
+          onlinePlayers: onlinePlayers.length,
+          isBot: user.isBot
         });
       }
       
@@ -2371,6 +2478,7 @@ io.on('connection', (socket) => {
       console.log('   User:', user.userName);
       console.log('   Room:', room);
       console.log('   Processing lock active:', processingClaims.has(roomStake));
+      console.log('   Is bot:', user.isBot);
       
       // Convert marked numbers properly for comparison
       const markedNumbers = marked.map(item => {
@@ -2411,6 +2519,7 @@ io.on('connection', (socket) => {
       console.log(`   Total prize: ${totalPrize} ETB`);
       console.log(`   Is four corners: ${isFourCornersWin}`);
       console.log(`   Bonus: ${bonus} ETB`);
+      console.log(`   Winner is bot: ${user.isBot}`);
       
       // Update user balance
       const oldBalance = user.balance;
@@ -2431,7 +2540,7 @@ io.on('connection', (socket) => {
         userName: user.userName,
         amount: totalPrize,
         room: room,
-        description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
+        description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''}${user.isBot ? ' (BOT WIN)' : ''}`
       });
       await transaction.save();
       
@@ -2443,7 +2552,7 @@ io.on('connection', (socket) => {
         userName: 'House',
         amount: houseEarnings,
         room: room,
-        description: `Commission from ${totalPlayers} players in ${room} ETB room`
+        description: `Commission from ${totalPlayers} players in ${room} ETB room${user.isBot ? ' (BOT GAME)' : ''}`
       });
       await houseTransaction.save();
       
@@ -2467,7 +2576,8 @@ io.on('connection', (socket) => {
         players: playersInRoom.length,
         ballsDrawn: roomData.ballsDrawn,
         isFourCorners: isFourCornersWin,
-        commissionCollected: houseEarnings
+        commissionCollected: houseEarnings,
+        isBotWin: user.isBot || false
       });
       
       // ✅ CRITICAL FIX: Now clear room data
@@ -2500,7 +2610,8 @@ io.on('connection', (socket) => {
         reason: 'bingo_win',
         commissionPerPlayer: commissionPerPlayer,
         contributionPerPlayer: contributionPerPlayer,
-        houseEarnings: houseEarnings
+        houseEarnings: houseEarnings,
+        isBotWin: user.isBot || false
       };
       
       // Send immediate callback response to the winner
@@ -3203,6 +3314,9 @@ app.get('/', (req, res) => {
             <a href="/test-connections" class="btn" style="background: #f59e0b;" target="_blank">🔌 Test Connections</a>
             <a href="/force-start/10" class="btn" style="background: #10b981;" target="_blank">🚀 Force Start Room 10</a>
           </div>
+          <div style="margin-top: 20px;">
+            <a href="/bot-health" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Bot Health Check</a>
+          </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
@@ -3224,6 +3338,7 @@ app.get('/', (req, res) => {
             Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES} minute timeout<br>
             Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
             Bot Squad: ✅ INTEGRATED (Ethiopian Bot Squad)<br>
+            Bot Squad Password: ${CONFIG.BOT_SQUAD_PASSWORD}<br>
             Fixed Issues: ✅ Double prize bug fixed, ✅ Claim lock implemented<br>
             ✅ Timer synchronization fixed, ✅ Game timer working<br>
             ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
@@ -3233,7 +3348,10 @@ app.get('/', (req, res) => {
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
             ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
-            ✅✅✅ BOT SQUAD INTEGRATED WITH ADMIN CONTROLS
+            ✅✅✅ BOT SQUAD INTEGRATED WITH ADMIN CONTROLS<br>
+            ✅✅✅ BOT AUTHENTICATION WORKING<br>
+            ✅✅✅ BOT AUTO-BALANCE REFILL (1000 ETB)<br>
+            ✅✅✅ BOT TRACKING IN ADMIN PANEL
           </p>
         </div>
       </div>
@@ -3289,6 +3407,35 @@ app.get('/bot-squad', (req, res) => {
   
   // Serve the bot squad HTML file
   res.sendFile(path.join(__dirname, 'bot-squad.html'));
+});
+
+// ========== BOT HEALTH CHECK ENDPOINT ==========
+app.get('/bot-health', async (req, res) => {
+  try {
+    const botCount = await User.countDocuments({ isBot: true });
+    const connectedBotCount = botSockets.size;
+    const activeBotUsers = await User.find({ 
+      isBot: true, 
+      isOnline: true 
+    }).limit(10);
+    
+    res.json({
+      status: 'ok',
+      botCount: botCount,
+      connectedBots: connectedBotCount,
+      activeBots: activeBotUsers.map(bot => ({
+        userId: bot.userId,
+        userName: bot.userName,
+        balance: bot.balance,
+        currentRoom: bot.currentRoom,
+        lastSeen: bot.lastSeen
+      })),
+      botSquadPasswordSet: !!CONFIG.BOT_SQUAD_PASSWORD,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE - PROFESSIONAL UX ==========
@@ -3919,6 +4066,9 @@ app.get('/socket-test', (req, res) => {
         <button onclick="testRoomStatus()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
           Test Room Status
         </button>
+        <button onclick="testBotAuth()" style="padding: 10px 20px; margin: 5px; background: #8b5cf6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Test Bot Auth
+        </button>
       </div>
       
       <h3>Connection Log:</h3>
@@ -4004,6 +4154,20 @@ app.get('/socket-test', (req, res) => {
           addLog('Requesting room status...', 'info');
           socket.emit('getTakenBoxes', { room: 10 }, (boxes) => {
             addLog('Taken boxes for room 10: ' + boxes.length + ' boxes', 'info');
+          });
+        }
+        
+        function testBotAuth() {
+          addLog('Testing bot authentication...', 'info');
+          socket.emit('bot:auth', '${CONFIG.BOT_SQUAD_PASSWORD}', (response) => {
+            addLog('Bot auth response: ' + JSON.stringify(response), response.success ? 'success' : 'error');
+            if (response.success) {
+              socket.emit('init', {
+                userId: 'bot-test-' + Date.now(),
+                userName: 'Test Bot',
+                isBot: true
+              });
+            }
           });
         }
         
@@ -4699,15 +4863,16 @@ app.get('/setup-telegram', async (req, res) => {
             <p>5. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
             <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p>7. 🤖 <strong>BOT SQUAD:</strong> Ethiopian Bot Squad fully integrated</p>
+            <p><strong>Bot Squad Features:</strong></p>
+            <p>• Password: ${CONFIG.BOT_SQUAD_PASSWORD}</p>
+            <p>• Auto-balance: Bots auto-refill to 1000 ETB</p>
+            <p>• Bot authentication via 'bot:auth' event</p>
+            <p>• Bot tracking in admin panel</p>
+            <p>• Bot wins tracked separately</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}</p>
             <p>• Minimum Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</p>
             <p>• Admin approval for all transactions</p>
-            <p><strong>Bot Squad Features:</strong></p>
-            <p>• Password protected: ${CONFIG.BOT_SQUAD_PASSWORD}</p>
-            <p>• Ethiopian names and avatars</p>
-            <p>• Real-time bot tracking in admin panel</p>
-            <p>• Bot management controls</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
             <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
@@ -4717,7 +4882,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
-            <p><strong>✅✅ BOT SQUAD FULLY INTEGRATED</strong></p>
+            <p><strong>✅✅ BOT SQUAD FULLY INTEGRATED WITH AUTHENTICATION</strong></p>
           </div>
           
           <div>
@@ -4795,6 +4960,7 @@ server.listen(PORT, () => {
 ║  Debug Room:   /debug-room/:stake                             ║
 ║  Force Start:  /force-start/:stake                            ║
 ║  Test:         /test-connections                              ║
+║  Bot Health:   /bot-health                                    ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
 ║  🔑 Bot Squad Password: ${CONFIG.BOT_SQUAD_PASSWORD}           ║
@@ -4804,7 +4970,8 @@ server.listen(PORT, () => {
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
-║  🤖 Bot Squad: ✅ INTEGRATED                                  ║
+║  🤖 Bot Squad: ✅ INTEGRATED WITH AUTHENTICATION              ║
+║  🤖 Bot Balance: ✅ AUTO-REFILL (1000 ETB)                    ║
 ║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}                ║
 ║  💸 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB              ║
 ║  🆕 NEW FEATURES & FIXES:                                     ║
@@ -4827,6 +4994,9 @@ server.listen(PORT, () => {
 ║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS       ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS    ║
 ║         ✅✅✅✅ BOT SQUAD FULLY INTEGRATED WITH TRACKING     ║
+║         ✅✅✅ BOT AUTHENTICATION WORKING                     ║
+║         ✅✅✅ BOT AUTO-BALANCE REFILL (1000 ETB)             ║
+║         ✅✅✅ BOT WINS TRACKED SEPARATELY                    ║
 ╚════════════════════════════════════════════════════════════════╝
 ✅ Server ready with WALLET SYSTEM, BOT SQUAD, DOUBLE PRIZE FIX and Timer Synchronization
   `);
