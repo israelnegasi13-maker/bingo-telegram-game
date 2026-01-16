@@ -734,7 +734,8 @@
             staggerDelay: 1000,
             isActive: false,
             masterSocket: null,
-            connectionTested: false
+            connectionTested: false,
+            botSquadPassword: "bot1234" // Bot squad password
         };
 
         // Ethiopian Bot Names with detailed profiles
@@ -895,51 +896,74 @@
                 const serverUrl = serverUrlInput.value || config.serverUrl;
                 log(`Testing connection to ${serverUrl}...`, 'info');
                 
-                if (config.masterSocket && config.masterSocket.connected) {
-                    config.masterSocket.disconnect();
-                }
-                
-                config.masterSocket = io(serverUrl, {
-                    transports: ['websocket', 'polling'],
-                    reconnection: false,
-                    timeout: 5000
-                });
-                
-                config.masterSocket.on('connect', () => {
-                    log(`✅ Successfully connected to server`, 'success');
-                    connectionDot.className = 'connection-dot connected';
-                    connectionStatus.textContent = `Connected to ${serverUrl}`;
-                    globalStatus.textContent = '✅ CONNECTED';
-                    globalStatus.className = 'status-indicator active';
-                    serverUrlDisplay.textContent = serverUrl;
-                    config.connectionTested = true;
-                    resolve(true);
-                    
-                    // Test a quick ping
-                    config.masterSocket.emit('ping');
-                    config.masterSocket.on('pong', () => {
-                        log(`✅ Server ping successful`, 'success');
+                // First test with fetch to check if server is reachable
+                fetch(`${serverUrl}/health`)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        } else {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                    })
+                    .then(data => {
+                        log(`✅ Server is reachable (${data.status})`, 'success');
+                        
+                        // Now test socket.io connection
+                        if (config.masterSocket && config.masterSocket.connected) {
+                            config.masterSocket.disconnect();
+                        }
+                        
+                        config.masterSocket = io(serverUrl, {
+                            transports: ['websocket', 'polling'],
+                            reconnection: false,
+                            timeout: 5000
+                        });
+                        
+                        config.masterSocket.on('connect', () => {
+                            log(`✅ Successfully connected to server via Socket.IO`, 'success');
+                            connectionDot.className = 'connection-dot connected';
+                            connectionStatus.textContent = `Connected to ${serverUrl}`;
+                            globalStatus.textContent = '✅ CONNECTED';
+                            globalStatus.className = 'status-indicator active';
+                            serverUrlDisplay.textContent = serverUrl;
+                            config.connectionTested = true;
+                            resolve(true);
+                            
+                            // Test a quick ping
+                            config.masterSocket.emit('ping');
+                            config.masterSocket.on('pong', () => {
+                                log(`✅ Server ping successful`, 'success');
+                            });
+                            
+                            // Disconnect test socket
+                            setTimeout(() => {
+                                config.masterSocket.disconnect();
+                            }, 1000);
+                        });
+                        
+                        config.masterSocket.on('connect_error', (error) => {
+                            log(`❌ Socket.IO connection failed: ${error.message}`, 'error');
+                            connectionDot.className = 'connection-dot';
+                            connectionStatus.textContent = `Socket.IO failed: ${error.message}`;
+                            globalStatus.textContent = '❌ SOCKET FAILED';
+                            globalStatus.className = 'status-indicator';
+                            config.connectionTested = false;
+                            resolve(false);
+                        });
+                        
+                        config.masterSocket.on('disconnect', () => {
+                            log(`Test socket disconnected`, 'info');
+                        });
+                    })
+                    .catch(error => {
+                        log(`❌ Cannot reach server: ${error.message}`, 'error');
+                        connectionDot.className = 'connection-dot';
+                        connectionStatus.textContent = `Failed to connect: ${error.message}`;
+                        globalStatus.textContent = '❌ CONNECTION FAILED';
+                        globalStatus.className = 'status-indicator';
+                        config.connectionTested = false;
+                        resolve(false);
                     });
-                    
-                    // Disconnect test socket
-                    setTimeout(() => {
-                        config.masterSocket.disconnect();
-                    }, 1000);
-                });
-                
-                config.masterSocket.on('connect_error', (error) => {
-                    log(`❌ Connection failed: ${error.message}`, 'error');
-                    connectionDot.className = 'connection-dot';
-                    connectionStatus.textContent = `Failed to connect: ${error.message}`;
-                    globalStatus.textContent = '❌ CONNECTION FAILED';
-                    globalStatus.className = 'status-indicator';
-                    config.connectionTested = false;
-                    resolve(false);
-                });
-                
-                config.masterSocket.on('disconnect', () => {
-                    log(`Test socket disconnected`, 'info');
-                });
             });
         }
 
@@ -999,28 +1023,40 @@
                         timeout: 10000,
                         query: {
                             userId: bot.id,
-                            userName: bot.name
+                            userName: bot.name,
+                            isBot: true  // Mark as bot
                         }
                     });
 
                     bot.socket.on('connect', () => {
                         log(`Bot ${bot.name} connected to server`, 'success');
-                        updateBotStatus(index, 'connected');
-                        bot.isConnected = true;
-                        bot.lastPing = Date.now();
                         
-                        // Initialize bot
-                        bot.socket.emit('init', {
-                            userId: bot.id,
-                            userName: bot.name
-                        }, (response) => {
-                            if (response?.success) {
-                                log(`Bot ${bot.name} initialized successfully`, 'success');
-                                updateBotStatus(index, 'initialized');
-                                bot.connectionAttempts = 0;
-                                resolve(true);
+                        // Send bot authentication
+                        bot.socket.emit('bot:auth', config.botSquadPassword, (authResponse) => {
+                            if (authResponse?.success) {
+                                log(`Bot ${bot.name} authenticated as bot`, 'success');
+                                updateBotStatus(index, 'connected');
+                                bot.isConnected = true;
+                                bot.lastPing = Date.now();
+                                
+                                // Initialize bot with isBot flag
+                                bot.socket.emit('init', {
+                                    userId: bot.id,
+                                    userName: bot.name,
+                                    isBot: true
+                                }, (response) => {
+                                    if (response?.success) {
+                                        log(`Bot ${bot.name} initialized successfully`, 'success');
+                                        updateBotStatus(index, 'initialized');
+                                        bot.connectionAttempts = 0;
+                                        resolve(true);
+                                    } else {
+                                        log(`Bot ${bot.name} failed to initialize: ${response?.message || 'Unknown error'}`, 'error');
+                                        resolve(false);
+                                    }
+                                });
                             } else {
-                                log(`Bot ${bot.name} failed to initialize: ${response?.message || 'Unknown error'}`, 'error');
+                                log(`Bot ${bot.name} failed authentication: ${authResponse?.message || 'Unknown error'}`, 'error');
                                 resolve(false);
                             }
                         });
@@ -1737,7 +1773,9 @@
             // Set auto-detected server URL
             const currentOrigin = window.location.origin;
             autoServerUrlSpan.textContent = currentOrigin;
+            serverUrlInput.value = currentOrigin; // Set the value
             serverUrlInput.placeholder = currentOrigin;
+            config.serverUrl = currentOrigin; // Update config
             
             // Initialize bots
             initializeBots();
@@ -1746,16 +1784,21 @@
             
             // Test initial connection
             setTimeout(() => {
-                testServerConnection();
+                testServerConnection().then(connected => {
+                    if (connected) {
+                        log('✅ Server connection successful', 'success');
+                        // Auto-start if URL parameter present
+                        const urlParams = new URLSearchParams(window.location.search);
+                        if (urlParams.get('autoStart') === 'true') {
+                            setTimeout(() => {
+                                toggleBots();
+                            }, 2000);
+                        }
+                    } else {
+                        log('❌ Server connection failed. Check server URL.', 'error');
+                    }
+                });
             }, 1000);
-
-            // Auto-start if URL parameter present
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('autoStart') === 'true') {
-                setTimeout(() => {
-                    toggleBots();
-                }, 2000);
-            }
         }
 
         // Event listeners
@@ -1795,6 +1838,7 @@
         });
 
         document.getElementById('serverUrl').addEventListener('change', function() {
+            config.serverUrl = this.value;
             config.connectionTested = false;
             log(`Server URL changed to ${this.value}, need to reconnect`, 'info');
         });
