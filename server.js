@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP - FULLY FIXED VERSION WITH WALLET SUPPORT AND BOT SQUAD INTEGRATION
+// server.js - BINGO ELITE - TELEGRAM MINI APP - WITH BOT SQUAD INTEGRATION
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -39,8 +39,7 @@ const userSchema = new mongoose.Schema({
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' },
   phoneNumber: { type: String },
-  isBot: { type: Boolean, default: false },
-  botPersonality: { type: String, default: '' }
+  isBot: { type: Boolean, default: false }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -94,7 +93,8 @@ const statsSchema = new mongoose.Schema({
   totalUsers: { type: Number, default: 0 },
   newUsers: { type: Number, default: 0 },
   totalBingos: { type: Number, default: 0 },
-  totalFourCorners: { type: Number, default: 0 }
+  totalFourCorners: { type: Number, default: 0 },
+  botGames: { type: Number, default: 0 }
 });
 
 const User = mongoose.model('User', userSchema);
@@ -149,8 +149,8 @@ app.use((req, res, next) => {
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "admin1234",
+  BOT_SQUAD_PASSWORD: process.env.BOT_SQUAD_PASSWORD || "bot1234",
   INITIAL_BALANCE: 0.00,
-  BOT_INITIAL_BALANCE: 10000.00, // Bots start with 10,000 ETB
   ROOM_STAKES: [10, 20, 50, 100],
   MAX_PLAYERS_PER_ROOM: 100,
   GAME_TIMER: 3,
@@ -170,17 +170,20 @@ const CONFIG = {
   GAME_TIMEOUT_MINUTES: 7,
   TELEBIRR_NUMBER: "0962577855",
   MIN_WITHDRAWAL: 50,
-  MAX_WITHDRAWAL: 10000
+  MAX_WITHDRAWAL: 10000,
+  MAX_BOTS_PER_ROOM: 10
 };
 
 // ========== GLOBAL STATE ==========
 let socketToUser = new Map();
 let adminSockets = new Set();
+let botSockets = new Set();
 let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
 let processingClaims = new Map();
+let activeBots = new Map();
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
 function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
@@ -261,37 +264,30 @@ function generateReferralCode(userId) {
   return code + userId.slice(-4);
 }
 
-async function getUser(userId, userName) {
+async function getUser(userId, userName, isBot = false) {
   try {
     let user = await User.findOne({ userId: userId });
     
     if (!user) {
-      const isBot = userId.startsWith('eth_bot_');
-      
       user = new User({
         userId: userId,
-        userName: userName || 'Guest',
-        balance: isBot ? CONFIG.BOT_INITIAL_BALANCE : CONFIG.INITIAL_BALANCE,
+        userName: userName || (isBot ? 'Bot' : 'Guest'),
+        balance: CONFIG.INITIAL_BALANCE,
         referralCode: generateReferralCode(userId),
         telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null,
-        isBot: isBot,
-        botPersonality: isBot ? userName.split(' ')[0] : ''
+        isBot: isBot
       });
       await user.save();
       
       // Record first transaction
       const transaction = new Transaction({
-        type: 'NEW_USER',
+        type: isBot ? 'BOT_CREATED' : 'NEW_USER',
         userId: userId,
-        userName: userName || 'Guest',
+        userName: userName || (isBot ? 'Bot' : 'Guest'),
         amount: 0,
-        description: `New ${isBot ? 'bot' : 'user'} registered`
+        description: isBot ? 'Bot created' : 'New user registered'
       });
       await transaction.save();
-      
-      if (isBot) {
-        console.log(`🤖 New bot created: ${userName} with ${CONFIG.BOT_INITIAL_BALANCE} ETB balance`);
-      }
     } else {
       user.lastSeen = new Date();
       user.sessionCount = (user.sessionCount || 0) + 1;
@@ -459,13 +455,13 @@ async function updateAdminPanel() {
         currentRoom: user.currentRoom,
         box: user.box,
         isOnline: isOnline,
-        isBot: user.isBot || false,
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
         lastSeen: user.lastSeen,
         telegramId: user.telegramId || '',
         phoneNumber: user.phoneNumber || '',
-        joinedAt: user.joinedAt
+        joinedAt: user.joinedAt,
+        isBot: user.isBot || false
       };
     });
     
@@ -508,6 +504,7 @@ async function updateAdminPanel() {
     
     // Get real-time connected sockets count
     const connectedSocketsCount = connectedSockets.size;
+    const botSocketsCount = botSockets.size;
     
     // Send to all admin sockets
     const adminData = {
@@ -515,6 +512,7 @@ async function updateAdminPanel() {
       activeGames: activeGames,
       totalUsers: users.length,
       connectedSockets: connectedSocketsCount,
+      botSockets: botSocketsCount,
       houseBalance: houseBalance,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime(),
@@ -537,7 +535,7 @@ async function updateAdminPanel() {
       }
     });
     
-    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games`);
+    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games, ${botSocketsCount} bot sockets`);
     
   } catch (error) {
     console.error('Error updating admin panel:', error);
@@ -1737,6 +1735,94 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== BOT SQUAD ADMIN CONTROLS ==========
+  socket.on('admin:botControl', async (data) => {
+    if (!adminSockets.has(socket.id)) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    
+    try {
+      const { action, roomStake, count, userId } = data;
+      
+      switch(action) {
+        case 'activateBots':
+          // Activate bots in a room
+          const room = await Room.findOne({ stake: parseInt(roomStake) });
+          if (!room) {
+            socket.emit('admin:error', 'Room not found');
+            return;
+          }
+          
+          const botCount = Math.min(count || 5, CONFIG.MAX_BOTS_PER_ROOM);
+          const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
+          const availableBoxes = 100 - room.takenBoxes.length;
+          
+          if (availableBoxes < botCount) {
+            socket.emit('admin:error', `Only ${availableBoxes} boxes available`);
+            return;
+          }
+          
+          socket.emit('admin:success', `Activating ${botCount} bots in ${roomStake} ETB room`);
+          logActivity('ADMIN_BOT_ACTIVATE', { adminSocket: socket.id, roomStake, botCount }, socket.id);
+          break;
+          
+        case 'deactivateBots':
+          // Deactivate all bots
+          socket.emit('admin:success', 'Deactivating all bots');
+          logActivity('ADMIN_BOT_DEACTIVATE', { adminSocket: socket.id }, socket.id);
+          break;
+          
+        case 'botStats':
+          // Get bot statistics
+          const botUsers = await User.find({ isBot: true });
+          const activeBotCount = botUsers.filter(u => u.isOnline).length;
+          
+          socket.emit('admin:botStats', {
+            totalBots: botUsers.length,
+            activeBots: activeBotCount,
+            bots: botUsers.map(bot => ({
+              userId: bot.userId,
+              userName: bot.userName,
+              balance: bot.balance,
+              isOnline: bot.isOnline,
+              currentRoom: bot.currentRoom
+            }))
+          });
+          break;
+          
+        case 'addBotFunds':
+          // Add funds to a bot
+          const botUser = await User.findOne({ userId: userId, isBot: true });
+          if (!botUser) {
+            socket.emit('admin:error', 'Bot not found');
+            return;
+          }
+          
+          const amount = data.amount || 1000;
+          botUser.balance += amount;
+          await botUser.save();
+          
+          const botTransaction = new Transaction({
+            type: 'BOT_FUNDS',
+            userId: userId,
+            userName: botUser.userName,
+            amount: amount,
+            description: `Admin added ${amount} ETB to bot`
+          });
+          await botTransaction.save();
+          
+          socket.emit('admin:success', `Added ${amount} ETB to bot ${botUser.userName}`);
+          logActivity('ADMIN_BOT_ADD_FUNDS', { adminSocket: socket.id, botId: userId, amount }, socket.id);
+          break;
+      }
+      
+    } catch (error) {
+      console.error('Error in bot control:', error);
+      socket.emit('admin:error', 'Error: ' + error.message);
+    }
+  });
+  
   // ========== WALLET EVENT HANDLERS ==========
   socket.on('wallet:depositRequest', async (data) => {
     try {
@@ -1863,18 +1949,28 @@ io.on('connection', (socket) => {
   // Player events
   socket.on('init', async (data, callback) => {
     try {
-      const { userId, userName } = data;
+      const { userId, userName, isBot } = data;
       
-      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
+      console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}, isBot: ${isBot || false}`);
       
       // Store userId on socket for tracking
       socket.userId = userId;
       
-      const user = await getUser(userId, userName);
+      const user = await getUser(userId, userName, isBot);
       
       if (user) {
         // Store in socketToUser map
         socketToUser.set(socket.id, userId);
+        
+        // Track bot sockets
+        if (isBot) {
+          botSockets.add(socket.id);
+          activeBots.set(socket.id, {
+            userId: userId,
+            userName: userName,
+            connectedAt: new Date()
+          });
+        }
         
         // Also update user's lastSeen immediately
         await User.findOneAndUpdate(
@@ -1904,13 +2000,13 @@ io.on('connection', (socket) => {
         }
         
         // Log the successful connection
-        console.log(`✅ User connected successfully: ${userName} (${userId})${user.isBot ? ' 🤖 BOT' : ''}`);
+        console.log(`✅ User connected successfully: ${userName} (${userId}) ${isBot ? '(BOT)' : ''}`);
         
         // Update admin panel with new connection IN REAL-TIME
         updateAdminPanel();
         broadcastRoomStatus();
         
-        logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id, isBot: user.isBot || false });
+        logActivity(isBot ? 'BOT_CONNECTED' : 'USER_CONNECTED', { userId, userName, socketId: socket.id, isBot });
       } else {
         if (callback) {
           callback({ success: false, message: 'Failed to initialize user' });
@@ -2201,7 +2297,8 @@ io.on('connection', (socket) => {
         box,
         takenBoxes: roomData.takenBoxes.length,
         playerCount: roomData.players.length,
-        onlinePlayers: onlinePlayers.length
+        onlinePlayers: onlinePlayers.length,
+        isBot: user.isBot || false
       });
       
       if (callback) {
@@ -2466,7 +2563,8 @@ io.on('connection', (socket) => {
         basePrize: basePrize,
         isFourCorners: isFourCornersWin,
         players: playersInRoom.length,
-        commissionCollected: houseEarnings
+        commissionCollected: houseEarnings,
+        isBot: user.isBot || false
       });
       
     } catch (error) {
@@ -2625,7 +2723,8 @@ io.on('connection', (socket) => {
         remainingPlayers: room.players.length,
         onlinePlayers: onlinePlayers.length,
         remainingBoxes: room.takenBoxes.length,
-        status: room.status
+        status: room.status,
+        isBot: user.isBot || false
       });
       
     } catch (error) {
@@ -2685,6 +2784,8 @@ io.on('connection', (socket) => {
     console.log(`❌ Socket disconnected: ${socket.id}`);
     connectedSockets.delete(socket.id);
     adminSockets.delete(socket.id);
+    botSockets.delete(socket.id);
+    activeBots.delete(socket.id);
     
     // Remove from room subscriptions
     roomSubscriptions.forEach((sockets, room) => {
@@ -2784,6 +2885,8 @@ setInterval(() => {
     const socket = io.sockets.sockets.get(socketId);
     if (!socket || !socket.connected) {
       socketToUser.delete(socketId);
+      botSockets.delete(socketId);
+      activeBots.delete(socketId);
       console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
     }
   });
@@ -2813,6 +2916,8 @@ async function cleanupStaleConnections() {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
         socketToUser.delete(socketId);
+        botSockets.delete(socketId);
+        activeBots.delete(socketId);
         console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
       }
     });
@@ -3045,8 +3150,16 @@ app.get('/', (req, res) => {
               <div class="stat-value" id="playerCount">${connectedSockets.size}</div>
             </div>
             <div class="stat">
+              <div class="stat-label">Connected Bots</div>
+              <div class="stat-value" style="color: #8b5cf6;">${botSockets.size}</div>
+            </div>
+            <div class="stat">
               <div class="stat-label">Database Status</div>
               <div class="stat-value" style="color: #10b981;">✅ Online</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Socket.IO</div>
+              <div class="stat-value" style="color: #3b82f6;">✅ Active</div>
             </div>
           </div>
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB!</p>
@@ -3054,11 +3167,11 @@ app.get('/', (req, res) => {
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
           <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ ACTIVE</p>
+          <p style="color: #8b5cf6;">🤖 Bot Squad System: ✅ INTEGRATED</p>
           <p style="color: #10b981;">🔒 NEW: Room lock when game is playing</p>
           <p style="color: #10b981;">⏰ NEW: 7-minute game timeout auto-clear</p>
           <p style="color: #10b981;">⏱️ NEW: Timer on box selection interface</p>
-          <p style="color: #10b981; margin-top: 10px;">🤖 BOT SQUAD: ✅ INTEGRATED - 10 Ethiopian AI Players</p>
-          <p style="color: #10b981;">✅ FIXED: Game timer and ball drawing issues resolved</p>
+          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
           <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
@@ -3066,6 +3179,7 @@ app.get('/', (req, res) => {
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED</p>
           <p style="color: #10b981;">✅ Claim lock prevents double prize payouts</p>
           <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
+          <p style="color: #8b5cf6; font-weight: bold; margin-top: 10px;">🤖 BOT SQUAD: Ethiopian Bot Squad integrated</p>
         </div>
         
         <div style="margin-top: 40px;">
@@ -3073,7 +3187,7 @@ app.get('/', (req, res) => {
           <div>
             <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
             <a href="/game" class="btn btn-game" target="_blank">🎮 Game Client</a>
-            <a href="/bot-squad" class="btn btn-bot" target="_blank">🤖 Bot Squad Control</a>
+            <a href="/bot-squad" class="btn btn-bot" target="_blank">🤖 Bot Squad</a>
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -3094,9 +3208,9 @@ app.get('/', (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 3.0.0 (WITH WALLET SYSTEM + BOT SQUAD) | Database: MongoDB Atlas<br>
+            Version: 3.0.0 (WITH BOT SQUAD INTEGRATION) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets.size}<br>
-            SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size}<br>
+            SocketToUser: ${socketToUser.size} | Admin Sockets: ${adminSockets.size} | Bot Sockets: ${botSockets.size}<br>
             Processing Claims: ${processingClaims.size} active<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${CONFIG.GAME_TIMER}s between balls<br>
@@ -3109,6 +3223,7 @@ app.get('/', (req, res) => {
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES} minute timeout<br>
             Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
+            Bot Squad: ✅ INTEGRATED (Ethiopian Bot Squad)<br>
             Fixed Issues: ✅ Double prize bug fixed, ✅ Claim lock implemented<br>
             ✅ Timer synchronization fixed, ✅ Game timer working<br>
             ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
@@ -3118,10 +3233,7 @@ app.get('/', (req, res) => {
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
             ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
-            🤖 BOT SQUAD: ✅ INTEGRATED - 10 Ethiopian AI Players<br>
-            🤖 Bot Balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each<br>
-            🤖 Bot Features: Auto-join, Auto-win, Real-time strategy<br>
-            🤖 Bot Control: Complete control panel available
+            ✅✅✅ BOT SQUAD INTEGRATED WITH ADMIN CONTROLS
           </p>
         </div>
       </div>
@@ -3137,17 +3249,46 @@ app.get('/', (req, res) => {
   `);
 });
 
-// ========== BOT SQUAD CONTROL PANEL ==========
+// ========== BOT SQUAD PAGE ==========
 app.get('/bot-squad', (req, res) => {
-  res.sendFile(path.join(__dirname, 'bot.html'));
-});
-
-app.get('/bot-panel', (req, res) => {
-  res.sendFile(path.join(__dirname, 'bot.html'));
-});
-
-app.get('/bots', (req, res) => {
-  res.sendFile(path.join(__dirname, 'bot.html'));
+  // Check for password protection
+  const password = req.query.password;
+  if (CONFIG.BOT_SQUAD_PASSWORD && password !== CONFIG.BOT_SQUAD_PASSWORD) {
+    return res.status(401).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Bot Squad - Access Denied</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 500px; margin: 0 auto; }
+          .error { background: rgba(239, 68, 68, 0.1); padding: 30px; border-radius: 15px; border: 2px solid rgba(239, 68, 68, 0.3); }
+          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+          input { padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: white; margin: 10px; width: 200px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1 style="color: #ef4444;">🤖 Bot Squad Access</h1>
+          <div class="error">
+            <h2>🔒 Password Required</h2>
+            <p>Enter the bot squad password to access the control panel:</p>
+            <form method="GET">
+              <input type="password" name="password" placeholder="Enter password" required>
+              <button type="submit" class="btn">Access</button>
+            </form>
+            <p style="margin-top: 20px; color: #94a3b8; font-size: 0.9rem;">
+              Contact admin for the password
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+  
+  // Serve the bot squad HTML file
+  res.sendFile(path.join(__dirname, 'bot-squad.html'));
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE - PROFESSIONAL UX ==========
@@ -3702,7 +3843,7 @@ app.get('/telegram', (req, res) => {
             function showHelp() {
                 tg.showPopup({
                     title: 'How to Play',
-                    message: '1. Click PLAY on Bingo Elite\\n2. Select a room (10-100 ETB)\\n3. Choose an available ticket\\n4. Wait for countdown\\n5. Mark numbers as called\\n6. Claim BINGO to win!',
+                    message: '1. Click PLAY on Bingo Elite\\\\n2. Select a room (10-100 ETB)\\\\n3. Choose an available ticket\\\\n4. Wait for countdown\\\\n5. Mark numbers as called\\\\n6. Claim BINGO to win!',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -3710,7 +3851,7 @@ app.get('/telegram', (req, res) => {
             function showWalletInfo() {
                 tg.showPopup({
                     title: 'Wallet Information',
-                    message: '💳 Deposit to: ${CONFIG.TELEBIRR_NUMBER}\\n💰 Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\\n🎮 Play: @ethio_games1_bot',
+                    message: '💳 Deposit to: ${CONFIG.TELEBIRR_NUMBER}\\\\n💰 Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\\\\n🎮 Play: @ethio_games1_bot',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -3718,7 +3859,7 @@ app.get('/telegram', (req, res) => {
             function showTerms() {
                 tg.showPopup({
                     title: 'Terms & Conditions',
-                    message: '• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support',
+                    message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @ethio_games1_bot for support',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -3910,6 +4051,8 @@ app.get('/health', async (req, res) => {
       database: 'connected',
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSockets.size,
+      botSockets: botSockets.size,
+      activeBots: activeBots.size,
       socketToUser: socketToUser.size,
       processingClaims: processingClaims.size,
       totalUsers: totalUsers,
@@ -3929,6 +4072,7 @@ app.get('/health', async (req, res) => {
       realTimeBoxUpdates: 'active',
       boxClearing: 'enabled',
       walletSystem: 'active',
+      botSquad: 'integrated',
       telebirrNumber: CONFIG.TELEBIRR_NUMBER,
       gameTimer: CONFIG.GAME_TIMER + ' seconds',
       countdownTimer: CONFIG.COUNTDOWN_TIMER + ' seconds',
@@ -3936,10 +4080,7 @@ app.get('/health', async (req, res) => {
       minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START + ' player',
       roomLockFeature: 'enabled',
       boxSelectionTimer: 'synced with waiting room',
-      botSquadIntegrated: true,
-      botInitialBalance: CONFIG.BOT_INITIAL_BALANCE + ' ETB',
       newFeatures: [
-        'bot_squad_integration',
         'wallet_system_with_deposit_and_withdraw',
         'telebirr_integration',
         'admin_transaction_approval',
@@ -3947,7 +4088,9 @@ app.get('/health', async (req, res) => {
         'timer_synchronization_between_discovery_and_waiting',
         'room_lock_when_playing',
         '7_minute_game_timeout_auto_clear',
-        'timer_on_box_selection_interface'
+        'timer_on_box_selection_interface',
+        'bot_squad_integration',
+        'bot_tracking_and_management'
       ],
       fixedIssues: [
         'double_claim_prevention_implemented',
@@ -4039,6 +4182,8 @@ app.get('/real-time-status', async (req, res) => {
     res.json({
       connectedPlayers: connectedPlayers,
       connectedSockets: connectedSocketsCount,
+      botSockets: botSockets.size,
+      activeBots: Array.from(activeBots.entries()),
       socketToUserSize: socketToUserSize,
       socketToUser: Array.from(socketToUser.entries()),
       adminSockets: Array.from(adminSockets),
@@ -4060,13 +4205,15 @@ app.get('/test-connections', (req, res) => {
       connected: socket.connected,
       userId: socket.userId || 'none',
       handshakeQuery: socket.handshake.query,
-      inSocketToUser: socketToUser.has(socket.id)
+      inSocketToUser: socketToUser.has(socket.id),
+      isBot: botSockets.has(socket.id)
     });
   });
   
   res.json({
     totalSockets: connections.length,
     connectedSockets: Array.from(connectedSockets).length,
+    botSockets: botSockets.size,
     socketToUserSize: socketToUser.size,
     socketToUserEntries: Array.from(socketToUser.entries()),
     processingClaims: Array.from(processingClaims.entries()),
@@ -4088,6 +4235,9 @@ app.get('/debug-connections', async (req, res) => {
       connectedUserIds: connectedUserIds,
       socketToUserCount: socketToUser.size,
       socketToUser: socketToUserArray.map(([socketId, userId]) => ({ socketId, userId })),
+      botSocketsCount: botSockets.size,
+      botSockets: Array.from(botSockets),
+      activeBots: Array.from(activeBots.entries()),
       processingClaimsCount: processingClaims.size,
       processingClaims: Array.from(processingClaims.entries()),
       connectedSocketsCount: connectedSockets.size,
@@ -4097,7 +4247,8 @@ app.get('/debug-connections', async (req, res) => {
           socketId,
           connected: socket?.connected || false,
           userId: socketToUser.get(socketId) || socket?.userId || 'unknown',
-          handshakeQuery: socket?.handshake?.query || {}
+          handshakeQuery: socket?.handshake?.query || {},
+          isBot: botSockets.has(socketId)
         };
       }),
       adminSocketsCount: adminSockets.size,
@@ -4140,6 +4291,7 @@ app.get('/debug-users', async (req, res) => {
       totalConnectedUsers: connectedUserIds.length,
       connectedUserIds: connectedUserIds,
       socketToUserSize: socketToUser.size,
+      botSockets: botSockets.size,
       processingClaimsCount: processingClaims.size,
       connectedSockets: connectedSockets.size,
       allUsers: userStatus
@@ -4343,12 +4495,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM ADDED** - Deposit/Withdraw\n` +
-                  `• 🤖 **BOT SQUAD INTEGRATED** - 10 Ethiopian AI Players\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Room lock when game is playing\n` +
                   `• ⏰ Auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
                   `• ⏱️ Timer shows on box selection screen\n` +
+                  `• 🤖 **BOT SQUAD INTEGRATED** - Ethiopian Bot Squad\n` +
                   `• 10/20/50/100 ETB rooms\n` +
                   `• Four Corners Bonus: 50 ETB\n` +
                   `• Real-time multiplayer\n` +
@@ -4436,12 +4588,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *Bingo Elite Help*\n\n` +
                   `*New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM** - Deposit/Withdraw funds\n` +
-                  `• 🤖 **BOT SQUAD** - 10 Ethiopian AI Players for testing\n` +
                   `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Rooms lock when game is playing\n` +
                   `• ⏰ Games auto-clear after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
-                  `• ⏱️ Timer shows on box selection screen\n\n` +
+                  `• ⏱️ Timer shows on box selection screen\n` +
+                  `• 🤖 **BOT SQUAD** - Ethiopian Bot Squad integrated\n\n` +
                   `*Commands:*\n` +
                   `/start - Start the bot\n` +
                   `/play - Play game\n` +
@@ -4472,9 +4624,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💳 *Wallet:*\n` +
                   `Deposit to Telebirr: *${CONFIG.TELEBIRR_NUMBER}*\n` +
                   `Min withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB\n\n` +
-                  `🤖 *Bot Squad:*\n` +
-                  `Access bot control panel: /bot-squad\n` +
-                  `For testing and development\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -4526,8 +4675,6 @@ app.get('/setup-telegram', async (req, res) => {
           .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
           .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
           .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-          .btn-bot { background: #8b5cf6; }
-          .btn-bot:hover { background: #7c3aed; }
         </style>
       </head>
       <body>
@@ -4541,27 +4688,26 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Bot:</strong> @ethio_games1_bot</p>
             <p><strong>Game URL:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
-            <p><strong>Bot Squad Panel:</strong> https://bingo-telegram-game.onrender.com/bot-squad</p>
+            <p><strong>Bot Squad:</strong> https://bingo-telegram-game.onrender.com/bot-squad?password=${CONFIG.BOT_SQUAD_PASSWORD}</p>
             <p><strong>Admin Password:</strong> admin1234</p>
+            <p><strong>Bot Squad Password:</strong> ${CONFIG.BOT_SQUAD_PASSWORD}</p>
             <p><strong>New Features & Fixes Added:</strong></p>
-            <p>1. 🤖 <strong>BOT SQUAD INTEGRATED:</strong> 10 Ethiopian AI Players with control panel</p>
-            <p>2. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
-            <p>3. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
-            <p>4. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
-            <p>5. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>6. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>7. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
-            <p><strong>Bot Squad Features:</strong></p>
-            <p>• 10 Ethiopian AI players with personalities</p>
-            <p>• Auto-join rooms and select boxes</p>
-            <p>• Auto-win with configurable timing</p>
-            <p>• Real-time bot status tracking</p>
-            <p>• Advanced controls (force wins, crash game, etc.)</p>
-            <p>• Bot initial balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each</p>
+            <p>1. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
+            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
+            <p>3. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>4. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>5. ⏰ <strong>${CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p>7. 🤖 <strong>BOT SQUAD:</strong> Ethiopian Bot Squad fully integrated</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}</p>
             <p>• Minimum Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB</p>
             <p>• Admin approval for all transactions</p>
+            <p><strong>Bot Squad Features:</strong></p>
+            <p>• Password protected: ${CONFIG.BOT_SQUAD_PASSWORD}</p>
+            <p>• Ethiopian names and avatars</p>
+            <p>• Real-time bot tracking in admin panel</p>
+            <p>• Bot management controls</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
             <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
@@ -4571,13 +4717,13 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
-            <p><strong>🤖 BOT SQUAD READY FOR TESTING</strong></p>
+            <p><strong>✅✅ BOT SQUAD FULLY INTEGRATED</strong></p>
           </div>
           
           <div>
             <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
-            <a href="/bot-squad" class="btn btn-bot" target="_blank">🤖 Bot Squad Control</a>
+            <a href="/bot-squad?password=${CONFIG.BOT_SQUAD_PASSWORD}" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Open Bot Squad</a>
           </div>
           
           <div style="margin-top: 30px; text-align: left;">
@@ -4589,15 +4735,6 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Play Bingo with new features!</li>
             </ol>
             
-            <h4>To Use Bot Squad:</h4>
-            <ol>
-              <li>Open Bot Squad Control Panel (link above)</li>
-              <li>Set server URL to your deployment URL</li>
-              <li>Configure bot settings (room, timing, etc.)</li>
-              <li>Click "ETHIOPIAN BOT SQUAD ACTIVE"</li>
-              <li>Watch bots join and play automatically</li>
-            </ol>
-            
             <h4>To Add Funds to Players:</h4>
             <ol>
               <li>Open Admin Panel (link above)</li>
@@ -4605,6 +4742,15 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Find user by Telegram ID</li>
               <li>Click "Add Funds" button</li>
               <li>OR Approve pending deposit/withdrawal requests</li>
+            </ol>
+            
+            <h4>To Use Bot Squad:</h4>
+            <ol>
+              <li>Open Bot Squad (link above)</li>
+              <li>Already pre-authenticated with password</li>
+              <li>Configure bot settings</li>
+              <li>Activate Ethiopian Bot Squad</li>
+              <li>Monitor in admin panel</li>
             </ol>
             
             <h4>Wallet Instructions for Players:</h4>
@@ -4640,8 +4786,8 @@ server.listen(PORT, () => {
 ║  Port:         ${PORT}                                        ║
 ║  Game:         /game                                          ║
 ║  Admin:        /admin (password: admin1234)                   ║
-║  Bot Squad:    /bot-squad                                     ║
 ║  Telegram:     /telegram                                      ║
+║  Bot Squad:    /bot-squad?password=${CONFIG.BOT_SQUAD_PASSWORD} ║
 ║  Bot Setup:    /setup-telegram                                ║
 ║  Real-Time:    /real-time-status                              ║
 ║  Debug:        /debug-connections                             ║
@@ -4651,20 +4797,20 @@ server.listen(PORT, () => {
 ║  Test:         /test-connections                              ║
 ╠════════════════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${process.env.ADMIN_PASSWORD || 'admin1234'} ║
+║  🔑 Bot Squad Password: ${CONFIG.BOT_SQUAD_PASSWORD}           ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                           ║
 ║  🤖 Bot Token: ${TELEGRAM_TOKEN.substring(0, 10)}...           ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections              ║
 ║  🎮 Four Corners Bonus: ${CONFIG.FOUR_CORNERS_BONUS} ETB       ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
+║  🤖 Bot Squad: ✅ INTEGRATED                                  ║
 ║  💰 Telebirr Number: ${CONFIG.TELEBIRR_NUMBER}                ║
 ║  💸 Min Withdrawal: ${CONFIG.MIN_WITHDRAWAL} ETB              ║
-║  🤖 Bot Squad: ✅ INTEGRATED - 10 Ethiopian AI Players        ║
-║  🤖 Bot Balance: ${CONFIG.BOT_INITIAL_BALANCE} ETB each       ║
 ║  🆕 NEW FEATURES & FIXES:                                     ║
-║  🤖 BOT SQUAD: ✅ 10 Ethiopian AI Players with control panel  ║
 ║  💳 WALLET SYSTEM: ✅ Deposit/Withdraw with Telebirr          ║
 ║  🔒 DOUBLE PRIZE BUG: ✅ FIXED WITH CLAIM LOCK               ║
+║  🤖 BOT SQUAD: ✅ ETHIOPIAN BOT SQUAD INTEGRATED             ║
 ║  ⏱️ Timer Sync: ✅ Discovery ↔ Waiting Room                  ║
 ║  🔒 Room Lock: ✅ When game is playing                        ║
 ║  ⏰ Auto-Clear: ✅ ${CONFIG.GAME_TIMEOUT_MINUTES}-minute timeout ║
@@ -4680,8 +4826,9 @@ server.listen(PORT, () => {
 ║         ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS       ║
 ║         ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS       ║
 ║         ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS    ║
+║         ✅✅✅✅ BOT SQUAD FULLY INTEGRATED WITH TRACKING     ║
 ╚════════════════════════════════════════════════════════════════╝
-✅ Server ready with BOT SQUAD, WALLET SYSTEM, DOUBLE PRIZE FIX and Timer Synchronization
+✅ Server ready with WALLET SYSTEM, BOT SQUAD, DOUBLE PRIZE FIX and Timer Synchronization
   `);
   
   // Initial broadcast
