@@ -247,7 +247,7 @@
         /* Lobby Screen */
         .lobby-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
         .app-logo {
@@ -281,22 +281,22 @@
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            margin-bottom: 30px;
+            gap: 14px;
+            margin-bottom: 25px;
         }
 
         .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 20px 16px;
+            padding: 14px 12px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 160px;
+            min-height: 140px;
         }
 
         .room-card:hover {
@@ -320,9 +320,9 @@
             position: absolute;
             top: 10px;
             right: 10px;
-            padding: 4px 8px;
+            padding: 3px 6px;
             border-radius: 20px;
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -349,7 +349,7 @@
         }
 
         .room-stake {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             margin-bottom: 4px;
             color: white;
@@ -359,14 +359,14 @@
             font-size: 14px;
             color: var(--gray-light);
             font-weight: 600;
-            margin-left: 5px;
+            margin-left: 6px;
         }
 
         .room-name {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             color: var(--gray);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .room-info {
@@ -374,6 +374,7 @@
             justify-content: space-between;
             align-items: center;
             margin-top: auto;
+            padding-top: 10px;
         }
 
         .room-players {
@@ -396,13 +397,14 @@
 
         .room-status {
             position: absolute;
-            bottom: 12px;
-            right: 12px;
-            font-size: 10px;
-            padding: 3px 8px;
+            bottom: 10px;
+            right: 10px;
+            font-size: 9px;
+            padding: 4px 8px;
             border-radius: 10px;
             font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .status-waiting {
@@ -1366,6 +1368,18 @@
             
             .room-stake {
                 font-size: 20px;
+            }
+            
+            .room-card {
+                padding: 12px 10px;
+                min-height: 130px;
+            }
+            
+            .room-status {
+                font-size: 8px;
+                padding: 3px 6px;
+                bottom: 8px;
+                right: 8px;
             }
             
             .boxes-grid {
@@ -2816,7 +2830,6 @@
                 
                 document.getElementById('claimBingoButton').disabled = true;
                 state.lastActivityTime = Date.now();
-            }
         }
 
         function resetToLobby() {
