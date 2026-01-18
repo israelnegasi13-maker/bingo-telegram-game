@@ -247,7 +247,7 @@
         /* Lobby Screen */
         .lobby-header {
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .app-logo {
@@ -276,31 +276,34 @@
             font-size: 14px;
             max-width: 300px;
             margin: 0 auto;
+            line-height: 1.4;
         }
 
+        /* UPDATED: Smaller rooms grid */
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 14px;
-            margin-bottom: 25px;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
+        /* UPDATED: Smaller room cards */
         .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 14px 12px;
+            padding: 15px 12px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 140px;
+            min-height: 130px; /* Reduced from 160px */
         }
 
         .room-card:hover {
-            transform: translateY(-4px);
+            transform: translateY(-3px);
             box-shadow: var(--shadow-lg);
             border-color: var(--primary);
         }
@@ -318,14 +321,14 @@
 
         .room-badge {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 8px;
+            right: 8px;
             padding: 3px 6px;
-            border-radius: 20px;
+            border-radius: 12px;
             font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
         }
 
         .badge-bronze {
@@ -348,63 +351,67 @@
             color: #f5f3ff;
         }
 
+        /* UPDATED: Smaller stake amount */
         .room-stake {
-            font-size: 22px;
+            font-size: 18px; /* Reduced from 24px */
             font-weight: 800;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             color: white;
         }
 
         .room-stake-currency {
-            font-size: 14px;
+            font-size: 12px;
             color: var(--gray-light);
             font-weight: 600;
-            margin-left: 6px;
+            margin-left: 3px;
         }
 
         .room-name {
             font-size: 13px;
             font-weight: 600;
             color: var(--gray);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .room-info {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-end;
             margin-top: auto;
-            padding-top: 10px;
+            padding-top: 5px;
         }
 
         .room-players {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 12px;
+            gap: 4px;
+            font-size: 11px;
             color: var(--gray);
         }
 
         .player-icon {
             color: var(--success);
+            font-size: 10px;
         }
 
         .room-prize {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: var(--secondary);
         }
 
+        /* UPDATED: Status with more spacing */
         .room-status {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
+            bottom: 8px;
+            right: 8px;
             font-size: 9px;
-            padding: 4px 8px;
-            border-radius: 10px;
+            padding: 2px 6px;
+            border-radius: 8px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
+            margin-top: 4px; /* Added spacing */
         }
 
         .status-waiting {
@@ -429,30 +436,30 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 16px;
+            margin-bottom: 16px;
         }
 
         .wallet-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .wallet-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
         }
 
         .wallet-action {
             color: var(--primary);
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             transition: all 0.3s ease;
         }
 
@@ -467,20 +474,20 @@
         }
 
         .balance-label {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--gray);
         }
 
         .balance-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             color: white;
         }
 
         .balance-currency {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--gray-light);
-            margin-left: 4px;
+            margin-left: 3px;
         }
 
         /* Game Info */
@@ -488,14 +495,14 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 20px;
+            padding: 14px;
+            margin-bottom: 15px;
         }
 
         .info-title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             color: var(--gray-light);
             text-align: center;
         }
@@ -503,42 +510,42 @@
         .bingo-letters {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 8px;
+            gap: 6px;
         }
 
         .letter-card {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 8px;
+            padding: 6px;
             background: rgba(30, 41, 59, 0.5);
             border-radius: var(--radius-sm);
             border: 1px solid var(--card-border);
         }
 
         .letter {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
 
         .letter-range {
-            font-size: 10px;
+            font-size: 9px;
             color: var(--gray);
         }
 
         /* Discovery Screen */
         .discovery-header {
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .selected-room-info {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 15px;
+            padding: 14px;
+            margin-bottom: 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -546,7 +553,7 @@
         }
 
         .room-stake-large {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             color: white;
         }
@@ -555,8 +562,8 @@
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -573,29 +580,29 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 16px;
+            padding: 14px;
             text-align: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .timer-display {
-            font-size: 40px;
+            font-size: 36px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
         }
 
         .timer-label {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--gray);
         }
 
         .players-info {
             display: flex;
             justify-content: center;
-            gap: 15px;
-            margin-bottom: 15px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .player-count {
@@ -605,13 +612,13 @@
         }
 
         .count-number {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 800;
             color: var(--success);
         }
 
         .count-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--gray);
         }
 
@@ -620,10 +627,10 @@
             display: grid;
             grid-template-columns: repeat(10, 1fr);
             gap: 2px;
-            margin-bottom: 15px;
-            max-height: 170px;
+            margin-bottom: 12px;
+            max-height: 160px;
             overflow-y: auto;
-            padding: 5px;
+            padding: 4px;
             background: rgba(15, 23, 42, 0.5);
             border-radius: var(--radius);
             border: 1px solid var(--card-border);
@@ -678,8 +685,8 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-            margin-bottom: 15px;
+            padding: 10px;
+            margin-bottom: 12px;
             display: none;
         }
 
@@ -690,17 +697,17 @@
 
         .plate-preview-title {
             text-align: center;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             color: var(--gray-light);
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .preview-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
-            max-width: 190px;
+            max-width: 170px;
             margin: 0 auto;
         }
 
@@ -712,7 +719,7 @@
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 9px;
+            font-size: 8px;
             color: var(--primary-light);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
@@ -730,7 +737,7 @@
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 10px;
+            font-size: 9px;
             color: var(--primary);
         }
 
@@ -739,7 +746,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .room-info-compact {
@@ -748,23 +755,24 @@
         }
 
         .room-stake-compact {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 800;
         }
 
         .room-status-compact {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--gray);
+            margin-top: 2px;
         }
 
         .game-controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .control-button {
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid var(--card-border);
@@ -785,22 +793,22 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 15px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .ball-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--gray);
-            margin-bottom: 6px;
+            margin-bottom: 5px;
         }
 
         .ball {
-            width: 80px;
-            height: 80px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             background: radial-gradient(circle at 30% 30%, #fff, #cbd5e1);
             display: flex;
@@ -810,40 +818,40 @@
             color: #0f172a;
             font-weight: 900;
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-            border: 4px solid #fff;
+            border: 3px solid #fff;
             position: relative;
             overflow: hidden;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .ball-letter {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 900;
             position: absolute;
-            top: 8px;
-            height: 16px;
+            top: 6px;
+            height: 14px;
             width: 100%;
             text-align: center;
             color: var(--primary);
         }
 
         .ball-number {
-            font-size: 28px;
-            margin-top: 20px;
+            font-size: 24px;
+            margin-top: 16px;
         }
 
         .ball-history {
             display: flex;
-            gap: 6px;
+            gap: 5px;
             overflow-x: auto;
-            padding: 6px;
+            padding: 5px;
             width: 100%;
         }
 
         .history-ball {
-            min-width: 30px;
-            width: 30px;
-            height: 30px;
+            min-width: 26px;
+            width: 26px;
+            height: 26px;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 50%;
             display: flex;
@@ -860,16 +868,16 @@
 
         .history-letter {
             position: absolute;
-            top: 2px;
-            font-size: 9px;
+            top: 1px;
+            font-size: 8px;
             font-weight: 900;
             line-height: 1;
             color: var(--primary);
         }
 
         .history-number {
-            margin-top: 8px;
-            font-size: 10px;
+            margin-top: 6px;
+            font-size: 9px;
             line-height: 1;
         }
 
@@ -877,45 +885,45 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-            margin-bottom: 15px;
+            padding: 10px;
+            margin-bottom: 12px;
         }
 
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
-            margin-bottom: 4px;
+            gap: 3px;
+            margin-bottom: 3px;
         }
 
         .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
-            border-radius: 6px;
+            border-radius: 5px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 14px;
+            font-size: 12px;
             color: var(--primary);
         }
 
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
+            gap: 3px;
         }
 
         .cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
+            border-radius: 5px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 14px;
+            font-size: 12px;
             color: var(--primary);
             cursor: pointer;
             position: relative;
@@ -939,15 +947,15 @@
             color: white;
             border: none;
             font-weight: 900;
-            font-size: 10px;
+            font-size: 9px;
         }
 
         .cell.corner::before {
             content: "★";
             position: absolute;
-            top: 2px;
-            right: 2px;
-            font-size: 7px;
+            top: 1px;
+            right: 1px;
+            font-size: 6px;
             color: var(--secondary);
         }
 
@@ -955,8 +963,8 @@
         .action-buttons {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 8px;
+            margin-top: 8px;
         }
 
         .confirm-button {
@@ -964,8 +972,8 @@
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 15px;
-            font-size: 14px;
+            padding: 12px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -989,8 +997,8 @@
             color: var(--gray-light);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-            font-size: 14px;
+            padding: 10px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -1007,14 +1015,14 @@
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 16px;
-            font-size: 16px;
+            padding: 14px;
+            font-size: 14px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
             width: 100%;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .claim-button:hover:not(:disabled) {
@@ -1040,32 +1048,33 @@
         }
 
         .wait-icon {
-            font-size: 50px;
+            font-size: 45px;
             color: var(--primary);
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             animation: pulse 2s infinite;
         }
 
         .wait-timer {
-            font-size: 56px;
+            font-size: 48px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
         }
 
         .wait-message {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             color: white;
         }
 
         .wait-details {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--gray);
-            max-width: 280px;
-            margin: 0 auto 20px;
+            max-width: 260px;
+            margin: 0 auto 15px;
+            line-height: 1.4;
         }
 
         .leave-button {
@@ -1073,8 +1082,8 @@
             color: var(--danger);
             border: 1px solid rgba(239, 68, 68, 0.3);
             border-radius: var(--radius);
-            padding: 10px 20px;
-            font-size: 14px;
+            padding: 8px 16px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -1112,22 +1121,22 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius-lg);
-            padding: 25px;
-            max-width: 380px;
+            padding: 22px;
+            max-width: 350px;
             width: 100%;
             text-align: center;
             box-shadow: var(--shadow-lg);
         }
 
         .overlay-icon {
-            font-size: 56px;
-            margin-bottom: 15px;
+            font-size: 50px;
+            margin-bottom: 12px;
         }
 
         .overlay-title {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .win-title {
@@ -1143,17 +1152,17 @@
         }
 
         .overlay-message {
-            font-size: 16px;
+            font-size: 15px;
             color: var(--gray-light);
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             line-height: 1.5;
         }
 
         .overlay-amount {
-            font-size: 36px;
+            font-size: 32px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .overlay-button {
@@ -1161,13 +1170,13 @@
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 14px;
-            font-size: 15px;
+            padding: 12px;
+            font-size: 14px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             width: 100%;
-            margin-top: 15px;
+            margin-top: 12px;
         }
 
         .overlay-button:hover {
@@ -1181,17 +1190,18 @@
             background: rgba(30, 41, 59, 0.5);
             border-radius: var(--radius);
             padding: 4px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .wallet-tab {
             flex: 1;
-            padding: 10px;
+            padding: 9px;
             text-align: center;
             border-radius: var(--radius-sm);
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-size: 13px;
         }
 
         .wallet-tab.active {
@@ -1208,26 +1218,26 @@
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             text-align: left;
         }
 
         .form-label {
             display: block;
-            margin-bottom: 6px;
-            font-size: 13px;
+            margin-bottom: 5px;
+            font-size: 12px;
             color: var(--gray-light);
             font-weight: 600;
         }
 
         .form-input {
             width: 100%;
-            padding: 12px;
+            padding: 11px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             color: white;
-            font-size: 15px;
+            font-size: 14px;
             transition: all 0.3s ease;
         }
 
@@ -1240,12 +1250,12 @@
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
+            gap: 6px;
+            margin-bottom: 14px;
         }
 
         .amount-button {
-            padding: 10px;
+            padding: 9px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
@@ -1253,6 +1263,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-size: 12px;
         }
 
         .amount-button:hover {
@@ -1263,13 +1274,13 @@
 
         /* Loading Overlay */
         .loading-spinner {
-            width: 50px;
-            height: 50px;
+            width: 45px;
+            height: 45px;
             border: 4px solid rgba(99, 102, 241, 0.3);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         /* Animations */
@@ -1297,47 +1308,55 @@
         @media (max-width: 480px) {
             .rooms-grid {
                 grid-template-columns: 1fr;
-                gap: 12px;
+                gap: 10px;
+            }
+            
+            .room-card {
+                min-height: 110px;
+                padding: 12px 10px;
+            }
+            
+            .room-stake {
+                font-size: 16px;
             }
             
             .ball {
-                width: 70px;
-                height: 70px;
+                width: 65px;
+                height: 65px;
             }
             
             .ball-number {
-                font-size: 24px;
-                margin-top: 16px;
+                font-size: 22px;
+                margin-top: 14px;
             }
             
             .ball-letter {
-                font-size: 14px;
-                top: 6px;
+                font-size: 12px;
+                top: 5px;
             }
             
             .wait-timer {
-                font-size: 48px;
+                font-size: 42px;
             }
             
             .timer-display {
-                font-size: 32px;
+                font-size: 28px;
             }
             
             .overlay-content {
-                padding: 20px;
+                padding: 18px;
             }
             
             .overlay-title {
-                font-size: 24px;
+                font-size: 22px;
             }
             
             .overlay-amount {
-                font-size: 32px;
+                font-size: 28px;
             }
             
             .boxes-grid {
-                grid-template-columns: repeat(10, 1fr);
-                max-height: 160px;
+                max-height: 150px;
             }
             
             .box-item {
@@ -1345,11 +1364,11 @@
             }
             
             .preview-grid {
-                max-width: 180px;
+                max-width: 160px;
             }
             
             .preview-cell {
-                font-size: 8px;
+                font-size: 7px;
             }
         }
 
@@ -1367,19 +1386,12 @@
             }
             
             .room-stake {
-                font-size: 20px;
+                font-size: 15px;
             }
             
             .room-card {
-                padding: 12px 10px;
-                min-height: 130px;
-            }
-            
-            .room-status {
-                font-size: 8px;
-                padding: 3px 6px;
-                bottom: 8px;
-                right: 8px;
+                min-height: 100px;
+                padding: 10px 8px;
             }
             
             .boxes-grid {
@@ -1388,7 +1400,7 @@
             }
             
             .cell {
-                font-size: 12px;
+                font-size: 10px;
             }
             
             .box-item {
@@ -1396,11 +1408,11 @@
             }
             
             .preview-grid {
-                max-width: 160px;
+                max-width: 150px;
             }
             
             .preview-cell {
-                font-size: 7px;
+                font-size: 6px;
             }
         }
     </style>
@@ -2830,6 +2842,7 @@
                 
                 document.getElementById('claimBingoButton').disabled = true;
                 state.lastActivityTime = Date.now();
+            }
         }
 
         function resetToLobby() {
