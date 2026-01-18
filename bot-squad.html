@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bingo Elite - Bot Squad</title>
+    <title>Bingo Elite - Safe Bot Control (10 Bots)</title>
     <style>
         * {
             margin: 0;
@@ -17,10 +17,11 @@
             color: #fff;
             min-height: 100vh;
             padding: 20px;
+            overflow-x: hidden;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -89,7 +90,7 @@
             gap: 10px;
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: white;
-            width: 300px;
+            width: 350px;
             justify-content: center;
             box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
         }
@@ -185,14 +186,14 @@
         .bots-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+            gap: 15px;
             margin-top: 30px;
         }
 
         .bot-card {
             background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
             border-radius: 12px;
-            padding: 20px;
+            padding: 15px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: all 0.3s ease;
             position: relative;
@@ -219,19 +220,19 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .bot-name {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #f8fafc;
         }
 
         .bot-status {
-            padding: 5px 12px;
+            padding: 4px 10px;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -251,9 +252,9 @@
 
         .bot-details {
             color: #94a3b8;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin: 15px 0;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            margin: 10px 0;
         }
 
         .bot-details span {
@@ -387,16 +388,17 @@
         }
         
         .bot-avatar {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
-            margin-right: 15px;
+            font-size: 1.2rem;
+            margin-right: 10px;
             border: 2px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, var(--avatar-color1), var(--avatar-color2));
         }
         
         .bot-header-left {
@@ -404,41 +406,10 @@
             align-items: center;
         }
         
-        .bot-avatar.yoni-tad { 
-            background: linear-gradient(135deg, #f97316, #ea580c);
-        }
-        .bot-avatar.nati { 
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-        }
-        .bot-avatar.biruk { 
-            background: linear-gradient(135deg, #10b981, #059669);
-        }
-        .bot-avatar.israel { 
-            background: linear-gradient(135deg, #0ea5e9, #0284c7);
-        }
-        .bot-avatar.sebri { 
-            background: linear-gradient(135deg, #ec4899, #db2777);
-        }
-        .bot-avatar.gebre { 
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-        }
-        .bot-avatar.fitsum { 
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-        }
-        .bot-avatar.fx-snipe { 
-            background: linear-gradient(135deg, #14b8a6, #0d9488);
-        }
-        .bot-avatar.john-raga { 
-            background: linear-gradient(135deg, #84cc16, #65a30d);
-        }
-        .bot-avatar.fthanegest { 
-            background: linear-gradient(135deg, #f43f5e, #e11d48);
-        }
-        
         .bot-profile {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .bot-info {
@@ -447,12 +418,12 @@
         
         .bot-skill {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 3px 8px;
             background: rgba(59, 130, 246, 0.1);
-            border-radius: 12px;
-            font-size: 0.7rem;
-            margin-right: 5px;
-            margin-bottom: 5px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            margin-right: 4px;
+            margin-bottom: 4px;
             border: 1px solid rgba(59, 130, 246, 0.2);
         }
         
@@ -463,17 +434,17 @@
         
         .bot-controls {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 8px;
+            margin-top: 10px;
         }
         
         .mini-btn {
-            padding: 8px 15px;
+            padding: 6px 12px;
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 8px;
+            border-radius: 6px;
             color: #94a3b8;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             cursor: pointer;
             transition: all 0.3s ease;
             flex: 1;
@@ -555,6 +526,108 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 6px;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn.active {
+            background: rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .bot-search {
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .bot-count-display {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .gender-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        .gender-male {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .gender-female {
+            background: rgba(236, 72, 153, 0.1);
+            color: #ec4899;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        /* SAFE MODE STYLES */
+        .safe-mode-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 2px solid rgba(245, 158, 11, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .throttle-controls {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        .throttle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .throttle-item {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        
+        .throttle-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #3b82f6;
+            margin-top: 5px;
+        }
+        
+        .bot-safe-mode {
+            background: linear-gradient(135deg, #dc2626, #991b1b) !important;
+        }
         
         @media (max-width: 768px) {
             .container {
@@ -585,16 +658,33 @@
             .danger-btns {
                 flex-direction: column;
             }
+
+            .quick-stats {
+                flex-direction: column;
+            }
+
+            .quick-stat {
+                min-width: 100%;
+            }
+            
+            .throttle-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>BINGO ELITE - BOT SQUAD</h1>
-            <p class="subtitle">Control 10 AI players that dominate the game and win every time</p>
-            <div class="status-indicator" id="globalStatus">DISCONNECTED</div>
+            <h1>🤖 BINGO ELITE - SAFE BOT CONTROL (10 BOTS)</h1>
+            <p class="subtitle">Control 10 bots safely without crashing the server. Throttled connections and intelligent room distribution.</p>
+            <div class="status-indicator" id="globalStatus">🚫 DISCONNECTED</div>
         </header>
+
+        <div class="safe-mode-warning">
+            ⚠️ <strong>SAFE MODE ACTIVE:</strong> Connections are throttled to prevent server overload. 
+            Max 3 simultaneous connections with 1-second delays between actions.
+        </div>
 
         <div class="connection-info">
             <div class="connection-status">
@@ -602,13 +692,16 @@
                 <span id="connectionStatus">Disconnected from server</span>
             </div>
             <div class="server-info" id="serverInfo">
-                Server: <span id="serverUrlDisplay">Not connected</span>
+                Server: <span id="serverUrlDisplay">Detecting...</span>
             </div>
         </div>
 
         <div class="main-controls">
             <button id="toggleBtn" class="control-btn">
-                <span>BOT SQUAD DISABLED</span>
+                <span>🚫 BOTS DISABLED</span>
+            </button>
+            <button id="autoJoinBtn" class="control-btn" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <span>🤖 AUTO JOIN ROOMS</span>
             </button>
         </div>
 
@@ -631,8 +724,29 @@
             </div>
         </div>
 
+        <div class="throttle-controls">
+            <h2>⚙️ Safe Connection Throttling</h2>
+            <div class="throttle-grid">
+                <div class="throttle-item">
+                    <label>Max Concurrent Bots</label>
+                    <input type="range" id="maxConcurrent" min="1" max="5" value="3">
+                    <div class="throttle-value" id="maxConcurrentValue">3 bots at once</div>
+                </div>
+                <div class="throttle-item">
+                    <label>Connection Delay</label>
+                    <input type="range" id="connectionDelay" min="500" max="5000" value="1000">
+                    <div class="throttle-value" id="connectionDelayValue">1000ms delay</div>
+                </div>
+                <div class="throttle-item">
+                    <label>Action Delay</label>
+                    <input type="range" id="actionDelay" min="1000" max="10000" value="2000">
+                    <div class="throttle-value" id="actionDelayValue">2-5 seconds</div>
+                </div>
+            </div>
+        </div>
+
         <div class="config-section">
-            <h2>Squad Configuration</h2>
+            <h2>🎯 Bot Configuration (10 Bots)</h2>
             <div class="config-grid">
                 <div class="config-item">
                     <label for="serverUrl">Server URL</label>
@@ -640,40 +754,46 @@
                     <p class="instruction">Auto-detected: <span id="autoServerUrl">...</span></p>
                 </div>
                 <div class="config-item">
-                    <label for="targetRoom">Target Room (ETB)</label>
+                    <label for="targetRoom">Target Rooms</label>
                     <select id="targetRoom">
-                        <option value="10">10 ETB Room (Easy)</option>
-                        <option value="20">20 ETB Room (Medium)</option>
-                        <option value="50" selected>50 ETB Room (Hard)</option>
-                        <option value="100">100 ETB Room (Expert)</option>
+                        <option value="balanced">Balanced (2/2/3/3)</option>
+                        <option value="10" selected>10 ETB Room (All 10)</option>
+                        <option value="20">20 ETB Room (All 10)</option>
+                        <option value="50">50 ETB Room (All 10)</option>
+                        <option value="100">100 ETB Room (All 10)</option>
+                        <option value="spread">Spread Across All</option>
                     </select>
                 </div>
                 <div class="config-item">
-                    <label for="winDelay">Win Timing (seconds after game starts)</label>
-                    <input type="range" id="winDelay" min="1" max="60" value="15">
-                    <span id="winDelayValue">15 seconds</span>
-                </div>
-                <div class="config-item">
-                    <label for="botBehavior">Squad Strategy</label>
+                    <label for="botBehavior">Bot Strategy</label>
                     <select id="botBehavior">
-                        <option value="aggressive">Aggressive - Instant Win (1-5s)</option>
-                        <option value="normal" selected>Normal - Random Timing (5-30s)</option>
-                        <option value="stealth">Stealth - Slow & Hidden (10-60s)</option>
-                        <option value="team">Team - Coordinated Attack</option>
+                        <option value="passive" selected>Passive - Join & Wait</option>
+                        <option value="normal">Normal - Random Wins</option>
+                        <option value="balanced">Balanced - Mixed Strategy</option>
+                        <option value="observer">Observer - Just Watch</option>
                     </select>
                 </div>
                 <div class="config-item">
-                    <label for="botCount">Number of Bots</label>
-                    <input type="range" id="botCount" min="1" max="10" value="10">
-                    <span id="botCountValue">10 bots</span>
-                </div>
-                <div class="config-item">
-                    <label for="staggerDelay">Connection Delay (ms)</label>
-                    <input type="range" id="staggerDelay" min="0" max="5000" value="1000">
-                    <span id="staggerDelayValue">1000ms between connections</span>
+                    <label for="winChance">Win Chance (%)</label>
+                    <input type="range" id="winChance" min="0" max="100" value="30">
+                    <span id="winChanceValue">30% chance to win</span>
                 </div>
             </div>
         </div>
+
+        <div class="filter-controls">
+            <div class="bot-search">
+                <input type="text" id="botSearch" placeholder="🔍 Search bots..." style="width: 100%;">
+            </div>
+            <button class="filter-btn active" data-filter="all">All Bots</button>
+            <button class="filter-btn" data-filter="male">👨 Male (8)</button>
+            <button class="filter-btn" data-filter="female">👩 Female (2)</button>
+            <button class="filter-btn" data-filter="online">Online</button>
+            <button class="filter-btn" data-filter="offline">Offline</button>
+            <button class="filter-btn" data-filter="winning">Winning</button>
+        </div>
+
+        <div class="bot-count-display">Showing <span id="displayCount">10</span> bots (8 male, 2 female)</div>
 
         <div class="bots-grid" id="botsContainer">
             <!-- Bot cards will be generated here -->
@@ -699,80 +819,74 @@
         </div>
 
         <div class="log-section">
-            <h2>Squad Activity Log</h2>
+            <h2>📋 Bot Activity Log</h2>
             <div class="log-container" id="logContainer">
                 <div class="log-entry">
                     <span class="log-time">[00:00:00]</span>
-                    <span class="log-info">Bot Squad initialized. Ready to dominate.</span>
+                    <span class="log-info">Safe Bot Control initialized. 10 bots ready (8 male, 2 female).</span>
                 </div>
             </div>
         </div>
 
         <div class="danger-zone">
-            <h2>Special Commands</h2>
-            <p class="instruction">Use these commands to completely control the game and ensure domination.</p>
+            <h2>⚠️ Advanced Commands (Use Carefully)</h2>
+            <p class="instruction">These commands can affect game balance. Use only when necessary.</p>
             <div class="danger-btns">
-                <button class="danger-btn" onclick="forceAllBotsWin()">Force All Bots to Win Now</button>
-                <button class="danger-btn" onclick="crashGame()">Crash Current Game</button>
-                <button class="danger-btn" onclick="blockRealPlayers()">Block Real Players</button>
-                <button class="danger-btn" onclick="drainRoom()">Drain Prize Pool</button>
-                <button class="danger-btn" onclick="coordinateAttack()">Coordinate Team Attack</button>
-                <button class="danger-btn" onclick="resetAllBots()">Reset All Bots</button>
+                <button class="danger-btn" onclick="simulateWins()">🎯 Simulate 1 Win Each</button>
+                <button class="danger-btn" onclick="balanceBots()">💰 Add Balance to Bots</button>
+                <button class="danger-btn" onclick="rotateRooms()">🔄 Rotate All Rooms</button>
+                <button class="danger-btn" onclick="resetAllBots()">🔄 Reset All Bots</button>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        // Enhanced Configuration
-        const config = {
-            serverUrl: window.location.origin, // Auto-detect current server
-            botCount: 10,
-            targetRoom: 50,
-            winDelay: 15,
-            behavior: 'normal',
-            staggerDelay: 1000,
-            isActive: false,
-            masterSocket: null,
-            connectionTested: false,
-            botSquadPassword: "bot1234" // Bot squad password
+        // ========== SAFE CONFIGURATION ==========
+        const SAFE_CONFIG = {
+            botCount: 10,           // 10 bots total
+            maleCount: 8,           // 8 male bots
+            femaleCount: 2,         // 2 female bots
+            maxConcurrent: 3,       // Max 3 simultaneous connections
+            connectionDelay: 1000,  // 1 second between connections
+            actionDelayMin: 2000,   // 2 seconds min between actions
+            actionDelayMax: 5000,   // 5 seconds max between actions
+            winChance: 0.3,         // 30% chance to win
+            autoJoinMode: false,    // Auto-join rooms when connected
+            stealthMode: true,      // Add random delays
+            avoidRealPlayers: true, // Try to avoid rooms with real players
+            useAdminAPI: true,      // Use admin API for funding bots
+            adminPassword: "admin1234", // Admin password from server.js
+            autoStopOnError: true   // Stop bots if errors occur
         };
 
-        // Bot Names with detailed profiles
-        const botNames = [
-            'Yoni Tad', 
-            'Nati', 
-            'Biruk', 
-            'Israel', 
-            'Sebri',
-            'Gebre', 
-            'Fitsum', 
-            'FX Snipe', 
-            'John Raga', 
-            'Fthanegest'
+        // ========== 8 MALE & 2 FEMALE ETHIOPIAN NAMES ==========
+        const maleEthiopianNames = [
+            'Abel', 'Addis', 'Akili', 'Alemu', 'Aman', 'Amare', 'Ashenafi', 'Bereket'
         ];
         
-        const botAvatars = [
-            'yoni-tad', 'nati', 'biruk', 'israel', 'sebri',
-            'gebre', 'fitsum', 'fx-snipe', 'john-raga', 'fthanegest'
+        const femaleEthiopianNames = [
+            'Betty', 'Bilen'
         ];
         
+        // Combine names (8 male, 2 female)
+        const ethiopianNames = [...maleEthiopianNames, ...femaleEthiopianNames];
+        
+        // Bot personalities for 10 bots
         const botPersonalities = [
-            'Team Captain - Aggressive Winner',
-            'Speed Demon - Fast Player', 
-            'Precision Expert - Strategic Player',
-            'Lucky Gambler - High Roller',
-            'Sniper - Long Range Expert',
-            'Showman - Entertainment Focused',
-            'Strategist - Smart Player',
-            'Smooth Operator - Charismatic',
-            'Brute Force - Power Player',
-            'Boss - Final Boss'
+            'Team Captain', 'Speed Demon', 'Precision Expert', 'Lucky Gambler', 'Sniper',
+            'Showman', 'Strategist', 'Smooth Operator', 'Brute Force', 'Boss'
         ];
         
-        const botWinRates = [95, 85, 90, 75, 88, 80, 92, 78, 87, 94];
+        // Avatar colors for 10 bots
+        const avatarColors = [
+            ['#3b82f6', '#1d4ed8'], ['#8b5cf6', '#7c3aed'], ['#10b981', '#059669'],
+            ['#0ea5e9', '#0284c7'], ['#ec4899', '#db2777'], ['#f59e0b', '#d97706'],
+            ['#6366f1', '#4f46e5'], ['#14b8a6', '#0d9488'], ['#84cc16', '#65a30d'],
+            ['#f43f5e', '#e11d48']
+        ];
 
-        // Bot data storage
+        // Bot data storage for 10 bots
         const bots = [];
 
         // Statistics
@@ -782,26 +896,24 @@
             gamesPlayed: 0,
             activeBots: 0,
             totalConnections: 0,
-            failedConnections: 0
+            failedConnections: 0,
+            winsByRoom: {10: 0, 20: 0, 50: 0, 100: 0}
         };
 
         // DOM elements
         const toggleBtn = document.getElementById('toggleBtn');
+        const autoJoinBtn = document.getElementById('autoJoinBtn');
         const botsContainer = document.getElementById('botsContainer');
         const logContainer = document.getElementById('logContainer');
-        const winDelaySlider = document.getElementById('winDelay');
-        const winDelayValue = document.getElementById('winDelayValue');
-        const botCountSlider = document.getElementById('botCount');
-        const botCountValue = document.getElementById('botCountValue');
-        const staggerDelaySlider = document.getElementById('staggerDelay');
-        const staggerDelayValue = document.getElementById('staggerDelayValue');
         const globalStatus = document.getElementById('globalStatus');
         const connectionDot = document.getElementById('connectionDot');
         const connectionStatus = document.getElementById('connectionStatus');
         const serverUrlDisplay = document.getElementById('serverUrlDisplay');
-        const serverInfo = document.getElementById('serverInfo');
         const serverUrlInput = document.getElementById('serverUrl');
         const autoServerUrlSpan = document.getElementById('autoServerUrl');
+        const botSearch = document.getElementById('botSearch');
+        const displayCount = document.getElementById('displayCount');
+        const filterBtns = document.querySelectorAll('.filter-btn');
 
         // Quick stats elements
         const quickWins = document.getElementById('quickWins');
@@ -809,20 +921,557 @@
         const quickActive = document.getElementById('quickActive');
         const quickGames = document.getElementById('quickGames');
 
-        // Initialize bots
+        // Throttle controls
+        const maxConcurrentSlider = document.getElementById('maxConcurrent');
+        const maxConcurrentValue = document.getElementById('maxConcurrentValue');
+        const connectionDelaySlider = document.getElementById('connectionDelay');
+        const connectionDelayValue = document.getElementById('connectionDelayValue');
+        const actionDelaySlider = document.getElementById('actionDelay');
+        const actionDelayValue = document.getElementById('actionDelayValue');
+        const winChanceSlider = document.getElementById('winChance');
+        const winChanceValue = document.getElementById('winChanceValue');
+
+        // ========== SAFE CONNECTION POOL ==========
+        class SafeConnectionPool {
+            constructor() {
+                this.activeConnections = 0;
+                this.connectionQueue = [];
+                this.activeBots = new Map();
+                this.isActive = false;
+            }
+            
+            async connectBot(bot, index) {
+                return new Promise((resolve) => {
+                    // Check if we can connect now
+                    if (this.activeConnections >= SAFE_CONFIG.maxConcurrent) {
+                        this.connectionQueue.push({ bot, index, resolve });
+                        log(`Bot ${bot.name} queued (${this.connectionQueue.length} waiting)`, 'warning');
+                        return;
+                    }
+                    
+                    this.activeConnections++;
+                    this._establishConnection(bot, index).then(success => {
+                        if (success) {
+                            stats.activeBots++;
+                            stats.totalConnections++;
+                            updateBotStatus(index, 'connected');
+                            updateQuickStats();
+                            updateStats();
+                        } else {
+                            stats.failedConnections++;
+                            updateBotStatus(index, 'offline');
+                        }
+                        resolve(success);
+                    });
+                });
+            }
+            
+            async _establishConnection(bot, index) {
+                try {
+                    // Add random delay for stealth
+                    const delay = Math.random() * SAFE_CONFIG.connectionDelay;
+                    await this.sleep(delay);
+                    
+                    const serverUrl = serverUrlInput.value || window.location.origin;
+                    
+                    log(`Bot ${bot.name} connecting to ${serverUrl}...`, 'info');
+                    
+                    // Generate proper Telegram-style user ID
+                    const userId = `tg_bot_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 6)}`;
+                    bot.userId = userId;
+                    
+                    // Create socket with safe configuration
+                    bot.socket = io(serverUrl, {
+                        transports: ['websocket', 'polling'],
+                        reconnection: false,
+                        timeout: 15000,
+                        query: {
+                            userId: userId,
+                            userName: bot.name,
+                            isBot: 'true'
+                        }
+                    });
+                    
+                    return new Promise((resolve) => {
+                        let connected = false;
+                        let timeoutFired = false;
+                        
+                        // Connection timeout
+                        const timeout = setTimeout(() => {
+                            timeoutFired = true;
+                            if (!connected) {
+                                log(`Bot ${bot.name} connection timeout`, 'error');
+                                if (bot.socket) bot.socket.disconnect();
+                                this.activeConnections--;
+                                this.processQueue();
+                                resolve(false);
+                            }
+                        }, 20000);
+                        
+                        bot.socket.on('connect', () => {
+                            if (timeoutFired) return;
+                            
+                            clearTimeout(timeout);
+                            connected = true;
+                            log(`Bot ${bot.name} connected successfully`, 'success');
+                            
+                            // Initialize bot
+                            this.initializeBot(bot, index).then(success => {
+                                if (success) {
+                                    bot.isConnected = true;
+                                    this.activeBots.set(bot.userId, bot);
+                                    resolve(true);
+                                } else {
+                                    bot.socket.disconnect();
+                                    this.activeConnections--;
+                                    this.processQueue();
+                                    resolve(false);
+                                }
+                            });
+                        });
+                        
+                        bot.socket.on('connect_error', (error) => {
+                            if (timeoutFired) return;
+                            
+                            clearTimeout(timeout);
+                            log(`Bot ${bot.name} connection error: ${error.message}`, 'error');
+                            this.activeConnections--;
+                            this.processQueue();
+                            resolve(false);
+                        });
+                        
+                        bot.socket.on('disconnect', (reason) => {
+                            log(`Bot ${bot.name} disconnected: ${reason}`, 'warning');
+                            bot.isConnected = false;
+                            this.activeBots.delete(bot.userId);
+                            updateBotStatus(index, 'offline');
+                            
+                            if (this.isActive && SAFE_CONFIG.autoStopOnError && reason !== 'io client disconnect') {
+                                setTimeout(() => {
+                                    if (this.isActive && !bot.isConnected) {
+                                        this.connectBot(bot, index);
+                                    }
+                                }, 10000);
+                            }
+                        });
+                    });
+                    
+                } catch (error) {
+                    log(`Bot ${bot.name} connection error: ${error.message}`, 'error');
+                    this.activeConnections--;
+                    this.processQueue();
+                    return false;
+                }
+            }
+            
+            async initializeBot(bot, index) {
+                return new Promise((resolve) => {
+                    // Wait a moment for socket to be ready
+                    setTimeout(() => {
+                        if (!bot.socket || !bot.socket.connected) {
+                            resolve(false);
+                            return;
+                        }
+                        
+                        // Initialize user
+                        bot.socket.emit('init', {
+                            userId: bot.userId,
+                            userName: bot.name
+                        }, (response) => {
+                            if (response?.success) {
+                                log(`Bot ${bot.name} initialized successfully`, 'success');
+                                
+                                // Listen for balance update
+                                bot.socket.once('balanceUpdate', (balance) => {
+                                    bot.balance = balance;
+                                    updateBotCard(index);
+                                    
+                                    // If balance is low, try to add funds
+                                    if (bot.balance < 500 && SAFE_CONFIG.useAdminAPI) {
+                                        this.addFundsToBot(bot, index);
+                                    }
+                                    
+                                    // Auto-join room if enabled
+                                    if (SAFE_CONFIG.autoJoinMode) {
+                                        setTimeout(() => {
+                                            this.autoJoinRoom(bot, index);
+                                        }, Math.random() * 3000 + 1000);
+                                    }
+                                });
+                                
+                                // Set up game event handlers
+                                this.setupEventHandlers(bot, index);
+                                
+                                resolve(true);
+                            } else {
+                                log(`Bot ${bot.name} initialization failed: ${response?.message || 'Unknown error'}`, 'error');
+                                resolve(false);
+                            }
+                        });
+                    }, 1000);
+                });
+            }
+            
+            async addFundsToBot(bot, index) {
+                try {
+                    const response = await fetch('/api/add-funds', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: bot.userId,
+                            amount: 1000,
+                            adminPassword: SAFE_CONFIG.adminPassword
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            log(`Added 1000 ETB to bot ${bot.name}`, 'success');
+                            bot.balance = data.newBalance;
+                            updateBotCard(index);
+                        }
+                    }
+                } catch (error) {
+                    // Silent fail - bot will play with existing balance
+                }
+            }
+            
+            setupEventHandlers(bot, index) {
+                if (!bot.socket) return;
+                
+                // Balance updates
+                bot.socket.on('balanceUpdate', (balance) => {
+                    bot.balance = balance;
+                    updateBotCard(index);
+                });
+                
+                // Game started
+                bot.socket.on('gameStarted', (data) => {
+                    log(`Bot ${bot.name}: Game started in room ${data.room}`, 'info');
+                    updateBotStatus(index, 'game_started');
+                    
+                    // Mark FREE space
+                    bot.markedNumbers = ['FREE'];
+                    
+                    // Determine if this bot will try to win
+                    const winRoll = Math.random();
+                    bot.willWin = winRoll < SAFE_CONFIG.winChance;
+                    
+                    if (bot.willWin) {
+                        log(`Bot ${bot.name} will attempt to win`, 'warning');
+                        
+                        // Schedule win attempt with random delay
+                        const delay = Math.random() * (SAFE_CONFIG.actionDelayMax - SAFE_CONFIG.actionDelayMin) + SAFE_CONFIG.actionDelayMin;
+                        setTimeout(() => {
+                            if (bot.isConnected && bot.willWin) {
+                                this.attemptWin(bot, index, data.room);
+                            }
+                        }, delay);
+                    }
+                });
+                
+                // Ball drawn
+                bot.socket.on('ballDrawn', (data) => {
+                    const num = data.num;
+                    
+                    // Check if this number is in bot's grid
+                    const gridIndex = bot.grid.indexOf(num);
+                    if (gridIndex !== -1 && !bot.markedNumbers.includes(num)) {
+                        bot.markedNumbers.push(num);
+                        
+                        // Check if bot has bingo now
+                        if (bot.willWin && this.checkBingo(bot.markedNumbers, bot.grid)) {
+                            setTimeout(() => {
+                                this.claimBingo(bot, index, data.room);
+                            }, Math.random() * 2000 + 1000);
+                        }
+                    }
+                });
+                
+                // Game over
+                bot.socket.on('gameOver', (data) => {
+                    if (data.winnerId === bot.userId) {
+                        // Bot won!
+                        bot.wins++;
+                        const prize = data.prize || 0;
+                        bot.earnings += prize;
+                        stats.totalWins++;
+                        stats.totalEarnings += prize;
+                        stats.gamesPlayed++;
+                        
+                        if (data.room) {
+                            stats.winsByRoom[data.room] = (stats.winsByRoom[data.room] || 0) + 1;
+                        }
+                        
+                        log(`🎉 Bot ${bot.name} WON ${prize} ETB in room ${data.room}!`, 'success');
+                        updateBotCard(index);
+                        updateStats();
+                        updateQuickStats();
+                    }
+                    
+                    // Reset for next game
+                    bot.markedNumbers = [];
+                    bot.willWin = false;
+                    updateBotStatus(index, 'waiting');
+                    
+                    // Auto rejoin if enabled
+                    if (SAFE_CONFIG.autoJoinMode) {
+                        setTimeout(() => {
+                            if (bot.isConnected) {
+                                this.autoJoinRoom(bot, index);
+                            }
+                        }, Math.random() * 5000 + 3000);
+                    }
+                });
+                
+                // Room status updates
+                bot.socket.on('roomStatus', (rooms) => {
+                    // Can use this for intelligent room selection
+                    bot.lastRoomUpdate = Date.now();
+                });
+            }
+            
+            async autoJoinRoom(bot, index) {
+                if (!bot.isConnected || !bot.socket) return;
+                
+                const targetRoom = bot.assignedRoom;
+                
+                // Get current room status
+                bot.socket.emit('getRoomCountdown', { room: targetRoom }, (roomData) => {
+                    if (!roomData || roomData.countdownActive === false) {
+                        log(`Room ${targetRoom} not active for ${bot.name}`, 'warning');
+                        setTimeout(() => this.autoJoinRoom(bot, index), 5000);
+                        return;
+                    }
+                    
+                    // Get taken boxes
+                    bot.socket.emit('getTakenBoxes', { room: targetRoom }, (takenBoxes) => {
+                        if (!Array.isArray(takenBoxes)) {
+                            log(`Failed to get boxes for ${bot.name}`, 'error');
+                            return;
+                        }
+                        
+                        // Find available box
+                        let availableBox = null;
+                        const attempts = 20;
+                        
+                        for (let i = 0; i < attempts; i++) {
+                            const randomBox = Math.floor(Math.random() * 100) + 1;
+                            if (!takenBoxes.includes(randomBox)) {
+                                availableBox = randomBox;
+                                break;
+                            }
+                        }
+                        
+                        if (!availableBox) {
+                            log(`No boxes available in room ${targetRoom} for ${bot.name}`, 'warning');
+                            return;
+                        }
+                        
+                        bot.box = availableBox;
+                        
+                        // Join with delay
+                        setTimeout(() => {
+                            bot.socket.emit('joinRoom', {
+                                room: targetRoom,
+                                box: availableBox,
+                                userName: bot.name
+                            }, (response) => {
+                                if (response?.success) {
+                                    bot.room = targetRoom;
+                                    log(`Bot ${bot.name} joined room ${targetRoom} with box ${availableBox}`, 'success');
+                                    updateBotStatus(index, 'in_room');
+                                    
+                                    // Subscribe to room updates
+                                    bot.socket.emit('subscribeToRoom', { room: targetRoom });
+                                } else {
+                                    log(`Bot ${bot.name} failed to join: ${response?.message || 'Unknown error'}`, 'error');
+                                }
+                            });
+                        }, Math.random() * 2000 + 1000);
+                    });
+                });
+            }
+            
+            attemptWin(bot, index, room) {
+                if (!bot.isConnected || !bot.willWin) return;
+                
+                // Create a winning pattern
+                const winningPatterns = [
+                    [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14],
+                    [15,16,17,18,19], [20,21,22,23,24],
+                    [0,5,10,15,20], [1,6,11,16,21], [2,7,12,17,22],
+                    [3,8,13,18,23], [4,9,14,19,24],
+                    [0,6,12,18,24], [4,8,12,16,20],
+                    [0,4,20,24]
+                ];
+                
+                const winningPattern = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
+                
+                // Mark the pattern
+                bot.markedNumbers = ['FREE'];
+                winningPattern.forEach(patternIndex => {
+                    const cellValue = bot.grid[patternIndex];
+                    if (cellValue !== 'FREE' && !bot.markedNumbers.includes(cellValue)) {
+                        bot.markedNumbers.push(cellValue);
+                    }
+                });
+                
+                // Claim bingo
+                setTimeout(() => {
+                    this.claimBingo(bot, index, room);
+                }, Math.random() * 3000 + 1000);
+            }
+            
+            claimBingo(bot, index, room) {
+                if (!bot.isConnected || !bot.socket) return;
+                
+                bot.socket.emit('claimBingo', {
+                    room: room,
+                    grid: bot.grid,
+                    marked: bot.markedNumbers
+                }, (response) => {
+                    if (response?.success) {
+                        log(`Bot ${bot.name} claimed BINGO!`, 'success');
+                        updateBotStatus(index, 'claimed_bingo');
+                    } else {
+                        log(`Bot ${bot.name} bingo claim failed: ${response?.message || 'Unknown error'}`, 'error');
+                    }
+                });
+            }
+            
+            checkBingo(markedNumbers, grid) {
+                const patterns = [
+                    [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14],
+                    [15,16,17,18,19], [20,21,22,23,24],
+                    [0,5,10,15,20], [1,6,11,16,21], [2,7,12,17,22],
+                    [3,8,13,18,23], [4,9,14,19,24],
+                    [0,6,12,18,24], [4,8,12,16,20],
+                    [0,4,20,24]
+                ];
+                
+                for (const pattern of patterns) {
+                    const isBingo = pattern.every(index => {
+                        const cellValue = grid[index];
+                        if (cellValue === 'FREE') return true;
+                        
+                        const markedNum = markedNumbers.find(marked => {
+                            if (marked === 'FREE') return false;
+                            return Number(marked) === cellValue;
+                        });
+                        
+                        return markedNum !== undefined;
+                    });
+                    
+                    if (isBingo) return true;
+                }
+                
+                return false;
+            }
+            
+            generateBingoGrid() {
+                const grid = [];
+                const ranges = {
+                    'B': [1, 15],
+                    'I': [16, 30],
+                    'N': [31, 45],
+                    'G': [46, 60],
+                    'O': [61, 75]
+                };
+
+                const letters = ['B', 'I', 'N', 'G', 'O'];
+                
+                for (let col = 0; col < 5; col++) {
+                    const letter = letters[col];
+                    const [min, max] = ranges[letter];
+                    const columnNumbers = [];
+                    
+                    while (columnNumbers.length < 5) {
+                        const num = Math.floor(Math.random() * (max - min + 1)) + min;
+                        if (!columnNumbers.includes(num)) {
+                            columnNumbers.push(num);
+                        }
+                    }
+                    
+                    if (col === 2) {
+                        columnNumbers[2] = 'FREE';
+                    }
+                    
+                    for (let row = 0; row < 5; row++) {
+                        const index = row * 5 + col;
+                        grid[index] = columnNumbers[row];
+                    }
+                }
+                
+                return grid;
+            }
+            
+            processQueue() {
+                this.activeConnections--;
+                
+                if (this.connectionQueue.length > 0 && this.activeConnections < SAFE_CONFIG.maxConcurrent) {
+                    const next = this.connectionQueue.shift();
+                    this.activeConnections++;
+                    this._establishConnection(next.bot, next.index).then(success => {
+                        if (success) {
+                            stats.activeBots++;
+                            stats.totalConnections++;
+                            updateBotStatus(next.index, 'connected');
+                        } else {
+                            stats.failedConnections++;
+                            updateBotStatus(next.index, 'offline');
+                        }
+                        next.resolve(success);
+                        updateQuickStats();
+                        updateStats();
+                    });
+                }
+            }
+            
+            disconnectAll() {
+                this.isActive = false;
+                this.connectionQueue = [];
+                
+                this.activeBots.forEach(bot => {
+                    if (bot.socket && bot.socket.connected) {
+                        bot.socket.disconnect();
+                    }
+                });
+                
+                this.activeBots.clear();
+                this.activeConnections = 0;
+            }
+            
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // ========== BOT MANAGEMENT ==========
         function initializeBots() {
             botsContainer.innerHTML = '';
             bots.length = 0;
-
-            const count = parseInt(config.botCount);
             
-            for (let i = 0; i < count; i++) {
+            // Create 10 bots (8 male, 2 female)
+            for (let i = 0; i < 10; i++) {
+                const name = ethiopianNames[i];
+                const gender = i < 8 ? 'male' : 'female';
+                const personality = botPersonalities[i];
+                const winRate = Math.floor(Math.random() * 21) + 70; // 70-90%
+                const avatarColor = avatarColors[i];
+                
+                // Generate BINGO grid for this bot
+                const grid = window.botPool ? window.botPool.generateBingoGrid() : Array(25).fill(0);
+                
                 const bot = {
-                    id: `bot_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`,
-                    name: botNames[i],
-                    avatar: botAvatars[i],
-                    personality: botPersonalities[i],
-                    winRate: botWinRates[i],
+                    id: `bot_${i}_${Date.now()}`,
+                    userId: '', // Will be set when connecting
+                    name: name,
+                    gender: gender,
+                    avatarColor: avatarColor,
+                    personality: personality,
+                    winRate: winRate,
                     socket: null,
                     status: 'offline',
                     room: null,
@@ -830,699 +1479,292 @@
                     balance: 0,
                     wins: 0,
                     earnings: 0,
-                    joinedAt: null,
-                    lastAction: null,
-                    grid: generateBingoGrid(),
-                    markedNumbers: [],
-                    willWin: false,
-                    isTeamCaptain: i === 0,
                     isConnected: false,
-                    connectionAttempts: 0,
-                    lastPing: null,
-                    index: i
+                    willWin: false,
+                    markedNumbers: [],
+                    grid: grid,
+                    assignedRoom: getAssignedRoom(i),
+                    index: i,
+                    lastAction: null
                 };
-
+                
                 bots.push(bot);
-
+                
                 // Create bot card
-                const botCard = document.createElement('div');
-                botCard.className = 'bot-card';
-                botCard.id = `bot-${i}`;
-                botCard.innerHTML = `
-                    <div class="bot-profile">
-                        <div class="bot-avatar ${bot.avatar}">
-                            ${bot.name.charAt(0)}
-                        </div>
-                        <div class="bot-info">
-                            <div class="bot-header">
-                                <div class="bot-header-left">
-                                    <div>
-                                        <div class="bot-name">${bot.name}</div>
-                                        <div style="font-size: 0.8rem; color: #94a3b8;">${bot.personality}</div>
+                createBotCard(bot, i);
+            }
+            
+            log(`Initialized 10 bots (8 male, 2 female) with safe connection pool`, 'success');
+            updateDisplayCount();
+        }
+        
+        function createBotCard(bot, index) {
+            const botCard = document.createElement('div');
+            botCard.className = 'bot-card';
+            botCard.id = `bot-${index}`;
+            botCard.dataset.status = 'offline';
+            botCard.dataset.gender = bot.gender;
+            botCard.dataset.room = 'none';
+            botCard.dataset.winning = 'false';
+            
+            botCard.innerHTML = `
+                <div class="bot-profile">
+                    <div class="bot-avatar" style="--avatar-color1: ${bot.avatarColor[0]}; --avatar-color2: ${bot.avatarColor[1]}">
+                        ${bot.name.charAt(0)}
+                    </div>
+                    <div class="bot-info">
+                        <div class="bot-header">
+                            <div class="bot-header-left">
+                                <div>
+                                    <div class="bot-name">${bot.name}
+                                        <span class="gender-badge gender-${bot.gender}">${bot.gender === 'male' ? '👨' : '👩'} ${bot.gender}</span>
                                     </div>
+                                    <div style="font-size: 0.7rem; color: #94a3b8;">${bot.personality}</div>
                                 </div>
-                                <div class="bot-status status-offline">OFFLINE</div>
                             </div>
-                            <div>
-                                <span class="bot-skill">${bot.winRate}% Win Rate</span>
-                                <span class="bot-skill">${bot.balance} ETB</span>
-                                <span class="bot-skill">${bot.wins} Wins</span>
-                            </div>
+                            <div class="bot-status status-offline">OFFLINE</div>
+                        </div>
+                        <div>
+                            <span class="bot-skill">🎯 ${bot.winRate}% Win</span>
+                            <span class="bot-skill">💰 ${bot.balance} ETB</span>
+                            <span class="bot-skill">🏆 ${bot.wins}</span>
+                            <span class="bot-skill">${getRoomEmoji(bot.assignedRoom)} ${bot.assignedRoom}</span>
                         </div>
                     </div>
-                    <div class="bot-details">
-                        Balance: <span>${bot.balance} ETB</span><br>
-                        Wins: <span>${bot.wins}</span><br>
-                        Earnings: <span>${bot.earnings} ETB</span><br>
-                        Status: <span id="bot-status-${i}">Waiting...</span>
-                    </div>
-                    <div class="bot-controls">
-                        <button class="mini-btn" onclick="forceBotWin(${i})">Force Win</button>
-                        <button class="mini-btn" onclick="toggleBot(${i})">Connect</button>
-                        <button class="mini-btn" onclick="changeBotRoom(${i})">Change Room</button>
-                    </div>
-                `;
-
-                botsContainer.appendChild(botCard);
+                </div>
+                <div class="bot-details">
+                    Room: <span id="bot-room-${index}">${bot.assignedRoom} ETB</span><br>
+                    Box: <span id="bot-box-${index}">-</span><br>
+                    Balance: <span>${bot.balance} ETB</span><br>
+                    Status: <span id="bot-status-${index}">Offline</span>
+                </div>
+                <div class="bot-controls">
+                    <button class="mini-btn" onclick="forceBotWin(${index})">🎯 Force Win</button>
+                    <button class="mini-btn" onclick="toggleSingleBot(${index})">🔌 Connect</button>
+                    <button class="mini-btn" onclick="changeBotRoom(${index})">🔄 Room</button>
+                </div>
+            `;
+            
+            botsContainer.appendChild(botCard);
+        }
+        
+        function getRoomEmoji(room) {
+            switch(room) {
+                case 10: return '💰';
+                case 20: return '💵';
+                case 50: return '💎';
+                case 100: return '👑';
+                default: return '🎮';
             }
-            
-            log(`Initialized ${count} bots`, 'info');
-            updateQuickStats();
         }
-
-        // Test server connection
-        async function testServerConnection() {
-            return new Promise((resolve) => {
-                const serverUrl = serverUrlInput.value || config.serverUrl;
-                log(`Testing connection to ${serverUrl}...`, 'info');
-                
-                // First test with fetch to check if server is reachable
-                fetch(`${serverUrl}/health`)
-                    .then(response => {
-                        if (response.ok) {
-                            return response.json();
-                        } else {
-                            throw new Error(`HTTP ${response.status}`);
-                        }
-                    })
-                    .then(data => {
-                        log(`Server is reachable (${data.status})`, 'success');
-                        
-                        // Now test socket.io connection
-                        if (config.masterSocket && config.masterSocket.connected) {
-                            config.masterSocket.disconnect();
-                        }
-                        
-                        config.masterSocket = io(serverUrl, {
-                            transports: ['websocket', 'polling'],
-                            reconnection: false,
-                            timeout: 5000
-                        });
-                        
-                        config.masterSocket.on('connect', () => {
-                            log(`Successfully connected to server via Socket.IO`, 'success');
-                            connectionDot.className = 'connection-dot connected';
-                            connectionStatus.textContent = `Connected to ${serverUrl}`;
-                            globalStatus.textContent = 'CONNECTED';
-                            globalStatus.className = 'status-indicator active';
-                            serverUrlDisplay.textContent = serverUrl;
-                            config.connectionTested = true;
-                            resolve(true);
-                            
-                            // Test a quick ping
-                            config.masterSocket.emit('ping');
-                            config.masterSocket.on('pong', () => {
-                                log(`Server ping successful`, 'success');
-                            });
-                            
-                            // Disconnect test socket
-                            setTimeout(() => {
-                                config.masterSocket.disconnect();
-                            }, 1000);
-                        });
-                        
-                        config.masterSocket.on('connect_error', (error) => {
-                            log(`Socket.IO connection failed: ${error.message}`, 'error');
-                            connectionDot.className = 'connection-dot';
-                            connectionStatus.textContent = `Socket.IO failed: ${error.message}`;
-                            globalStatus.textContent = 'SOCKET FAILED';
-                            globalStatus.className = 'status-indicator';
-                            config.connectionTested = false;
-                            resolve(false);
-                        });
-                        
-                        config.masterSocket.on('disconnect', () => {
-                            log(`Test socket disconnected`, 'info');
-                        });
-                    })
-                    .catch(error => {
-                        log(`Cannot reach server: ${error.message}`, 'error');
-                        connectionDot.className = 'connection-dot';
-                        connectionStatus.textContent = `Failed to connect: ${error.message}`;
-                        globalStatus.textContent = 'CONNECTION FAILED';
-                        globalStatus.className = 'status-indicator';
-                        config.connectionTested = false;
-                        resolve(false);
-                    });
-            });
-        }
-
-        // Generate random BINGO grid
-        function generateBingoGrid() {
-            const grid = [];
-            const ranges = {
-                'B': [1, 15],
-                'I': [16, 30],
-                'N': [31, 45],
-                'G': [46, 60],
-                'O': [61, 75]
-            };
-
-            const letters = ['B', 'I', 'N', 'G', 'O'];
+        
+        function getAssignedRoom(botIndex) {
+            const strategy = document.getElementById('targetRoom').value;
             
-            for (let col = 0; col < 5; col++) {
-                const letter = letters[col];
-                const [min, max] = ranges[letter];
-                const columnNumbers = [];
-                
-                // Generate 5 unique numbers for this column
-                while (columnNumbers.length < 5) {
-                    const num = Math.floor(Math.random() * (max - min + 1)) + min;
-                    if (!columnNumbers.includes(num)) {
-                        columnNumbers.push(num);
-                    }
-                }
-                
-                // Set FREE space in the middle (N column, 3rd row)
-                if (col === 2) {
-                    columnNumbers[2] = 'FREE';
-                }
-                
-                for (let row = 0; row < 5; row++) {
-                    const index = row * 5 + col;
-                    grid[index] = columnNumbers[row];
-                }
-            }
-            
-            return grid;
-        }
-
-        // Connect a bot to the server
-        async function connectBot(bot, index) {
-            return new Promise((resolve) => {
-                bot.connectionAttempts++;
-                
-                try {
-                    const serverUrl = serverUrlInput.value || config.serverUrl;
+            switch(strategy) {
+                case 'balanced':
+                    // 2/2/3/3 distribution
+                    if (botIndex < 2) return 10;
+                    if (botIndex < 4) return 20;
+                    if (botIndex < 7) return 50;
+                    return 100;
                     
-                    bot.socket = io(serverUrl, {
-                        transports: ['websocket', 'polling'],
-                        reconnection: true,
-                        reconnectionAttempts: 3,
-                        reconnectionDelay: 1000,
-                        timeout: 10000,
-                        query: {
-                            userId: bot.id,
-                            userName: bot.name,
-                            isBot: true  // Mark as bot
-                        }
-                    });
-
-                    bot.socket.on('connect', () => {
-                        log(`Bot ${bot.name} connected to server`, 'success');
-                        
-                        // Send bot authentication
-                        bot.socket.emit('bot:auth', config.botSquadPassword, (authResponse) => {
-                            if (authResponse?.success) {
-                                log(`Bot ${bot.name} authenticated as bot`, 'success');
-                                updateBotStatus(index, 'connected');
-                                bot.isConnected = true;
-                                bot.lastPing = Date.now();
-                                
-                                // Initialize bot with isBot flag
-                                bot.socket.emit('init', {
-                                    userId: bot.id,
-                                    userName: bot.name,
-                                    isBot: true
-                                }, (response) => {
-                                    if (response?.success) {
-                                        log(`Bot ${bot.name} initialized successfully`, 'success');
-                                        updateBotStatus(index, 'initialized');
-                                        bot.connectionAttempts = 0;
-                                        resolve(true);
-                                    } else {
-                                        log(`Bot ${bot.name} failed to initialize: ${response?.message || 'Unknown error'}`, 'error');
-                                        resolve(false);
-                                    }
-                                });
-                            } else {
-                                log(`Bot ${bot.name} failed authentication: ${authResponse?.message || 'Unknown error'}`, 'error');
-                                resolve(false);
-                            }
-                        });
-                    });
-
-                    bot.socket.on('balanceUpdate', (balance) => {
-                        bot.balance = balance;
-                        updateBotCard(index);
-                        updateQuickStats();
-                    });
-
-                    bot.socket.on('gameStarted', (data) => {
-                        log(`Bot ${bot.name}: Game started in room ${data.room}`, 'warning');
-                        updateBotStatus(index, 'game_started');
-                        
-                        // Start marking numbers
-                        bot.markedNumbers = ['FREE'];
-                        
-                        // If this bot is supposed to win, prepare to claim
-                        if (bot.willWin) {
-                            let delay;
-                            switch(config.behavior) {
-                                case 'aggressive':
-                                    delay = Math.random() * 4000 + 1000; // 1-5 seconds
-                                    break;
-                                case 'stealth':
-                                    delay = Math.random() * 50000 + 10000; // 10-60 seconds
-                                    break;
-                                case 'team':
-                                    delay = (index + 1) * 5000; // Staggered wins
-                                    break;
-                                default: // normal
-                                    delay = Math.random() * (config.winDelay * 1000) + 5000; // 5-30 seconds
-                            }
-                            
-                            setTimeout(() => {
-                                if (bot.isConnected && bot.willWin) {
-                                    forceWinPattern(bot, index, data.room);
-                                }
-                            }, delay);
-                        }
-                    });
-
-                    bot.socket.on('ballDrawn', (data) => {
-                        const num = data.num;
-                        const gridIndex = bot.grid.indexOf(num);
-                        
-                        if (gridIndex !== -1 && !bot.markedNumbers.includes(num)) {
-                            bot.markedNumbers.push(num);
-                            
-                            // Auto-claim if we have bingo
-                            if (bot.willWin && checkBingo(bot.markedNumbers, bot.grid)) {
-                                setTimeout(() => {
-                                    claimBingo(bot, index, data.room);
-                                }, Math.random() * 2000 + 1000);
-                            }
-                        }
-                    });
-
-                    bot.socket.on('gameOver', (data) => {
-                        if (data.winnerId === bot.id) {
-                            bot.wins++;
-                            const prize = data.prize || 0;
-                            bot.earnings += prize;
-                            stats.totalWins++;
-                            stats.totalEarnings += prize;
-                            stats.gamesPlayed++;
-                            
-                            log(`Bot ${bot.name} WON ${prize} ETB!`, 'success');
-                            updateBotCard(index);
-                            updateStats();
-                            updateQuickStats();
-                        }
-                        
-                        // Reset for next game
-                        bot.markedNumbers = [];
-                        bot.willWin = false;
-                        updateBotStatus(index, 'waiting');
-                        
-                        // Rejoin after delay
-                        setTimeout(() => {
-                            if (bot.isConnected) {
-                                joinRoom(bot, index);
-                            }
-                        }, 3000);
-                    });
-
-                    bot.socket.on('joinedRoom', () => {
-                        log(`Bot ${bot.name} successfully joined room`, 'success');
-                    });
-
-                    bot.socket.on('insufficientFunds', () => {
-                        log(`Bot ${bot.name} has insufficient funds`, 'error');
-                    });
-
-                    bot.socket.on('boxTaken', () => {
-                        log(`Bot ${bot.name}: Box already taken, trying another...`, 'warning');
-                        setTimeout(() => {
-                            if (bot.isConnected) {
-                                joinRoom(bot, index);
-                            }
-                        }, 2000);
-                    });
-
-                    bot.socket.on('roomLocked', () => {
-                        log(`Bot ${bot.name}: Room is locked (game in progress)`, 'warning');
-                        setTimeout(() => {
-                            if (bot.isConnected) {
-                                joinRoom(bot, index);
-                            }
-                        }, 5000);
-                    });
-
-                    bot.socket.on('error', (error) => {
-                        log(`Bot ${bot.name} error: ${error}`, 'error');
-                    });
-
-                    bot.socket.on('disconnect', (reason) => {
-                        log(`Bot ${bot.name} disconnected: ${reason}`, 'error');
-                        updateBotStatus(index, 'offline');
-                        bot.isConnected = false;
-                        bot.willWin = false;
-                        
-                        // Try to reconnect if squad is active
-                        if (config.isActive) {
-                            setTimeout(() => {
-                                if (config.isActive && !bot.isConnected) {
-                                    connectBot(bot, index).then(success => {
-                                        if (success) {
-                                            setTimeout(() => joinRoom(bot, index), 2000);
-                                        }
-                                    });
-                                }
-                            }, 5000);
-                        }
-                    });
-
-                    bot.socket.on('connect_error', (error) => {
-                        log(`Bot ${bot.name} connection error: ${error.message}`, 'error');
-                        resolve(false);
-                    });
-
-                } catch (error) {
-                    log(`Bot ${bot.name} connection error: ${error.message}`, 'error');
-                    resolve(false);
-                }
-            });
-        }
-
-        // Bot joins a room
-        async function joinRoom(bot, index) {
-            if (!bot.isConnected) {
-                log(`Bot ${bot.name} not connected, cannot join room`, 'error');
-                return;
-            }
-
-            // Get taken boxes first
-            bot.socket.emit('getTakenBoxes', { room: config.targetRoom }, (takenBoxes) => {
-                // Find an available box
-                let availableBox = null;
-                const maxAttempts = 50;
-                
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    const randomBox = Math.floor(Math.random() * 100) + 1;
-                    if (!takenBoxes.includes(randomBox)) {
-                        availableBox = randomBox;
-                        break;
-                    }
-                }
-                
-                if (!availableBox) {
-                    log(`Bot ${bot.name}: No boxes available in room ${config.targetRoom}, trying again...`, 'warning');
-                    setTimeout(() => joinRoom(bot, index), 3000);
-                    return;
-                }
-                
-                bot.box = availableBox;
-                
-                // Join the room
-                bot.socket.emit('joinRoom', {
-                    room: parseInt(config.targetRoom),
-                    box: availableBox,
-                    userName: bot.name
-                }, (response) => {
-                    if (response?.success) {
-                        bot.room = config.targetRoom;
-                        bot.joinedAt = new Date();
-                        updateBotStatus(index, 'joined_room');
-                        log(`Bot ${bot.name} joined room ${config.targetRoom} with box ${availableBox}`, 'success');
-                        
-                        // Subscribe to room updates
-                        bot.socket.emit('subscribeToRoom', { room: config.targetRoom });
-                        
-                        // Determine if this bot will win (only one bot per game wins)
-                        const winningBot = bots.find(b => b.willWin && b.room === config.targetRoom);
-                        if (!winningBot) {
-                            bot.willWin = Math.random() < (bot.winRate / 100);
-                            if (bot.willWin) {
-                                log(`Bot ${bot.name} selected as winner for next game in room ${config.targetRoom}`, 'warning');
-                            }
-                        }
-                    } else {
-                        log(`Bot ${bot.name} failed to join room: ${response?.message || 'Unknown error'}`, 'error');
-                        // Try again with different box
-                        setTimeout(() => joinRoom(bot, index), 2000);
-                    }
-                });
-            });
-        }
-
-        // Check if we have bingo
-        function checkBingo(markedNumbers, grid) {
-            const patterns = [
-                // Rows
-                [0,1,2,3,4],
-                [5,6,7,8,9],
-                [10,11,12,13,14],
-                [15,16,17,18,19],
-                [20,21,22,23,24],
-                
-                // Columns
-                [0,5,10,15,20],
-                [1,6,11,16,21],
-                [2,7,12,17,22],
-                [3,8,13,18,23],
-                [4,9,14,19,24],
-                
-                // Diagonals
-                [0,6,12,18,24],
-                [4,8,12,16,20],
-                
-                // Four corners
-                [0,4,20,24]
-            ];
-            
-            for (const pattern of patterns) {
-                const isBingo = pattern.every(index => {
-                    const cellValue = grid[index];
-                    if (cellValue === 'FREE') return true;
+                case '10':
+                    return 10;
                     
-                    // Convert marked numbers to numbers for comparison
-                    const markedNum = markedNumbers.find(marked => {
-                        if (marked === 'FREE') return false;
-                        return Number(marked) === cellValue;
-                    });
+                case '20':
+                    return 20;
                     
-                    return markedNum !== undefined;
-                });
-                
-                if (isBingo) {
-                    return { 
-                        isBingo: true, 
-                        pattern: pattern,
-                        isFourCorners: pattern.length === 4 && pattern[0] === 0 && pattern[1] === 4 && pattern[2] === 20 && pattern[3] === 24
-                    };
-                }
+                case '50':
+                    return 50;
+                    
+                case '100':
+                    return 100;
+                    
+                case 'spread':
+                    // Spread evenly
+                    const rooms = [10, 20, 50, 100];
+                    return rooms[botIndex % rooms.length];
+                    
+                default:
+                    return 10;
             }
-            
-            return { isBingo: false };
         }
 
-        // Create a winning pattern for the bot
-        function forceWinPattern(bot, index, room) {
-            if (!bot.isConnected) return;
-            
-            // Choose a winning pattern
-            const winningPatterns = [
-                // Rows
-                [0,1,2,3,4],
-                [5,6,7,8,9],
-                [10,11,12,13,14],
-                [15,16,17,18,19],
-                [20,21,22,23,24],
-                
-                // Columns
-                [0,5,10,15,20],
-                [1,6,11,16,21],
-                [2,7,12,17,22],
-                [3,8,13,18,23],
-                [4,9,14,19,24],
-                
-                // Diagonals
-                [0,6,12,18,24],
-                [4,8,12,16,20],
-                
-                // Four corners
-                [0,4,20,24]
-            ];
-            
-            const winningPattern = winningPatterns[Math.floor(Math.random() * winningPatterns.length)];
-            
-            // Clear current marked numbers and add the pattern
-            bot.markedNumbers = ['FREE'];
-            winningPattern.forEach(patternIndex => {
-                const cellValue = bot.grid[patternIndex];
-                if (cellValue !== 'FREE' && !bot.markedNumbers.includes(cellValue)) {
-                    bot.markedNumbers.push(cellValue);
-                }
-            });
-            
-            log(`Bot ${bot.name} prepared winning pattern`, 'warning');
-            
-            // Claim bingo after short delay
-            setTimeout(() => {
-                claimBingo(bot, index, room);
-            }, 1000);
-        }
-
-        // Bot claims bingo
-        function claimBingo(bot, index, room) {
-            if (!bot.isConnected || !bot.willWin) return;
-            
-            // Ensure we have a valid bingo pattern
-            const bingoCheck = checkBingo(bot.markedNumbers, bot.grid);
-            if (!bingoCheck.isBingo) {
-                // Force a winning pattern by adding missing numbers
-                const winningPatterns = [[0,1,2,3,4]]; // Simple top row
-                const winningPattern = winningPatterns[0];
-                const missingNumbers = winningPattern.filter(patternIndex => {
-                    const cellValue = bot.grid[patternIndex];
-                    return cellValue !== 'FREE' && !bot.markedNumbers.includes(cellValue);
-                });
-                
-                missingNumbers.forEach(patternIndex => {
-                    const num = bot.grid[patternIndex];
-                    if (!bot.markedNumbers.includes(num)) {
-                        bot.markedNumbers.push(num);
-                    }
-                });
-            }
-            
-            // Claim bingo
-            bot.socket.emit('claimBingo', {
-                room: room,
-                grid: bot.grid,
-                marked: bot.markedNumbers
-            }, (response) => {
-                if (response?.success) {
-                    log(`Bot ${bot.name} claimed BINGO!`, 'success');
-                    updateBotStatus(index, 'claimed_bingo');
-                } else {
-                    log(`Bot ${bot.name} failed to claim BINGO: ${response?.message || 'Unknown error'}`, 'error');
-                }
-            });
-        }
-
-        // Toggle all bots
+        // ========== BOT CONTROLS ==========
         async function toggleBots() {
-            if (!config.connectionTested) {
-                const connected = await testServerConnection();
-                if (!connected) {
-                    log('Cannot activate bots: Server connection failed', 'error');
-                    return;
-                }
+            if (!window.botPool) {
+                window.botPool = new SafeConnectionPool();
             }
             
-            config.isActive = !config.isActive;
+            const pool = window.botPool;
             
-            if (config.isActive) {
-                toggleBtn.innerHTML = '<span>BOT SQUAD ACTIVE</span>';
+            if (!pool.isActive) {
+                // Activate bots
+                toggleBtn.innerHTML = '<span>✅ BOTS ACTIVE (SAFE MODE)</span>';
                 toggleBtn.classList.add('btn-on');
-                log('Activating all bots...', 'warning');
+                globalStatus.textContent = '✅ CONNECTED';
+                globalStatus.className = 'status-indicator active';
                 
+                log('Activating bots with safe connection pool...', 'warning');
+                pool.isActive = true;
+                
+                // Reset stats
                 stats.activeBots = 0;
+                stats.totalConnections = 0;
+                stats.failedConnections = 0;
                 updateStats();
                 updateQuickStats();
                 
-                // Connect all bots with staggered delays
+                // Connect all bots
                 for (let i = 0; i < bots.length; i++) {
                     setTimeout(async () => {
-                        const bot = bots[i];
-                        const success = await connectBot(bot, i);
-                        if (success) {
-                            stats.activeBots++;
-                            stats.totalConnections++;
-                            updateStats();
-                            updateQuickStats();
-                            
-                            // Join room after short delay
-                            setTimeout(() => {
-                                joinRoom(bot, i);
-                            }, 2000);
-                        } else {
-                            stats.failedConnections++;
-                            log(`Failed to connect bot ${bot.name}`, 'error');
+                        if (pool.isActive) {
+                            await pool.connectBot(bots[i], i);
                         }
-                    }, i * config.staggerDelay);
+                    }, i * SAFE_CONFIG.connectionDelay);
                 }
                 
-                log(`All bots activating with ${config.staggerDelay}ms stagger...`, 'success');
-                
             } else {
-                toggleBtn.innerHTML = '<span>BOT SQUAD INACTIVE</span>';
+                // Deactivate bots
+                toggleBtn.innerHTML = '<span>🚫 BOTS INACTIVE</span>';
                 toggleBtn.classList.remove('btn-on');
-                log('Deactivating all bots...', 'warning');
+                globalStatus.textContent = '🚫 DISCONNECTED';
+                globalStatus.className = 'status-indicator';
                 
-                // Disconnect all bots
-                bots.forEach(bot => {
-                    if (bot.socket && bot.socket.connected) {
-                        bot.socket.disconnect();
-                    }
+                log('Deactivating all bots...', 'warning');
+                pool.disconnectAll();
+                
+                // Update all bot statuses
+                bots.forEach((bot, index) => {
                     bot.status = 'offline';
                     bot.isConnected = false;
                     bot.willWin = false;
+                    updateBotStatus(index, 'offline');
                 });
                 
                 stats.activeBots = 0;
                 updateStats();
                 updateQuickStats();
-                
-                // Reset bot cards
-                bots.forEach((bot, index) => {
-                    updateBotStatus(index, 'offline');
-                    document.getElementById(`bot-${index}`).classList.remove('active');
-                });
-                
                 log('All bots deactivated', 'success');
             }
         }
+        
+        async function toggleSingleBot(index) {
+            const bot = bots[index];
+            const pool = window.botPool;
+            
+            if (!pool || !pool.isActive) {
+                log('Bot pool not active. Enable bots first.', 'error');
+                return;
+            }
+            
+            if (bot.isConnected) {
+                // Disconnect single bot
+                if (bot.socket) {
+                    bot.socket.disconnect();
+                }
+                bot.isConnected = false;
+                updateBotStatus(index, 'offline');
+                log(`Bot ${bot.name} disconnected`, 'info');
+            } else {
+                // Connect single bot
+                await pool.connectBot(bot, index);
+            }
+        }
+        
+        function forceBotWin(index) {
+            const bot = bots[index];
+            if (bot.isConnected && bot.socket && bot.room) {
+                log(`Forcing win for ${bot.name}...`, 'warning');
+                
+                if (window.botPool) {
+                    window.botPool.attemptWin(bot, index, bot.room);
+                }
+            } else {
+                log(`Bot ${bot.name} is not connected or in a room`, 'error');
+            }
+        }
+        
+        function changeBotRoom(index) {
+            const bot = bots[index];
+            const rooms = [10, 20, 50, 100];
+            const currentIndex = rooms.indexOf(bot.assignedRoom);
+            const nextIndex = (currentIndex + 1) % rooms.length;
+            const newRoom = rooms[nextIndex];
+            
+            bot.assignedRoom = newRoom;
+            updateBotCard(index);
+            
+            if (bot.isConnected && bot.socket) {
+                // Leave current room if in one
+                if (bot.room) {
+                    bot.socket.emit('player:leaveRoom', {});
+                    bot.room = null;
+                }
+                
+                // Join new room after delay
+                setTimeout(() => {
+                    if (bot.isConnected && window.botPool) {
+                        window.botPool.autoJoinRoom(bot, index);
+                    }
+                }, 2000);
+            }
+            
+            log(`Bot ${bot.name} assigned to room ${newRoom} ETB`, 'info');
+        }
 
-        // Update bot status display
+        // ========== UI UPDATES ==========
         function updateBotStatus(index, status) {
             const bot = bots[index];
             bot.status = status;
             
-            const statusElement = document.getElementById(`bot-status-${index}`);
             const botCard = document.getElementById(`bot-${index}`);
+            const statusElement = document.getElementById(`bot-status-${index}`);
             const statusBadge = botCard.querySelector('.bot-status');
             
             if (statusElement) {
                 const statusTexts = {
                     'offline': 'Offline',
                     'connected': 'Connected',
-                    'initialized': 'Initialized',
-                    'joined_room': 'In Room',
+                    'in_room': 'In Room',
                     'game_started': 'Game Started',
                     'claimed_bingo': 'Claimed BINGO!',
-                    'waiting': 'Waiting for game'
+                    'waiting': 'Waiting'
                 };
-                
                 statusElement.textContent = statusTexts[status] || status;
             }
             
-            // Update status badge
             if (statusBadge) {
                 statusBadge.className = 'bot-status ' + 
                     (status === 'offline' ? 'status-offline' : 'status-online');
-                
                 statusBadge.textContent = status === 'offline' ? 'OFFLINE' : 'ONLINE';
             }
             
-            // Highlight active bot card
             if (status !== 'offline') {
                 botCard.classList.add('active');
+                botCard.dataset.status = 'online';
             } else {
                 botCard.classList.remove('active');
+                botCard.dataset.status = 'offline';
             }
             
-            // Update control button text
+            // Update room data attribute
+            if (bot.room) {
+                botCard.dataset.room = `room${bot.room}`;
+            } else {
+                botCard.dataset.room = 'none';
+            }
+            
+            // Update winning data attribute
+            botCard.dataset.winning = bot.willWin ? 'true' : 'false';
+            
             const toggleBtn = botCard.querySelector('.mini-btn:nth-child(2)');
             if (toggleBtn) {
-                toggleBtn.textContent = status === 'offline' ? 'Connect' : 'Disconnect';
+                toggleBtn.textContent = status === 'offline' ? '🔌 Connect' : '🔌 Disconnect';
             }
         }
-
-        // Update bot card information
+        
         function updateBotCard(index) {
             const bot = bots[index];
             const botCard = document.getElementById(`bot-${index}`);
@@ -1531,42 +1773,45 @@
                 const details = botCard.querySelector('.bot-details');
                 if (details) {
                     details.innerHTML = `
+                        Room: <span id="bot-room-${index}">${bot.assignedRoom} ETB</span><br>
+                        Box: <span id="bot-box-${index}">${bot.box || '-'}</span><br>
                         Balance: <span>${bot.balance} ETB</span><br>
-                        Wins: <span>${bot.wins}</span><br>
-                        Earnings: <span>${bot.earnings} ETB</span><br>
                         Status: <span id="bot-status-${index}">${bot.status}</span>
                     `;
                 }
                 
-                // Update skills display
                 const skillsDiv = botCard.querySelector('.bot-info div:nth-child(2)');
                 if (skillsDiv) {
                     skillsDiv.innerHTML = `
-                        <span class="bot-skill">${bot.winRate}% Win Rate</span>
-                        <span class="bot-skill">${bot.balance} ETB</span>
-                        <span class="bot-skill">${bot.wins} Wins</span>
+                        <span class="bot-skill">🎯 ${bot.winRate}% Win</span>
+                        <span class="bot-skill">💰 ${bot.balance} ETB</span>
+                        <span class="bot-skill">🏆 ${bot.wins}</span>
+                        <span class="bot-skill">${getRoomEmoji(bot.assignedRoom)} ${bot.assignedRoom}</span>
                     `;
                 }
             }
         }
-
-        // Update statistics display
+        
         function updateStats() {
             document.getElementById('totalWins').textContent = stats.totalWins;
             document.getElementById('totalEarnings').textContent = stats.totalEarnings;
             document.getElementById('activeBots').textContent = stats.activeBots;
             document.getElementById('gamesPlayed').textContent = stats.gamesPlayed;
         }
-
-        // Update quick stats display
+        
         function updateQuickStats() {
             quickWins.textContent = stats.totalWins;
             quickEarnings.textContent = stats.totalEarnings;
             quickActive.textContent = stats.activeBots;
             quickGames.textContent = stats.gamesPlayed;
         }
+        
+        function updateDisplayCount() {
+            const visibleBots = document.querySelectorAll('.bot-card:not([style*="display: none"])').length;
+            displayCount.textContent = visibleBots;
+        }
 
-        // Log messages
+        // ========== LOGGING ==========
         function log(message, type = 'info') {
             const time = new Date().toLocaleTimeString();
             const logEntry = document.createElement('div');
@@ -1582,313 +1827,304 @@
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
-        // Individual bot controls
-        function toggleBot(index) {
-            const bot = bots[index];
-            if (bot.status === 'offline') {
-                connectBot(bot, index).then(success => {
-                    if (success) {
-                        setTimeout(() => {
-                            joinRoom(bot, index);
-                        }, 1000);
-                    }
-                });
-            } else {
-                if (bot.socket && bot.socket.connected) {
-                    bot.socket.disconnect();
-                }
-                bot.status = 'offline';
-                bot.isConnected = false;
-                updateBotStatus(index, 'offline');
-            }
+        // ========== SERVER CONNECTION TEST ==========
+        async function testServerConnection() {
+            return new Promise((resolve) => {
+                const serverUrl = serverUrlInput.value || window.location.origin;
+                
+                log(`Testing connection to ${serverUrl}...`, 'info');
+                
+                fetch(`${serverUrl}/health`)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        } else {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                    })
+                    .then(data => {
+                        log(`✅ Server is reachable: ${data.status}`, 'success');
+                        
+                        connectionDot.className = 'connection-dot connected';
+                        connectionStatus.textContent = `Connected to ${serverUrl}`;
+                        globalStatus.textContent = '✅ CONNECTED';
+                        globalStatus.className = 'status-indicator active';
+                        serverUrlDisplay.textContent = serverUrl;
+                        
+                        resolve(true);
+                    })
+                    .catch(error => {
+                        log(`❌ Cannot reach server: ${error.message}`, 'error');
+                        connectionDot.className = 'connection-dot';
+                        connectionStatus.textContent = `Failed to connect: ${error.message}`;
+                        globalStatus.textContent = '❌ CONNECTION FAILED';
+                        globalStatus.className = 'status-indicator';
+                        
+                        resolve(false);
+                    });
+            });
         }
 
-        function forceBotWin(index) {
-            const bot = bots[index];
-            if (bot.socket && bot.socket.connected && bot.room) {
-                forceWinPattern(bot, index, bot.room);
-            } else {
-                log(`Bot ${bot.name} not ready to win`, 'error');
-            }
-        }
-
-        function changeBotRoom(index) {
-            const bot = bots[index];
-            const newRoom = prompt(`Enter new room for bot ${bot.name}:`, config.targetRoom);
-            if (newRoom && [10, 20, 50, 100].includes(parseInt(newRoom))) {
-                if (bot.socket && bot.socket.connected && bot.room) {
-                    bot.socket.emit('player:leaveRoom', {});
-                    setTimeout(() => {
-                        config.targetRoom = parseInt(newRoom);
-                        joinRoom(bot, index);
-                    }, 2000);
-                }
-            }
-        }
-
-        // Advanced control functions
-        function forceAllBotsWin() {
-            if (!config.isActive) {
-                log('Bots not active. Activate them first.', 'error');
+        // ========== ADVANCED CONTROLS ==========
+        function simulateWins() {
+            if (!window.botPool || !window.botPool.isActive) {
+                log('Bots not active. Enable them first.', 'error');
                 return;
             }
             
-            log('Forcing all bots to win...', 'warning');
+            log('Simulating one win for each bot in a room...', 'warning');
             
             bots.forEach((bot, index) => {
-                if (bot.socket && bot.socket.connected && bot.room) {
+                if (bot.isConnected && bot.socket && bot.room) {
                     setTimeout(() => {
-                        forceWinPattern(bot, index, bot.room);
-                    }, index * 500); // Stagger wins
+                        window.botPool.attemptWin(bot, index, bot.room);
+                    }, index * 1000);
                 }
             });
         }
-
-        function crashGame() {
-            if (!config.isActive) {
-                log('Bots not active. Activate them first.', 'error');
-                return;
-            }
+        
+        function balanceBots() {
+            log('Adding balance to all bots via admin API...', 'warning');
             
-            log('Attempting to crash current game...', 'warning');
-            
-            // Send invalid data to confuse the server
-            bots.forEach(bot => {
-                if (bot.socket && bot.socket.connected) {
-                    for (let i = 0; i < 10; i++) {
-                        setTimeout(() => {
-                            bot.socket.emit('claimBingo', {
-                                room: config.targetRoom,
-                                grid: Array(25).fill(0),
-                                marked: Array(25).fill('FREE')
-                            });
-                        }, i * 100);
-                    }
+            bots.forEach((bot, index) => {
+                if (bot.userId && SAFE_CONFIG.useAdminAPI) {
+                    fetch('/api/add-funds', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: bot.userId,
+                            amount: 1000,
+                            adminPassword: SAFE_CONFIG.adminPassword
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            bot.balance = data.newBalance;
+                            updateBotCard(index);
+                            log(`Added 1000 ETB to ${bot.name}`, 'success');
+                        }
+                    })
+                    .catch(error => {
+                        log(`Failed to fund ${bot.name}: ${error.message}`, 'error');
+                    });
                 }
             });
-            
-            log('Crash commands sent', 'success');
         }
-
-        function blockRealPlayers() {
-            if (!config.isActive) {
-                log('Bots not active. Activate them first.', 'error');
-                return;
-            }
+        
+        function rotateRooms() {
+            log('Rotating all bots to different rooms...', 'warning');
             
-            log('Blocking real players by taking all boxes...', 'warning');
-            
-            // Try to take all boxes
-            bots.forEach(bot => {
-                if (bot.socket && bot.socket.connected) {
-                    for (let box = 1; box <= 20; box++) {
-                        setTimeout(() => {
-                            bot.socket.emit('joinRoom', {
-                                room: parseInt(config.targetRoom),
-                                box: box,
-                                userName: bot.name
-                            });
-                        }, box * 50);
-                    }
-                }
-            });
-            
-            log('Attempting to fill room with bot boxes', 'success');
-        }
-
-        function drainRoom() {
-            if (!config.isActive) {
-                log('Bots not active. Activate them first.', 'error');
-                return;
-            }
-            
-            log('Draining prize pool...', 'warning');
-            
-            // Make bots leave and rejoin repeatedly
-            bots.forEach(bot => {
-                if (bot.socket && bot.socket.connected && bot.room) {
-                    // Leave room
-                    bot.socket.emit('player:leaveRoom', {});
-                    
-                    // Rejoin after short delay
-                    setTimeout(() => {
-                        joinRoom(bot, bots.indexOf(bot));
-                    }, Math.random() * 3000 + 1000);
-                }
-            });
-            
-            log('Draining initiated', 'success');
-        }
-
-        function coordinateAttack() {
-            if (!config.isActive) {
-                log('Bots not active. Activate them first.', 'error');
-                return;
-            }
-            
-            log('Preparing coordinated team attack...', 'warning');
-            
-            // Reset all bot win flags
-            bots.forEach(bot => bot.willWin = false);
-            
-            // Select 3 bots to win in sequence
-            const attackers = [0, 3, 6]; // Yoni Tad, Israel, Fitsum
-            attackers.forEach((botIndex, i) => {
-                setTimeout(() => {
-                    const bot = bots[botIndex];
-                    bot.willWin = true;
-                    log(`Bot ${bot.name} set as attacker ${i+1}`, 'warning');
-                    
-                    if (bot.socket && bot.socket.connected && bot.room) {
-                        setTimeout(() => {
-                            forceWinPattern(bot, botIndex, bot.room);
-                        }, 3000);
-                    }
-                }, i * 5000);
+            bots.forEach((bot, index) => {
+                changeBotRoom(index);
             });
         }
-
+        
         function resetAllBots() {
             log('Resetting all bots...', 'warning');
             
-            // Disconnect all
-            bots.forEach(bot => {
-                if (bot.socket && bot.socket.connected) {
-                    bot.socket.disconnect();
-                }
-            });
+            if (window.botPool) {
+                window.botPool.disconnectAll();
+            }
             
-            // Reinitialize
             setTimeout(() => {
                 initializeBots();
-                if (config.isActive) {
-                    toggleBots(); // Turn off
-                    setTimeout(() => toggleBots(), 1000); // Turn back on
-                }
+                updateStats();
+                updateQuickStats();
+                log('All bots reset successfully', 'success');
             }, 1000);
         }
 
-        // Initialize page
+        // ========== FILTER AND SEARCH ==========
+        function filterBots(filter) {
+            const botCards = document.querySelectorAll('.bot-card');
+            let visibleCount = 0;
+            
+            botCards.forEach(card => {
+                let show = false;
+                
+                switch(filter) {
+                    case 'all':
+                        show = true;
+                        break;
+                    case 'male':
+                        show = card.dataset.gender === 'male';
+                        break;
+                    case 'female':
+                        show = card.dataset.gender === 'female';
+                        break;
+                    case 'online':
+                        show = card.dataset.status === 'online';
+                        break;
+                    case 'offline':
+                        show = card.dataset.status === 'offline';
+                        break;
+                    case 'winning':
+                        show = card.dataset.winning === 'true';
+                        break;
+                    default:
+                        show = true;
+                }
+                
+                card.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+            
+            displayCount.textContent = visibleCount;
+        }
+        
+        function searchBots(query) {
+            const botCards = document.querySelectorAll('.bot-card');
+            let visibleCount = 0;
+            
+            botCards.forEach(card => {
+                const botName = card.querySelector('.bot-name').textContent.toLowerCase();
+                const show = botName.includes(query.toLowerCase());
+                card.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+            
+            displayCount.textContent = visibleCount;
+        }
+
+        // ========== AUTO JOIN FUNCTION ==========
+        function enableAutoJoin() {
+            SAFE_CONFIG.autoJoinMode = true;
+            autoJoinBtn.innerHTML = '<span>✅ AUTO JOIN ENABLED</span>';
+            autoJoinBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            
+            log('Auto-join mode enabled. Bots will automatically join rooms.', 'success');
+            
+            // Auto-join all connected bots
+            bots.forEach((bot, index) => {
+                if (bot.isConnected && window.botPool) {
+                    setTimeout(() => {
+                        window.botPool.autoJoinRoom(bot, index);
+                    }, index * 1000);
+                }
+            });
+        }
+
+        // ========== INITIALIZATION ==========
         function initializePage() {
-            // Set auto-detected server URL
+            // Set server URL
             const currentOrigin = window.location.origin;
             autoServerUrlSpan.textContent = currentOrigin;
-            serverUrlInput.value = currentOrigin; // Set the value
+            serverUrlInput.value = currentOrigin;
             serverUrlInput.placeholder = currentOrigin;
-            config.serverUrl = currentOrigin; // Update config
+            
+            // Initialize connection pool
+            window.botPool = new SafeConnectionPool();
             
             // Initialize bots
             initializeBots();
             updateStats();
             updateQuickStats();
             
-            // Test initial connection
+            // Test server connection
             setTimeout(() => {
-                testServerConnection().then(connected => {
-                    if (connected) {
-                        log('Server connection successful', 'success');
-                        // Auto-start if URL parameter present
-                        const urlParams = new URLSearchParams(window.location.search);
-                        if (urlParams.get('autoStart') === 'true') {
-                            setTimeout(() => {
-                                toggleBots();
-                            }, 2000);
-                        }
-                    } else {
-                        log('Server connection failed. Check server URL.', 'error');
-                    }
-                });
+                testServerConnection();
             }, 1000);
+            
+            log('Safe Bot Control Panel initialized with 10 bots', 'success');
         }
 
-        // Event listeners
+        // ========== EVENT LISTENERS ==========
         toggleBtn.addEventListener('click', toggleBots);
-
-        winDelaySlider.addEventListener('input', function() {
-            config.winDelay = this.value;
-            winDelayValue.textContent = `${this.value} seconds`;
+        autoJoinBtn.addEventListener('click', enableAutoJoin);
+        
+        // Throttle controls
+        maxConcurrentSlider.addEventListener('input', function() {
+            SAFE_CONFIG.maxConcurrent = parseInt(this.value);
+            maxConcurrentValue.textContent = `${this.value} bots at once`;
         });
-
-        botCountSlider.addEventListener('input', function() {
-            config.botCount = this.value;
-            botCountValue.textContent = `${this.value} bots`;
-            initializeBots();
+        
+        connectionDelaySlider.addEventListener('input', function() {
+            SAFE_CONFIG.connectionDelay = parseInt(this.value);
+            connectionDelayValue.textContent = `${this.value}ms delay`;
         });
-
-        staggerDelaySlider.addEventListener('input', function() {
-            config.staggerDelay = this.value;
-            staggerDelayValue.textContent = `${this.value}ms between connections`;
+        
+        actionDelaySlider.addEventListener('input', function() {
+            SAFE_CONFIG.actionDelayMin = parseInt(this.value);
+            SAFE_CONFIG.actionDelayMax = parseInt(this.value) * 2.5;
+            actionDelayValue.textContent = `${this.value}-${Math.floor(this.value * 2.5)} seconds`;
         });
-
+        
+        winChanceSlider.addEventListener('input', function() {
+            SAFE_CONFIG.winChance = this.value / 100;
+            winChanceValue.textContent = `${this.value}% chance to win`;
+        });
+        
+        // Configuration changes
         document.getElementById('targetRoom').addEventListener('change', function() {
-            config.targetRoom = parseInt(this.value);
-            log(`Target room changed to ${config.targetRoom} ETB`, 'info');
+            log(`Room strategy changed to ${this.value}`, 'info');
             
-            // Update all connected bots
-            if (config.isActive) {
-                bots.forEach(bot => {
-                    if (bot.socket && bot.socket.connected && bot.room) {
-                        bot.socket.emit('player:leaveRoom', {});
-                        setTimeout(() => {
-                            joinRoom(bot, bots.indexOf(bot));
-                        }, 2000);
-                    }
-                });
-            }
+            bots.forEach((bot, index) => {
+                bot.assignedRoom = getAssignedRoom(index);
+                updateBotCard(index);
+            });
         });
-
-        document.getElementById('serverUrl').addEventListener('change', function() {
-            config.serverUrl = this.value;
-            config.connectionTested = false;
-            log(`Server URL changed to ${this.value}, need to reconnect`, 'info');
-        });
-
+        
         document.getElementById('botBehavior').addEventListener('change', function() {
-            config.behavior = this.value;
             log(`Bot behavior changed to ${this.value}`, 'info');
         });
-
-        // Add keyboard shortcuts
+        
+        // Search and filter
+        botSearch.addEventListener('input', function() {
+            searchBots(this.value);
+        });
+        
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                filterBots(this.dataset.filter);
+            });
+        });
+        
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            // Ctrl+Shift+E to toggle all bots
-            if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+            if (e.ctrlKey && e.key === 'b') {
                 e.preventDefault();
                 toggleBots();
             }
-            // Ctrl+Shift+W to force all wins
-            if (e.ctrlKey && e.shiftKey && e.key === 'W') {
+            if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault();
-                forceAllBotsWin();
+                enableAutoJoin();
             }
-            // Ctrl+Shift+C to crash game
-            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-                e.preventDefault();
-                crashGame();
-            }
-            // Ctrl+Shift+R to reset
             if (e.ctrlKey && e.shiftKey && e.key === 'R') {
                 e.preventDefault();
                 resetAllBots();
             }
         });
         
-        // Health check interval
+        // Health monitor
         setInterval(() => {
-            if (config.isActive) {
+            if (window.botPool && window.botPool.isActive) {
+                // Check for stuck bots
                 bots.forEach((bot, index) => {
-                    if (bot.isConnected && bot.lastPing) {
-                        const timeSincePing = Date.now() - bot.lastPing;
-                        if (timeSincePing > 30000) { // 30 seconds
-                            log(`Bot ${bot.name} appears to be stuck, reconnecting...`, 'warning');
+                    if (bot.isConnected && bot.lastAction) {
+                        const timeSinceAction = Date.now() - bot.lastAction;
+                        if (timeSinceAction > 60000) { // 1 minute
+                            log(`Bot ${bot.name} appears stuck, reconnecting...`, 'warning');
                             if (bot.socket) bot.socket.disconnect();
                         }
                     }
                 });
+                
+                // Update connection status
+                const pool = window.botPool;
+                const active = pool.activeBots.size;
+                if (active !== stats.activeBots) {
+                    stats.activeBots = active;
+                    updateStats();
+                    updateQuickStats();
+                }
             }
-        }, 10000);
+        }, 30000);
 
-        // Initialize everything
-        initializePage();
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', initializePage);
     </script>
 </body>
 </html>
