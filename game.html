@@ -527,14 +527,14 @@
         /* Discovery Screen */
         .discovery-header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .selected-room-info {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             border-radius: var(--radius);
             padding: 16px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -542,7 +542,7 @@
         }
 
         .room-stake-large {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             color: white;
         }
@@ -551,8 +551,8 @@
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -569,13 +569,13 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 20px;
+            padding: 16px;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .timer-display {
-            font-size: 48px;
+            font-size: 40px;
             font-weight: 800;
             color: var(--secondary);
             margin-bottom: 8px;
@@ -590,8 +590,8 @@
         .players-info {
             display: flex;
             justify-content: center;
-            gap: 20px;
-            margin-bottom: 20px;
+            gap: 15px;
+            margin-bottom: 15px;
         }
 
         .player-count {
@@ -601,7 +601,7 @@
         }
 
         .count-number {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 800;
             color: var(--success);
         }
@@ -611,13 +611,13 @@
             color: var(--gray);
         }
 
-        /* Smaller discovery boxes */
+        /* Updated boxes grid with smaller numbers */
         .boxes-grid {
             display: grid;
-            grid-template-columns: repeat(10, 1fr); /* 10 columns for smaller boxes */
+            grid-template-columns: repeat(10, 1fr);
             gap: 4px;
-            margin-bottom: 20px;
-            max-height: 250px;
+            margin-bottom: 15px;
+            max-height: 200px;
             overflow-y: auto;
             padding: 8px;
             background: rgba(15, 23, 42, 0.5);
@@ -628,19 +628,17 @@
         .box-item {
             aspect-ratio: 1;
             background: rgba(30, 41, 59, 0.7);
-            border-radius: var(--radius-sm);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            font-weight: 600;
+            font-size: 12px;
             color: var(--primary-light);
             cursor: pointer;
             transition: all 0.3s ease;
             border: 1px solid transparent;
             position: relative;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 2px;
         }
 
         .box-item:hover {
@@ -653,10 +651,8 @@
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(1.02);
+            transform: scale(1.05);
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-            font-size: 12px;
-            font-weight: 800;
         }
 
         .box-item.taken {
@@ -673,182 +669,73 @@
             font-size: 14px;
         }
 
-        /* Plate Preview Container */
+        /* Plate Preview Section */
         .plate-preview-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 12px;
-            margin: 16px 0;
+            margin-bottom: 15px;
             display: none;
         }
-        
+
         .plate-preview-container.active {
             display: block;
             animation: fadeIn 0.3s ease;
         }
-        
-        .plate-preview-header {
+
+        .plate-preview-title {
+            text-align: center;
             font-size: 14px;
             font-weight: 600;
             color: var(--gray-light);
             margin-bottom: 10px;
-            text-align: center;
         }
-        
-        .plate-preview-grid {
+
+        .preview-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 3px;
-            margin-bottom: 12px;
+            max-width: 220px;
+            margin: 0 auto;
         }
-        
+
         .preview-cell {
             aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.5);
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
             font-weight: 700;
+            font-size: 11px;
             color: var(--primary-light);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            position: relative;
         }
-        
+
         .preview-cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
             color: white;
-            font-size: 9px;
-        }
-        
-        .preview-cell.corner::after {
-            content: "★";
-            position: absolute;
-            top: 1px;
-            right: 1px;
-            font-size: 6px;
-            color: var(--secondary);
         }
 
-        /* Bottom back button */
-        .discovery-bottom-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        .back-button-bottom {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 14px;
-            color: var(--gray-light);
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            flex: 1;
+        .preview-letter {
+            aspect-ratio: 1;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-        }
-        
-        .back-button-bottom:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-        
-        .confirm-button {
-            flex: 2;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            padding: 14px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: var(--shadow);
-            margin-top: 0;
-        }
-
-        .confirm-button:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .confirm-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* Wait Screen */
-        .wait-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            text-align: center;
-        }
-
-        .wait-icon {
-            font-size: 64px;
+            font-weight: 900;
+            font-size: 12px;
             color: var(--primary);
-            margin-bottom: 20px;
-            animation: pulse 2s infinite;
         }
 
-        .wait-timer {
-            font-size: 72px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 16px;
-            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
-        }
-
-        .wait-message {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: white;
-        }
-
-        .wait-details {
-            font-size: 14px;
-            color: var(--gray);
-            max-width: 300px;
-            margin: 0 auto 30px;
-        }
-
-        .leave-button {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: var(--radius);
-            padding: 12px 24px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .leave-button:hover {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        /* Game Screen - Smaller elements */
+        /* Compact game screen elements */
         .game-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 15px;
         }
 
         .room-info-compact {
@@ -857,7 +744,7 @@
         }
 
         .room-stake-compact {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 800;
         }
 
@@ -868,12 +755,12 @@
 
         .game-controls {
             display: flex;
-            gap: 12px;
+            gap: 10px;
         }
 
         .control-button {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid var(--card-border);
@@ -894,17 +781,17 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 16px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 15px;
         }
 
         .ball-label {
-            font-size: 14px;
+            font-size: 12px;
             color: var(--gray);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .ball {
@@ -933,7 +820,7 @@
             height: 16px;
             width: 100%;
             text-align: center;
-            color: var(--primary) !important;
+            color: var(--primary);
         }
 
         .ball-number {
@@ -950,9 +837,9 @@
         }
 
         .history-ball {
-            min-width: 32px;
-            width: 32px;
-            height: 32px;
+            min-width: 30px;
+            width: 30px;
+            height: 30px;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 50%;
             display: flex;
@@ -969,11 +856,11 @@
 
         .history-letter {
             position: absolute;
-            top: 1px;
+            top: 2px;
             font-size: 9px;
             font-weight: 900;
             line-height: 1;
-            color: var(--primary) !important;
+            color: var(--primary);
         }
 
         .history-number {
@@ -987,45 +874,45 @@
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 15px;
         }
 
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
-            margin-bottom: 6px;
+            gap: 4px;
+            margin-bottom: 4px;
         }
 
         .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
-            border-radius: var(--radius-sm);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 18px;
-            color: var(--primary) !important;
+            font-size: 14px;
+            color: var(--primary);
         }
 
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
+            gap: 4px;
         }
 
         .cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: var(--radius-sm);
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
             font-size: 14px;
-            color: var(--primary) !important;
+            color: var(--primary);
             cursor: pointer;
             position: relative;
             transition: all 0.3s ease;
@@ -1037,7 +924,7 @@
 
         .cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white !important;
+            color: white;
             border: none;
             box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
             transform: scale(1.05);
@@ -1045,7 +932,7 @@
 
         .cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
-            color: white !important;
+            color: white;
             border: none;
             font-weight: 900;
             font-size: 10px;
@@ -1056,8 +943,59 @@
             position: absolute;
             top: 2px;
             right: 2px;
-            font-size: 8px;
+            font-size: 7px;
             color: var(--secondary);
+        }
+
+        /* Updated confirm button and back button */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .confirm-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 15px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .confirm-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .confirm-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .back-button-bottom {
+            background: rgba(30, 41, 59, 0.7);
+            color: var(--gray-light);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .back-button-bottom:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
         }
 
         .claim-button {
@@ -1066,7 +1004,7 @@
             border: none;
             border-radius: var(--radius);
             padding: 16px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -1085,6 +1023,61 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
+        }
+
+        /* Wait Screen */
+        .wait-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+        }
+
+        .wait-icon {
+            font-size: 50px;
+            color: var(--primary);
+            margin-bottom: 15px;
+            animation: pulse 2s infinite;
+        }
+
+        .wait-timer {
+            font-size: 56px;
+            font-weight: 800;
+            color: var(--secondary);
+            margin-bottom: 12px;
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+        }
+
+        .wait-message {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: white;
+        }
+
+        .wait-details {
+            font-size: 13px;
+            color: var(--gray);
+            max-width: 280px;
+            margin: 0 auto 20px;
+        }
+
+        .leave-button {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius);
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .leave-button:hover {
+            background: rgba(239, 68, 68, 0.3);
         }
 
         /* Overlays */
@@ -1115,22 +1108,22 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius-lg);
-            padding: 30px;
-            max-width: 400px;
+            padding: 25px;
+            max-width: 380px;
             width: 100%;
             text-align: center;
             box-shadow: var(--shadow-lg);
         }
 
         .overlay-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
+            font-size: 56px;
+            margin-bottom: 15px;
         }
 
         .overlay-title {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 800;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .win-title {
@@ -1146,17 +1139,17 @@
         }
 
         .overlay-message {
-            font-size: 18px;
+            font-size: 16px;
             color: var(--gray-light);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             line-height: 1.5;
         }
 
         .overlay-amount {
-            font-size: 40px;
+            font-size: 36px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .overlay-button {
@@ -1164,13 +1157,13 @@
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 16px;
-            font-size: 16px;
+            padding: 14px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             width: 100%;
-            margin-top: 20px;
+            margin-top: 15px;
         }
 
         .overlay-button:hover {
@@ -1184,12 +1177,12 @@
             background: rgba(30, 41, 59, 0.5);
             border-radius: var(--radius);
             padding: 4px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .wallet-tab {
             flex: 1;
-            padding: 12px;
+            padding: 10px;
             text-align: center;
             border-radius: var(--radius-sm);
             font-weight: 600;
@@ -1211,26 +1204,26 @@
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             text-align: left;
         }
 
         .form-label {
             display: block;
-            margin-bottom: 8px;
-            font-size: 14px;
+            margin-bottom: 6px;
+            font-size: 13px;
             color: var(--gray-light);
             font-weight: 600;
         }
 
         .form-input {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             color: white;
-            font-size: 16px;
+            font-size: 15px;
             transition: all 0.3s ease;
         }
 
@@ -1243,12 +1236,12 @@
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: 8px;
+            margin-bottom: 16px;
         }
 
         .amount-button {
-            padding: 12px;
+            padding: 10px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
@@ -1266,13 +1259,13 @@
 
         /* Loading Overlay */
         .loading-spinner {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             border: 4px solid rgba(99, 102, 241, 0.3);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         /* Animations */
@@ -1310,7 +1303,7 @@
             
             .ball-number {
                 font-size: 24px;
-                margin-top: 18px;
+                margin-top: 16px;
             }
             
             .ball-letter {
@@ -1319,11 +1312,11 @@
             }
             
             .wait-timer {
-                font-size: 56px;
+                font-size: 48px;
             }
             
             .timer-display {
-                font-size: 36px;
+                font-size: 32px;
             }
             
             .overlay-content {
@@ -1340,9 +1333,18 @@
             
             .boxes-grid {
                 grid-template-columns: repeat(8, 1fr);
+                max-height: 180px;
             }
             
             .box-item {
+                font-size: 11px;
+            }
+            
+            .preview-grid {
+                max-width: 200px;
+            }
+            
+            .preview-cell {
                 font-size: 10px;
             }
         }
@@ -1364,24 +1366,17 @@
                 font-size: 20px;
             }
             
+            .boxes-grid {
+                grid-template-columns: repeat(7, 1fr);
+                gap: 3px;
+            }
+            
             .cell {
                 font-size: 12px;
             }
             
-            .boxes-grid {
-                grid-template-columns: repeat(7, 1fr);
-            }
-            
             .box-item {
-                font-size: 9px;
-            }
-            
-            .plate-preview-grid {
-                gap: 2px;
-            }
-            
-            .preview-cell {
-                font-size: 9px;
+                font-size: 10px;
             }
         }
     </style>
@@ -1520,25 +1515,20 @@
                 <!-- Boxes will be populated by JavaScript -->
             </div>
 
-            <!-- Plate Preview Container -->
+            <!-- Plate Preview Section -->
             <div class="plate-preview-container" id="platePreviewContainer">
-                <div class="plate-preview-header">Your Bingo Card Preview</div>
-                <div class="plate-preview-grid" id="platePreviewGrid">
-                    <!-- Preview cells will be populated by JavaScript -->
-                </div>
-                <div style="text-align: center; font-size: 11px; color: var(--gray); margin-top: 8px;">
-                    Box #<span id="previewBoxNumber">--</span> • Seed determines your unique card
+                <div class="plate-preview-title">Your Bingo Card Preview</div>
+                <div class="preview-grid" id="previewGrid">
+                    <!-- Preview grid will be populated by JavaScript -->
                 </div>
             </div>
 
-            <!-- Updated buttons section with back button -->
-            <div class="discovery-bottom-buttons">
-                <button class="back-button-bottom" onclick="leaveDiscovery()">
-                    <i class="fas fa-arrow-left"></i>
-                    Back
-                </button>
+            <div class="action-buttons">
                 <button class="confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>
                     Select a box first
+                </button>
+                <button class="back-button-bottom" onclick="leaveDiscovery()">
+                    <i class="fas fa-arrow-left"></i> Back to Lobby
                 </button>
             </div>
         </div>
@@ -2336,8 +2326,9 @@
             state.previousTakenBoxes = [];
             state.selectedBox = null;
             
-            // Hide timer container and plate preview initially
+            // Hide timer container initially
             document.getElementById('timerContainer').style.display = 'none';
+            // Hide plate preview initially
             document.getElementById('platePreviewContainer').classList.remove('active');
             
             if(state.isConnected) {
@@ -2410,16 +2401,13 @@
                 selectedBox.classList.add('selected');
                 state.selectedBox = boxNumber;
                 
+                // Show plate preview
+                showPlatePreview(boxNumber);
+                
                 // Enable confirm button
                 const confirmButton = document.getElementById('confirmBoxButton');
                 confirmButton.disabled = false;
-                confirmButton.textContent = `Join with Box ${boxNumber}`;
-                
-                // Generate and show plate preview
-                generatePlatePreview(boxNumber);
-                
-                // Show the preview container
-                document.getElementById('platePreviewContainer').classList.add('active');
+                confirmButton.textContent = `Select Box ${boxNumber}`;
                 
                 // Add haptic feedback
                 try { 
@@ -2430,81 +2418,33 @@
             }
         }
         
-        function generatePlatePreview(boxNumber) {
-            // Update box number display
-            document.getElementById('previewBoxNumber').textContent = boxNumber;
+        function showPlatePreview(seed) {
+            // Generate preview grid
+            generateTraditionalBingoCard(seed);
             
-            // Generate the same bingo card that would be used in the game
-            const letters = ['B', 'I', 'N', 'G', 'O'];
-            const ranges = {
-                'B': { min: 1, max: 15 },
-                'I': { min: 16, max: 30 },
-                'N': { min: 31, max: 45 },
-                'G': { min: 46, max: 60 },
-                'O': { min: 61, max: 75 }
-            };
-            
-            // Use the same seed generation as in generateTraditionalBingoCard
-            function seededRandom(s) {
-                var mask = 0xffffffff;
-                var m_w = (123456789 + s) & mask;
-                var m_z = (987654321 - s) & mask;
-
-                return function() {
-                    m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & mask;
-                    m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & mask;
-                    var result = ((m_z << 16) + (m_w & 65535)) >>> 0;
-                    return result / 4294967296;
-                }
-            }
-
-            const random = seededRandom(boxNumber * 777);
-            const availableNumbers = {};
-            
-            for (const letter of letters) {
-                const range = ranges[letter];
-                availableNumbers[letter] = [];
-                for (let i = range.min; i <= range.max; i++) {
-                    availableNumbers[letter].push(i);
-                }
-                
-                // Shuffle
-                for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
-                    const j = Math.floor(random() * (i + 1));
-                    [availableNumbers[letter][i], availableNumbers[letter][j]] = 
-                    [availableNumbers[letter][j], availableNumbers[letter][i]];
-                }
-            }
-            
-            // Build the preview grid
-            const previewGrid = document.getElementById('platePreviewGrid');
+            const previewGrid = document.getElementById('previewGrid');
             previewGrid.innerHTML = '';
             
-            for (let row = 0; row < 5; row++) {
-                for (let col = 0; col < 5; col++) {
-                    const index = row * 5 + col;
-                    const letter = letters[col];
-                    
-                    const cell = document.createElement('div');
-                    cell.className = 'preview-cell';
-                    
-                    if (col === 2 && row === 2) {
-                        cell.textContent = 'FREE';
-                        cell.classList.add('free');
-                    } else {
-                        const available = availableNumbers[letter];
-                        const selectedNumber = available.shift();
-                        cell.textContent = selectedNumber;
-                        
-                        // Add star to corner cells
-                        if ([0, 4, 20, 24].includes(index)) {
-                            cell.classList.add('corner');
-                        }
-                    }
-                    
-                    previewGrid.appendChild(cell);
-                }
-            }
+            // Add header letters
+            const letters = ['B', 'I', 'N', 'G', 'O'];
+            letters.forEach(letter => {
+                const letterCell = document.createElement('div');
+                letterCell.className = 'preview-letter';
+                letterCell.textContent = letter;
+                previewGrid.appendChild(letterCell);
+            });
+            
+            // Add cells
+            state.grid.forEach((val, index) => {
+                const cell = document.createElement('div');
+                const isFree = val === 'FREE';
+                cell.className = 'preview-cell' + (isFree ? ' free' : '');
+                cell.textContent = isFree ? 'FREE' : val;
+                previewGrid.appendChild(cell);
+            });
+            
+            // Show preview container
+            document.getElementById('platePreviewContainer').classList.add('active');
         }
         
         function updateBoxCounters(takenBoxes) {
@@ -2585,9 +2525,6 @@
         }
         
         function leaveDiscovery() {
-            // Hide plate preview
-            document.getElementById('platePreviewContainer').classList.remove('active');
-            
             // Unsubscribe from room updates
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
@@ -2702,14 +2639,6 @@
             ballLetter.textContent = letter;
             ballNumber.textContent = num;
             
-            // Smaller ball size
-            ballDisplay.style.width = '80px';
-            ballDisplay.style.height = '80px';
-            ballNumber.style.fontSize = '28px';
-            ballNumber.style.marginTop = '20px';
-            ballLetter.style.fontSize = '16px';
-            ballLetter.style.top = '8px';
-            
             ballDisplay.style.animation = 'none';
             void ballDisplay.offsetWidth;
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
@@ -2811,9 +2740,6 @@
                 cell.dataset.index = index;
                 cell.dataset.value = val;
                 
-                // Smaller font size for better fit
-                cell.style.fontSize = isFree ? '10px' : '14px';
-                
                 if (!isFree) {
                     cell.style.color = '#6366f1';
                 }
@@ -2914,6 +2840,9 @@
             hideOverlay('loseOverlay');
             hideOverlay('insufficientOverlay');
             hideOverlay('roomLockedOverlay');
+            
+            // Hide plate preview
+            document.getElementById('platePreviewContainer').classList.remove('active');
             
             // Reset UI
             showScreen('lobbyScreen');
