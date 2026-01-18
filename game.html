@@ -24,14 +24,14 @@
             --light: #f8fafc;
             --gray: #64748b;
             --gray-light: #cbd5e1;
-            --card-bg: rgba(30, 41, 59, 0.8);
+            --card-bg: rgba(30, 41, 59, 0.7);
             --card-border: rgba(255, 255, 255, 0.1);
             --glass: rgba(255, 255, 255, 0.05);
-            --shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3);
-            --radius: 10px;
-            --radius-sm: 6px;
-            --radius-lg: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 16px;
         }
 
         * {
@@ -42,7 +42,6 @@
             -webkit-tap-highlight-color: transparent;
             user-select: none;
             touch-action: manipulation;
-            font-size: 13px;
         }
 
         html, body {
@@ -59,37 +58,67 @@
             flex-direction: column;
         }
 
-        /* Compact Header */
+        /* Background Effects */
+        .bg-effects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            overflow: hidden;
+        }
+
+        .gradient-bg {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.15;
+        }
+
+        .gradient-1 {
+            top: -100px;
+            left: -100px;
+            background: var(--primary);
+        }
+
+        .gradient-2 {
+            bottom: -100px;
+            right: -100px;
+            background: var(--secondary);
+        }
+
+        /* Header */
         .app-header {
-            padding: 8px 12px;
+            padding: 16px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(15, 23, 42, 0.9);
+            background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--card-border);
             z-index: 100;
             position: relative;
-            height: 50px;
-            min-height: 50px;
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
         }
 
         .avatar {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 18px;
             color: white;
             box-shadow: var(--shadow);
         }
@@ -101,20 +130,20 @@
 
         .user-name {
             font-weight: 700;
-            font-size: 12px;
+            font-size: 14px;
         }
 
         .user-status {
-            font-size: 9px;
+            font-size: 11px;
             color: var(--gray);
             display: flex;
             align-items: center;
-            gap: 3px;
+            gap: 4px;
         }
 
         .status-dot {
-            width: 5px;
-            height: 5px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: var(--danger);
         }
@@ -127,48 +156,49 @@
         .wallet-info {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
         }
 
         .balance-card {
             background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.1));
             border: 1px solid rgba(99, 102, 241, 0.2);
             border-radius: var(--radius);
-            padding: 6px 10px;
+            padding: 10px 16px;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
-            height: 32px;
         }
 
         .balance-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
             border-color: rgba(99, 102, 241, 0.4);
         }
 
         .balance-icon {
             color: var(--primary-light);
-            font-size: 12px;
+            font-size: 16px;
         }
 
         .balance-amount {
             font-weight: 800;
-            font-size: 13px;
+            font-size: 16px;
             color: white;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
         }
 
         .balance-currency {
-            font-size: 10px;
+            font-size: 12px;
             color: var(--gray-light);
             font-weight: 600;
         }
 
         .refresh-btn {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid var(--card-border);
@@ -178,7 +208,12 @@
             color: var(--gray-light);
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 12px;
+        }
+
+        .refresh-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: rotate(90deg);
         }
 
         /* Main Container */
@@ -186,7 +221,6 @@
             flex: 1;
             overflow: hidden;
             position: relative;
-            padding: 0 8px;
         }
 
         /* Screens */
@@ -196,7 +230,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            padding: 12px 8px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             opacity: 0;
@@ -210,28 +244,27 @@
             pointer-events: all;
         }
 
-        /* Compact Lobby Screen */
+        /* Lobby Screen */
         .lobby-header {
             text-align: center;
-            margin-bottom: 16px;
-            padding: 0 4px;
+            margin-bottom: 30px;
         }
 
         .app-logo {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            margin-bottom: 4px;
+            gap: 10px;
+            margin-bottom: 8px;
         }
 
         .logo-icon {
-            font-size: 20px;
+            font-size: 28px;
             color: var(--secondary);
         }
 
         .logo-text {
-            font-size: 20px;
+            font-size: 28px;
             font-weight: 800;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
@@ -240,466 +273,444 @@
 
         .app-tagline {
             color: var(--gray);
-            font-size: 11px;
-            max-width: 280px;
+            font-size: 14px;
+            max-width: 300px;
             margin: 0 auto;
-            line-height: 1.3;
         }
 
-        .compact-rooms-grid {
+        .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
+            gap: 16px;
+            margin-bottom: 30px;
         }
 
-        .compact-room-card {
+        .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
+            padding: 20px 16px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            height: 80px;
         }
 
-        .compact-room-card:hover {
-            transform: translateY(-2px);
+        .room-card:hover {
+            transform: translateY(-4px);
             box-shadow: var(--shadow-lg);
             border-color: var(--primary);
         }
 
-        .compact-room-card.locked {
+        .room-card.locked {
             opacity: 0.7;
             cursor: not-allowed;
         }
 
-        .compact-room-card.locked:hover {
+        .room-card.locked:hover {
             transform: none;
             box-shadow: none;
             border-color: var(--card-border);
         }
 
-        .compact-room-badge {
+        .room-badge {
             position: absolute;
-            top: 6px;
-            right: 6px;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 9px;
+            top: 10px;
+            right: 10px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
         }
 
-        .compact-badge-bronze {
+        .badge-bronze {
             background: linear-gradient(135deg, #92400e, #b45309);
             color: #fef3c7;
         }
 
-        .compact-badge-silver {
+        .badge-silver {
             background: linear-gradient(135deg, #374151, #6b7280);
             color: #f9fafb;
         }
 
-        .compact-badge-gold {
+        .badge-gold {
             background: linear-gradient(135deg, #b45309, #d97706);
             color: #fef3c7;
         }
 
-        .compact-badge-elite {
+        .badge-elite {
             background: linear-gradient(135deg, #7c3aed, #8b5cf6);
             color: #f5f3ff;
         }
 
-        .compact-room-stake {
-            font-size: 16px;
+        .room-stake {
+            font-size: 24px;
             font-weight: 800;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
             color: white;
         }
 
-        .compact-room-stake-currency {
-            font-size: 11px;
+        .room-stake-currency {
+            font-size: 14px;
             color: var(--gray-light);
             font-weight: 600;
         }
 
-        .compact-room-name {
-            font-size: 11px;
+        .room-name {
+            font-size: 14px;
             font-weight: 600;
             color: var(--gray);
-            margin-bottom: 8px;
+            margin-bottom: 12px;
         }
 
-        .compact-room-info {
+        .room-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-top: auto;
         }
 
-        .compact-room-players {
+        .room-players {
             display: flex;
             align-items: center;
-            gap: 3px;
-            font-size: 10px;
+            gap: 6px;
+            font-size: 12px;
             color: var(--gray);
         }
 
-        .compact-player-icon {
+        .player-icon {
             color: var(--success);
-            font-size: 9px;
         }
 
-        .compact-room-prize {
-            font-size: 11px;
+        .room-prize {
+            font-size: 14px;
             font-weight: 700;
             color: var(--secondary);
         }
 
-        .compact-room-status {
+        .room-status {
             position: absolute;
-            bottom: 6px;
-            right: 6px;
-            font-size: 8px;
-            padding: 2px 6px;
-            border-radius: 8px;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
             font-weight: 700;
             text-transform: uppercase;
         }
 
-        .compact-status-waiting {
+        .status-waiting {
             background: rgba(16, 185, 129, 0.2);
             color: var(--success);
             border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
-        .compact-status-starting {
+        .status-starting {
             background: rgba(245, 158, 11, 0.2);
             color: var(--warning);
             border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
-        .compact-status-playing, .compact-status-locked {
+        .status-playing, .status-locked {
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
-        .compact-wallet-section {
+        .wallet-section {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-            margin-bottom: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
         }
 
-        .compact-wallet-header {
+        .wallet-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 16px;
         }
 
-        .compact-wallet-title {
-            font-size: 13px;
+        .wallet-title {
+            font-size: 16px;
             font-weight: 700;
         }
 
-        .compact-wallet-action {
+        .wallet-action {
             color: var(--primary);
-            font-size: 11px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             transition: all 0.3s ease;
         }
 
-        .compact-wallet-balance {
+        .wallet-action:hover {
+            color: var(--primary-light);
+        }
+
+        .wallet-balance {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .compact-balance-label {
-            font-size: 11px;
+        .balance-label {
+            font-size: 14px;
             color: var(--gray);
         }
 
-        .compact-balance-value {
-            font-size: 18px;
+        .balance-value {
+            font-size: 24px;
             font-weight: 800;
             color: white;
         }
 
-        /* Compact Game Info */
-        .compact-game-info {
+        .balance-currency {
+            font-size: 14px;
+            color: var(--gray-light);
+            margin-left: 4px;
+        }
+
+        /* Game Info */
+        .game-info {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-            margin-bottom: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
         }
 
-        .compact-info-title {
-            font-size: 11px;
+        .info-title {
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
             color: var(--gray-light);
             text-align: center;
         }
 
-        .compact-bingo-letters {
+        .bingo-letters {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
+            gap: 8px;
         }
 
-        .compact-letter-card {
+        .letter-card {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 6px;
+            padding: 8px;
             background: rgba(30, 41, 59, 0.5);
             border-radius: var(--radius-sm);
             border: 1px solid var(--card-border);
         }
 
-        .compact-letter {
-            font-size: 14px;
+        .letter {
+            font-size: 18px;
             font-weight: 800;
             color: var(--primary);
-            margin-bottom: 2px;
-        }
-
-        .compact-letter-range {
-            font-size: 9px;
-            color: var(--gray);
-        }
-
-        /* Compact Discovery Screen */
-        .compact-discovery-header {
-            text-align: center;
-            margin-bottom: 12px;
-            padding: 0 4px;
-        }
-
-        .compact-discovery-header h2 {
-            font-size: 16px;
-            font-weight: 700;
             margin-bottom: 4px;
         }
 
-        .compact-discovery-header p {
+        .letter-range {
+            font-size: 10px;
             color: var(--gray);
-            font-size: 11px;
         }
 
-        .compact-selected-room-info {
+        /* Discovery Screen */
+        .discovery-header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .discovery-header h2 {
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+
+        .discovery-header p {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        .selected-room-info {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             border-radius: var(--radius);
-            padding: 10px;
-            margin-bottom: 12px;
+            padding: 12px;
+            margin-bottom: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-shadow: var(--shadow);
         }
 
-        .compact-room-stake-large {
-            font-size: 18px;
+        .room-stake-large {
+            font-size: 22px;
             font-weight: 800;
             color: white;
         }
 
-        .compact-back-button {
+        .back-button {
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 12px;
         }
 
-        .compact-timer-container {
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .timer-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 12px;
             text-align: center;
-            margin-bottom: 12px;
-            display: none;
+            margin-bottom: 15px;
         }
 
-        .compact-timer-display {
-            font-size: 28px;
+        .timer-display {
+            font-size: 36px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 4px;
-            text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+            margin-bottom: 6px;
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
         }
 
-        .compact-timer-label {
-            font-size: 11px;
+        .timer-label {
+            font-size: 12px;
             color: var(--gray);
         }
 
-        .compact-players-info {
+        .players-info {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            gap: 8px;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
         }
 
-        .compact-player-count {
-            flex: 1;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: var(--radius);
-            padding: 8px;
+        .player-count {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
 
-        .compact-count-number {
-            font-size: 16px;
+        .count-number {
+            font-size: 18px;
             font-weight: 800;
             color: var(--success);
-            margin-bottom: 2px;
         }
 
-        .compact-count-label {
-            font-size: 9px;
+        .count-label {
+            font-size: 10px;
             color: var(--gray);
-            text-align: center;
-            line-height: 1.2;
         }
 
-        /* Small Boxes Grid - Now 10x10 */
-        .compact-boxes-grid {
+        .boxes-grid {
             display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            gap: 4px;
-            margin-bottom: 12px;
-            padding: 6px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 15px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 8px;
             background: rgba(15, 23, 42, 0.5);
             border-radius: var(--radius);
             border: 1px solid var(--card-border);
-            max-height: 200px;
-            overflow-y: auto;
         }
 
-        .compact-box-item {
+        .box-item {
             aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.8);
+            background: rgba(30, 41, 59, 0.7);
             border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 10px;
             color: var(--primary-light);
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
             border: 1px solid transparent;
             position: relative;
-            min-height: 20px;
+            font-size: 11px;
         }
 
-        .compact-box-item:hover {
+        .box-item:hover {
             background: rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
             border-color: var(--primary);
         }
 
-        .compact-box-item.selected {
+        .box-item.selected {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(1.1);
-            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
-            z-index: 2;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
         }
 
-        .compact-box-item.taken {
+        .box-item.taken {
             background: rgba(239, 68, 68, 0.1);
             color: var(--gray);
             cursor: not-allowed;
             opacity: 0.5;
         }
 
-        .compact-box-item.taken::after {
+        .box-item.taken::after {
             content: "✗";
             position: absolute;
             color: var(--danger);
-            font-size: 12px;
+            font-size: 18px;
         }
 
-        /* Card Preview Section */
-        .compact-card-preview-container {
+        /* Plate Preview Container */
+        .plate-preview-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 12px;
-            margin-bottom: 12px;
+            margin-bottom: 15px;
             display: none;
+        }
+
+        .plate-preview-container.visible {
+            display: block;
             animation: fadeIn 0.3s ease;
         }
 
-        .compact-card-preview-container.active {
-            display: block;
-        }
-
-        .compact-preview-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .compact-preview-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--primary-light);
-        }
-
-        .compact-preview-box-number {
-            font-size: 11px;
+        .plate-preview-title {
+            font-size: 14px;
+            font-weight: 600;
             color: var(--gray);
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 6px;
-            border-radius: 10px;
+            margin-bottom: 10px;
+            text-align: center;
         }
 
-        .compact-preview-grid {
+        .preview-letters {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
+            gap: 4px;
             margin-bottom: 8px;
         }
 
-        .compact-preview-letter-row {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
-            margin-bottom: 2px;
-        }
-
-        .compact-preview-letter-cell {
+        .preview-letter {
             aspect-ratio: 1;
-            background: rgba(99, 102, 241, 0.2);
+            background: rgba(99, 102, 241, 0.1);
             border-radius: 4px;
             display: flex;
             align-items: center;
@@ -709,152 +720,169 @@
             color: var(--primary);
         }
 
-        .compact-preview-cell {
+        .plate-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+
+        .preview-cell {
             aspect-ratio: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(30, 41, 59, 0.5);
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
             font-size: 10px;
-            color: var(--primary-light);
+            color: var(--primary);
+            border: 1px solid var(--card-border);
         }
 
-        .compact-preview-cell.free {
-            background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
-            color: white;
-            font-size: 8px;
-            font-weight: 800;
-        }
-
-        .compact-preview-cell.corner::before {
-            content: "★";
-            position: absolute;
-            top: 1px;
-            right: 1px;
-            font-size: 6px;
+        .preview-cell.free {
+            background: rgba(245, 158, 11, 0.2);
             color: var(--secondary);
+            font-size: 8px;
         }
 
-        .compact-preview-stats {
-            display: flex;
-            justify-content: space-between;
-            font-size: 10px;
-            color: var(--gray);
+        .preview-cell.marked {
+            background: rgba(99, 102, 241, 0.3);
+            color: white;
         }
 
-        .compact-confirm-button {
+        .selected-box-info {
+            text-align: center;
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: var(--radius-sm);
+        }
+
+        .selected-box-text {
+            font-size: 12px;
+            color: var(--gray-light);
+        }
+
+        .selected-box-number {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--primary-light);
+            margin-top: 2px;
+        }
+
+        .confirm-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 12px;
-            font-size: 13px;
+            padding: 14px;
+            font-size: 14px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
-            width: 100%;
+            margin-top: 8px;
         }
 
-        .compact-confirm-button:hover:not(:disabled) {
-            transform: translateY(-1px);
+        .confirm-button:hover {
+            transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
         }
 
-        .compact-confirm-button:disabled {
+        .confirm-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
 
-        /* Compact Wait Screen */
-        .compact-wait-container {
+        /* Wait Screen */
+        .wait-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100%;
             text-align: center;
-            padding: 0 20px;
         }
 
-        .compact-wait-icon {
-            font-size: 40px;
+        .wait-icon {
+            font-size: 64px;
             color: var(--primary);
-            margin-bottom: 12px;
+            margin-bottom: 20px;
             animation: pulse 2s infinite;
         }
 
-        .compact-wait-timer {
-            font-size: 48px;
+        .wait-timer {
+            font-size: 72px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 8px;
-            text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+            margin-bottom: 16px;
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
         }
 
-        .compact-wait-message {
-            font-size: 14px;
+        .wait-message {
+            font-size: 18px;
             font-weight: 600;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             color: white;
         }
 
-        .compact-wait-details {
-            font-size: 11px;
+        .wait-details {
+            font-size: 14px;
             color: var(--gray);
-            max-width: 250px;
-            margin: 0 auto 16px;
-            line-height: 1.4;
+            max-width: 300px;
+            margin: 0 auto 30px;
         }
 
-        .compact-leave-button {
+        .leave-button {
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
             border: 1px solid rgba(239, 68, 68, 0.3);
             border-radius: var(--radius);
-            padding: 10px 16px;
-            font-size: 12px;
+            padding: 12px 24px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
         }
 
-        /* Compact Game Screen */
-        .compact-game-header {
+        .leave-button:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Game Screen - Compact Version */
+        .game-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
         }
 
-        .compact-room-info-compact {
+        .room-info-compact {
             display: flex;
             flex-direction: column;
         }
 
-        .compact-room-stake-compact {
-            font-size: 14px;
+        .room-stake-compact {
+            font-size: 16px;
             font-weight: 800;
         }
 
-        .compact-room-status-compact {
-            font-size: 10px;
+        .room-status-compact {
+            font-size: 11px;
             color: var(--gray);
         }
 
-        .compact-game-controls {
+        .game-controls {
             display: flex;
-            gap: 6px;
+            gap: 12px;
         }
 
-        .compact-control-button {
-            width: 32px;
-            height: 32px;
+        .control-button {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid var(--card-border);
@@ -864,10 +892,14 @@
             color: var(--gray-light);
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 12px;
         }
 
-        .compact-ball-display-container {
+        .control-button:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .ball-display-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
@@ -878,13 +910,13 @@
             margin-bottom: 12px;
         }
 
-        .compact-ball-label {
-            font-size: 11px;
+        .ball-label {
+            font-size: 14px;
             color: var(--gray);
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
 
-        .compact-ball {
+        .ball {
             width: 70px;
             height: 70px;
             border-radius: 50%;
@@ -895,15 +927,15 @@
             justify-content: center;
             color: #0f172a;
             font-weight: 900;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            border: 3px solid #fff;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            border: 4px solid #fff;
             position: relative;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 16px;
         }
 
-        .compact-ball-letter {
-            font-size: 14px;
+        .ball-letter {
+            font-size: 16px;
             font-weight: 900;
             position: absolute;
             top: 8px;
@@ -913,21 +945,20 @@
             color: var(--primary) !important;
         }
 
-        .compact-ball-number {
-            font-size: 24px;
-            margin-top: 18px;
+        .ball-number {
+            font-size: 28px;
+            margin-top: 15px;
         }
 
-        .compact-ball-history {
+        .ball-history {
             display: flex;
-            gap: 4px;
+            gap: 8px;
             overflow-x: auto;
-            padding: 6px;
+            padding: 8px;
             width: 100%;
-            -webkit-overflow-scrolling: touch;
         }
 
-        .compact-history-ball {
+        .history-ball {
             min-width: 28px;
             width: 28px;
             height: 28px;
@@ -945,120 +976,120 @@
             overflow: hidden;
         }
 
-        .compact-history-letter {
+        .history-letter {
             position: absolute;
-            top: 2px;
-            font-size: 8px;
+            top: 1px;
+            font-size: 9px;
             font-weight: 900;
             line-height: 1;
             color: var(--primary) !important;
         }
 
-        .compact-history-number {
+        .history-number {
             margin-top: 8px;
             font-size: 10px;
             line-height: 1;
         }
 
-        .compact-bingo-card-container {
+        .bingo-card-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 12px;
         }
 
-        .compact-bingo-header {
+        .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 4px;
             margin-bottom: 4px;
         }
 
-        .compact-bingo-letter-cell {
+        .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
-            border-radius: 5px;
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 14px;
-            color: var(--primary);
+            font-size: 16px;
+            color: var(--primary) !important;
         }
 
-        .compact-bingo-grid {
+        .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 4px;
         }
 
-        .compact-cell {
+        .cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 5px;
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
             font-size: 12px;
-            color: var(--primary);
+            color: var(--primary) !important;
             cursor: pointer;
             position: relative;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
         }
 
-        .compact-cell:hover {
+        .cell:hover {
             background: rgba(99, 102, 241, 0.1);
         }
 
-        .compact-cell.marked {
+        .cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
+            color: white !important;
             border: none;
-            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
             transform: scale(1.05);
         }
 
-        .compact-cell.free {
+        .cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
-            color: white;
+            color: white !important;
             border: none;
             font-weight: 900;
             font-size: 10px;
         }
 
-        .compact-cell.corner::before {
+        .cell.corner::before {
             content: "★";
             position: absolute;
-            top: 1px;
-            right: 1px;
-            font-size: 7px;
+            top: 2px;
+            right: 2px;
+            font-size: 8px;
             color: var(--secondary);
         }
 
-        .compact-claim-button {
+        .claim-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 14px;
-            font-size: 14px;
+            padding: 16px;
+            font-size: 16px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
             width: 100%;
-            margin-bottom: 8px;
+            margin-bottom: 15px;
         }
 
-        .compact-claim-button:hover:not(:disabled) {
-            transform: translateY(-1px);
+        .claim-button:hover:not(:disabled) {
+            transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
         }
 
-        .compact-claim-button:disabled {
+        .claim-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
@@ -1081,7 +1112,7 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
-            padding: 16px;
+            padding: 20px;
         }
 
         .overlay.active {
@@ -1093,24 +1124,22 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius-lg);
-            padding: 20px;
-            max-width: 320px;
+            padding: 30px;
+            max-width: 400px;
             width: 100%;
             text-align: center;
             box-shadow: var(--shadow-lg);
-            max-height: 90vh;
-            overflow-y: auto;
         }
 
         .overlay-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            font-size: 64px;
+            margin-bottom: 20px;
         }
 
         .overlay-title {
-            font-size: 24px;
+            font-size: 32px;
             font-weight: 800;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
 
         .win-title {
@@ -1126,17 +1155,17 @@
         }
 
         .overlay-message {
-            font-size: 14px;
+            font-size: 18px;
             color: var(--gray-light);
-            margin-bottom: 16px;
+            margin-bottom: 24px;
             line-height: 1.5;
         }
 
         .overlay-amount {
-            font-size: 32px;
+            font-size: 40px;
             font-weight: 800;
             color: var(--secondary);
-            margin-bottom: 16px;
+            margin-bottom: 24px;
         }
 
         .overlay-button {
@@ -1144,81 +1173,91 @@
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 14px;
-            font-size: 14px;
+            padding: 16px;
+            font-size: 16px;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
             width: 100%;
-            margin-top: 16px;
+            margin-top: 20px;
         }
 
-        /* Compact Wallet Overlay */
-        .compact-wallet-tabs {
+        .overlay-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* Wallet Overlay */
+        .wallet-tabs {
             display: flex;
             background: rgba(30, 41, 59, 0.5);
             border-radius: var(--radius);
-            padding: 3px;
-            margin-bottom: 16px;
+            padding: 4px;
+            margin-bottom: 24px;
         }
 
-        .compact-wallet-tab {
+        .wallet-tab {
             flex: 1;
-            padding: 10px;
+            padding: 12px;
             text-align: center;
             border-radius: var(--radius-sm);
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 12px;
         }
 
-        .compact-wallet-tab.active {
+        .wallet-tab.active {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
         }
 
-        .compact-wallet-form {
+        .wallet-form {
             display: none;
         }
 
-        .compact-wallet-form.active {
+        .wallet-form.active {
             display: block;
         }
 
-        .compact-form-group {
-            margin-bottom: 16px;
+        .form-group {
+            margin-bottom: 20px;
             text-align: left;
         }
 
-        .compact-form-label {
+        .form-label {
             display: block;
-            margin-bottom: 6px;
-            font-size: 12px;
+            margin-bottom: 8px;
+            font-size: 14px;
             color: var(--gray-light);
             font-weight: 600;
         }
 
-        .compact-form-input {
+        .form-input {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             color: white;
-            font-size: 14px;
+            font-size: 16px;
             transition: all 0.3s ease;
         }
 
-        .compact-amount-buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
 
-        .compact-amount-button {
-            padding: 10px;
+        .amount-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .amount-button {
+            padding: 12px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
@@ -1226,18 +1265,42 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 12px;
+        }
+
+        .amount-button:hover {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+            color: var(--primary-light);
         }
 
         /* Loading Overlay */
         .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(99, 102, 241, 0.3);
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(99, 102, 241, 0.3);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            background: #6366f1;
+            color: white;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 12px;
+            box-shadow: var(--shadow-lg);
+            animation: fadeIn 0.3s ease;
+            max-width: 90%;
+            text-align: center;
         }
 
         /* Animations */
@@ -1251,190 +1314,129 @@
             100% { transform: scale(1); }
         }
 
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Hide scrollbars but keep functionality */
-        .compact-boxes-grid::-webkit-scrollbar,
-        .compact-ball-history::-webkit-scrollbar {
-            display: none;
-        }
-
-        .compact-boxes-grid,
-        .compact-ball-history {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-
-        /* Responsive Design for very small screens */
-        @media (max-width: 360px) {
-            * {
-                font-size: 12px;
+        /* Responsive Design */
+        @media (max-width: 480px) {
+            .rooms-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
             }
             
-            .app-header {
-                padding: 6px 8px;
-                height: 45px;
-                min-height: 45px;
-            }
-            
-            .avatar {
-                width: 28px;
-                height: 28px;
-                font-size: 12px;
-            }
-            
-            .user-name {
-                font-size: 11px;
-            }
-            
-            .user-status {
-                font-size: 8px;
-            }
-            
-            .balance-card {
-                padding: 5px 8px;
-                height: 28px;
-            }
-            
-            .balance-amount {
-                font-size: 12px;
-            }
-            
-            .balance-currency {
-                font-size: 9px;
-            }
-            
-            .refresh-btn {
-                width: 28px;
-                height: 28px;
-                font-size: 11px;
-            }
-            
-            .main-container {
-                padding: 0 6px;
-            }
-            
-            .compact-room-card {
-                height: 70px;
-                padding: 8px;
-            }
-            
-            .compact-room-stake {
-                font-size: 14px;
-            }
-            
-            .compact-room-stake-currency {
-                font-size: 10px;
-            }
-            
-            .compact-boxes-grid {
-                grid-template-columns: repeat(10, 1fr);
-                gap: 3px;
-            }
-            
-            .compact-box-item {
-                font-size: 9px;
-                min-height: 18px;
-            }
-            
-            .compact-ball {
+            .ball {
                 width: 60px;
                 height: 60px;
             }
             
-            .compact-ball-letter {
-                font-size: 12px;
+            .ball-number {
+                font-size: 22px;
+                margin-top: 12px;
+            }
+            
+            .ball-letter {
+                font-size: 14px;
                 top: 6px;
             }
             
-            .compact-ball-number {
-                font-size: 20px;
-                margin-top: 15px;
+            .wait-timer {
+                font-size: 56px;
             }
             
-            .compact-history-ball {
-                min-width: 24px;
-                width: 24px;
-                height: 24px;
-            }
-            
-            .compact-history-letter {
-                font-size: 7px;
-            }
-            
-            .compact-history-number {
-                font-size: 9px;
-                margin-top: 6px;
-            }
-            
-            .compact-cell {
-                font-size: 11px;
+            .timer-display {
+                font-size: 36px;
             }
             
             .overlay-content {
-                padding: 16px;
+                padding: 20px;
             }
             
             .overlay-title {
-                font-size: 20px;
+                font-size: 24px;
             }
             
             .overlay-amount {
-                font-size: 28px;
-            }
-        }
-
-        /* For landscape orientation */
-        @media (max-height: 600px) and (orientation: landscape) {
-            .app-header {
-                height: 40px;
-                min-height: 40px;
-                padding: 4px 8px;
+                font-size: 32px;
             }
             
-            .avatar {
-                width: 26px;
-                height: 26px;
-                font-size: 11px;
-            }
-            
-            .user-name {
+            .cell {
                 font-size: 10px;
             }
             
+            .claim-button {
+                padding: 14px;
+                font-size: 14px;
+            }
+            
+            .boxes-grid {
+                max-height: 200px;
+            }
+            
+            .box-item {
+                font-size: 10px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .app-header {
+                padding: 12px 16px;
+            }
+            
             .balance-card {
-                height: 26px;
-                padding: 4px 6px;
+                padding: 8px 12px;
             }
             
             .balance-amount {
-                font-size: 11px;
+                font-size: 14px;
             }
             
-            .compact-boxes-grid {
-                max-height: 120px;
+            .room-stake {
+                font-size: 20px;
             }
             
-            .compact-card-preview-container {
-                padding: 8px;
+            .boxes-grid {
+                gap: 5px;
+            }
+            
+            .cell {
+                font-size: 9px;
+            }
+            
+            .game-header {
                 margin-bottom: 8px;
             }
             
-            .compact-preview-grid {
-                gap: 2px;
+            .ball-display-container {
+                padding: 8px;
             }
             
-            .compact-preview-cell {
-                font-size: 9px;
+            .bingo-card-container {
+                padding: 8px;
+            }
+            
+            .history-ball {
+                min-width: 24px;
+                width: 24px;
+                height: 24px;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Compact Header -->
+    <!-- Background Effects -->
+    <div class="bg-effects">
+        <div class="gradient-bg gradient-1"></div>
+        <div class="gradient-bg gradient-2"></div>
+    </div>
+
+    <!-- Header -->
     <div class="app-header">
         <div class="user-info">
             <div class="avatar" id="userAvatar">P</div>
@@ -1467,54 +1469,54 @@
             <div class="lobby-header">
                 <div class="app-logo">
                     <div class="logo-icon">🎯</div>
-                    <div class="logo-text">BINGO</div>
+                    <div class="logo-text">BINGO ELITE</div>
                 </div>
-                <div class="app-tagline">Win big with every bingo. Select your arena.</div>
+                <div class="app-tagline">Win big with every bingo. Select your arena below.</div>
             </div>
 
-            <div class="compact-rooms-grid" id="roomsGrid">
+            <div class="rooms-grid" id="roomsGrid">
                 <!-- Rooms will be populated by JavaScript -->
             </div>
 
-            <div class="compact-wallet-section">
-                <div class="compact-wallet-header">
-                    <div class="compact-wallet-title">Your Wallet</div>
-                    <div class="compact-wallet-action" onclick="showWallet()">
+            <div class="wallet-section">
+                <div class="wallet-header">
+                    <div class="wallet-title">Your Wallet</div>
+                    <div class="wallet-action" onclick="showWallet()">
                         <span>Manage</span>
                         <i class="fas fa-arrow-right"></i>
                     </div>
                 </div>
-                <div class="compact-wallet-balance">
-                    <div class="compact-balance-label">Available Balance</div>
+                <div class="wallet-balance">
+                    <div class="balance-label">Available Balance</div>
                     <div>
-                        <span class="compact-balance-value" id="lobbyBalance">0.00</span>
+                        <span class="balance-value" id="lobbyBalance">0.00</span>
                         <span class="balance-currency">ETB</span>
                     </div>
                 </div>
             </div>
 
-            <div class="compact-game-info">
-                <div class="compact-info-title">BINGO LETTERS & RANGES</div>
-                <div class="compact-bingo-letters">
-                    <div class="compact-letter-card">
-                        <div class="compact-letter">B</div>
-                        <div class="compact-letter-range">1-15</div>
+            <div class="game-info">
+                <div class="info-title">BINGO LETTERS & RANGES</div>
+                <div class="bingo-letters">
+                    <div class="letter-card">
+                        <div class="letter">B</div>
+                        <div class="letter-range">1-15</div>
                     </div>
-                    <div class="compact-letter-card">
-                        <div class="compact-letter">I</div>
-                        <div class="compact-letter-range">16-30</div>
+                    <div class="letter-card">
+                        <div class="letter">I</div>
+                        <div class="letter-range">16-30</div>
                     </div>
-                    <div class="compact-letter-card">
-                        <div class="compact-letter">N</div>
-                        <div class="compact-letter-range">31-45</div>
+                    <div class="letter-card">
+                        <div class="letter">N</div>
+                        <div class="letter-range">31-45</div>
                     </div>
-                    <div class="compact-letter-card">
-                        <div class="compact-letter">G</div>
-                        <div class="compact-letter-range">46-60</div>
+                    <div class="letter-card">
+                        <div class="letter">G</div>
+                        <div class="letter-range">46-60</div>
                     </div>
-                    <div class="compact-letter-card">
-                        <div class="compact-letter">O</div>
-                        <div class="compact-letter-range">61-75</div>
+                    <div class="letter-card">
+                        <div class="letter">O</div>
+                        <div class="letter-range">61-75</div>
                     </div>
                 </div>
             </div>
@@ -1522,88 +1524,81 @@
 
         <!-- Discovery Screen -->
         <div class="screen" id="discoveryScreen">
-            <div class="compact-discovery-header">
+            <div class="discovery-header">
                 <h2>Select Your Ticket</h2>
-                <p>Tap a box to see your card preview</p>
+                <p>Choose an available box to join the game</p>
             </div>
 
-            <div class="compact-selected-room-info">
+            <div class="selected-room-info">
                 <div>
-                    <div class="compact-room-stake-large" id="selectedRoomStake">10 ETB</div>
+                    <div class="room-stake-large" id="selectedRoomStake">10 ETB</div>
                     <div style="font-size: 10px; color: rgba(255,255,255,0.8);">Arena Entry</div>
                 </div>
-                <button class="compact-back-button" onclick="leaveDiscovery()">
+                <button class="back-button" onclick="leaveDiscovery()">
                     <i class="fas fa-arrow-left"></i>
                 </button>
             </div>
 
-            <div class="compact-timer-container" id="timerContainer" style="display: none;">
-                <div class="compact-timer-display" id="discoveryTimer">30</div>
-                <div class="compact-timer-label">Game starts in <span id="timerSeconds">30</span> seconds</div>
+            <div class="timer-container" id="timerContainer" style="display: none;">
+                <div class="timer-display" id="discoveryTimer">30</div>
+                <div class="timer-label">Game starts in <span id="timerSeconds">30</span> seconds</div>
             </div>
 
-            <div class="compact-players-info">
-                <div class="compact-player-count">
-                    <div class="compact-count-number" id="availableBoxes">100</div>
-                    <div class="compact-count-label">Available</div>
+            <div class="players-info">
+                <div class="player-count">
+                    <div class="count-number" id="availableBoxes">100</div>
+                    <div class="count-label">Available</div>
                 </div>
-                <div class="compact-player-count">
-                    <div class="compact-count-number" id="takenBoxes">0</div>
-                    <div class="compact-count-label">Taken</div>
+                <div class="player-count">
+                    <div class="count-number" id="takenBoxes">0</div>
+                    <div class="count-label">Taken</div>
                 </div>
-                <div class="compact-player-count">
-                    <div class="compact-count-number" id="onlinePlayers">1</div>
-                    <div class="compact-count-label">Online</div>
-                </div>
-            </div>
-
-            <div class="compact-boxes-grid" id="boxesGrid">
-                <!-- Boxes 1-100 in 10x10 grid will be populated by JavaScript -->
-            </div>
-
-            <!-- Card Preview Section -->
-            <div class="compact-card-preview-container" id="cardPreview">
-                <div class="compact-preview-header">
-                    <div class="compact-preview-title">Your Card Preview</div>
-                    <div class="compact-preview-box-number">Box: <span id="previewBoxNumber">-</span></div>
-                </div>
-                
-                <div class="compact-preview-letter-row">
-                    <div class="compact-preview-letter-cell">B</div>
-                    <div class="compact-preview-letter-cell">I</div>
-                    <div class="compact-preview-letter-cell">N</div>
-                    <div class="compact-preview-letter-cell">G</div>
-                    <div class="compact-preview-letter-cell">O</div>
-                </div>
-                
-                <div class="compact-preview-grid" id="cardPreviewGrid">
-                    <!-- Card preview will be populated by JavaScript -->
-                </div>
-                
-                <div class="compact-preview-stats">
-                    <div>Corners: <span id="previewCorners">0/4</span></div>
-                    <div>Numbers: <span id="previewNumbers">0/24</span></div>
-                    <div>Free: <span id="previewFree">YES</span></div>
+                <div class="player-count">
+                    <div class="count-number" id="onlinePlayers">1</div>
+                    <div class="count-label">Online</div>
                 </div>
             </div>
 
-            <button class="compact-confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>
+            <div class="boxes-grid" id="boxesGrid">
+                <!-- Boxes will be populated by JavaScript -->
+            </div>
+
+            <!-- Plate Preview -->
+            <div class="plate-preview-container" id="platePreview">
+                <div class="plate-preview-title">PLATE PREVIEW</div>
+                <div class="preview-letters">
+                    <div class="preview-letter">B</div>
+                    <div class="preview-letter">I</div>
+                    <div class="preview-letter">N</div>
+                    <div class="preview-letter">G</div>
+                    <div class="preview-letter">O</div>
+                </div>
+                <div class="plate-preview-grid" id="previewGrid">
+                    <!-- Preview will be generated here -->
+                </div>
+                <div class="selected-box-info">
+                    <div class="selected-box-text" id="selectedBoxText">Select a box to see your plate</div>
+                    <div class="selected-box-number" id="selectedBoxNumber">--</div>
+                </div>
+            </div>
+
+            <button class="confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>
                 Select a box first
             </button>
         </div>
 
         <!-- Wait Screen -->
         <div class="screen" id="waitScreen">
-            <div class="compact-wait-container">
-                <div class="compact-wait-icon">
+            <div class="wait-container">
+                <div class="wait-icon">
                     <i class="fas fa-users"></i>
                 </div>
-                <div class="compact-wait-timer" id="waitTimer">30</div>
-                <div class="compact-wait-message" id="waitMessage">Waiting for players...</div>
-                <div class="compact-wait-details" id="waitDetails">
+                <div class="wait-timer" id="waitTimer">30</div>
+                <div class="wait-message" id="waitMessage">Waiting for players...</div>
+                <div class="wait-details" id="waitDetails">
                     Game starts with 1 online player after 30 seconds
                 </div>
-                <button class="compact-leave-button" onclick="leaveLobby()">
+                <button class="leave-button" onclick="leaveLobby()">
                     Leave Lobby
                 </button>
             </div>
@@ -1611,46 +1606,46 @@
 
         <!-- Game Screen -->
         <div class="screen" id="gameScreen">
-            <div class="compact-game-header">
-                <div class="compact-room-info-compact">
-                    <div class="compact-room-stake-compact" id="gameRoomStake">10 ETB</div>
-                    <div class="compact-room-status-compact">Game in progress</div>
+            <div class="game-header">
+                <div class="room-info-compact">
+                    <div class="room-stake-compact" id="gameRoomStake">10 ETB</div>
+                    <div class="room-status-compact">Game in progress</div>
                 </div>
-                <div class="compact-game-controls">
-                    <div class="compact-control-button" onclick="showWallet()">
+                <div class="game-controls">
+                    <div class="control-button" onclick="showWallet()">
                         <i class="fas fa-wallet"></i>
                     </div>
-                    <div class="compact-control-button" onclick="resetToLobby()">
+                    <div class="control-button" onclick="resetToLobby()">
                         <i class="fas fa-sign-out-alt"></i>
                     </div>
                 </div>
             </div>
 
-            <div class="compact-ball-display-container">
-                <div class="compact-ball-label">LAST BALL</div>
-                <div class="compact-ball" id="lastBall">
-                    <div class="compact-ball-letter" id="ballLetter">--</div>
-                    <div class="compact-ball-number" id="ballNumber">--</div>
+            <div class="ball-display-container">
+                <div class="ball-label">LAST BALL</div>
+                <div class="ball" id="lastBall">
+                    <div class="ball-letter" id="ballLetter">--</div>
+                    <div class="ball-number" id="ballNumber">--</div>
                 </div>
-                <div class="compact-ball-history" id="ballHistory">
+                <div class="ball-history" id="ballHistory">
                     <!-- History balls will be added by JavaScript -->
                 </div>
             </div>
 
-            <div class="compact-bingo-card-container">
-                <div class="compact-bingo-header">
-                    <div class="compact-bingo-letter-cell">B</div>
-                    <div class="compact-bingo-letter-cell">I</div>
-                    <div class="compact-bingo-letter-cell">N</div>
-                    <div class="compact-bingo-letter-cell">G</div>
-                    <div class="compact-bingo-letter-cell">O</div>
+            <div class="bingo-card-container">
+                <div class="bingo-header">
+                    <div class="bingo-letter-cell">B</div>
+                    <div class="bingo-letter-cell">I</div>
+                    <div class="bingo-letter-cell">N</div>
+                    <div class="bingo-letter-cell">G</div>
+                    <div class="bingo-letter-cell">O</div>
                 </div>
-                <div class="compact-bingo-grid" id="bingoGrid">
+                <div class="bingo-grid" id="bingoGrid">
                     <!-- Bingo grid will be populated by JavaScript -->
                 </div>
             </div>
 
-            <button class="compact-claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
+            <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
                 CLAIM BINGO!
             </button>
         </div>
@@ -1663,73 +1658,73 @@
             <div class="overlay-icon">💰</div>
             <h2 class="overlay-title">Wallet</h2>
             
-            <div class="compact-wallet-tabs">
-                <div class="compact-wallet-tab active" onclick="switchWalletTab('deposit')">Deposit</div>
-                <div class="compact-wallet-tab" onclick="switchWalletTab('withdraw')">Withdraw</div>
+            <div class="wallet-tabs">
+                <div class="wallet-tab active" onclick="switchWalletTab('deposit')">Deposit</div>
+                <div class="wallet-tab" onclick="switchWalletTab('withdraw')">Withdraw</div>
             </div>
             
             <!-- Deposit Tab -->
-            <div class="compact-wallet-form active" id="depositForm">
-                <div class="compact-form-group">
-                    <label class="compact-form-label">Telebirr Number</label>
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 10px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 16px; letter-spacing: 0.5px;">
+            <div class="wallet-form active" id="depositForm">
+                <div class="form-group">
+                    <label class="form-label">Telebirr Number</label>
+                    <div style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
                         0962577855
                     </div>
                 </div>
                 
-                <div class="compact-form-group">
-                    <label class="compact-form-label">Receipt Number</label>
-                    <input type="text" class="compact-form-input" id="receiptNumber" placeholder="Enter receipt number">
+                <div class="form-group">
+                    <label class="form-label">Receipt Number</label>
+                    <input type="text" class="form-input" id="receiptNumber" placeholder="Enter receipt number">
                 </div>
                 
-                <div class="compact-form-group">
-                    <label class="compact-form-label">Amount Sent (ETB)</label>
-                    <input type="number" class="compact-form-input" id="depositAmount" placeholder="Enter amount">
+                <div class="form-group">
+                    <label class="form-label">Amount Sent (ETB)</label>
+                    <input type="number" class="form-input" id="depositAmount" placeholder="Enter amount">
                 </div>
                 
                 <button class="overlay-button" onclick="submitDeposit()">
                     Submit Deposit Request
                 </button>
                 
-                <div style="margin-top: 12px; font-size: 11px; color: var(--gray);">
-                    Funds added within 24 hours after verification
+                <div style="margin-top: 16px; font-size: 12px; color: var(--gray);">
+                    Funds will be added within 24 hours after verification
                 </div>
             </div>
             
             <!-- Withdraw Tab -->
-            <div class="compact-wallet-form" id="withdrawForm">
-                <div class="compact-form-group">
-                    <label class="compact-form-label">Select Amount</label>
-                    <div class="compact-amount-buttons">
-                        <button class="compact-amount-button" onclick="selectWithdrawAmount(50)">50 ETB</button>
-                        <button class="compact-amount-button" onclick="selectWithdrawAmount(100)">100 ETB</button>
-                        <button class="compact-amount-button" onclick="selectWithdrawAmount(200)">200 ETB</button>
-                        <button class="compact-amount-button" onclick="selectWithdrawAmount(500)">500 ETB</button>
-                        <button class="compact-amount-button" onclick="selectWithdrawAmount(1000)">1000 ETB</button>
+            <div class="wallet-form" id="withdrawForm">
+                <div class="form-group">
+                    <label class="form-label">Select Amount</label>
+                    <div class="amount-buttons">
+                        <button class="amount-button" onclick="selectWithdrawAmount(50)">50 ETB</button>
+                        <button class="amount-button" onclick="selectWithdrawAmount(100)">100 ETB</button>
+                        <button class="amount-button" onclick="selectWithdrawAmount(200)">200 ETB</button>
+                        <button class="amount-button" onclick="selectWithdrawAmount(500)">500 ETB</button>
+                        <button class="amount-button" onclick="selectWithdrawAmount(1000)">1000 ETB</button>
                     </div>
-                    <input type="number" class="compact-form-input" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
+                    <input type="number" class="form-input" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
                 </div>
                 
-                <div class="compact-form-group">
-                    <label class="compact-form-label">Phone Number</label>
-                    <input type="tel" class="compact-form-input" id="withdrawPhoneNumber" placeholder="e.g., 0912345678">
+                <div class="form-group">
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" class="form-input" id="withdrawPhoneNumber" placeholder="e.g., 0912345678">
                 </div>
                 
-                <div style="background: rgba(245, 158, 11, 0.1); padding: 10px; border-radius: var(--radius); margin-bottom: 16px;">
-                    <div style="font-size: 11px; color: var(--secondary); margin-bottom: 4px;">Selected Amount</div>
-                    <div style="font-size: 20px; font-weight: 800; color: white;" id="selectedWithdrawAmount">0 ETB</div>
+                <div style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-radius: var(--radius); margin-bottom: 20px;">
+                    <div style="font-size: 12px; color: var(--secondary); margin-bottom: 4px;">Selected Amount</div>
+                    <div style="font-size: 24px; font-weight: 800; color: white;" id="selectedWithdrawAmount">0 ETB</div>
                 </div>
                 
                 <button class="overlay-button" onclick="submitWithdrawal()" id="withdrawSubmitBtn">
                     Submit Withdrawal
                 </button>
                 
-                <div style="margin-top: 12px; font-size: 11px; color: var(--danger);">
+                <div style="margin-top: 16px; font-size: 12px; color: var(--danger);">
                     Minimum withdrawal: 50 ETB • Processed within 24 hours
                 </div>
             </div>
             
-            <button class="overlay-button" onclick="hideWallet()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 12px;">
+            <button class="overlay-button" onclick="hideWallet()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 16px;">
                 Back to Game
             </button>
         </div>
@@ -1754,10 +1749,10 @@
             <div class="overlay-icon">😢</div>
             <h2 class="overlay-title lose-title">GAME OVER</h2>
             <div class="overlay-message" id="loseMessage">Someone else claimed Bingo first!</div>
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 13px; color: var(--gray); margin-bottom: 6px;">Winner</div>
-                <div style="font-size: 20px; font-weight: 700; color: white;" id="winnerName">Player</div>
-                <div style="font-size: 18px; font-weight: 700; color: var(--secondary); margin-top: 6px;" id="winnerPrize">0.00 ETB</div>
+            <div style="margin-bottom: 24px;">
+                <div style="font-size: 14px; color: var(--gray); margin-bottom: 8px;">Winner</div>
+                <div style="font-size: 24px; font-weight: 700; color: white;" id="winnerName">Player</div>
+                <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
             <button class="overlay-button" onclick="resetToLobby()">
                 Return to Lobby
@@ -1841,7 +1836,7 @@
             query: {
                 userId: 'pending',
                 source: 'telegram_game',
-                version: '3.1.0'
+                version: '3.0.0'
             }
         });
 
@@ -1870,9 +1865,11 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0,
-            previewGrid: []
+            selectedWithdrawAmount: 0
         };
+
+        // Plate preview cache
+        let previewGridCache = {};
 
         // Update connection status UI
         function updateConnectionStatus(connected, message) {
@@ -1967,7 +1964,7 @@
             notification.className = 'notification';
             notification.style.cssText = `
                 position: fixed;
-                top: 60px;
+                top: 80px;
                 left: 50%;
                 transform: translateX(-50%);
                 z-index: 10000;
@@ -1984,7 +1981,7 @@
             `;
             
             notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
                     <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div>
                     <div>${message}</div>
                 </div>
@@ -1994,7 +1991,7 @@
             
             setTimeout(() => {
                 notification.style.opacity = '0';
-                notification.style.transform = 'translateX(-50%) translateY(-10px)';
+                notification.style.transform = 'translateX(-50%) translateY(-20px)';
                 setTimeout(() => {
                     if (notification.parentNode) {
                         notification.parentNode.removeChild(notification);
@@ -2066,16 +2063,16 @@
             state.walletTab = tab;
             
             // Update tab buttons
-            document.querySelectorAll('.compact-wallet-tab').forEach(tabElement => {
+            document.querySelectorAll('.wallet-tab').forEach(tabElement => {
                 tabElement.classList.remove('active');
             });
             
             if (tab === 'deposit') {
-                document.querySelectorAll('.compact-wallet-tab')[0].classList.add('active');
+                document.querySelectorAll('.wallet-tab')[0].classList.add('active');
                 document.getElementById('depositForm').classList.add('active');
                 document.getElementById('withdrawForm').classList.remove('active');
             } else {
-                document.querySelectorAll('.compact-wallet-tab')[1].classList.add('active');
+                document.querySelectorAll('.wallet-tab')[1].classList.add('active');
                 document.getElementById('withdrawForm').classList.add('active');
                 document.getElementById('depositForm').classList.remove('active');
             }
@@ -2165,33 +2162,41 @@
             }
         }
 
-        // Generate a preview card for a given seed
-        function generatePreviewCard(seed) {
+        // Plate Preview Functions
+        function generatePlatePreview(boxNumber) {
+            if (previewGridCache[boxNumber]) {
+                return previewGridCache[boxNumber];
+            }
+            
+            // Generate a traditional bingo card based on box number
+            const seed = boxNumber;
             const letters = ['B', 'I', 'N', 'G', 'O'];
             const ranges = {
-                'B': { min: 1, max: 15, count: 15 },
-                'I': { min: 16, max: 30, count: 15 },
-                'N': { min: 31, max: 45, count: 15 },
-                'G': { min: 46, max: 60, count: 15 },
-                'O': { min: 61, max: 75, count: 15 }
+                'B': { min: 1, max: 15 },
+                'I': { min: 16, max: 30 },
+                'N': { min: 31, max: 45 },
+                'G': { min: 46, max: 60 },
+                'O': { min: 61, max: 75 }
             };
             
+            // Seeded random function
             function seededRandom(s) {
-                var mask = 0xffffffff;
-                var m_w = (123456789 + s) & mask;
-                var m_z = (987654321 - s) & mask;
-
+                let mask = 0xffffffff;
+                let m_w = (123456789 + s) & mask;
+                let m_z = (987654321 - s) & mask;
+                
                 return function() {
                     m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & mask;
                     m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & mask;
-                    var result = ((m_z << 16) + (m_w & 65535)) >>> 0;
+                    let result = ((m_z << 16) + (m_w & 65535)) >>> 0;
                     return result / 4294967296;
-                }
+                };
             }
-
+            
             const random = seededRandom(seed * 777);
             const previewGrid = [];
             
+            // Get available numbers for each column
             const availableNumbers = {};
             
             for (const letter of letters) {
@@ -2201,17 +2206,20 @@
                     availableNumbers[letter].push(i);
                 }
                 
+                // Shuffle each column's numbers
                 for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
                     const j = Math.floor(random() * (i + 1));
                     [availableNumbers[letter][i], availableNumbers[letter][j]] = [availableNumbers[letter][j], availableNumbers[letter][i]];
                 }
             }
             
+            // Fill the 5x5 grid
             for (let row = 0; row < 5; row++) {
                 for (let col = 0; col < 5; col++) {
                     const index = row * 5 + col;
                     const letter = letters[col];
                     
+                    // Center is FREE
                     if (col === 2 && row === 2) {
                         previewGrid[index] = 'FREE';
                         continue;
@@ -2229,50 +2237,40 @@
                 }
             }
             
+            previewGridCache[boxNumber] = previewGrid;
             return previewGrid;
         }
 
-        // Show card preview
-        function showCardPreview(boxNumber) {
-            // Generate preview card
-            state.previewGrid = generatePreviewCard(boxNumber);
+        function updatePlatePreview(boxNumber) {
+            const previewContainer = document.getElementById('platePreview');
+            const previewGrid = document.getElementById('previewGrid');
+            const selectedBoxText = document.getElementById('selectedBoxText');
+            const selectedBoxNumber = document.getElementById('selectedBoxNumber');
             
-            // Update preview header
-            document.getElementById('previewBoxNumber').textContent = boxNumber;
+            if (!boxNumber) {
+                previewContainer.classList.remove('visible');
+                return;
+            }
             
-            // Render preview grid
-            const previewGrid = document.getElementById('cardPreviewGrid');
+            // Show the preview container
+            previewContainer.classList.add('visible');
+            
+            // Update selected box info
+            selectedBoxText.textContent = 'Your selected plate:';
+            selectedBoxNumber.textContent = `Box #${boxNumber}`;
+            
+            // Generate and display the preview grid
+            const previewNumbers = generatePlatePreview(boxNumber);
             previewGrid.innerHTML = '';
             
-            let corners = 0;
-            let numbers = 0;
-            
-            state.previewGrid.forEach((val, index) => {
+            // Add the numbers
+            previewNumbers.forEach((number, index) => {
                 const cell = document.createElement('div');
-                const isFree = val === 'FREE';
-                const isCorner = [0, 4, 20, 24].includes(index);
-                
-                if (isCorner && !isFree) corners++;
-                if (!isFree) numbers++;
-                
-                cell.className = 'compact-preview-cell' + (isFree ? ' free' : '');
-                if (isCorner) {
-                    cell.classList.add('corner');
-                }
-                
-                cell.textContent = isFree ? 'FREE' : val;
-                cell.title = isFree ? 'Free Space' : `Number: ${val}`;
-                
+                const isFree = number === 'FREE';
+                cell.className = 'preview-cell' + (isFree ? ' free' : '');
+                cell.textContent = isFree ? 'FREE' : number;
                 previewGrid.appendChild(cell);
             });
-            
-            // Update stats
-            document.getElementById('previewCorners').textContent = `${corners}/4`;
-            document.getElementById('previewNumbers').textContent = `${numbers}/24`;
-            document.getElementById('previewFree').textContent = 'YES';
-            
-            // Show preview container
-            document.getElementById('cardPreview').classList.add('active');
         }
 
         // Handle socket connection
@@ -2373,10 +2371,10 @@
             roomsGrid.innerHTML = '';
             
             const rooms = [
-                { stake: 10, name: 'Bronze', badge: 'compact-badge-bronze' },
-                { stake: 20, name: 'Silver', badge: 'compact-badge-silver' },
-                { stake: 50, name: 'Gold', badge: 'compact-badge-gold' },
-                { stake: 100, name: 'Elite', badge: 'compact-badge-elite' }
+                { stake: 10, name: 'Bronze', badge: 'badge-bronze' },
+                { stake: 20, name: 'Silver', badge: 'badge-silver' },
+                { stake: 50, name: 'Gold', badge: 'badge-gold' },
+                { stake: 100, name: 'Elite', badge: 'badge-elite' }
             ];
             
             rooms.forEach(room => {
@@ -2391,35 +2389,35 @@
                 const isLocked = roomInfo.locked || roomInfo.status === 'locked';
                 
                 const roomCard = document.createElement('div');
-                roomCard.className = 'compact-room-card' + (isLocked ? ' locked' : '');
+                roomCard.className = 'room-card' + (isLocked ? ' locked' : '');
                 roomCard.onclick = isLocked ? null : () => selectStake(room.stake);
                 
-                let statusClass = 'compact-status-waiting';
+                let statusClass = 'status-waiting';
                 let statusText = 'WAITING';
                 
                 if (isLocked) {
-                    statusClass = 'compact-status-locked';
+                    statusClass = 'status-locked';
                     statusText = 'LOCKED';
                 } else if (roomInfo.status === 'starting') {
-                    statusClass = 'compact-status-starting';
+                    statusClass = 'status-starting';
                     statusText = 'STARTING';
                 } else if (roomInfo.status === 'playing') {
-                    statusClass = 'compact-status-playing';
+                    statusClass = 'status-playing';
                     statusText = 'PLAYING';
                 }
                 
                 roomCard.innerHTML = `
-                    <div class="compact-room-badge ${room.badge}">${room.name}</div>
-                    <div class="compact-room-stake">${room.stake} <span class="compact-room-stake-currency">ETB</span></div>
-                    <div class="compact-room-name">${room.name} Arena</div>
-                    <div class="compact-room-info">
-                        <div class="compact-room-players">
-                            <div class="compact-player-icon"><i class="fas fa-user"></i></div>
+                    <div class="room-badge ${room.badge}">${room.name}</div>
+                    <div class="room-stake">${room.stake} <span class="room-stake-currency">ETB</span></div>
+                    <div class="room-name">${room.name} Arena</div>
+                    <div class="room-info">
+                        <div class="room-players">
+                            <div class="player-icon"><i class="fas fa-user"></i></div>
                             <div>${roomInfo.playerCount}/100</div>
                         </div>
-                        <div class="compact-room-prize">${roomInfo.potentialPrize || 0} ETB</div>
+                        <div class="room-prize">${roomInfo.potentialPrize || 0} ETB</div>
                     </div>
-                    <div class="compact-room-status ${statusClass}">${statusText}</div>
+                    <div class="room-status ${statusClass}">${statusText}</div>
                 `;
                 
                 roomsGrid.appendChild(roomCard);
@@ -2496,11 +2494,11 @@
             state.previousTakenBoxes = [];
             state.selectedBox = null;
             
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
+            
             // Hide timer container initially
             document.getElementById('timerContainer').style.display = 'none';
-            
-            // Hide card preview
-            document.getElementById('cardPreview').classList.remove('active');
             
             if(state.isConnected) {
                 // Subscribe to room updates
@@ -2534,12 +2532,12 @@
             const grid = document.getElementById('boxesGrid');
             grid.innerHTML = '';
             
-            // Create boxes 1-100 in a 10x10 grid
+            // Create boxes 1-100
             for(let i=1; i<=100; i++) {
                 const box = document.createElement('div');
                 const isTaken = taken.includes(i);
                 
-                box.className = 'compact-box-item' + (isTaken ? ' taken' : '');
+                box.className = 'box-item' + (isTaken ? ' taken' : '');
                 box.textContent = i;
                 box.dataset.number = i;
                 
@@ -2562,23 +2560,23 @@
         
         function selectBox(boxNumber) {
             // Deselect all boxes
-            document.querySelectorAll('.compact-box-item').forEach(box => {
+            document.querySelectorAll('.box-item').forEach(box => {
                 box.classList.remove('selected');
             });
             
             // Select the clicked box
-            const selectedBox = document.querySelector(`.compact-box-item[data-number="${boxNumber}"]`);
+            const selectedBox = document.querySelector(`.box-item[data-number="${boxNumber}"]`);
             if (selectedBox && !selectedBox.classList.contains('taken')) {
                 selectedBox.classList.add('selected');
                 state.selectedBox = boxNumber;
                 
-                // Show card preview
-                showCardPreview(boxNumber);
+                // Show the plate preview
+                updatePlatePreview(boxNumber);
                 
                 // Enable confirm button
                 const confirmButton = document.getElementById('confirmBoxButton');
                 confirmButton.disabled = false;
-                confirmButton.textContent = `Confirm Box ${boxNumber}`;
+                confirmButton.textContent = `Select Box ${boxNumber}`;
                 
                 // Add haptic feedback
                 try { 
@@ -2646,12 +2644,11 @@
                 return;
             }
             
-            // Use the preview grid as the actual grid
-            state.grid = state.previewGrid;
-            showScreen('waitScreen');
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
             
-            // Hide card preview
-            document.getElementById('cardPreview').classList.remove('active');
+            generateTraditionalBingoCard(state.selectedBox);
+            showScreen('waitScreen');
             
             if(state.isConnected) {
                 socket.emit('joinRoom', { 
@@ -2671,6 +2668,9 @@
         }
         
         function leaveDiscovery() {
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
+            
             // Unsubscribe from room updates
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
@@ -2680,13 +2680,13 @@
             // Clear selected box
             state.selectedBox = null;
             
-            // Hide card preview
-            document.getElementById('cardPreview').classList.remove('active');
-            
             showScreen('lobbyScreen');
         }
         
         function leaveLobby() {
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
+            
             if(state.isConnected) {
                 socket.emit('player:leaveRoom', { 
                     action: 'left_lobby',
@@ -2798,10 +2798,10 @@
             
             state.history.slice(0, 8).forEach(ball => {
                 const historyBall = document.createElement('div');
-                historyBall.className = 'compact-history-ball';
+                historyBall.className = 'history-ball';
                 historyBall.innerHTML = `
-                    <div class="compact-history-letter">${ball.letter}</div>
-                    <div class="compact-history-number">${ball.num}</div>
+                    <div class="history-letter">${ball.letter}</div>
+                    <div class="history-number">${ball.num}</div>
                 `;
                 historyContainer.appendChild(historyBall);
             });
@@ -2880,7 +2880,7 @@
                 const isFree = val === 'FREE';
                 const isCorner = [0, 4, 20, 24].includes(index);
                 
-                cell.className = 'compact-cell' + (isFree ? ' free' : '');
+                cell.className = 'cell' + (isFree ? ' free' : '');
                 if (isCorner) {
                     cell.classList.add('corner');
                 }
@@ -2978,12 +2978,14 @@
             state.selectedBox = null;
             state.onlinePlayersCount = 0;
             state.totalPlayersCount = 0;
-            state.previewGrid = [];
             
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
             }
+            
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
             
             // Hide all overlays
             hideOverlay('winOverlay');
@@ -3003,9 +3005,6 @@
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitMessage').textContent = "Waiting for players...";
             document.getElementById('waitDetails').textContent = "Game starts with 1 online player after 30 seconds";
-            
-            // Hide card preview
-            document.getElementById('cardPreview').classList.remove('active');
             
             updateRoomsDisplay();
             
@@ -3174,6 +3173,9 @@
             showNotification(`🔒 ${data.message}`, 'warning', 3000);
             showOverlay('roomLockedOverlay');
             
+            // Hide plate preview
+            document.getElementById('platePreview').classList.remove('visible');
+            
             // Automatically return to lobby after 3 seconds
             setTimeout(() => {
                 hideOverlay('roomLockedOverlay');
@@ -3183,9 +3185,6 @@
                 state.stake = 0;
                 state.selectedBox = null;
                 state.roomSubscribed = false;
-                
-                // Hide card preview
-                document.getElementById('cardPreview').classList.remove('active');
             }, 3000);
         });
 
