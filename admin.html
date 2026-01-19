@@ -1,5 +1,3 @@
-[file name]: admin.html
-[file content begin]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1051,6 +1049,23 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Reset Button Style */
+        .btn-reset {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 10px;
+        }
+        
+        .btn-reset:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
     </style>
 </head>
 <body>
@@ -1220,15 +1235,19 @@
                         </div>
                     </div>
                     
+                    <!-- UPDATED: House Earnings instead of House Balance -->
                     <div class="stat-card">
                         <div class="stat-icon balance">
                             <i class="fas fa-coins"></i>
                         </div>
                         <div class="stat-info">
-                            <h3>House Balance</h3>
-                            <div class="stat-value" id="houseBalance">0 ETB</div>
+                            <h3>House Earnings</h3>
+                            <div class="stat-value" id="houseEarnings">0 ETB</div>
                             <div class="stat-change positive">
-                                <i class="fas fa-trend-up"></i> Real-time
+                                <i class="fas fa-trend-up"></i> From Fees
+                                <button class="btn-reset" onclick="resetHouseEarnings()" title="Reset House Earnings">
+                                    <i class="fas fa-undo"></i> Reset
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1514,13 +1533,14 @@
                             </div>
                         </div>
                         
+                        <!-- UPDATED: House Earnings in Analytics -->
                         <div class="stat-card">
                             <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
                                 <i class="fas fa-home"></i>
                             </div>
                             <div class="stat-info">
                                 <h3>House Earnings</h3>
-                                <div class="stat-value" id="houseEarnings">0 ETB</div>
+                                <div class="stat-value" id="houseEarningsAnalytics">0 ETB</div>
                                 <div class="stat-change positive">
                                     <i class="fas fa-arrow-up"></i> Commission
                                 </div>
@@ -1573,6 +1593,15 @@
                             </div>
                             <h4>Backup DB</h4>
                             <p>Create database backup</p>
+                        </div>
+                        
+                        <!-- ADDED: Reset House Earnings Button -->
+                        <div class="action-card" onclick="resetHouseEarnings()">
+                            <div class="action-icon" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">
+                                <i class="fas fa-undo"></i>
+                            </div>
+                            <h4>Reset House Earnings</h4>
+                            <p>Set house earnings to zero</p>
                         </div>
                         
                         <div class="action-card" onclick="emergencyStop()">
@@ -1862,7 +1891,7 @@
                 }
             }
             
-            addSystemLog('Admin panel initialized');
+            addSystemLog('Admin panel initialized - House Earnings tracking enabled');
             attachNavListeners();
             setupUserInfoDisplay();
         });
@@ -2092,6 +2121,17 @@
                 refreshPendingTransactions();
                 addSystemLog(`Withdrawal rejected: ${data.message}`);
             });
+
+            // ADDED: House earnings reset confirmation
+            state.socket.on('admin:houseEarningsReset', (data) => {
+                showToast(`House earnings reset from ${data.previousAmount} to 0 ETB`, 'success');
+                addSystemLog(`House earnings reset: Was ${data.previousAmount} ETB`);
+            });
+
+            state.socket.on('admin:houseEarningsResetError', (message) => {
+                showToast('Failed to reset house earnings: ' + message, 'error');
+                addSystemLog('House earnings reset failed: ' + message, 'error');
+            });
         }
 
         // Login Function
@@ -2158,7 +2198,9 @@
             document.getElementById('totalUsers').textContent = data.totalUsers || 0;
             document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
             document.getElementById('activeGames').textContent = data.activeGames || 0;
-            document.getElementById('houseBalance').textContent = (data.houseBalance || 0).toFixed(2) + ' ETB';
+            
+            // UPDATED: Use houseEarnings instead of houseBalance
+            document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
             
             if (data.totalWagered !== undefined) {
                 document.getElementById('totalWagered').textContent = (data.totalWagered || 0).toFixed(2) + ' ETB';
@@ -2167,10 +2209,29 @@
                 document.getElementById('totalWins').textContent = (data.totalWins || 0).toFixed(2) + ' ETB';
             }
             if (data.houseEarnings !== undefined) {
-                document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
+                document.getElementById('houseEarningsAnalytics').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
             }
             if (data.totalBingos !== undefined) {
                 document.getElementById('totalBingos').textContent = data.totalBingos || 0;
+            }
+        }
+        
+        // ADDED: Reset House Earnings Function
+        function resetHouseEarnings() {
+            if (confirm('Are you sure you want to reset house earnings to zero? This will clear all accumulated commission/fee earnings.\n\nThis action cannot be undone.')) {
+                if (state.socket && state.isAdmin) {
+                    state.socket.emit('admin:resetHouseEarnings');
+                    showToast('Resetting house earnings to zero...', 'warning');
+                    addSystemLog('House earnings reset requested');
+                    
+                    // Update UI immediately for better UX
+                    document.getElementById('houseEarnings').textContent = '0.00 ETB';
+                    if (document.getElementById('houseEarningsAnalytics')) {
+                        document.getElementById('houseEarningsAnalytics').textContent = '0.00 ETB';
+                    }
+                } else {
+                    showToast('Cannot reset: Not connected to server', 'error');
+                }
             }
         }
         
@@ -3398,6 +3459,12 @@
                 e.preventDefault();
                 refreshPendingTransactions();
             }
+            
+            // ADDED: Ctrl+Shift+R for reset house earnings
+            if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+                e.preventDefault();
+                resetHouseEarnings();
+            }
         });
 
         // Add some sample activity on load
@@ -3405,10 +3472,9 @@
             if (state.isAdmin) {
                 addActivityItem({message: 'System initialized successfully'});
                 addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard v3.0'});
-                addSystemLog('Admin dashboard loaded with wallet approval system');
+                addSystemLog('Admin dashboard loaded with house earnings tracking and reset functionality');
             }
         }, 2000);
     </script>
 </body>
 </html>
-[file content end]
