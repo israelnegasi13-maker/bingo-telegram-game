@@ -292,14 +292,14 @@
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 15px 12px;
+            padding: 14px 12px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 130px; /* Reduced from 160px */
+            min-height: 130px;
         }
 
         .room-card:hover {
@@ -351,25 +351,27 @@
             color: #f5f3ff;
         }
 
-        /* UPDATED: Fixed stake amount alignment - ETB positioned properly */
+        /* FIXED: ETB positioned much higher - above the stake number */
         .room-stake {
-            font-size: 18px; /* Reduced from 24px */
+            font-size: 18px;
             font-weight: 800;
-            margin-bottom: 0; /* Removed bottom margin */
             color: white;
             display: flex;
-            align-items: center; /* Changed from flex-end to center */
-            height: 24px; /* Added fixed height */
+            align-items: flex-start;
+            position: relative;
+            line-height: 1.2;
+            margin-bottom: 2px;
         }
 
         .room-stake-currency {
-            font-size: 11px; /* Slightly larger for better visibility */
+            font-size: 11px;
             color: var(--gray-light);
             font-weight: 600;
             margin-left: 2px;
-            margin-bottom: 0; /* Removed bottom margin */
-            align-self: center; /* Align with main number */
-            line-height: 1;
+            align-self: flex-start;
+            margin-top: 0;
+            position: relative;
+            top: -1px;
         }
 
         .room-name {
@@ -377,8 +379,7 @@
             font-weight: 600;
             color: var(--gray);
             margin-bottom: 8px;
-            margin-top: 2px; /* Added top margin to separate from stake */
-            min-height: 16px; /* Ensure consistent height */
+            margin-top: 2px;
         }
 
         .room-info {
@@ -386,7 +387,7 @@
             justify-content: space-between;
             align-items: flex-end;
             margin-top: auto;
-            padding-top: 8px; /* Increased from 5px to push status down */
+            padding-top: 8px;
         }
 
         .room-players {
@@ -408,20 +409,17 @@
             color: var(--secondary);
         }
 
-        /* UPDATED: Status with better visibility */
+        /* FIXED: Status positioned clearly at bottom */
         .room-status {
             position: absolute;
-            bottom: 8px; /* Keep at 8px */
-            right: 8px; /* Keep at 8px */
+            bottom: 8px;
+            right: 8px;
             font-size: 9px;
             padding: 2px 6px;
             border-radius: 8px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
         .status-waiting {
@@ -1322,7 +1320,7 @@
             }
             
             .room-card {
-                min-height: 110px;
+                min-height: 120px;
                 padding: 12px 10px;
             }
             
@@ -1397,11 +1395,10 @@
             
             .room-stake {
                 font-size: 15px;
-                height: 20px;
             }
             
             .room-card {
-                min-height: 100px;
+                min-height: 110px;
                 padding: 10px 8px;
             }
             
@@ -2306,7 +2303,7 @@
         // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
-            const val = state.balance.toFixed(2);
+            const val = bal.toFixed(2);
             document.getElementById('balanceAmount').textContent = val;
             document.getElementById('lobbyBalance').textContent = val;
             
