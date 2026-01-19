@@ -351,25 +351,22 @@
             color: #f5f3ff;
         }
 
-        /* FIXED: ETB text moved higher and aligned better */
+        /* UPDATED: Smaller stake amount with ETB moved higher */
         .room-stake {
             font-size: 18px; /* Reduced from 24px */
             font-weight: 800;
-            margin-bottom: 4px; /* Added small margin to separate from room name */
+            margin-bottom: 0; /* Removed bottom margin */
             color: white;
             display: flex;
             align-items: flex-end;
         }
 
         .room-stake-currency {
-            font-size: 11px; /* Slightly smaller */
-            color: var(--secondary); /* Changed to yellow to match ETB theme */
-            font-weight: 700;
+            font-size: 12px;
+            color: var(--gray-light);
+            font-weight: 600;
             margin-left: 2px;
-            margin-bottom: 0; /* Removed bottom margin */
-            align-self: flex-end; /* Align to bottom of stake number */
-            position: relative;
-            top: -1px; /* Moved up slightly */
+            margin-bottom: 2px; /* Moved ETB up by reducing bottom margin */
         }
 
         .room-name {
@@ -377,6 +374,7 @@
             font-weight: 600;
             color: var(--gray);
             margin-bottom: 8px;
+            margin-top: 2px; /* Added top margin to separate from stake */
         }
 
         .room-info {
@@ -406,11 +404,11 @@
             color: var(--secondary);
         }
 
-        /* Status positioned lower to avoid overlap */
+        /* FIXED: Status moved MUCH higher to avoid overlap */
         .room-status {
             position: absolute;
-            bottom: 8px; /* Moved down from 6px */
-            right: 8px;
+            top: 35px; /* Moved from bottom: 6px to top: 35px (about 3x higher) */
+            right: 6px;
             font-size: 9px;
             padding: 2px 6px;
             border-radius: 8px;
@@ -1325,9 +1323,9 @@
                 font-size: 16px;
             }
             
-            .room-stake-currency {
-                font-size: 10px;
-                top: 0;
+            /* Adjust status position for smaller screens */
+            .room-status {
+                top: 30px; /* Adjusted for smaller room card */
             }
             
             .ball {
@@ -1399,13 +1397,14 @@
                 font-size: 15px;
             }
             
-            .room-stake-currency {
-                font-size: 9px;
-            }
-            
             .room-card {
                 min-height: 100px;
                 padding: 10px 8px;
+            }
+            
+            /* Adjust status position for even smaller screens */
+            .room-status {
+                top: 25px; /* Further adjusted for smallest room card */
             }
             
             .boxes-grid {
