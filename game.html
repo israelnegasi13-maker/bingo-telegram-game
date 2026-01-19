@@ -287,19 +287,19 @@
             margin-bottom: 20px;
         }
 
-        /* UPDATED: Smaller room cards */
+        /* UPDATED: Smaller room cards with adjusted spacing */
         .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 15px 12px;
+            padding: 12px 10px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 130px; /* Reduced from 160px */
+            min-height: 120px;
         }
 
         .room-card:hover {
@@ -351,14 +351,17 @@
             color: #f5f3ff;
         }
 
-        /* UPDATED: Smaller stake amount with ETB moved higher */
+        /* FIXED: Stake amount with ETB positioned higher to avoid status overlap */
         .room-stake {
-            font-size: 18px; /* Reduced from 24px */
+            font-size: 18px;
             font-weight: 800;
-            margin-bottom: 0; /* Removed bottom margin */
+            margin-bottom: 0;
             color: white;
             display: flex;
-            align-items: flex-end;
+            align-items: flex-start;
+            position: relative;
+            line-height: 1;
+            margin-top: 4px;
         }
 
         .room-stake-currency {
@@ -366,15 +369,16 @@
             color: var(--gray-light);
             font-weight: 600;
             margin-left: 2px;
-            margin-bottom: 2px; /* Moved ETB up by reducing bottom margin */
+            align-self: flex-start;
+            margin-top: 1px;
         }
 
         .room-name {
             font-size: 13px;
             font-weight: 600;
             color: var(--gray);
-            margin-bottom: 8px;
-            margin-top: 2px; /* Added top margin to separate from stake */
+            margin-bottom: 6px;
+            margin-top: 2px;
         }
 
         .room-info {
@@ -382,7 +386,7 @@
             justify-content: space-between;
             align-items: flex-end;
             margin-top: auto;
-            padding-top: 8px; /* Increased from 5px to push status down */
+            padding-top: 4px;
         }
 
         .room-players {
@@ -404,17 +408,18 @@
             color: var(--secondary);
         }
 
-        /* UPDATED: Status moved further down */
+        /* FIXED: Status positioned with better spacing */
         .room-status {
             position: absolute;
-            bottom: 6px; /* Moved down from 8px */
-            right: 6px; /* Moved in from 8px */
+            bottom: 4px;
+            right: 6px;
             font-size: 9px;
             padding: 2px 6px;
             border-radius: 8px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
+            z-index: 2;
         }
 
         .status-waiting {
@@ -2298,7 +2303,7 @@
         // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
-            const val = state.balance.toFixed(2);
+            const val = bal.toFixed(2);
             document.getElementById('balanceAmount').textContent = val;
             document.getElementById('lobbyBalance').textContent = val;
             
