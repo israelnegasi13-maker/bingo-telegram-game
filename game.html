@@ -287,19 +287,19 @@
             margin-bottom: 20px;
         }
 
-        /* UPDATED: Smaller room cards with adjusted spacing */
+        /* UPDATED: Smaller room cards */
         .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px 10px;
+            padding: 15px 12px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 120px;
+            min-height: 130px; /* Reduced from 160px */
         }
 
         .room-card:hover {
@@ -351,34 +351,34 @@
             color: #f5f3ff;
         }
 
-        /* FIXED: Stake amount with ETB positioned higher to avoid status overlap */
+        /* UPDATED: Fixed stake amount alignment - ETB positioned properly */
         .room-stake {
-            font-size: 18px;
+            font-size: 18px; /* Reduced from 24px */
             font-weight: 800;
-            margin-bottom: 0;
+            margin-bottom: 0; /* Removed bottom margin */
             color: white;
             display: flex;
-            align-items: flex-start;
-            position: relative;
-            line-height: 1;
-            margin-top: 4px;
+            align-items: center; /* Changed from flex-end to center */
+            height: 24px; /* Added fixed height */
         }
 
         .room-stake-currency {
-            font-size: 12px;
+            font-size: 11px; /* Slightly larger for better visibility */
             color: var(--gray-light);
             font-weight: 600;
             margin-left: 2px;
-            align-self: flex-start;
-            margin-top: 1px;
+            margin-bottom: 0; /* Removed bottom margin */
+            align-self: center; /* Align with main number */
+            line-height: 1;
         }
 
         .room-name {
             font-size: 13px;
             font-weight: 600;
             color: var(--gray);
-            margin-bottom: 6px;
-            margin-top: 2px;
+            margin-bottom: 8px;
+            margin-top: 2px; /* Added top margin to separate from stake */
+            min-height: 16px; /* Ensure consistent height */
         }
 
         .room-info {
@@ -386,7 +386,7 @@
             justify-content: space-between;
             align-items: flex-end;
             margin-top: auto;
-            padding-top: 4px;
+            padding-top: 8px; /* Increased from 5px to push status down */
         }
 
         .room-players {
@@ -408,18 +408,20 @@
             color: var(--secondary);
         }
 
-        /* FIXED: Status positioned with better spacing */
+        /* UPDATED: Status with better visibility */
         .room-status {
             position: absolute;
-            bottom: 4px;
-            right: 6px;
+            bottom: 8px; /* Keep at 8px */
+            right: 8px; /* Keep at 8px */
             font-size: 9px;
             padding: 2px 6px;
             border-radius: 8px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
-            z-index: 2;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
         .status-waiting {
@@ -1395,6 +1397,7 @@
             
             .room-stake {
                 font-size: 15px;
+                height: 20px;
             }
             
             .room-card {
@@ -2303,7 +2306,7 @@
         // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
-            const val = bal.toFixed(2);
+            const val = state.balance.toFixed(2);
             document.getElementById('balanceAmount').textContent = val;
             document.getElementById('lobbyBalance').textContent = val;
             
