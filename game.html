@@ -1663,10 +1663,10 @@
                 <div class="form-group">
                     <label class="form-label">Telebirr Number</label>
                     <div id="telebirrNumberDisplay" style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
-                        0962577855
+                        Loading...
                     </div>
-                    <div style="font-size: 11px; color: var(--gray-light); text-align: center; margin-top: 5px;">
-                        Updated in real-time by admin
+                    <div style="font-size: 11px; color: var(--gray); margin-top: 5px; text-align: center;">
+                        Send money to this number and enter receipt below
                     </div>
                 </div>
                 
@@ -1684,7 +1684,7 @@
                     Submit Deposit Request
                 </button>
                 
-                <div style="margin-top: 16px; font-size: 12px; color: var(--gray);">
+                <div style="margin-top: 16px; font-size: 12px; color: var(--gray); text-align: center;">
                     Funds will be added within 24 hours after verification
                 </div>
             </div>
@@ -1717,7 +1717,7 @@
                     Submit Withdrawal
                 </button>
                 
-                <div style="margin-top: 16px; font-size: 12px; color: var(--danger);">
+                <div style="margin-top: 16px; font-size: 12px; color: var(--danger); text-align: center;">
                     Minimum withdrawal: 50 ETB • Processed within 24 hours
                 </div>
             </div>
@@ -1848,6 +1848,7 @@
             balance: 0.00,
             userId: null,
             userName: 'Guest',
+            telebirrNumber: '0962577855', // Default value, will be updated from server
             roomStatuses: {},
             connectionAttempts: 0,
             lastActivityTime: Date.now(),
@@ -1863,17 +1864,19 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0,
-            telebirrNumber: '0962577855' // Add Telebirr number to state
+            selectedWithdrawAmount: 0
         };
 
-        // Helper function to update Telebirr number display
-        function updateTelebirrNumberDisplay() {
-            const display = document.getElementById('telebirrNumberDisplay');
-            if (display) {
-                display.textContent = state.telebirrNumber;
-                console.log('📱 Updated Telebirr display to:', state.telebirrNumber);
+        // Update Telebirr number in UI
+        function updateTelebirrNumberInUI(telebirrNumber) {
+            const displayElement = document.getElementById('telebirrNumberDisplay');
+            if (displayElement) {
+                displayElement.textContent = telebirrNumber;
             }
+            
+            // Also update state for reference
+            state.telebirrNumber = telebirrNumber;
+            console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
         }
 
         // Update connection status UI
@@ -2049,6 +2052,21 @@
             document.getElementById('customAmount').value = '';
             document.getElementById('withdrawPhoneNumber').value = '';
             
+            // ✅ Fetch current Telebirr number from server
+            if (state.isConnected) {
+                socket.emit('getTelebirrNumber', (data) => {
+                    if (data && data.telebirrNumber) {
+                        updateTelebirrNumberInUI(data.telebirrNumber);
+                    } else {
+                        // Fallback to default if server doesn't respond
+                        updateTelebirrNumberInUI('0962577855');
+                    }
+                });
+            } else {
+                // Use default if not connected
+                updateTelebirrNumberInUI('0962577855');
+            }
+            
             // Show wallet overlay
             showOverlay('walletOverlay');
             
@@ -2058,17 +2076,6 @@
                     tg.HapticFeedback.impactOccurred('light'); 
                 }
             } catch(e){}
-            
-            // ✅ Fetch current Telebirr number from server
-            if (state.isConnected) {
-                socket.emit('getTelebirrNumber', (response) => {
-                    if (response && response.telebirrNumber) {
-                        state.telebirrNumber = response.telebirrNumber;
-                        updateTelebirrNumberDisplay();
-                        console.log('📱 Fetched Telebirr number:', response.telebirrNumber);
-                    }
-                });
-            }
         }
 
         function hideWallet() {
@@ -2134,11 +2141,16 @@
                     receiptNumber: receiptNumber,
                     amount: depositAmount,
                     userId: state.userId,
-                    userName: state.userName
+                    userName: state.userName,
+                    telebirrNumber: state.telebirrNumber || '0962577855'
                 });
                 
-                showNotification('Deposit request submitted! Admin will verify and add funds.', 'success');
+                showNotification(`Deposit request submitted! Send ${depositAmount} ETB to: ${state.telebirrNumber || '0962577855'}`, 'success');
                 hideWallet();
+                
+                // Clear form
+                document.getElementById('receiptNumber').value = '';
+                document.getElementById('depositAmount').value = '';
             } else {
                 showNotification('Not connected to server', 'error');
             }
@@ -2171,8 +2183,14 @@
                     userName: state.userName
                 });
                 
-                showNotification('Withdrawal request submitted! Admin will process within 24 hours.', 'success');
+                showNotification(`Withdrawal request submitted! ${amount} ETB will be sent to ${phoneNumber}`, 'success');
                 hideWallet();
+                
+                // Clear form
+                state.selectedWithdrawAmount = 0;
+                document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
+                document.getElementById('customAmount').value = '';
+                document.getElementById('withdrawPhoneNumber').value = '';
             } else {
                 showNotification('Not connected to server', 'error');
             }
@@ -2255,22 +2273,22 @@
             saveUserInfo();
         });
 
-        // ✅ NEW: Listen for Telebirr number from server
+        // ✅ Handle Telebirr number received from server
         socket.on('telebirrNumber', (number) => {
             console.log('📱 Received Telebirr number from server:', number);
             state.telebirrNumber = number;
-            updateTelebirrNumberDisplay();
+            updateTelebirrNumberInUI(number);
         });
 
-        // ✅ NEW: Listen for Telebirr number updates
+        // ✅ Handle Telebirr number updates in real-time
         socket.on('telebirrNumberUpdate', (data) => {
-            console.log('📱 Telebirr number updated:', data.telebirrNumber);
+            console.log('📱 Telebirr number updated in real-time:', data.telebirrNumber);
             state.telebirrNumber = data.telebirrNumber;
-            updateTelebirrNumberDisplay();
+            updateTelebirrNumberInUI(data.telebirrNumber);
             
-            // Show notification to user if wallet is open
+            // Show notification to user if they're viewing the wallet
             if (document.getElementById('walletOverlay').classList.contains('active')) {
-                showNotification(`📱 Telebirr number updated to: ${data.telebirrNumber}`, 'info', 5000);
+                showNotification('📱 Telebirr number has been updated', 'info', 3000);
             }
         });
 
