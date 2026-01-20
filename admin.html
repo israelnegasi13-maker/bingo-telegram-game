@@ -1067,45 +1067,24 @@
             background: rgba(239, 68, 68, 0.25);
         }
         
-        /* Telebirr Settings */
-        .tele-settings-result {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            display: none;
+        /* Telebirr Number Input */
+        .telebirr-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
         
-        .tele-settings-success {
-            background: rgba(6, 214, 160, 0.15);
-            color: var(--success);
-            border: 1px solid rgba(6, 214, 160, 0.3);
+        .telebirr-input-group input {
+            flex: 1;
+            font-family: monospace;
+            letter-spacing: 1px;
+            font-size: 1.1rem;
         }
         
-        .tele-settings-error {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        
-        /* Telebirr Info Card */
-        .tele-info-card {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .tele-number-display {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin: 5px 0;
-        }
-        
-        .tele-update-time {
-            font-size: 0.8rem;
-            color: var(--text-muted);
+        .telebirr-status {
+            margin-top: 5px;
+            font-size: 0.85rem;
+            min-height: 20px;
         }
     </style>
 </head>
@@ -1312,12 +1291,12 @@
                         <p>Send message to all players</p>
                     </div>
                     
-                    <div class="action-card" onclick="forceRefreshData()">
-                        <div class="action-icon">
-                            <i class="fas fa-sync-alt"></i>
+                    <div class="action-card" onclick="focusTelebirrNumber()">
+                        <div class="action-icon" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);">
+                            <i class="fas fa-phone"></i>
                         </div>
-                        <h4>Refresh Data</h4>
-                        <p>Update all statistics</p>
+                        <h4>Telebirr Number</h4>
+                        <p>Update deposit phone</p>
                     </div>
                     
                     <div class="action-card" onclick="showEmergencyModal()">
@@ -1654,69 +1633,30 @@
                         </div>
                     </div>
                     
-                    <!-- NEW: Telebirr Settings Section -->
-                    <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid var(--dark-border);">
-                        <h3 style="margin-bottom: 20px; color: var(--primary);">
-                            <i class="fas fa-mobile-alt"></i> Telebirr Settings
-                        </h3>
+                    <div style="margin-top: 30px;">
+                        <h3 style="margin-bottom: 20px;">System Settings</h3>
                         
-                        <div class="tele-info-card">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                <i class="fas fa-phone-alt" style="color: var(--primary); font-size: 1.2rem;"></i>
-                                <h4 style="margin: 0;">Deposit Number</h4>
-                            </div>
-                            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">
-                                This number is shown to players for making deposits
-                            </p>
-                            <div class="tele-number-display" id="currentTeleBirrNumber">
-                                Loading...
-                            </div>
-                            <div class="tele-update-time" id="teleBirrUpdatedAt">
-                                Last updated: Loading...
-                            </div>
-                        </div>
-                        
+                        <!-- NEW: Telebirr Number Setting -->
                         <div class="form-group">
-                            <label>Change Telebirr Number</label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="text" id="teleBirrNumber" placeholder="Enter new Telebirr number..." style="flex: 1;">
-                                <button class="btn-action btn-add" onclick="updateTeleBirrNumber()">
+                            <label>Telebirr Phone Number</label>
+                            <div class="telebirr-input-group">
+                                <input type="text" id="telebirrNumber" value="0962577855" 
+                                       placeholder="Enter Telebirr phone number"
+                                       style="width: 100%;">
+                                <button class="btn-action btn-add" onclick="updateTelebirrNumber()" title="Update Number">
                                     <i class="fas fa-save"></i> Update
                                 </button>
+                                <button class="btn-action" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);" 
+                                        onclick="getCurrentTelebirrNumber()" title="Get Current Number">
+                                    <i class="fas fa-sync"></i>
+                                </button>
                             </div>
-                            <small style="color: var(--text-muted); font-size: 0.85rem; display: block; margin-top: 5px;">
-                                Format: 09XXXXXXXX or +2519XXXXXXXX
+                            <small style="color: var(--text-muted); font-size: 0.85rem;">
+                                This number is shown to players for depositing funds. Must be an Ethiopian number (09xxxxxxxx)
                             </small>
-                            <div id="teleBirrUpdateResult" class="tele-settings-result"></div>
+                            <div id="telebirrNumberStatus" class="telebirr-status"></div>
                         </div>
                         
-                        <div class="form-group">
-                            <label>Deposit Instructions Template</label>
-                            <textarea id="depositInstructions" rows="4" style="width: 100%; padding: 15px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--dark-border); border-radius: 12px; color: var(--text); font-size: 1rem;" placeholder="Instructions shown to players for making deposits..."></textarea>
-                            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                                <button class="btn-action btn-add" onclick="updateDepositInstructions()">
-                                    <i class="fas fa-save"></i> Update Instructions
-                                </button>
-                                <button class="btn-action" style="background: rgba(100, 116, 139, 0.15); color: var(--text);" onclick="resetDepositInstructions()">
-                                    <i class="fas fa-undo"></i> Reset to Default
-                                </button>
-                            </div>
-                            <div id="depositInstructionsResult" class="tele-settings-result"></div>
-                        </div>
-                        
-                        <div style="background: rgba(255, 209, 102, 0.1); border: 1px solid rgba(255, 209, 102, 0.3); border-radius: 12px; padding: 15px; margin-top: 20px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                <i class="fas fa-info-circle" style="color: var(--warning);"></i>
-                                <h4 style="margin: 0; font-size: 1rem;">Note</h4>
-                            </div>
-                            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">
-                                Changing the Telebirr number will notify all online players. Make sure the new number is correct before updating.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 40px;">
-                        <h3 style="margin-bottom: 20px;">System Settings</h3>
                         <div class="form-group">
                             <label>Game Timer (seconds)</label>
                             <input type="number" id="gameTimer" value="3" style="width: 200px;">
@@ -1729,22 +1669,6 @@
                             <label>Minimum Players to Start</label>
                             <input type="number" id="minPlayers" value="2" style="width: 200px;">
                             <button class="btn-action btn-add" onclick="updateMinPlayers()" style="margin-left: 10px;">
-                                Update
-                            </button>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Minimum Withdrawal (ETB)</label>
-                            <input type="number" id="minWithdrawal" value="50" style="width: 200px;">
-                            <button class="btn-action btn-add" onclick="updateMinWithdrawal()" style="margin-left: 10px;">
-                                Update
-                            </button>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Maximum Withdrawal (ETB)</label>
-                            <input type="number" id="maxWithdrawal" value="10000" style="width: 200px;">
-                            <button class="btn-action btn-add" onclick="updateMaxWithdrawal()" style="margin-left: 10px;">
                                 Update
                             </button>
                         </div>
@@ -1972,9 +1896,7 @@
         const CONFIG = {
             SERVER_URL: "https://bingo-telegram-game.onrender.com",
             AUTO_REFRESH_INTERVAL: 2000,
-            MAX_ACTIVITY_ITEMS: 20,
-            DEFAULT_TELEBIRR_NUMBER: "0962577855",
-            DEFAULT_DEPOSIT_INSTRUCTIONS: "Send your deposit to the Telebirr number above. After sending, enter the receipt number below."
+            MAX_ACTIVITY_ITEMS: 20
         };
 
         // State
@@ -1993,11 +1915,7 @@
             debugInfo: {},
             showUserDetails: false,
             multiSocketUsers: 0,
-            telebirrSettings: {
-                number: CONFIG.DEFAULT_TELEBIRR_NUMBER,
-                depositInstructions: CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS,
-                updatedAt: null
-            }
+            telebirrNumber: "0962577855" // Default Telebirr number
         };
 
         // Initialize
@@ -2016,7 +1934,7 @@
                 }
             }
             
-            addSystemLog('Admin panel initialized - Telebirr settings management enabled');
+            addSystemLog('Admin panel initialized - House Earnings tracking enabled');
             attachNavListeners();
             setupUserInfoDisplay();
         });
@@ -2051,13 +1969,6 @@
                     
                     if (section === 'wallet-approvals') {
                         refreshPendingTransactions();
-                    }
-                    
-                    if (section === 'controls') {
-                        // Request Telebirr settings when controls section is opened
-                        if (state.socket && state.isAdmin) {
-                            state.socket.emit('admin:getTeleBirrSettings');
-                        }
                     }
                 });
             });
@@ -2101,9 +2012,8 @@
                 localStorage.setItem('bingo_admin_session', JSON.stringify(session));
                 
                 state.socket.emit('admin:getData');
-                // Request Telebirr settings
-                state.socket.emit('admin:getTeleBirrSettings');
-                
+                // Get current Telebirr number on login
+                state.socket.emit('admin:getTelebirrNumber');
                 startAutoRefresh();
                 startRealTimeMonitoring();
                 setTimeout(initCharts, 1000);
@@ -2126,6 +2036,12 @@
                 updateOnlineStatus(data.totalPlayers || 0);
                 document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
                 updateDebugStats();
+                
+                // Update Telebirr number if available
+                if (data.telebirrNumber) {
+                    state.telebirrNumber = data.telebirrNumber;
+                    document.getElementById('telebirrNumber').value = data.telebirrNumber;
+                }
             });
 
             state.socket.on('admin:players', (data) => {
@@ -2174,6 +2090,23 @@
                 state.pendingTransactions = data;
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
+            });
+
+            // NEW: Telebirr number events
+            state.socket.on('admin:telebirrNumber', (number) => {
+                state.telebirrNumber = number;
+                document.getElementById('telebirrNumber').value = number;
+                const statusEl = document.getElementById('telebirrNumberStatus');
+                statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Current: ${number}</span>`;
+            });
+
+            state.socket.on('admin:telebirrNumberUpdated', (data) => {
+                state.telebirrNumber = data.telebirrNumber;
+                document.getElementById('telebirrNumber').value = data.telebirrNumber;
+                const statusEl = document.getElementById('telebirrNumberStatus');
+                statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Updated to: ${data.telebirrNumber}</span>`;
+                showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
+                addSystemLog(`Telebirr number updated to ${data.telebirrNumber}`);
             });
 
             state.socket.on('admin:newDepositRequest', (transaction) => {
@@ -2267,57 +2200,6 @@
                 showToast('Failed to reset house earnings: ' + message, 'error');
                 addSystemLog('House earnings reset failed: ' + message, 'error');
             });
-
-            // NEW: Telebirr settings events
-            state.socket.on('admin:teleBirrSettings', (settings) => {
-                state.telebirrSettings = settings;
-                updateTeleBirrSettingsUI(settings);
-                showToast('Telebirr settings loaded', 'success');
-                addSystemLog('Telebirr settings loaded: ' + settings.number);
-            });
-
-            state.socket.on('admin:teleBirrNumberUpdated', (data) => {
-                state.telebirrSettings.number = data.newNumber;
-                state.telebirrSettings.updatedAt = data.updatedAt;
-                updateTeleBirrSettingsUI(state.telebirrSettings);
-                
-                const resultDiv = document.getElementById('teleBirrUpdateResult');
-                resultDiv.innerHTML = `<span style="color: var(--success);">✅ Telebirr number updated to ${data.newNumber}</span>`;
-                resultDiv.className = 'tele-settings-result tele-settings-success';
-                resultDiv.style.display = 'block';
-                
-                showToast(`Telebirr number updated to ${data.newNumber}`, 'success');
-                addSystemLog(`Telebirr number updated to ${data.newNumber}`);
-                
-                // Auto-hide the success message after 5 seconds
-                setTimeout(() => {
-                    resultDiv.style.display = 'none';
-                }, 5000);
-            });
-
-            state.socket.on('admin:teleBirrNumberUpdateError', (message) => {
-                const resultDiv = document.getElementById('teleBirrUpdateResult');
-                resultDiv.innerHTML = `<span style="color: var(--danger);">❌ Error: ${message}</span>`;
-                resultDiv.className = 'tele-settings-result tele-settings-error';
-                resultDiv.style.display = 'block';
-                
-                showToast('Failed to update Telebirr number: ' + message, 'error');
-            });
-
-            state.socket.on('admin:depositInstructionsUpdated', (data) => {
-                const resultDiv = document.getElementById('depositInstructionsResult');
-                resultDiv.innerHTML = `<span style="color: var(--success);">✅ Deposit instructions updated successfully</span>`;
-                resultDiv.className = 'tele-settings-result tele-settings-success';
-                resultDiv.style.display = 'block';
-                
-                showToast('Deposit instructions updated', 'success');
-                addSystemLog('Deposit instructions updated');
-                
-                // Auto-hide the success message after 5 seconds
-                setTimeout(() => {
-                    resultDiv.style.display = 'none';
-                }, 5000);
-            });
         }
 
         // Login Function
@@ -2379,93 +2261,6 @@
             overlay.classList.toggle('active');
         }
 
-        // Telebirr Settings Functions
-        function updateTeleBirrSettingsUI(settings) {
-            document.getElementById('currentTeleBirrNumber').textContent = settings.number;
-            
-            if (settings.updatedAt) {
-                const date = new Date(settings.updatedAt);
-                document.getElementById('teleBirrUpdatedAt').textContent = 
-                    `Last updated: ${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-            }
-            
-            document.getElementById('teleBirrNumber').value = settings.number;
-            document.getElementById('depositInstructions').value = settings.depositInstructions || CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS;
-        }
-
-        function updateTeleBirrNumber() {
-            const newNumber = document.getElementById('teleBirrNumber').value.trim();
-            const resultDiv = document.getElementById('teleBirrUpdateResult');
-            
-            if (!newNumber) {
-                showToast('Please enter a valid Telebirr number', 'error');
-                return;
-            }
-            
-            // Basic Ethiopian phone number validation
-            const ethiopianPhoneRegex = /^(\+251|0)(9\d{8})$/;
-            if (!ethiopianPhoneRegex.test(newNumber)) {
-                resultDiv.innerHTML = `<span style="color: var(--danger);">❌ Invalid Ethiopian phone number format. Use 09XXXXXXXX or +2519XXXXXXXX</span>`;
-                resultDiv.className = 'tele-settings-result tele-settings-error';
-                resultDiv.style.display = 'block';
-                return;
-            }
-            
-            if (state.socket && state.isAdmin) {
-                state.socket.emit('admin:updateTeleBirrNumber', newNumber);
-                resultDiv.innerHTML = '<div class="loading-spinner" style="display: inline-block;"></div> Updating Telebirr number...';
-                resultDiv.className = 'tele-settings-result';
-                resultDiv.style.display = 'block';
-            }
-        }
-
-        function updateDepositInstructions() {
-            const instructions = document.getElementById('depositInstructions').value.trim();
-            
-            if (!instructions) {
-                showToast('Please enter deposit instructions', 'error');
-                return;
-            }
-            
-            if (state.socket && state.isAdmin) {
-                state.socket.emit('admin:updateDepositInstructions', instructions);
-                
-                const resultDiv = document.getElementById('depositInstructionsResult');
-                resultDiv.innerHTML = '<div class="loading-spinner" style="display: inline-block;"></div> Updating deposit instructions...';
-                resultDiv.className = 'tele-settings-result';
-                resultDiv.style.display = 'block';
-            }
-        }
-
-        function resetDepositInstructions() {
-            if (confirm('Reset deposit instructions to default?')) {
-                document.getElementById('depositInstructions').value = CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS;
-                showToast('Instructions reset to default', 'info');
-            }
-        }
-
-        function updateMinWithdrawal() {
-            const minWithdrawal = document.getElementById('minWithdrawal').value;
-            if (minWithdrawal && minWithdrawal >= 1) {
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:updateMinWithdrawal', parseInt(minWithdrawal));
-                    showToast(`Minimum withdrawal updated to ${minWithdrawal} ETB`, 'success');
-                    addSystemLog(`Minimum withdrawal updated to ${minWithdrawal} ETB`);
-                }
-            }
-        }
-
-        function updateMaxWithdrawal() {
-            const maxWithdrawal = document.getElementById('maxWithdrawal').value;
-            if (maxWithdrawal && maxWithdrawal >= 1) {
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:updateMaxWithdrawal', parseInt(maxWithdrawal));
-                    showToast(`Maximum withdrawal updated to ${maxWithdrawal} ETB`, 'success');
-                    addSystemLog(`Maximum withdrawal updated to ${maxWithdrawal} ETB`);
-                }
-            }
-        }
-
         // Data Update Functions
         function updateStats(data) {
             document.getElementById('totalUsers').textContent = data.totalUsers || 0;
@@ -2506,6 +2301,61 @@
                     showToast('Cannot reset: Not connected to server', 'error');
                 }
             }
+        }
+        
+        // NEW: Update Telebirr Number Function
+        function updateTelebirrNumber() {
+            const newNumber = document.getElementById('telebirrNumber').value.trim();
+            const statusEl = document.getElementById('telebirrNumberStatus');
+            
+            if (!newNumber) {
+                statusEl.innerHTML = '<span style="color: var(--danger);">Please enter a phone number</span>';
+                return;
+            }
+            
+            // Basic validation
+            if (!/^09[0-9]{8}$/.test(newNumber)) {
+                statusEl.innerHTML = '<span style="color: var(--warning);">Format: 09xxxxxxxx (10 digits)</span>';
+                return;
+            }
+            
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:updateTelebirrNumber', newNumber);
+                statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
+            }
+        }
+        
+        // NEW: Get current Telebirr number
+        function getCurrentTelebirrNumber() {
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getTelebirrNumber');
+                const statusEl = document.getElementById('telebirrNumberStatus');
+                statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Fetching...</span>';
+            }
+        }
+        
+        // NEW: Focus on Telebirr number input
+        function focusTelebirrNumber() {
+            // Switch to Controls section if not already
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.querySelector('.nav-item[data-section="controls"]').classList.add('active');
+            
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.getElementById('controlsSection').classList.add('active');
+            document.getElementById('pageTitle').textContent = 'System Controls';
+            
+            // Scroll to and focus on Telebirr input
+            setTimeout(() => {
+                const input = document.getElementById('telebirrNumber');
+                if (input) {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    input.focus();
+                    input.select();
+                }
+            }, 100);
+            
+            // Get current number
+            getCurrentTelebirrNumber();
         }
         
         function updateOnlineStatus(onlineCount) {
@@ -3623,22 +3473,16 @@
         function updateGameTimer() {
             const timer = document.getElementById('gameTimer').value;
             if (timer && timer > 0) {
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:updateGameTimer', parseInt(timer));
-                    showToast(`Game timer updated to ${timer} seconds`, 'success');
-                    addSystemLog(`Game timer updated to ${timer} seconds`);
-                }
+                showToast(`Game timer updated to ${timer} seconds`, 'success');
+                addSystemLog(`Game timer updated to ${timer} seconds`);
             }
         }
 
         function updateMinPlayers() {
             const minPlayers = document.getElementById('minPlayers').value;
             if (minPlayers && minPlayers >= 1) {
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:updateMinPlayers', parseInt(minPlayers));
-                    showToast(`Minimum players updated to ${minPlayers}`, 'success');
-                    addSystemLog(`Minimum players updated to ${minPlayers}`);
-                }
+                showToast(`Minimum players updated to ${minPlayers}`, 'success');
+                addSystemLog(`Minimum players updated to ${minPlayers}`);
             }
         }
 
@@ -3739,27 +3583,16 @@
                 refreshPendingTransactions();
             }
             
+            // NEW: Ctrl+T for Telebirr number
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                focusTelebirrNumber();
+            }
+            
             // ADDED: Ctrl+Shift+R for reset house earnings
             if (e.ctrlKey && e.shiftKey && e.key === 'R') {
                 e.preventDefault();
                 resetHouseEarnings();
-            }
-            
-            // NEW: Ctrl+Shift+T for Telebirr settings
-            if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-                e.preventDefault();
-                // Switch to Controls section and request Telebirr settings
-                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-                document.querySelector('.nav-item[data-section="controls"]').classList.add('active');
-                
-                document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-                document.getElementById('controlsSection').classList.add('active');
-                
-                document.getElementById('pageTitle').textContent = 'System Controls';
-                
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:getTeleBirrSettings');
-                }
             }
         });
 
@@ -3768,7 +3601,7 @@
             if (state.isAdmin) {
                 addActivityItem({message: 'System initialized successfully'});
                 addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard v3.0'});
-                addSystemLog('Admin dashboard loaded with Telebirr settings management');
+                addSystemLog('Admin dashboard loaded with house earnings tracking and Telebirr number management');
             }
         }, 2000);
     </script>
