@@ -23,7 +23,8 @@ const CONFIG = {
   GAME_TIMEOUT_MINUTES: 7,
   TELEBIRR_NUMBER: "0962577855",
   MIN_WITHDRAWAL: 50,
-  MAX_WITHDRAWAL: 10000
+  MAX_WITHDRAWAL: 10000,
+  DEFAULT_DEPOSIT_INSTRUCTIONS: "Send your deposit to the Telebirr number above. After sending, enter the receipt number below."
 };
 
 // ========== GLOBAL STATE ==========
@@ -37,10 +38,24 @@ let connectedSockets = new Set();
 let roomSubscriptions = new Map();
 let processingClaims = new Map();
 
+// ========== RUNTIME CONFIGURATION (LOADED FROM DATABASE) ==========
+let runtimeConfig = {
+  telebirrNumber: CONFIG.TELEBIRR_NUMBER,
+  depositInstructions: CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS,
+  gameTimer: CONFIG.GAME_TIMER,
+  minPlayersToStart: CONFIG.MIN_PLAYERS_TO_START,
+  minWithdrawal: CONFIG.MIN_WITHDRAWAL,
+  maxWithdrawal: CONFIG.MAX_WITHDRAWAL,
+  lastUpdated: new Date()
+};
+
 // ========== INITIALIZATION FUNCTION ==========
-function initialize(socketIo, dbModels) {
+async function initialize(socketIo, dbModels) {
   io = socketIo;
   models = dbModels;
+  
+  // Load runtime configuration from database
+  await loadRuntimeConfig();
   
   // Set up Socket.IO event handlers
   setupSocketHandlers();
@@ -49,6 +64,121 @@ function initialize(socketIo, dbModels) {
   startPeriodicTasks();
   
   console.log('✅ Game logic initialized');
+  console.log(`📱 Telebirr Number: ${runtimeConfig.telebirrNumber}`);
+  console.log(`⏱️ Game Timer: ${runtimeConfig.gameTimer}s`);
+  console.log(`👥 Min Players: ${runtimeConfig.minPlayersToStart}`);
+}
+
+// ========== RUNTIME CONFIGURATION FUNCTIONS ==========
+async function loadRuntimeConfig() {
+  try {
+    console.log('📂 Loading runtime configuration...');
+    
+    // Try to load Telebirr settings
+    const telebirrSettings = await models.Setting.findOne({ key: 'TELEBIRR_SETTINGS' });
+    if (telebirrSettings) {
+      runtimeConfig.telebirrNumber = telebirrSettings.value.number || CONFIG.TELEBIRR_NUMBER;
+      runtimeConfig.depositInstructions = telebirrSettings.value.depositInstructions || CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS;
+      runtimeConfig.lastUpdated = telebirrSettings.updatedAt || new Date();
+      console.log(`✅ Loaded Telebirr settings: ${runtimeConfig.telebirrNumber}`);
+    } else {
+      // Save default settings
+      await saveTeleBirrSettings();
+      console.log('✅ Created default Telebirr settings');
+    }
+    
+    // Try to load game settings
+    const gameSettings = await models.Setting.findOne({ key: 'GAME_SETTINGS' });
+    if (gameSettings) {
+      runtimeConfig.gameTimer = gameSettings.value.gameTimer || CONFIG.GAME_TIMER;
+      runtimeConfig.minPlayersToStart = gameSettings.value.minPlayersToStart || CONFIG.MIN_PLAYERS_TO_START;
+      console.log(`✅ Loaded game settings: Timer=${runtimeConfig.gameTimer}s, MinPlayers=${runtimeConfig.minPlayersToStart}`);
+    }
+    
+    // Try to load withdrawal settings
+    const withdrawalSettings = await models.Setting.findOne({ key: 'WITHDRAWAL_SETTINGS' });
+    if (withdrawalSettings) {
+      runtimeConfig.minWithdrawal = withdrawalSettings.value.minWithdrawal || CONFIG.MIN_WITHDRAWAL;
+      runtimeConfig.maxWithdrawal = withdrawalSettings.value.maxWithdrawal || CONFIG.MAX_WITHDRAWAL;
+      console.log(`✅ Loaded withdrawal settings: Min=${runtimeConfig.minWithdrawal}, Max=${runtimeConfig.maxWithdrawal}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error loading runtime configuration:', error);
+    // Use default values if loading fails
+    runtimeConfig.telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+    runtimeConfig.depositInstructions = CONFIG.DEFAULT_DEPOSIT_INSTRUCTIONS;
+    runtimeConfig.gameTimer = CONFIG.GAME_TIMER;
+    runtimeConfig.minPlayersToStart = CONFIG.MIN_PLAYERS_TO_START;
+    runtimeConfig.minWithdrawal = CONFIG.MIN_WITHDRAWAL;
+    runtimeConfig.maxWithdrawal = CONFIG.MAX_WITHDRAWAL;
+  }
+}
+
+async function saveTeleBirrSettings() {
+  try {
+    await models.Setting.findOneAndUpdate(
+      { key: 'TELEBIRR_SETTINGS' },
+      { 
+        key: 'TELEBIRR_SETTINGS',
+        value: {
+          number: runtimeConfig.telebirrNumber,
+          depositInstructions: runtimeConfig.depositInstructions,
+          updatedAt: new Date()
+        },
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`✅ Saved Telebirr settings: ${runtimeConfig.telebirrNumber}`);
+  } catch (error) {
+    console.error('❌ Error saving Telebirr settings:', error);
+    throw error;
+  }
+}
+
+async function saveGameSettings() {
+  try {
+    await models.Setting.findOneAndUpdate(
+      { key: 'GAME_SETTINGS' },
+      { 
+        key: 'GAME_SETTINGS',
+        value: {
+          gameTimer: runtimeConfig.gameTimer,
+          minPlayersToStart: runtimeConfig.minPlayersToStart,
+          updatedAt: new Date()
+        },
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`✅ Saved game settings: Timer=${runtimeConfig.gameTimer}s, MinPlayers=${runtimeConfig.minPlayersToStart}`);
+  } catch (error) {
+    console.error('❌ Error saving game settings:', error);
+    throw error;
+  }
+}
+
+async function saveWithdrawalSettings() {
+  try {
+    await models.Setting.findOneAndUpdate(
+      { key: 'WITHDRAWAL_SETTINGS' },
+      { 
+        key: 'WITHDRAWAL_SETTINGS',
+        value: {
+          minWithdrawal: runtimeConfig.minWithdrawal,
+          maxWithdrawal: runtimeConfig.maxWithdrawal,
+          updatedAt: new Date()
+        },
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`✅ Saved withdrawal settings: Min=${runtimeConfig.minWithdrawal}, Max=${runtimeConfig.maxWithdrawal}`);
+  } catch (error) {
+    console.error('❌ Error saving withdrawal settings:', error);
+    throw error;
+  }
 }
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
@@ -269,7 +399,7 @@ async function broadcastRoomStatus() {
         houseFee: houseFee,
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
-        minPlayers: CONFIG.MIN_PLAYERS_TO_START,
+        minPlayers: runtimeConfig.minPlayersToStart,
         fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
       };
     }
@@ -420,14 +550,15 @@ async function updateAdminPanel() {
       activeGames: activeGames,
       totalUsers: users.length,
       connectedSockets: connectedSocketsCount,
-      houseEarnings: houseEarnings, // UPDATED: Use houseEarnings instead of houseBalance
+      houseEarnings: houseEarnings,
       totalWagered: totalWagered,
       totalWins: totalWins,
       totalBingos: totalBingos,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime(),
       gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES,
-      multiSocketUsers: multiSocketUsers // Added for admin panel
+      multiSocketUsers: multiSocketUsers,
+      runtimeConfig: runtimeConfig // Added runtime configuration
     };
     
     adminSockets.forEach(socketId => {
@@ -671,10 +802,10 @@ async function startGameTimer(room) {
       clearInterval(timer);
       roomTimers.delete(room.stake);
     }
-  }, CONFIG.GAME_TIMER * 1000);
+  }, runtimeConfig.gameTimer * 1000);
   
   roomTimers.set(room.stake, timer);
-  console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
+  console.log(`✅ Game timer started for room ${room.stake}, interval: ${runtimeConfig.gameTimer}s`);
 }
 
 // ✅✅✅ FIXED: Check if a player has bingo
@@ -926,7 +1057,7 @@ async function startCountdownForRoom(room) {
           const finalOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
           
           // ✅ AUTO START GAME with any players remaining
-          if (finalOnlinePlayers.length >= 1) {
+          if (finalOnlinePlayers.length >= runtimeConfig.minPlayersToStart) {
             console.log(`🎮 AUTO STARTING game for room ${room.stake} with ${finalOnlinePlayers.length} online player(s)`);
             
             // Update room to playing
@@ -985,7 +1116,7 @@ async function startCountdownForRoom(room) {
             console.log(`✅ Game AUTO STARTED for room ${room.stake}, timer active`);
           } else {
             // No players - reset room
-            console.log(`⚠️ Game start aborted for room ${room.stake}: no online players`);
+            console.log(`⚠️ Game start aborted for room ${room.stake}: not enough online players (${finalOnlinePlayers.length}/${runtimeConfig.minPlayersToStart})`);
             finalRoom.status = 'waiting';
             finalRoom.countdownStartTime = null;
             finalRoom.countdownStartedWith = 0;
@@ -1019,7 +1150,7 @@ async function startCountdownForRoom(room) {
               if (socket && socket.connected) {
                 socket.emit('countdownStopped', {
                   room: room.stake,
-                  reason: 'no_players_online'
+                  reason: 'not_enough_players'
                 });
                 socket.emit('lobbyUpdate', {
                   room: room.stake,
@@ -1342,6 +1473,30 @@ async function disconnectUser(userId, adminSocketId) {
   }
 }
 
+// ========== BROADCAST TELEBIRR UPDATE TO PLAYERS ==========
+function broadcastTeleBirrUpdate() {
+  console.log(`📢 Broadcasting Telebirr update to all players: ${runtimeConfig.telebirrNumber}`);
+  
+  io.emit('teleBirrUpdate', {
+    number: runtimeConfig.telebirrNumber,
+    depositInstructions: runtimeConfig.depositInstructions,
+    timestamp: new Date().toISOString(),
+    message: 'Telebirr deposit number has been updated'
+  });
+  
+  // Also update admin panels
+  adminSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit('admin:teleBirrNumberUpdated', {
+        oldNumber: runtimeConfig.telebirrNumber, // Will be updated by the actual update function
+        newNumber: runtimeConfig.telebirrNumber,
+        updatedAt: new Date().toISOString()
+      });
+    }
+  });
+}
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 function setupSocketHandlers() {
   io.on('connection', (socket) => {
@@ -1422,6 +1577,226 @@ function setupSocketHandlers() {
       
       // Update admin panel after disconnecting
       updateAdminPanel();
+    });
+    
+    // ========== TELEBIRR SETTINGS MANAGEMENT ==========
+    socket.on('admin:getTeleBirrSettings', async () => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        socket.emit('admin:teleBirrSettings', {
+          number: runtimeConfig.telebirrNumber,
+          depositInstructions: runtimeConfig.depositInstructions,
+          updatedAt: runtimeConfig.lastUpdated
+        });
+      } catch (error) {
+        console.error('Error getting Telebirr settings:', error);
+        socket.emit('admin:error', 'Failed to get Telebirr settings');
+      }
+    });
+    
+    socket.on('admin:updateTeleBirrNumber', async (newNumber) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      // Validate phone number (basic Ethiopian format)
+      const ethiopianPhoneRegex = /^(\+251|0)(9\d{8})$/;
+      if (!ethiopianPhoneRegex.test(newNumber)) {
+        socket.emit('admin:teleBirrNumberUpdateError', 'Invalid Ethiopian phone number format. Use 09XXXXXXXX or +2519XXXXXXXX');
+        return;
+      }
+      
+      try {
+        const oldNumber = runtimeConfig.telebirrNumber;
+        runtimeConfig.telebirrNumber = newNumber;
+        runtimeConfig.lastUpdated = new Date();
+        
+        // Save to database
+        await saveTeleBirrSettings();
+        
+        // Broadcast update to all admin panels
+        adminSockets.forEach(adminSocketId => {
+          const adminSocket = io.sockets.sockets.get(adminSocketId);
+          if (adminSocket) {
+            adminSocket.emit('admin:teleBirrNumberUpdated', {
+              oldNumber: oldNumber,
+              newNumber: newNumber,
+              updatedAt: runtimeConfig.lastUpdated.toISOString()
+            });
+          }
+        });
+        
+        // Broadcast to all players
+        broadcastTeleBirrUpdate();
+        
+        logActivity('TELEBIRR_NUMBER_UPDATE', {
+          adminSocket: socket.id,
+          oldNumber: oldNumber,
+          newNumber: newNumber
+        }, socket.id);
+        
+        console.log(`✅ Telebirr number updated: ${oldNumber} → ${newNumber}`);
+        
+      } catch (error) {
+        console.error('Error updating Telebirr number:', error);
+        socket.emit('admin:teleBirrNumberUpdateError', error.message);
+      }
+    });
+    
+    socket.on('admin:updateDepositInstructions', async (instructions) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        runtimeConfig.depositInstructions = instructions;
+        runtimeConfig.lastUpdated = new Date();
+        
+        // Save to database
+        await saveTeleBirrSettings();
+        
+        // Notify admin
+        socket.emit('admin:depositInstructionsUpdated', {
+          message: 'Deposit instructions updated successfully'
+        });
+        
+        // Broadcast to all players
+        broadcastTeleBirrUpdate();
+        
+        logActivity('DEPOSIT_INSTRUCTIONS_UPDATE', {
+          adminSocket: socket.id,
+          instructions: instructions.substring(0, 100) + '...'
+        }, socket.id);
+        
+        console.log('✅ Deposit instructions updated');
+        
+      } catch (error) {
+        console.error('Error updating deposit instructions:', error);
+        socket.emit('admin:error', 'Failed to update deposit instructions: ' + error.message);
+      }
+    });
+    
+    // ========== GAME SETTINGS MANAGEMENT ==========
+    socket.on('admin:updateGameTimer', async (newTimer) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      if (newTimer < 1 || newTimer > 30) {
+        socket.emit('admin:error', 'Game timer must be between 1 and 30 seconds');
+        return;
+      }
+      
+      try {
+        runtimeConfig.gameTimer = parseInt(newTimer);
+        await saveGameSettings();
+        
+        socket.emit('admin:success', `Game timer updated to ${newTimer} seconds`);
+        logActivity('GAME_TIMER_UPDATE', {
+          adminSocket: socket.id,
+          newTimer: newTimer
+        }, socket.id);
+        
+        console.log(`✅ Game timer updated to ${newTimer} seconds`);
+        
+      } catch (error) {
+        console.error('Error updating game timer:', error);
+        socket.emit('admin:error', 'Failed to update game timer: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:updateMinPlayers', async (newMinPlayers) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      if (newMinPlayers < 1 || newMinPlayers > 10) {
+        socket.emit('admin:error', 'Minimum players must be between 1 and 10');
+        return;
+      }
+      
+      try {
+        runtimeConfig.minPlayersToStart = parseInt(newMinPlayers);
+        await saveGameSettings();
+        
+        socket.emit('admin:success', `Minimum players updated to ${newMinPlayers}`);
+        logActivity('MIN_PLAYERS_UPDATE', {
+          adminSocket: socket.id,
+          newMinPlayers: newMinPlayers
+        }, socket.id);
+        
+        console.log(`✅ Minimum players updated to ${newMinPlayers}`);
+        
+      } catch (error) {
+        console.error('Error updating minimum players:', error);
+        socket.emit('admin:error', 'Failed to update minimum players: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:updateMinWithdrawal', async (newMinWithdrawal) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      if (newMinWithdrawal < 1 || newMinWithdrawal > 1000) {
+        socket.emit('admin:error', 'Minimum withdrawal must be between 1 and 1000 ETB');
+        return;
+      }
+      
+      try {
+        runtimeConfig.minWithdrawal = parseInt(newMinWithdrawal);
+        await saveWithdrawalSettings();
+        
+        socket.emit('admin:success', `Minimum withdrawal updated to ${newMinWithdrawal} ETB`);
+        logActivity('MIN_WITHDRAWAL_UPDATE', {
+          adminSocket: socket.id,
+          newMinWithdrawal: newMinWithdrawal
+        }, socket.id);
+        
+        console.log(`✅ Minimum withdrawal updated to ${newMinWithdrawal} ETB`);
+        
+      } catch (error) {
+        console.error('Error updating minimum withdrawal:', error);
+        socket.emit('admin:error', 'Failed to update minimum withdrawal: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:updateMaxWithdrawal', async (newMaxWithdrawal) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      if (newMaxWithdrawal < 100 || newMaxWithdrawal > 50000) {
+        socket.emit('admin:error', 'Maximum withdrawal must be between 100 and 50000 ETB');
+        return;
+      }
+      
+      try {
+        runtimeConfig.maxWithdrawal = parseInt(newMaxWithdrawal);
+        await saveWithdrawalSettings();
+        
+        socket.emit('admin:success', `Maximum withdrawal updated to ${newMaxWithdrawal} ETB`);
+        logActivity('MAX_WITHDRAWAL_UPDATE', {
+          adminSocket: socket.id,
+          newMaxWithdrawal: newMaxWithdrawal
+        }, socket.id);
+        
+        console.log(`✅ Maximum withdrawal updated to ${newMaxWithdrawal} ETB`);
+        
+      } catch (error) {
+        console.error('Error updating maximum withdrawal:', error);
+        socket.emit('admin:error', 'Failed to update maximum withdrawal: ' + error.message);
+      }
     });
     
     socket.on('admin:addFunds', async ({ userId, amount }) => {
@@ -2043,14 +2418,14 @@ function setupSocketHandlers() {
         }
         
         // Check minimum withdrawal amount
-        if (amount < CONFIG.MIN_WITHDRAWAL) {
-          socket.emit('wallet:error', `Minimum withdrawal amount is ${CONFIG.MIN_WITHDRAWAL} ETB`);
+        if (amount < runtimeConfig.minWithdrawal) {
+          socket.emit('wallet:error', `Minimum withdrawal amount is ${runtimeConfig.minWithdrawal} ETB`);
           return;
         }
         
         // Check maximum withdrawal amount
-        if (amount > CONFIG.MAX_WITHDRAWAL) {
-          socket.emit('wallet:error', `Maximum withdrawal amount is ${CONFIG.MAX_WITHDRAWAL} ETB`);
+        if (amount > runtimeConfig.maxWithdrawal) {
+          socket.emit('wallet:error', `Maximum withdrawal amount is ${runtimeConfig.maxWithdrawal} ETB`);
           return;
         }
         
@@ -2100,7 +2475,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // Player events
+    // ========== PLAYER EVENTS ==========
     socket.on('init', async (data, callback) => {
       try {
         const { userId, userName } = data;
@@ -2133,6 +2508,14 @@ function setupSocketHandlers() {
             balance: user.balance,
             referralCode: user.referralCode,
             phoneNumber: user.phoneNumber || ''
+          });
+          
+          // Send Telebirr settings to player
+          socket.emit('teleBirrSettings', {
+            number: runtimeConfig.telebirrNumber,
+            depositInstructions: runtimeConfig.depositInstructions,
+            minWithdrawal: runtimeConfig.minWithdrawal,
+            maxWithdrawal: runtimeConfig.maxWithdrawal
           });
           
           socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
@@ -2171,6 +2554,18 @@ function setupSocketHandlers() {
           socket.emit('balanceUpdate', user.balance);
           socket.emit('balanceRefreshed', user.balance);
         }
+      }
+    });
+    
+    // Get Telebirr settings
+    socket.on('getTeleBirrSettings', (callback) => {
+      if (callback) {
+        callback({
+          number: runtimeConfig.telebirrNumber,
+          depositInstructions: runtimeConfig.depositInstructions,
+          minWithdrawal: runtimeConfig.minWithdrawal,
+          maxWithdrawal: runtimeConfig.maxWithdrawal
+        });
       }
     });
     
@@ -2411,13 +2806,13 @@ function setupSocketHandlers() {
           });
         }
         
-        // FIXED: Start countdown if we have at least 1 online player
-        if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
+        // FIXED: Start countdown if we have at least minPlayersToStart online player
+        if (onlinePlayers.length >= runtimeConfig.minPlayersToStart && roomData.status === 'waiting') {
           console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online player(s)!`);
           await startCountdownForRoom(roomData);
         } else {
           console.log(`⏸️ NOT starting countdown:`);
-          console.log(`   Online players: ${onlinePlayers.length} (need ${CONFIG.MIN_PLAYERS_TO_START})`);
+          console.log(`   Online players: ${onlinePlayers.length} (need ${runtimeConfig.minPlayersToStart})`);
           console.log(`   Room status: ${roomData.status} (need 'waiting')`);
         }
         
@@ -3089,6 +3484,9 @@ module.exports = {
   // Configuration
   CONFIG,
   
+  // Runtime Configuration
+  runtimeConfig,
+  
   // Initialization
   initialize,
   
@@ -3100,6 +3498,13 @@ module.exports = {
   broadcastTakenBoxes,
   getUser,
   getRoom,
+  
+  // Configuration Management Functions
+  loadRuntimeConfig,
+  saveTeleBirrSettings,
+  saveGameSettings,
+  saveWithdrawalSettings,
+  broadcastTeleBirrUpdate,
   
   // NEW FUNCTIONS FOR ADMIN PANEL
   resetHouseEarnings,
