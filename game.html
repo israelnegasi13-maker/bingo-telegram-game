@@ -1662,8 +1662,11 @@
             <div class="wallet-form active" id="depositForm">
                 <div class="form-group">
                     <label class="form-label">Telebirr Number</label>
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
+                    <div id="telebirrNumberDisplay" style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
                         0962577855
+                    </div>
+                    <div style="font-size: 11px; color: var(--gray-light); text-align: center; margin-top: 5px;">
+                        Updated in real-time by admin
                     </div>
                 </div>
                 
@@ -1860,8 +1863,18 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0
+            selectedWithdrawAmount: 0,
+            telebirrNumber: '0962577855' // Add Telebirr number to state
         };
+
+        // Helper function to update Telebirr number display
+        function updateTelebirrNumberDisplay() {
+            const display = document.getElementById('telebirrNumberDisplay');
+            if (display) {
+                display.textContent = state.telebirrNumber;
+                console.log('📱 Updated Telebirr display to:', state.telebirrNumber);
+            }
+        }
 
         // Update connection status UI
         function updateConnectionStatus(connected, message) {
@@ -2045,6 +2058,17 @@
                     tg.HapticFeedback.impactOccurred('light'); 
                 }
             } catch(e){}
+            
+            // ✅ Fetch current Telebirr number from server
+            if (state.isConnected) {
+                socket.emit('getTelebirrNumber', (response) => {
+                    if (response && response.telebirrNumber) {
+                        state.telebirrNumber = response.telebirrNumber;
+                        updateTelebirrNumberDisplay();
+                        console.log('📱 Fetched Telebirr number:', response.telebirrNumber);
+                    }
+                });
+            }
         }
 
         function hideWallet() {
@@ -2229,6 +2253,25 @@
             document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
             
             saveUserInfo();
+        });
+
+        // ✅ NEW: Listen for Telebirr number from server
+        socket.on('telebirrNumber', (number) => {
+            console.log('📱 Received Telebirr number from server:', number);
+            state.telebirrNumber = number;
+            updateTelebirrNumberDisplay();
+        });
+
+        // ✅ NEW: Listen for Telebirr number updates
+        socket.on('telebirrNumberUpdate', (data) => {
+            console.log('📱 Telebirr number updated:', data.telebirrNumber);
+            state.telebirrNumber = data.telebirrNumber;
+            updateTelebirrNumberDisplay();
+            
+            // Show notification to user if wallet is open
+            if (document.getElementById('walletOverlay').classList.contains('active')) {
+                showNotification(`📱 Telebirr number updated to: ${data.telebirrNumber}`, 'info', 5000);
+            }
         });
 
         // Handle room status updates
