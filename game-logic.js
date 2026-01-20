@@ -296,6 +296,23 @@ async function updateAdminPanel() {
     // Get connected user IDs for real-time status
     const connectedUserIds = getConnectedUsers();
     
+    // Count sockets per user
+    const userSocketCount = {};
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && socket.connected) {
+        userSocketCount[userId] = (userSocketCount[userId] || 0) + 1;
+      }
+    });
+    
+    // Also count from all connected sockets
+    io.sockets.sockets.forEach((socket) => {
+      if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
+        const userId = socket.userId;
+        userSocketCount[userId] = (userSocketCount[userId] || 0) + 1;
+      }
+    });
+    
     const userArray = users.map(user => {
       let isOnline = false;
       
@@ -319,12 +336,15 @@ async function updateAdminPanel() {
         currentRoom: user.currentRoom,
         box: user.box,
         isOnline: isOnline,
+        socketCount: userSocketCount[user.userId] || 0,
         totalWagered: user.totalWagered || 0,
         totalWins: user.totalWins || 0,
+        totalBingos: user.totalBingos || 0,
         lastSeen: user.lastSeen,
         telegramId: user.telegramId || '',
         phoneNumber: user.phoneNumber || '',
-        joinedAt: user.joinedAt
+        joinedAt: user.joinedAt,
+        sessionCount: user.sessionCount || 1
       };
     });
     
@@ -359,14 +379,40 @@ async function updateAdminPanel() {
       };
     }
     
-    // Calculate total house balance
-    const houseBalance = await models.Transaction.aggregate([
-      { $match: { type: { $in: ['HOUSE_EARNINGS', 'ADMIN_ADD'] } } },
+    // Calculate house earnings (only from HOUSE_EARNINGS transactions)
+    const houseEarnings = await models.Transaction.aggregate([
+      { $match: { type: 'HOUSE_EARNINGS' } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
+    // Calculate total wagered (all negative transactions except ADMIN_ADD and HOUSE_EARNINGS)
+    const totalWagered = await models.Transaction.aggregate([
+      { $match: { 
+        type: { $nin: ['NEW_USER', 'ADMIN_ADD', 'HOUSE_EARNINGS'] },
+        amount: { $lt: 0 }
+      } },
+      { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Calculate total wins (all positive transactions except ADMIN_ADD)
+    const totalWins = await models.Transaction.aggregate([
+      { $match: { 
+        type: { $nin: ['ADMIN_ADD', 'HOUSE_EARNINGS'] },
+        amount: { $gt: 0 }
+      } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Calculate total bingos
+    const totalBingos = await models.Transaction.countDocuments({ 
+      type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] } 
+    });
+    
     // Get real-time connected sockets count
     const connectedSocketsCount = connectedSockets.size;
+    
+    // Count users with multiple sockets
+    const multiSocketUsers = Object.values(userSocketCount).filter(count => count > 1).length;
     
     // Send to all admin sockets
     const adminData = {
@@ -374,10 +420,14 @@ async function updateAdminPanel() {
       activeGames: activeGames,
       totalUsers: users.length,
       connectedSockets: connectedSocketsCount,
-      houseBalance: houseBalance,
+      houseEarnings: houseEarnings, // UPDATED: Use houseEarnings instead of houseBalance
+      totalWagered: totalWagered,
+      totalWins: totalWins,
+      totalBingos: totalBingos,
       timestamp: new Date().toISOString(),
       serverUptime: process.uptime(),
-      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES
+      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES,
+      multiSocketUsers: multiSocketUsers // Added for admin panel
     };
     
     adminSockets.forEach(socketId => {
@@ -396,7 +446,7 @@ async function updateAdminPanel() {
       }
     });
     
-    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games`);
+    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games, House Earnings: ${houseEarnings} ETB`);
     
   } catch (error) {
     console.error('Error updating admin panel:', error);
@@ -1169,6 +1219,129 @@ async function cleanupStaleConnections() {
   }
 }
 
+// ========== NEW: RESET HOUSE EARNINGS FUNCTION ==========
+async function resetHouseEarnings(adminSocketId) {
+  try {
+    console.log('💰 Attempting to reset house earnings...');
+    
+    // Calculate current house earnings
+    const currentEarnings = await models.Transaction.aggregate([
+      { $match: { type: 'HOUSE_EARNINGS' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    if (currentEarnings === 0) {
+      return {
+        success: false,
+        message: 'House earnings are already at zero'
+      };
+    }
+    
+    // Create a reset transaction that negates the current earnings
+    const resetTransaction = new models.Transaction({
+      type: 'HOUSE_EARNINGS_RESET',
+      userId: 'ADMIN',
+      userName: 'Admin',
+      amount: -currentEarnings,
+      description: `House earnings reset by admin (was ${currentEarnings.toFixed(2)} ETB)`,
+      adminSocketId: adminSocketId,
+      timestamp: new Date()
+    });
+    
+    await resetTransaction.save();
+    
+    console.log(`✅ House earnings reset from ${currentEarnings.toFixed(2)} to 0 ETB`);
+    
+    // Notify admin
+    const adminSocket = io.sockets.sockets.get(adminSocketId);
+    if (adminSocket) {
+      adminSocket.emit('admin:houseEarningsReset', {
+        previousAmount: currentEarnings.toFixed(2),
+        newAmount: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Update admin panel
+    updateAdminPanel();
+    
+    logActivity('HOUSE_EARNINGS_RESET', { 
+      adminSocketId: adminSocketId,
+      previousAmount: currentEarnings.toFixed(2),
+      newAmount: 0
+    }, adminSocketId);
+    
+    return {
+      success: true,
+      message: `House earnings reset from ${currentEarnings.toFixed(2)} to 0 ETB`,
+      previousAmount: currentEarnings
+    };
+    
+  } catch (error) {
+    console.error('❌ Error resetting house earnings:', error);
+    
+    // Notify admin of error
+    const adminSocket = io.sockets.sockets.get(adminSocketId);
+    if (adminSocket) {
+      adminSocket.emit('admin:houseEarningsResetError', error.message);
+    }
+    
+    return {
+      success: false,
+      message: 'Failed to reset house earnings: ' + error.message
+    };
+  }
+}
+
+// ========== NEW: DISCONNECT USER FUNCTION ==========
+async function disconnectUser(userId, adminSocketId) {
+  try {
+    console.log(`🔌 Disconnecting all sockets for user ${userId}`);
+    
+    let disconnectedCount = 0;
+    
+    // Find all sockets for this user from socketToUser map
+    socketToUser.forEach((uId, socketId) => {
+      if (uId === userId) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          socket.disconnect();
+          disconnectedCount++;
+          console.log(`🔌 Disconnected socket ${socketId} for user ${userId}`);
+        }
+      }
+    });
+    
+    // Also check all connected sockets
+    io.sockets.sockets.forEach((socket) => {
+      if (socket && socket.connected && socket.userId === userId) {
+        socket.disconnect();
+        disconnectedCount++;
+        console.log(`🔌 Disconnected socket ${socket.id} for user ${userId}`);
+      }
+    });
+    
+    logActivity('ADMIN_DISCONNECT_USER', { 
+      adminSocketId: adminSocketId,
+      userId: userId,
+      disconnectedSockets: disconnectedCount
+    }, adminSocketId);
+    
+    return {
+      success: true,
+      message: `Disconnected ${disconnectedCount} socket(s) for user ${userId}`,
+      disconnectedCount: disconnectedCount
+    };
+    
+  } catch (error) {
+    console.error('❌ Error disconnecting user:', error);
+    return {
+      success: false,
+      message: 'Failed to disconnect user: ' + error.message
+    };
+  }
+}
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 function setupSocketHandlers() {
   io.on('connection', (socket) => {
@@ -1213,6 +1386,41 @@ function setupSocketHandlers() {
         socket.emit('admin:error', 'Unauthorized - Please authenticate first');
         return;
       }
+      updateAdminPanel();
+    });
+    
+    // ========== NEW: HOUSE EARNINGS RESET ==========
+    socket.on('admin:resetHouseEarnings', async () => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const result = await resetHouseEarnings(socket.id);
+      
+      if (!result.success) {
+        socket.emit('admin:error', result.message);
+      } else {
+        socket.emit('admin:success', result.message);
+      }
+    });
+    
+    // ========== NEW: DISCONNECT USER ==========
+    socket.on('admin:disconnectUser', async (userId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const result = await disconnectUser(userId, socket.id);
+      
+      if (!result.success) {
+        socket.emit('admin:error', result.message);
+      } else {
+        socket.emit('admin:success', result.message);
+      }
+      
+      // Update admin panel after disconnecting
       updateAdminPanel();
     });
     
@@ -2340,11 +2548,15 @@ function setupSocketHandlers() {
         
         const totalPrize = basePrize + bonus;
         
+        // Calculate house earnings
+        const houseEarnings = commissionPerPlayer * totalPlayers;
+        
         console.log(`🎰 WIN CALCULATION for ${room} ETB room:`);
         console.log(`   Total players: ${totalPlayers}`);
         console.log(`   Total prize: ${totalPrize} ETB`);
         console.log(`   Is four corners: ${isFourCornersWin}`);
         console.log(`   Bonus: ${bonus} ETB`);
+        console.log(`   House earnings: ${houseEarnings} ETB`);
         
         // Update user balance
         const oldBalance = user.balance;
@@ -2370,7 +2582,6 @@ function setupSocketHandlers() {
         await transaction.save();
         
         // Record house earnings
-        const houseEarnings = commissionPerPlayer * totalPlayers;
         const houseTransaction = new models.Transaction({
           type: 'HOUSE_EARNINGS',
           userId: 'HOUSE',
@@ -2890,11 +3101,18 @@ module.exports = {
   getUser,
   getRoom,
   
+  // NEW FUNCTIONS FOR ADMIN PANEL
+  resetHouseEarnings,
+  disconnectUser,
+  
   // State getters for server.js
   getSocketToUser: () => socketToUser,
   getAdminSockets: () => adminSockets,
   getProcessingClaims: () => processingClaims,
   getConnectedSockets: () => connectedSockets,
+  getActivityLog: () => activityLog,
+  getRoomSubscriptions: () => roomSubscriptions,
+  getRoomTimers: () => roomTimers,
   
   // Game logic functions
   getBingoLetter,
