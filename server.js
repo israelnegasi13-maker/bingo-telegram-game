@@ -255,12 +255,262 @@ gameLogic.initialize(io, {
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
 })();
 
+// ========== SOCKET.IO EVENT HANDLERS ==========
+io.on('connection', (socket) => {
+  console.log(`🔌 New connection: ${socket.id}`);
+  
+  // Admin authentication
+  socket.on('admin:auth', async (password) => {
+    if (password === gameLogic.CONFIG.ADMIN_PASSWORD) {
+      socket.admin = true;
+      socket.emit('admin:authSuccess');
+      
+      // Send current Telebirr number on successful auth
+      const telebirrNumber = await getTelebirrNumber();
+      socket.emit('admin:telebirrNumber', telebirrNumber);
+      
+      console.log(`🔑 Admin authenticated: ${socket.id}`);
+    } else {
+      socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  // Get Telebirr number (admin only)
+  socket.on('admin:getTelebirrNumber', async () => {
+    if (socket.admin) {
+      const number = await getTelebirrNumber();
+      socket.emit('admin:telebirrNumber', number);
+    }
+  });
+  
+  // Update Telebirr number (admin only)
+  socket.on('admin:updateTelebirrNumber', async (newNumber) => {
+    if (socket.admin) {
+      try {
+        const result = await updateTelebirrNumber(newNumber);
+        const updatedNumber = result.value;
+        
+        // Broadcast to all admin sockets
+        io.emit('admin:telebirrNumberUpdated', { 
+          telebirrNumber: updatedNumber,
+          updatedAt: result.updatedAt
+        });
+        
+        // Broadcast to all players
+        io.emit('telebirrNumberUpdate', {
+          telebirrNumber: updatedNumber,
+          timestamp: new Date().toISOString()
+        });
+        
+        socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
+        console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
+        
+        // Log the transaction
+        const adminTransaction = new Transaction({
+          type: 'TELEBIRR_UPDATE',
+          userId: 'admin',
+          userName: 'Admin',
+          amount: 0,
+          admin: true,
+          description: `Telebirr number updated to ${updatedNumber}`
+        });
+        await adminTransaction.save();
+        
+      } catch (error) {
+        console.error('❌ Error updating Telebirr number:', error);
+        socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
+      }
+    }
+  });
+  
+  // Reset house earnings (admin only)
+  socket.on('admin:resetHouseEarnings', async () => {
+    if (socket.admin) {
+      try {
+        // Get current total from all transactions
+        const houseEarningsTransactions = await Transaction.find({ 
+          type: 'HOUSE_EARNINGS' 
+        });
+        const previousAmount = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
+        
+        // Create a reset transaction
+        const resetTransaction = new Transaction({
+          type: 'HOUSE_EARNINGS_RESET',
+          userId: 'system',
+          userName: 'System',
+          amount: -previousAmount,
+          admin: true,
+          description: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
+        });
+        await resetTransaction.save();
+        
+        socket.emit('admin:houseEarningsReset', { 
+          previousAmount,
+          resetAmount: 0,
+          message: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
+        });
+        
+        console.log(`🔄 House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
+      } catch (error) {
+        console.error('Error resetting house earnings:', error);
+        socket.emit('admin:houseEarningsResetError', error.message);
+      }
+    }
+  });
+  
+  // Existing admin events (delegated to gameLogic)
+  socket.on('admin:getData', () => {
+    if (socket.admin && gameLogic.handleAdminGetData) {
+      gameLogic.handleAdminGetData(socket);
+    }
+  });
+  
+  socket.on('admin:addFunds', (data) => {
+    if (socket.admin && gameLogic.handleAdminAddFunds) {
+      gameLogic.handleAdminAddFunds(socket, data);
+    }
+  });
+  
+  socket.on('admin:banPlayer', (userId) => {
+    if (socket.admin && gameLogic.handleAdminBanPlayer) {
+      gameLogic.handleAdminBanPlayer(socket, userId);
+    }
+  });
+  
+  socket.on('admin:kickPlayer', (userId) => {
+    if (socket.admin && gameLogic.handleAdminKickPlayer) {
+      gameLogic.handleAdminKickPlayer(socket, userId);
+    }
+  });
+  
+  socket.on('admin:disconnectUser', (userId) => {
+    if (socket.admin && gameLogic.handleAdminDisconnectUser) {
+      gameLogic.handleAdminDisconnectUser(socket, userId);
+    }
+  });
+  
+  socket.on('admin:forceStartGame', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceStartGame) {
+      gameLogic.handleAdminForceStartGame(socket, stake);
+    }
+  });
+  
+  socket.on('admin:forceDraw', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceDraw) {
+      gameLogic.handleAdminForceDraw(socket, stake);
+    }
+  });
+  
+  socket.on('admin:forceEndGame', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceEndGame) {
+      gameLogic.handleAdminForceEndGame(socket, stake);
+    }
+  });
+  
+  socket.on('admin:getPendingTransactions', async () => {
+    if (socket.admin && gameLogic.handleAdminGetPendingTransactions) {
+      await gameLogic.handleAdminGetPendingTransactions(socket);
+    }
+  });
+  
+  socket.on('admin:approveDeposit', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminApproveDeposit) {
+      gameLogic.handleAdminApproveDeposit(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:approveWithdrawal', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminApproveWithdrawal) {
+      gameLogic.handleAdminApproveWithdrawal(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:rejectTransaction', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminRejectTransaction) {
+      gameLogic.handleAdminRejectTransaction(socket, transactionId);
+    }
+  });
+  
+  // Disconnect handler
+  socket.on('disconnect', () => {
+    console.log(`🔌 Disconnected: ${socket.id}`);
+    if (socket.admin) {
+      console.log(`🔑 Admin disconnected: ${socket.id}`);
+    }
+    // Handle player disconnect in game logic
+    if (gameLogic.handleDisconnect) {
+      gameLogic.handleDisconnect(socket);
+    }
+  });
+  
+  // Forward game events to game logic
+  socket.on('join', (data) => {
+    if (gameLogic.handleJoin) {
+      gameLogic.handleJoin(socket, data);
+    }
+  });
+  
+  socket.on('selectBox', (data) => {
+    if (gameLogic.handleSelectBox) {
+      gameLogic.handleSelectBox(socket, data);
+    }
+  });
+  
+  socket.on('claimBingo', (data) => {
+    if (gameLogic.handleClaimBingo) {
+      gameLogic.handleClaimBingo(socket, data);
+    }
+  });
+  
+  socket.on('markNumber', (data) => {
+    if (gameLogic.handleMarkNumber) {
+      gameLogic.handleMarkNumber(socket, data);
+    }
+  });
+  
+  socket.on('depositRequest', (data) => {
+    if (gameLogic.handleDepositRequest) {
+      gameLogic.handleDepositRequest(socket, data);
+    }
+  });
+  
+  socket.on('withdrawRequest', (data) => {
+    if (gameLogic.handleWithdrawRequest) {
+      gameLogic.handleWithdrawRequest(socket, data);
+    }
+  });
+  
+  socket.on('getUserData', (data) => {
+    if (gameLogic.handleGetUserData) {
+      gameLogic.handleGetUserData(socket, data);
+    }
+  });
+  
+  // Telebirr number request from players
+  socket.on('getTelebirrNumber', async (callback) => {
+    try {
+      const telebirrNumber = await getTelebirrNumber();
+      if (callback) {
+        callback({ telebirrNumber });
+      } else {
+        socket.emit('telebirrNumber', telebirrNumber);
+      }
+    } catch (error) {
+      console.error('Error getting Telebirr number for player:', error);
+      if (callback) {
+        callback({ telebirrNumber: '0962577855' });
+      }
+    }
+  });
+});
+
 // ========== EXPRESS ROUTES ==========
 app.get('/', async (req, res) => {
   const connectedSockets = gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
   const socketToUser = gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
   const adminSockets = gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
   const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
+  const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
   const telebirrNumber = await getTelebirrNumber();
   
   res.send(`
@@ -283,6 +533,7 @@ app.get('/', async (req, res) => {
         .btn-game:hover { background: #059669; }
         .telebirr-info { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
         .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
+        .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
       </style>
     </head>
     <body>
@@ -309,6 +560,24 @@ app.get('/', async (req, res) => {
             <p style="color: #94a3b8; font-size: 0.9rem;">Persisted in database - Will survive server restarts</p>
           </div>
           
+          <div class="fix-highlight">
+            <h3 style="color: #10b981;">✅ DOUBLE PRIZE BUG FIXED</h3>
+            <p style="color: #94a3b8;">
+              <strong>Multiple layers of protection:</strong><br>
+              1. ✅ Room winner tracking (memory cache)<br>
+              2. ✅ Processing claims lock per user per room<br>
+              3. ✅ Atomic room status updates<br>
+              4. ✅ Database transaction checks<br>
+              5. ✅ Room lock for concurrent claims<br>
+              6. ✅ Auto-cleanup of stale locks<br>
+              7. ✅ Enhanced error handling<br>
+            </p>
+            <p style="color: #fbbf24;">
+              <strong>Processing Claims:</strong> ${processingClaims}<br>
+              <strong>Recent Room Winners:</strong> ${roomWinners}
+            </p>
+          </div>
+          
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${gameLogic.CONFIG ? gameLogic.CONFIG.FOUR_CORNERS_BONUS : 50} ETB!</p>
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
@@ -322,8 +591,11 @@ app.get('/', async (req, res) => {
           <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
           <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
           <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
-          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED</p>
-          <p style="color: #10b981;">✅ Claim lock prevents double prize payouts</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED (ATOMIC UPDATES)</p>
+          <p style="color: #10b981;">✅ Room winner tracking prevents double claims</p>
+          <p style="color: #10b981;">✅ Processing locks for per-user per-room claims</p>
+          <p style="color: #10b981;">✅ Atomic findOneAndUpdate ensures only one winner</p>
+          <p style="color: #10b981;">✅ Multiple database checks for recent wins</p>
           <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
         </div>
         
@@ -352,10 +624,10 @@ app.get('/', async (req, res) => {
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
           <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
-            Version: 2.9.0 (WITH WALLET SYSTEM) | Database: MongoDB Atlas<br>
+            Version: 2.9.1 (DOUBLE PRIZE BUG FIXED) | Database: MongoDB Atlas<br>
             Socket.IO: ✅ Connected Sockets: ${connectedSockets}<br>
             SocketToUser: ${socketToUser} | Admin Sockets: ${adminSockets}<br>
-            Processing Claims: ${processingClaims} active<br>
+            Processing Claims: ${processingClaims} active | Room Winners: ${roomWinners}<br>
             Telegram Integration: ✅ Ready<br>
             Game Timer: ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMER : 3}s between balls<br>
             Game Timeout: ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} minutes auto-clear<br>
@@ -367,7 +639,14 @@ app.get('/', async (req, res) => {
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} minute timeout<br>
             Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
-            Fixed Issues: ✅ Double prize bug fixed, ✅ Claim lock implemented<br>
+            <strong>✅✅✅ DOUBLE PRIZE BUG FIXED COMPLETELY:</strong><br>
+            • Room winner tracking in memory<br>
+            • Processing claims lock per user per room<br>
+            • Atomic room status updates<br>
+            • Database transaction checks<br>
+            • Room lock for concurrent claims<br>
+            • Auto-cleanup of stale locks<br>
+            • Enhanced error handling<br>
             ✅ Timer synchronization fixed, ✅ Game timer working<br>
             ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
             ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
@@ -375,7 +654,8 @@ app.get('/', async (req, res) => {
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
             ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
-            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS
+            ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
+            ✅✅✅✅ ATOMIC ROOM UPDATES PREVENT DOUBLE WINNERS
           </p>
         </div>
       </div>
@@ -1102,7 +1382,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM ADDED** - Deposit/Withdraw\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock implemented\n` +
+                  `• 🔒 **DOUBLE PRIZE BUG FIXED COMPLETELY** - Atomic updates prevent double wins\n` +
+                  `• 🏆 **Room winner tracking** - Prevents multiple claims\n` +
+                  `• 🔒 **Processing locks** - Per-user per-room claim protection\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Room lock when game is playing\n` +
                   `• ⏰ Auto-clear after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
@@ -1115,7 +1397,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• Game starts automatically when 1 player joins\n` +
                   `• Timer continues even if players leave\n` +
                   `• Random BINGO card numbers\n` +
-                  `• ✅✅✅ Fixed: Double prize bug eliminated\n` +
+                  `• ✅✅✅ Fixed: Double prize bug eliminated with atomic updates\n` +
                   `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
                   `• ✅ Fixed: All players return to lobby after game ends\n` +
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
@@ -1194,7 +1476,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *Bingo Elite Help*\n\n` +
                   `*New Features & Fixes:*\n` +
                   `• 💳 **WALLET SYSTEM** - Deposit/Withdraw funds\n` +
-                  `• 🔒 DOUBLE PRIZE BUG FIXED - Claim lock prevents multiple payouts\n` +
+                  `• 🔒 **DOUBLE PRIZE BUG FIXED COMPLETELY** - Atomic updates prevent multiple payouts\n` +
+                  `• 🏆 **Room winner tracking** - Prevents multiple claims in same room\n` +
+                  `• 🔒 **Processing locks** - Per-user per-room claim protection\n` +
                   `• ⏱️ Timer sync between discovery and waiting rooms\n` +
                   `• 🔒 Rooms lock when game is playing\n` +
                   `• ⏰ Games auto-clear after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
@@ -1214,7 +1498,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `6. Timer continues even if players leave\n` +
                   `7. 🔒 Room locks when game starts\n` +
                   `8. Mark numbers as called\n` +
-                  `9. Claim BINGO! - 🔒 Claim lock prevents double prizes\n` +
+                  `9. Claim BINGO! - 🔒 Multiple protection layers prevent double prizes\n` +
                   `10. ⏰ Game auto-ends after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes if no winner\n` +
                   `11. ALL players return to lobby automatically\n\n` +
                   `*Four Corners Bonus:* 50 ETB!\n` +
@@ -1222,7 +1506,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*Auto Start:* Game starts when 1 online player joins\n` +
                   `*Timer Doesn't Reset:* Game continues even if players leave\n` +
                   `*Random BINGO Cards:* Each card has unique random numbers\n` +
-                  `*🔒 DOUBLE PRIZE FIXED:* Claim lock prevents multiple payouts\n` +
+                  `*🔒 DOUBLE PRIZE FIXED COMPLETELY:* Atomic updates ensure only one winner\n` +
                   `*✅✅✅ Fixed:* Claim Bingo now properly checks numbers\n` +
                   `*✅ Fixed:* All players return to lobby after game ends\n` +
                   `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
@@ -1285,6 +1569,7 @@ app.get('/setup-telegram', async (req, res) => {
           .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
           .telebirr-highlight { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
           .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
+          .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
         </style>
       </head>
       <body>
@@ -1300,6 +1585,19 @@ app.get('/setup-telegram', async (req, res) => {
             <p>Admin can update it in Admin Panel → Settings</p>
           </div>
           
+          <div class="fix-highlight">
+            <h3>✅ DOUBLE PRIZE BUG FIXED COMPLETELY</h3>
+            <p><strong>Multiple protection layers added:</strong></p>
+            <p>1. ✅ Room winner tracking (memory cache)</p>
+            <p>2. ✅ Processing claims lock per user per room</p>
+            <p>3. ✅ Atomic room status updates</p>
+            <p>4. ✅ Database transaction checks</p>
+            <p>5. ✅ Room lock for concurrent claims</p>
+            <p>6. ✅ Auto-cleanup of stale locks</p>
+            <p>7. ✅ Enhanced error handling</p>
+            <p><strong>This ensures only one winner per game, even with multiple clicks.</strong></p>
+          </div>
+          
           <div class="info-box">
             <h3>Bot Information:</h3>
             <p><strong>Bot:</strong> @ethio_games1_bot</p>
@@ -1308,24 +1606,27 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Admin Password:</strong> ${gameLogic.CONFIG.ADMIN_PASSWORD}</p>
             <p><strong>New Features & Fixes Added:</strong></p>
             <p>1. 💳 <strong>WALLET SYSTEM:</strong> Deposit/Withdraw with Telebirr integration</p>
-            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED:</strong> Claim lock prevents multiple payouts</p>
-            <p>3. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
-            <p>4. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
-            <p>5. ⏰ <strong>${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
-            <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
+            <p>2. 🔒 <strong>DOUBLE PRIZE BUG FIXED COMPLETELY:</strong> Atomic updates prevent multiple payouts</p>
+            <p>3. 🏆 <strong>Room winner tracking:</strong> Prevents multiple claims in same room</p>
+            <p>4. 🔒 <strong>Processing locks:</strong> Per-user per-room claim protection</p>
+            <p>5. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>6. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>7. ⏰ <strong>${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>8. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
-            <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
+            <p><strong>Fixed Issues:</strong> Double prize bug eliminated with atomic updates, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
             <p><strong>✅ 30-second countdown now working</strong></p>
             <p><strong>✅ Balls pop every 3 seconds</strong></p>
             <p><strong>✅ Countdown continues when players leave</strong></p>
             <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
-            <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH CLAIM LOCK</strong></p>
+            <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH ATOMIC UPDATES</strong></p>
             <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
             <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
+            <p><strong>✅✅ ATOMIC ROOM UPDATES PREVENT DOUBLE WINNERS</strong></p>
           </div>
           
           <div>
@@ -1368,6 +1669,17 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Admin approves in Admin Panel</li>
               <li>Funds appear in player balance</li>
             </ol>
+            
+            <h4>Double Prize Protection Details:</h4>
+            <p>The system now has multiple layers to prevent double prizing:</p>
+            <ol>
+              <li><strong>Room Winner Tracking:</strong> In-memory cache tracks recent room winners</li>
+              <li><strong>Processing Locks:</strong> Per-user per-room locks prevent multiple claims</li>
+              <li><strong>Atomic Updates:</strong> Database operations ensure only one winner</li>
+              <li><strong>Transaction Checks:</strong> Database checks for recent wins</li>
+              <li><strong>Auto-Cleanup:</strong> Stale locks are automatically cleaned</li>
+            </ol>
+            <p><strong>Result:</strong> Even if multiple players click "Claim Bingo" simultaneously, only the first valid claim wins.</p>
           </div>
         </div>
       </body>
@@ -1402,6 +1714,8 @@ app.get('/health', async (req, res) => {
     const pendingDeposits = await Transaction.countDocuments({ type: 'DEPOSIT_REQUEST', status: 'pending' });
     const pendingWithdrawals = await Transaction.countDocuments({ type: 'WITHDRAW_REQUEST', status: 'pending' });
     const telebirrNumber = await getTelebirrNumber();
+    const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
+    const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     
     res.json({
       status: 'ok',
@@ -1420,7 +1734,19 @@ app.get('/health', async (req, res) => {
       telegramReady: true,
       botUsername: '@ethio_games1_bot',
       realTimeBoxUpdates: 'active',
-      walletSystem: 'active'
+      walletSystem: 'active',
+      doublePrizeProtection: {
+        enabled: true,
+        processingClaims: processingClaims,
+        roomWinners: roomWinners,
+        layers: [
+          'room_winner_tracking',
+          'processing_locks',
+          'atomic_updates',
+          'database_checks',
+          'auto_cleanup'
+        ]
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1434,13 +1760,19 @@ app.get('/debug-connections', (req, res) => {
     const socketToUser = gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
     const adminSockets = gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
     const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
+    const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     
     res.json({
       connectedSockets: connectedSockets,
       socketToUser: socketToUser,
       adminSockets: adminSockets,
       processingClaims: processingClaims,
-      serverTime: new Date().toISOString()
+      roomWinners: roomWinners,
+      serverTime: new Date().toISOString(),
+      doublePrizeProtection: {
+        processingClaims: Array.from(gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().entries() : []),
+        roomWinners: Array.from(gameLogic.getRoomWinners ? gameLogic.getRoomWinners().entries() : [])
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1493,27 +1825,36 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   const telebirrNumber = await getTelebirrNumber();
   console.log(`
-╔════════════════════════════════════════════════════════════════╗
-║             🤖 BINGO ELITE - TELEGRAM READY                   ║
-╠════════════════════════════════════════════════════════════════╣
-║  URL:          https://bingo-telegram-game.onrender.com       ║
-║  Port:         ${PORT}                                        ║
-║  Game:         /game                                          ║
-║  Admin:        /admin (password: ${gameLogic.CONFIG.ADMIN_PASSWORD})  ║
-║  Telegram:     /telegram                                      ║
-║  Bot Setup:    /setup-telegram                                ║
-╠════════════════════════════════════════════════════════════════╣
-║  🔑 Admin Password: ${gameLogic.CONFIG.ADMIN_PASSWORD}          ║
-║  🤖 Telegram Bot: @ethio_games1_bot                           ║
-║  📡 WebSocket: ✅ Ready for Telegram connections              ║
-║  🎮 Four Corners Bonus: ${gameLogic.CONFIG.FOUR_CORNERS_BONUS} ETB ║
-║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
-║  💳 Wallet System: ✅ ACTIVE                                  ║
-║  📱 TELEBIRR: ${telebirrNumber}                               ║
-║  💾 TELEBIRR PERSISTENCE: ✅ DATABASE SAVED                  ║
-║  🔄 Will survive server restarts                              ║
-╚════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════════╗
+║             🤖 BINGO ELITE - TELEGRAM READY                                 ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:          https://bingo-telegram-game.onrender.com                     ║
+║  Port:         ${PORT}                                                      ║
+║  Game:         /game                                                        ║
+║  Admin:        /admin (password: ${gameLogic.CONFIG.ADMIN_PASSWORD})                 ║
+║  Telegram:     /telegram                                                    ║
+║  Bot Setup:    /setup-telegram                                              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  🔑 Admin Password: ${gameLogic.CONFIG.ADMIN_PASSWORD}                       ║
+║  🤖 Telegram Bot: @ethio_games1_bot                                         ║
+║  📡 WebSocket: ✅ Ready for Telegram connections                            ║
+║  🎮 Four Corners Bonus: ${gameLogic.CONFIG.FOUR_CORNERS_BONUS} ETB           ║
+║  📦 Real-time Box Tracking: ✅ ACTIVE                                       ║
+║  💳 Wallet System: ✅ ACTIVE                                                ║
+║  📱 TELEBIRR: ${telebirrNumber}                                             ║
+║  💾 TELEBIRR PERSISTENCE: ✅ DATABASE SAVED                                ║
+║  🔄 Will survive server restarts                                            ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  🔒 DOUBLE PRIZE BUG FIXED: ✅ COMPLETELY FIXED                            ║
+║  ✅ Room winner tracking                                                    ║
+║  ✅ Processing locks per user per room                                      ║
+║  ✅ Atomic room status updates                                              ║
+║  ✅ Database transaction checks                                             ║
+║  ✅ Auto-cleanup of stale locks                                            ║
+║  ✅ Enhanced error handling                                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ✅ Server ready with database-persisted Telebirr number
 📱 Telebirr number loaded from database: ${telebirrNumber}
+🔒 Double prize protection: ACTIVE with multiple layers
   `);
 });
