@@ -101,7 +101,7 @@ const statsSchema = new mongoose.Schema({
   totalFourCorners: { type: Number, default: 0 }
 });
 
-// NEW: Setting model for storing Telebirr number
+// Setting model for storing Telebirr number and other settings
 const settingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: mongoose.Schema.Types.Mixed, required: true },
@@ -112,15 +112,21 @@ const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const Stats = mongoose.model('Stats', statsSchema);
-const Setting = mongoose.model('Setting', settingSchema); // NEW
+const Setting = mongoose.model('Setting', settingSchema);
 
-// Telebirr number utility functions
+// ========== TELEBIRR NUMBER DATABASE FUNCTIONS ==========
 async function getTelebirrNumber() {
   try {
     const setting = await Setting.findOne({ key: 'telebirrNumber' });
-    return setting ? setting.value : '0962577855';
+    if (!setting) {
+      // Initialize if not exists
+      await initializeTelebirrNumber();
+      const newSetting = await Setting.findOne({ key: 'telebirrNumber' });
+      return newSetting ? newSetting.value : '0962577855';
+    }
+    return setting.value;
   } catch (err) {
-    console.error('Error getting Telebirr number:', err);
+    console.error('❌ Error getting Telebirr number:', err);
     return '0962577855';
   }
 }
@@ -134,13 +140,27 @@ async function updateTelebirrNumber(newNumber) {
     
     const result = await Setting.findOneAndUpdate(
       { key: 'telebirrNumber' },
-      { value: newNumber, updatedAt: new Date() },
-      { upsert: true, new: true }
+      { 
+        value: newNumber, 
+        updatedAt: new Date() 
+      },
+      { 
+        upsert: true, 
+        new: true,
+        setDefaultsOnInsert: true 
+      }
     );
+    
     console.log(`✅ Telebirr number updated to: ${newNumber}`);
+    
+    // Update game logic
+    if (gameLogic && gameLogic.setTelebirrNumber) {
+      gameLogic.setTelebirrNumber(newNumber);
+    }
+    
     return result;
   } catch (err) {
-    console.error('Error updating Telebirr number:', err);
+    console.error('❌ Error updating Telebirr number:', err);
     throw err;
   }
 }
@@ -155,11 +175,21 @@ async function initializeTelebirrNumber() {
         updatedAt: new Date()
       });
       console.log('✅ Default Telebirr number initialized: 0962577855');
+      
+      // Update game logic with initial value
+      if (gameLogic && gameLogic.setTelebirrNumber) {
+        gameLogic.setTelebirrNumber('0962577855');
+      }
     } else {
       console.log(`✅ Telebirr number loaded from DB: ${exists.value}`);
+      
+      // Update game logic with loaded value
+      if (gameLogic && gameLogic.setTelebirrNumber) {
+        gameLogic.setTelebirrNumber(exists.value);
+      }
     }
   } catch (err) {
-    console.error('Error initializing Telebirr number:', err);
+    console.error('❌ Error initializing Telebirr number:', err);
   }
 }
 
@@ -208,7 +238,22 @@ app.use((req, res, next) => {
 });
 
 // ========== INITIALIZE GAME LOGIC ==========
-gameLogic.initialize(io, { User, Room, Transaction, Stats });
+// Pass database models and Telebirr number functions to game logic
+gameLogic.initialize(io, { 
+  User, 
+  Room, 
+  Transaction, 
+  Stats,
+  Setting,
+  getTelebirrNumber, // Pass the function
+  updateTelebirrNumber // Pass the function
+});
+
+// Load initial Telebirr number into game logic
+(async () => {
+  const telebirrNumber = await getTelebirrNumber();
+  console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
+})();
 
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
@@ -251,6 +296,12 @@ io.on('connection', (socket) => {
           updatedAt: result.updatedAt
         });
         
+        // Broadcast to all players
+        io.emit('telebirrNumberUpdate', {
+          telebirrNumber: updatedNumber,
+          timestamp: new Date().toISOString()
+        });
+        
         socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
         console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
         
@@ -266,7 +317,7 @@ io.on('connection', (socket) => {
         await adminTransaction.save();
         
       } catch (error) {
-        console.error('Error updating Telebirr number:', error);
+        console.error('❌ Error updating Telebirr number:', error);
         socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
       }
     }
@@ -434,6 +485,23 @@ io.on('connection', (socket) => {
       gameLogic.handleGetUserData(socket, data);
     }
   });
+  
+  // Telebirr number request from players
+  socket.on('getTelebirrNumber', async (callback) => {
+    try {
+      const telebirrNumber = await getTelebirrNumber();
+      if (callback) {
+        callback({ telebirrNumber });
+      } else {
+        socket.emit('telebirrNumber', telebirrNumber);
+      }
+    } catch (error) {
+      console.error('Error getting Telebirr number for player:', error);
+      if (callback) {
+        callback({ telebirrNumber: '0962577855' });
+      }
+    }
+  });
 });
 
 // ========== EXPRESS ROUTES ==========
@@ -463,6 +531,8 @@ app.get('/', async (req, res) => {
         .btn-admin:hover { background: #dc2626; }
         .btn-game { background: #10b981; }
         .btn-game:hover { background: #059669; }
+        .telebirr-info { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
       </style>
     </head>
     <body>
@@ -482,6 +552,13 @@ app.get('/', async (req, res) => {
               <div class="stat-value" style="color: #10b981;">✅ Online</div>
             </div>
           </div>
+          
+          <div class="telebirr-info">
+            <div class="stat-label">📱 TELEBIRR PAYMENT NUMBER</div>
+            <div class="telebirr-number">${telebirrNumber}</div>
+            <p style="color: #94a3b8; font-size: 0.9rem;">Persisted in database - Will survive server restarts</p>
+          </div>
+          
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${gameLogic.CONFIG ? gameLogic.CONFIG.FOUR_CORNERS_BONUS : 50} ETB!</p>
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
           <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
@@ -535,7 +612,7 @@ app.get('/', async (req, res) => {
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
             Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
-            Telebirr Number: ${telebirrNumber}<br>
+            <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
             Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} minute timeout<br>
@@ -1183,6 +1260,17 @@ app.get('/api/user/:userId', async (req, res) => {
   }
 });
 
+// API endpoint to get Telebirr number
+app.get('/api/telebirr-number', async (req, res) => {
+  try {
+    const telebirrNumber = await getTelebirrNumber();
+    res.json({ telebirrNumber });
+  } catch (error) {
+    console.error('Error getting Telebirr number:', error);
+    res.status(500).json({ error: error.message, telebirrNumber: '0962577855' });
+  }
+});
+
 // API endpoint to add funds (for admin)
 app.post('/api/add-funds', async (req, res) => {
   try {
@@ -1445,6 +1533,8 @@ app.get('/setup-telegram', async (req, res) => {
           .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
           .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
           .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+          .telebirr-highlight { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
+          .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
         </style>
       </head>
       <body>
@@ -1452,6 +1542,13 @@ app.get('/setup-telegram', async (req, res) => {
           <h1>✅ Telegram Bot Setup Complete!</h1>
           <div class="success">✓ Webhook Configured</div>
           <div class="success">✓ Menu Button Set</div>
+          
+          <div class="telebirr-highlight">
+            <h3>📱 TELEBIRR PAYMENT NUMBER (DATABASE PERSISTED)</h3>
+            <div class="telebirr-number">${telebirrNumber}</div>
+            <p>This number is stored in MongoDB and will survive server restarts.</p>
+            <p>Admin can update it in Admin Panel → Settings</p>
+          </div>
           
           <div class="info-box">
             <h3>Bot Information:</h3>
@@ -1467,7 +1564,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p>5. ⏰ <strong>${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
             <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p><strong>Wallet Features:</strong></p>
-            <p>• Telebirr Number: ${telebirrNumber}</p>
+            <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
@@ -1495,9 +1592,18 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Play Bingo with new features!</li>
             </ol>
             
-            <h4>To Add Funds to Players:</h4>
+            <h4>To Update Telebirr Number:</h4>
             <ol>
               <li>Open Admin Panel (link above)</li>
+              <li>Login with password: ${gameLogic.CONFIG.ADMIN_PASSWORD}</li>
+              <li>Go to Settings or look for Telebirr number field</li>
+              <li>Update to new number</li>
+              <li>Number is saved to database and persists across restarts</li>
+            </ol>
+            
+            <h4>To Add Funds to Players:</h4>
+            <ol>
+              <li>Open Admin Panel</li>
               <li>Login with password: ${gameLogic.CONFIG.ADMIN_PASSWORD}</li>
               <li>Find user by Telegram ID</li>
               <li>Click "Add Funds" button</li>
@@ -1506,7 +1612,7 @@ app.get('/setup-telegram', async (req, res) => {
             
             <h4>Wallet Instructions for Players:</h4>
             <ol>
-              <li>Send money to Telebirr: ${telebirrNumber}</li>
+              <li>Send money to Telebirr: ${telebirrNumber} (persists in database)</li>
               <li>In game, click Wallet (💰 button)</li>
               <li>Enter receipt number and amount</li>
               <li>Admin approves in Admin Panel</li>
@@ -1558,6 +1664,7 @@ app.get('/health', async (req, res) => {
       pendingDeposits: pendingDeposits,
       pendingWithdrawals: pendingWithdrawals,
       telebirrNumber: telebirrNumber,
+      telebirrPersisted: true,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       telegramReady: true,
@@ -1614,6 +1721,23 @@ app.get('/debug-users', async (req, res) => {
   }
 });
 
+// Debug Telebirr number endpoint
+app.get('/debug/telebirr', async (req, res) => {
+  try {
+    const setting = await Setting.findOne({ key: 'telebirrNumber' });
+    const telebirrNumber = await getTelebirrNumber();
+    
+    res.json({
+      databaseSetting: setting,
+      currentNumber: telebirrNumber,
+      gameLogicNumber: gameLogic.getTelebirrNumber ? gameLogic.getTelebirrNumber() : 'N/A',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
@@ -1635,9 +1759,11 @@ server.listen(PORT, async () => {
 ║  🎮 Four Corners Bonus: ${gameLogic.CONFIG.FOUR_CORNERS_BONUS} ETB ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
-║  📱 Telebirr: ${telebirrNumber}                               ║
-║  💾 Telebirr Number: DATABASE PERSISTENCE ✅                 ║
+║  📱 TELEBIRR: ${telebirrNumber}                               ║
+║  💾 TELEBIRR PERSISTENCE: ✅ DATABASE SAVED                  ║
+║  🔄 Will survive server restarts                              ║
 ╚════════════════════════════════════════════════════════════════╝
 ✅ Server ready with database-persisted Telebirr number
+📱 Telebirr number loaded from database: ${telebirrNumber}
   `);
 });
