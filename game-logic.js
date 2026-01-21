@@ -35,7 +35,7 @@ let activityLog = [];
 let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
-let processingClaims = new Map();
+let processingClaims = new Map(); // For preventing double prize bug
 let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
 
 // ========== INITIALIZATION FUNCTION ==========
@@ -116,12 +116,12 @@ function cleanupRoomTimer(stake) {
 // Clear stale processing claims
 function cleanupProcessingClaims() {
   const now = Date.now();
-  const thirtySecondsAgo = now - 30000; // Increased to 30 seconds for safety
+  const tenSecondsAgo = now - 10000;
   
-  processingClaims.forEach((timestamp, roomStake) => {
-    if (timestamp < thirtySecondsAgo) {
-      processingClaims.delete(roomStake);
-      console.log(`🧹 Cleaned up stale processing claim for room ${roomStake} (was stuck for 30+ seconds)`);
+  processingClaims.forEach((timestamp, key) => {
+    if (timestamp < tenSecondsAgo) {
+      processingClaims.delete(key);
+      console.log(`🧹 Cleaned up stale processing claim: ${key}`);
     }
   });
 }
@@ -2338,7 +2338,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate: new Date()
+            lastBoxUpdate = new Date()
           });
           await roomData.save();
         }
@@ -2512,59 +2512,62 @@ function setupSocketHandlers() {
         
         const roomStake = parseInt(room);
         
-        // 🚨 CRITICAL FIX: Add player-level claim lock to prevent multiple clicks
-        if (socket.claimingBingo) {
-          console.log(`🚨 Player ${user.userName} is already claiming bingo! Blocking duplicate click`);
-          socket.emit('error', 'Please wait, your bingo claim is being processed');
+        // ✅ ATOMIC CHECK: Use a per-user-per-room lock to prevent rapid clicks
+        const claimKey = `${roomStake}_${userId}`;
+        
+        // Check if this exact user already has a claim in progress for this room
+        if (processingClaims.has(claimKey)) {
+          console.log(`🚨 DOUBLE CLICK PREVENTED: User ${user.userName} already has a claim in progress for room ${roomStake}`);
+          socket.emit('error', 'Your bingo claim is already being processed');
           if (callback) callback({ 
             success: false, 
-            message: 'Your bingo claim is already being processed. Please wait.' 
+            message: 'Your claim is already being processed. Please wait.' 
           });
           return;
         }
         
-        // Set immediate lock on this socket
-        socket.claimingBingo = true;
-        
-        // CHECK IF CLAIM IS ALREADY BEING PROCESSED FOR THIS ROOM
-        if (processingClaims.has(roomStake)) {
-          console.log(`🚨 DOUBLE CLAIM PREVENTED: Room ${roomStake} already has a claim being processed`);
+        // Also check if ANY claim is being processed for this room (global room lock)
+        const roomClaimKey = `room_${roomStake}`;
+        if (processingClaims.has(roomClaimKey)) {
+          console.log(`🚨 ROOM CLAIM LOCKED: Room ${roomStake} has a claim being processed`);
           socket.emit('error', 'A bingo claim is already being processed for this room');
           if (callback) callback({ 
             success: false, 
-            message: 'A bingo claim is already being processed. Please wait.' 
+            message: 'A bingo claim is already being processed for this room. Please wait.' 
           });
-          
-          // Clear the socket lock
-          delete socket.claimingBingo;
           return;
         }
         
-        // LOCK THE ROOM FOR CLAIM PROCESSING
-        processingClaims.set(roomStake, Date.now());
-        console.log(`🔒 Locked room ${roomStake} for claim processing by ${user.userName}`);
+        // ✅ ATOMIC SET: Set both locks immediately
+        processingClaims.set(claimKey, Date.now()); // User-specific lock
+        processingClaims.set(roomClaimKey, Date.now()); // Room-wide lock
+        
+        console.log(`🔒 Locked claim for user ${user.userName} in room ${roomStake}`);
         
         const roomData = await models.Room.findOne({ stake: roomStake, status: 'playing' });
         if (!roomData) {
-          processingClaims.delete(roomStake);
-          delete socket.claimingBingo;
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
           socket.emit('error', 'Game not found or not in progress');
           if (callback) callback({ success: false, message: 'Game not found or not in progress' });
           return;
         }
         
         if (!roomData.players.includes(userId)) {
-          processingClaims.delete(roomStake);
-          delete socket.claimingBingo;
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
           socket.emit('error', 'You are not in this game');
           if (callback) callback({ success: false, message: 'You are not in this game' });
           return;
         }
         
-        console.log('🎯 BINGO CLAIM RECEIVED:');
+        console.log('🎯 BINGO CLAIM PROCESSING:');
         console.log('   User:', user.userName);
         console.log('   Room:', room);
-        console.log('   Processing lock active:', processingClaims.has(roomStake));
+        console.log('   User lock active:', processingClaims.has(claimKey));
+        console.log('   Room lock active:', processingClaims.has(roomClaimKey));
         
         // Convert marked numbers properly for comparison
         const markedNumbers = marked.map(item => {
@@ -2575,8 +2578,9 @@ function setupSocketHandlers() {
         // Check if bingo is valid
         const bingoCheck = checkBingo(markedNumbers, grid);
         if (!bingoCheck.isBingo) {
-          processingClaims.delete(roomStake);
-          delete socket.claimingBingo;
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
           console.log('❌ Invalid bingo claim - no winning pattern found');
           socket.emit('error', 'Invalid bingo claim');
           if (callback) callback({ success: false, message: 'Invalid bingo claim - no winning pattern' });
@@ -2610,6 +2614,31 @@ function setupSocketHandlers() {
         console.log(`   Is four corners: ${isFourCornersWin}`);
         console.log(`   Bonus: ${bonus} ETB`);
         console.log(`   House earnings: ${houseEarnings} ETB`);
+        
+        // Check if user already received prize (additional safety)
+        const recentWin = await models.Transaction.findOne({
+          userId: userId,
+          room: room,
+          type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] },
+          createdAt: { $gt: new Date(Date.now() - 60000) } // Last 60 seconds
+        });
+        
+        if (recentWin) {
+          console.log(`⚠️ User ${user.userName} already won in room ${room} recently`);
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          
+          // Already paid, just acknowledge
+          if (callback) {
+            callback({ 
+              success: true, 
+              message: 'BINGO already processed',
+              alreadyProcessed: true
+            });
+          }
+          return;
+        }
         
         // Update user balance
         const oldBalance = user.balance;
@@ -2680,9 +2709,10 @@ function setupSocketHandlers() {
         roomData.lastBoxUpdate = new Date();
         await roomData.save();
         
-        // RELEASE THE PROCESSING LOCK
-        processingClaims.delete(roomStake);
-        console.log(`🔓 Released processing lock for room ${roomStake}`);
+        // RELEASE THE PROCESSING LOCKS
+        processingClaims.delete(claimKey);
+        processingClaims.delete(roomClaimKey);
+        console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
         
         // Create game over data
         const gameOverData = {
@@ -2765,11 +2795,17 @@ function setupSocketHandlers() {
         });
         
       } catch (error) {
-        // RELEASE LOCK ON ERROR TOO
+        // RELEASE ALL LOCKS ON ERROR
+        const userId = socketToUser.get(socket.id) || socket.userId;
         const roomStake = parseInt(data?.room);
-        if (roomStake && processingClaims.has(roomStake)) {
-          processingClaims.delete(roomStake);
-          console.log(`🔓 Released processing lock for room ${roomStake} due to error`);
+        
+        if (roomStake && userId) {
+          const claimKey = `${roomStake}_${userId}`;
+          const roomClaimKey = `room_${roomStake}`;
+          
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          console.log(`🔓 Released all locks for room ${roomStake} due to error`);
         }
         
         console.error('Error in claimBingo:', error);
@@ -2780,10 +2816,6 @@ function setupSocketHandlers() {
             message: 'Server error processing bingo claim'
           });
         }
-      } finally {
-        // 🚨 CRITICAL: Always clear the socket-level lock
-        delete socket.claimingBingo;
-        console.log(`🔓 Cleared socket claim lock for user ${userId}`);
       }
     });
     
@@ -2984,9 +3016,6 @@ function setupSocketHandlers() {
       console.log(`❌ Socket disconnected: ${socket.id}`);
       connectedSockets.delete(socket.id);
       adminSockets.delete(socket.id);
-      
-      // Clear any claim locks this socket might have
-      delete socket.claimingBingo;
       
       // Remove from room subscriptions
       roomSubscriptions.forEach((sockets, room) => {
