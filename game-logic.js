@@ -21,7 +21,7 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  TELEBIRR_NUMBER: process.env.TELEBIRR_NUMBER || "0962577855",
+  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
   MIN_WITHDRAWAL: 50,
   MAX_WITHDRAWAL: 10000
 };
@@ -36,92 +36,34 @@ let roomTimers = new Map();
 let connectedSockets = new Set();
 let roomSubscriptions = new Map();
 let processingClaims = new Map();
-let telebirrNumber = CONFIG.TELEBIRR_NUMBER; // Mutable Telebirr number
+let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
 
 // ========== INITIALIZATION FUNCTION ==========
 async function initialize(socketIo, dbModels) {
   io = socketIo;
   models = dbModels;
   
-  // Load Telebirr number from database on startup
-  await loadTelebirrNumberFromDB();
+  console.log('✅ Game logic initialized');
   
   // Set up Socket.IO event handlers
   setupSocketHandlers();
   
   // Start periodic tasks
   startPeriodicTasks();
+}
+
+// ========== TELEBIRR NUMBER FUNCTIONS ==========
+function getTelebirrNumber() {
+  return telebirrNumber;
+}
+
+function setTelebirrNumber(newNumber) {
+  telebirrNumber = newNumber;
+  console.log(`📱 Telebirr number updated in game logic: ${telebirrNumber}`);
   
-  console.log('✅ Game logic initialized');
-  console.log(`📱 Telebirr number loaded: ${telebirrNumber}`);
-}
-
-// ========== TELEBIRR NUMBER DATABASE PERSISTENCE ==========
-async function loadTelebirrNumberFromDB() {
-  try {
-    // Check if we have a Config model (for storing settings)
-    if (models.Config) {
-      const config = await models.Config.findOne({ key: 'telebirr_number' });
-      if (config) {
-        telebirrNumber = config.value;
-        console.log(`📱 Loaded Telebirr number from database: ${telebirrNumber}`);
-      } else {
-        // Save default to database
-        const newConfig = new models.Config({
-          key: 'telebirr_number',
-          value: telebirrNumber,
-          updatedAt: new Date()
-        });
-        await newConfig.save();
-        console.log(`📱 Saved default Telebirr number to database: ${telebirrNumber}`);
-      }
-    } else {
-      // If no Config model, create one
-      const configSchema = new mongoose.Schema({
-        key: { type: String, required: true, unique: true },
-        value: { type: String, required: true },
-        updatedAt: { type: Date, default: Date.now }
-      });
-      
-      models.Config = mongoose.model('Config', configSchema);
-      
-      // Try to load again
-      const config = await models.Config.findOne({ key: 'telebirr_number' });
-      if (config) {
-        telebirrNumber = config.value;
-      } else {
-        const newConfig = new models.Config({
-          key: 'telebirr_number',
-          value: telebirrNumber,
-          updatedAt: new Date()
-        });
-        await newConfig.save();
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error loading Telebirr number from database:', error);
-    // Keep using default from CONFIG
-    telebirrNumber = CONFIG.TELEBIRR_NUMBER;
-  }
-}
-
-async function saveTelebirrNumberToDB() {
-  try {
-    if (models.Config) {
-      await models.Config.findOneAndUpdate(
-        { key: 'telebirr_number' },
-        { 
-          value: telebirrNumber,
-          updatedAt: new Date()
-        },
-        { upsert: true, new: true }
-      );
-      console.log(`📱 Saved Telebirr number to database: ${telebirrNumber}`);
-      return true;
-    }
-  } catch (error) {
-    console.error('❌ Error saving Telebirr number to database:', error);
-    return false;
+  // Broadcast to all connected players
+  if (io) {
+    io.emit('telebirrNumber', telebirrNumber);
   }
 }
 
@@ -182,63 +124,6 @@ function cleanupProcessingClaims() {
       console.log(`🧹 Cleaned up stale processing claim for room ${roomStake}`);
     }
   });
-}
-
-// ========== TELEBIRR NUMBER MANAGEMENT ==========
-function getTelebirrNumber() {
-  return telebirrNumber;
-}
-
-async function updateTelebirrNumber(newNumber, adminSocketId) {
-  const oldNumber = telebirrNumber;
-  telebirrNumber = newNumber;
-  
-  // Save to database
-  const saved = await saveTelebirrNumberToDB();
-  
-  if (saved) {
-    console.log(`📱 Telebirr number updated: ${oldNumber} -> ${newNumber} by admin ${adminSocketId}`);
-    
-    // Broadcast to all admin panels
-    adminSockets.forEach(socketId => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
-        socket.emit('admin:telebirrNumberUpdated', { 
-          telebirrNumber: newNumber,
-          updatedBy: adminSocketId,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
-    
-    // Broadcast to all players
-    io.emit('telebirrNumberUpdate', {
-      telebirrNumber: newNumber,
-      timestamp: new Date().toISOString()
-    });
-    
-    logActivity('TELEBIRR_NUMBER_UPDATE', { 
-      adminSocketId: adminSocketId,
-      oldNumber: oldNumber,
-      newNumber: newNumber
-    }, adminSocketId);
-    
-    return {
-      success: true,
-      message: `Telebirr number updated from ${oldNumber} to ${newNumber}`,
-      oldNumber: oldNumber,
-      newNumber: newNumber
-    };
-  } else {
-    // Revert if save failed
-    telebirrNumber = oldNumber;
-    return {
-      success: false,
-      message: 'Failed to save Telebirr number to database',
-      oldNumber: oldNumber,
-      newNumber: oldNumber
-    };
-  }
 }
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
@@ -559,7 +444,7 @@ async function updateAdminPanel() {
       serverUptime: process.uptime(),
       gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES,
       multiSocketUsers: multiSocketUsers,
-      telebirrNumber: telebirrNumber // ADDED: Include Telebirr number
+      telebirrNumber: telebirrNumber
     };
     
     adminSockets.forEach(socketId => {
@@ -1505,6 +1390,9 @@ function setupSocketHandlers() {
         socket.emit('admin:authSuccess');
         updateAdminPanel();
         
+        // Send Telebirr number to admin
+        socket.emit('admin:telebirrNumber', telebirrNumber);
+        
         logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
         console.log(`✅ Admin authenticated: ${socket.id}`);
       } else {
@@ -1519,44 +1407,6 @@ function setupSocketHandlers() {
         return;
       }
       updateAdminPanel();
-    });
-    
-    // ========== NEW: TELEBIRR NUMBER MANAGEMENT ==========
-    socket.on('admin:getTelebirrNumber', () => {
-      if (!adminSockets.has(socket.id)) {
-        socket.emit('admin:error', 'Unauthorized');
-        return;
-      }
-      
-      socket.emit('admin:telebirrNumber', telebirrNumber);
-      console.log(`📱 Sent Telebirr number to admin ${socket.id}: ${telebirrNumber}`);
-    });
-    
-    socket.on('admin:updateTelebirrNumber', async (newNumber) => {
-      if (!adminSockets.has(socket.id)) {
-        socket.emit('admin:error', 'Unauthorized');
-        return;
-      }
-      
-      if (!newNumber || newNumber.trim() === '') {
-        socket.emit('admin:error', 'Telebirr number cannot be empty');
-        return;
-      }
-      
-      // Validate Ethiopian phone number format
-      const ethPhoneRegex = /^(09[0-9]{8})$/;
-      if (!ethPhoneRegex.test(newNumber)) {
-        socket.emit('admin:warning', 'Phone number should be in Ethiopian format (09xxxxxxxx)');
-        // Continue anyway, just warn
-      }
-      
-      const result = await updateTelebirrNumber(newNumber.trim(), socket.id);
-      
-      if (!result.success) {
-        socket.emit('admin:error', result.message);
-      } else {
-        socket.emit('admin:success', result.message);
-      }
     });
     
     // ========== HOUSE EARNINGS RESET ==========
@@ -2169,7 +2019,7 @@ function setupSocketHandlers() {
         // Notify the user
         socket.emit('wallet:depositRequestSuccess', {
           message: 'Deposit request submitted successfully. Admin will process it soon.',
-          telebirrNumber: telebirrNumber // Include current Telebirr number
+          telebirrNumber: telebirrNumber
         });
         
         // Notify admin
@@ -2271,10 +2121,12 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== TELEBIRR NUMBER FOR PLAYERS ==========
+    // Telebirr number request from players
     socket.on('getTelebirrNumber', (callback) => {
       if (callback) {
         callback({ telebirrNumber: telebirrNumber });
+      } else {
+        socket.emit('telebirrNumber', telebirrNumber);
       }
     });
     
@@ -3285,8 +3137,10 @@ module.exports = {
   // NEW FUNCTIONS FOR ADMIN PANEL
   resetHouseEarnings,
   disconnectUser,
+  
+  // Telebirr number functions
   getTelebirrNumber,
-  updateTelebirrNumber,
+  setTelebirrNumber,
   
   // State getters for server.js
   getSocketToUser: () => socketToUser,
