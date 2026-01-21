@@ -39,9 +39,12 @@ let processingClaims = new Map();
 let telebirrNumber = CONFIG.TELEBIRR_NUMBER; // Mutable Telebirr number
 
 // ========== INITIALIZATION FUNCTION ==========
-function initialize(socketIo, dbModels) {
+async function initialize(socketIo, dbModels) {
   io = socketIo;
   models = dbModels;
+  
+  // Load Telebirr number from database on startup
+  await loadTelebirrNumberFromDB();
   
   // Set up Socket.IO event handlers
   setupSocketHandlers();
@@ -50,7 +53,76 @@ function initialize(socketIo, dbModels) {
   startPeriodicTasks();
   
   console.log('✅ Game logic initialized');
-  console.log(`📱 Initial Telebirr number: ${telebirrNumber}`);
+  console.log(`📱 Telebirr number loaded: ${telebirrNumber}`);
+}
+
+// ========== TELEBIRR NUMBER DATABASE PERSISTENCE ==========
+async function loadTelebirrNumberFromDB() {
+  try {
+    // Check if we have a Config model (for storing settings)
+    if (models.Config) {
+      const config = await models.Config.findOne({ key: 'telebirr_number' });
+      if (config) {
+        telebirrNumber = config.value;
+        console.log(`📱 Loaded Telebirr number from database: ${telebirrNumber}`);
+      } else {
+        // Save default to database
+        const newConfig = new models.Config({
+          key: 'telebirr_number',
+          value: telebirrNumber,
+          updatedAt: new Date()
+        });
+        await newConfig.save();
+        console.log(`📱 Saved default Telebirr number to database: ${telebirrNumber}`);
+      }
+    } else {
+      // If no Config model, create one
+      const configSchema = new mongoose.Schema({
+        key: { type: String, required: true, unique: true },
+        value: { type: String, required: true },
+        updatedAt: { type: Date, default: Date.now }
+      });
+      
+      models.Config = mongoose.model('Config', configSchema);
+      
+      // Try to load again
+      const config = await models.Config.findOne({ key: 'telebirr_number' });
+      if (config) {
+        telebirrNumber = config.value;
+      } else {
+        const newConfig = new models.Config({
+          key: 'telebirr_number',
+          value: telebirrNumber,
+          updatedAt: new Date()
+        });
+        await newConfig.save();
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error loading Telebirr number from database:', error);
+    // Keep using default from CONFIG
+    telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+  }
+}
+
+async function saveTelebirrNumberToDB() {
+  try {
+    if (models.Config) {
+      await models.Config.findOneAndUpdate(
+        { key: 'telebirr_number' },
+        { 
+          value: telebirrNumber,
+          updatedAt: new Date()
+        },
+        { upsert: true, new: true }
+      );
+      console.log(`📱 Saved Telebirr number to database: ${telebirrNumber}`);
+      return true;
+    }
+  } catch (error) {
+    console.error('❌ Error saving Telebirr number to database:', error);
+    return false;
+  }
 }
 
 // ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
@@ -117,42 +189,56 @@ function getTelebirrNumber() {
   return telebirrNumber;
 }
 
-function updateTelebirrNumber(newNumber, adminSocketId) {
+async function updateTelebirrNumber(newNumber, adminSocketId) {
   const oldNumber = telebirrNumber;
   telebirrNumber = newNumber;
   
-  console.log(`📱 Telebirr number updated: ${oldNumber} -> ${newNumber} by admin ${adminSocketId}`);
+  // Save to database
+  const saved = await saveTelebirrNumberToDB();
   
-  // Broadcast to all admin panels
-  adminSockets.forEach(socketId => {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-      socket.emit('admin:telebirrNumberUpdated', { 
-        telebirrNumber: newNumber,
-        updatedBy: adminSocketId,
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-  
-  // Broadcast to all players
-  io.emit('telebirrNumberUpdate', {
-    telebirrNumber: newNumber,
-    timestamp: new Date().toISOString()
-  });
-  
-  logActivity('TELEBIRR_NUMBER_UPDATE', { 
-    adminSocketId: adminSocketId,
-    oldNumber: oldNumber,
-    newNumber: newNumber
-  }, adminSocketId);
-  
-  return {
-    success: true,
-    message: `Telebirr number updated from ${oldNumber} to ${newNumber}`,
-    oldNumber: oldNumber,
-    newNumber: newNumber
-  };
+  if (saved) {
+    console.log(`📱 Telebirr number updated: ${oldNumber} -> ${newNumber} by admin ${adminSocketId}`);
+    
+    // Broadcast to all admin panels
+    adminSockets.forEach(socketId => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('admin:telebirrNumberUpdated', { 
+          telebirrNumber: newNumber,
+          updatedBy: adminSocketId,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+    
+    // Broadcast to all players
+    io.emit('telebirrNumberUpdate', {
+      telebirrNumber: newNumber,
+      timestamp: new Date().toISOString()
+    });
+    
+    logActivity('TELEBIRR_NUMBER_UPDATE', { 
+      adminSocketId: adminSocketId,
+      oldNumber: oldNumber,
+      newNumber: newNumber
+    }, adminSocketId);
+    
+    return {
+      success: true,
+      message: `Telebirr number updated from ${oldNumber} to ${newNumber}`,
+      oldNumber: oldNumber,
+      newNumber: newNumber
+    };
+  } else {
+    // Revert if save failed
+    telebirrNumber = oldNumber;
+    return {
+      success: false,
+      message: 'Failed to save Telebirr number to database',
+      oldNumber: oldNumber,
+      newNumber: oldNumber
+    };
+  }
 }
 
 // ========== IMPROVED HELPER FUNCTIONS ==========
@@ -1464,7 +1550,7 @@ function setupSocketHandlers() {
         // Continue anyway, just warn
       }
       
-      const result = updateTelebirrNumber(newNumber.trim(), socket.id);
+      const result = await updateTelebirrNumber(newNumber.trim(), socket.id);
       
       if (!result.success) {
         socket.emit('admin:error', result.message);
