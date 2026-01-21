@@ -17,7 +17,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bingo', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('✅ MongoDB Connected'))
+.then(async () => {
+  console.log('✅ MongoDB Connected');
+  await initializeTelebirrNumber(); // Initialize default Telebirr number
+})
 .catch(err => {
   console.error('❌ MongoDB Connection Error:', err);
   process.exit(1);
@@ -98,10 +101,67 @@ const statsSchema = new mongoose.Schema({
   totalFourCorners: { type: Number, default: 0 }
 });
 
+// NEW: Setting model for storing Telebirr number
+const settingSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed, required: true },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const Stats = mongoose.model('Stats', statsSchema);
+const Setting = mongoose.model('Setting', settingSchema); // NEW
+
+// Telebirr number utility functions
+async function getTelebirrNumber() {
+  try {
+    const setting = await Setting.findOne({ key: 'telebirrNumber' });
+    return setting ? setting.value : '0962577855';
+  } catch (err) {
+    console.error('Error getting Telebirr number:', err);
+    return '0962577855';
+  }
+}
+
+async function updateTelebirrNumber(newNumber) {
+  try {
+    // Validate Ethiopian phone number format
+    if (!/^09[0-9]{8}$/.test(newNumber)) {
+      throw new Error('Invalid phone number format. Must be 09xxxxxxxx (10 digits)');
+    }
+    
+    const result = await Setting.findOneAndUpdate(
+      { key: 'telebirrNumber' },
+      { value: newNumber, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+    console.log(`✅ Telebirr number updated to: ${newNumber}`);
+    return result;
+  } catch (err) {
+    console.error('Error updating Telebirr number:', err);
+    throw err;
+  }
+}
+
+async function initializeTelebirrNumber() {
+  try {
+    const exists = await Setting.findOne({ key: 'telebirrNumber' });
+    if (!exists) {
+      await Setting.create({
+        key: 'telebirrNumber',
+        value: '0962577855',
+        updatedAt: new Date()
+      });
+      console.log('✅ Default Telebirr number initialized: 0962577855');
+    } else {
+      console.log(`✅ Telebirr number loaded from DB: ${exists.value}`);
+    }
+  } catch (err) {
+    console.error('Error initializing Telebirr number:', err);
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -150,12 +210,239 @@ app.use((req, res, next) => {
 // ========== INITIALIZE GAME LOGIC ==========
 gameLogic.initialize(io, { User, Room, Transaction, Stats });
 
+// ========== SOCKET.IO EVENT HANDLERS ==========
+io.on('connection', (socket) => {
+  console.log(`🔌 New connection: ${socket.id}`);
+  
+  // Admin authentication
+  socket.on('admin:auth', async (password) => {
+    if (password === gameLogic.CONFIG.ADMIN_PASSWORD) {
+      socket.admin = true;
+      socket.emit('admin:authSuccess');
+      
+      // Send current Telebirr number on successful auth
+      const telebirrNumber = await getTelebirrNumber();
+      socket.emit('admin:telebirrNumber', telebirrNumber);
+      
+      console.log(`🔑 Admin authenticated: ${socket.id}`);
+    } else {
+      socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  // Get Telebirr number (admin only)
+  socket.on('admin:getTelebirrNumber', async () => {
+    if (socket.admin) {
+      const number = await getTelebirrNumber();
+      socket.emit('admin:telebirrNumber', number);
+    }
+  });
+  
+  // Update Telebirr number (admin only)
+  socket.on('admin:updateTelebirrNumber', async (newNumber) => {
+    if (socket.admin) {
+      try {
+        const result = await updateTelebirrNumber(newNumber);
+        const updatedNumber = result.value;
+        
+        // Broadcast to all admin sockets
+        io.emit('admin:telebirrNumberUpdated', { 
+          telebirrNumber: updatedNumber,
+          updatedAt: result.updatedAt
+        });
+        
+        socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
+        console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
+        
+        // Log the transaction
+        const adminTransaction = new Transaction({
+          type: 'TELEBIRR_UPDATE',
+          userId: 'admin',
+          userName: 'Admin',
+          amount: 0,
+          admin: true,
+          description: `Telebirr number updated to ${updatedNumber}`
+        });
+        await adminTransaction.save();
+        
+      } catch (error) {
+        console.error('Error updating Telebirr number:', error);
+        socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
+      }
+    }
+  });
+  
+  // Reset house earnings (admin only)
+  socket.on('admin:resetHouseEarnings', async () => {
+    if (socket.admin) {
+      try {
+        // Get current total from all transactions
+        const houseEarningsTransactions = await Transaction.find({ 
+          type: 'HOUSE_EARNINGS' 
+        });
+        const previousAmount = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
+        
+        // Create a reset transaction
+        const resetTransaction = new Transaction({
+          type: 'HOUSE_EARNINGS_RESET',
+          userId: 'system',
+          userName: 'System',
+          amount: -previousAmount,
+          admin: true,
+          description: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
+        });
+        await resetTransaction.save();
+        
+        socket.emit('admin:houseEarningsReset', { 
+          previousAmount,
+          resetAmount: 0,
+          message: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
+        });
+        
+        console.log(`🔄 House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
+      } catch (error) {
+        console.error('Error resetting house earnings:', error);
+        socket.emit('admin:houseEarningsResetError', error.message);
+      }
+    }
+  });
+  
+  // Existing admin events (delegated to gameLogic)
+  socket.on('admin:getData', () => {
+    if (socket.admin && gameLogic.handleAdminGetData) {
+      gameLogic.handleAdminGetData(socket);
+    }
+  });
+  
+  socket.on('admin:addFunds', (data) => {
+    if (socket.admin && gameLogic.handleAdminAddFunds) {
+      gameLogic.handleAdminAddFunds(socket, data);
+    }
+  });
+  
+  socket.on('admin:banPlayer', (userId) => {
+    if (socket.admin && gameLogic.handleAdminBanPlayer) {
+      gameLogic.handleAdminBanPlayer(socket, userId);
+    }
+  });
+  
+  socket.on('admin:kickPlayer', (userId) => {
+    if (socket.admin && gameLogic.handleAdminKickPlayer) {
+      gameLogic.handleAdminKickPlayer(socket, userId);
+    }
+  });
+  
+  socket.on('admin:disconnectUser', (userId) => {
+    if (socket.admin && gameLogic.handleAdminDisconnectUser) {
+      gameLogic.handleAdminDisconnectUser(socket, userId);
+    }
+  });
+  
+  socket.on('admin:forceStartGame', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceStartGame) {
+      gameLogic.handleAdminForceStartGame(socket, stake);
+    }
+  });
+  
+  socket.on('admin:forceDraw', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceDraw) {
+      gameLogic.handleAdminForceDraw(socket, stake);
+    }
+  });
+  
+  socket.on('admin:forceEndGame', (stake) => {
+    if (socket.admin && gameLogic.handleAdminForceEndGame) {
+      gameLogic.handleAdminForceEndGame(socket, stake);
+    }
+  });
+  
+  socket.on('admin:getPendingTransactions', async () => {
+    if (socket.admin && gameLogic.handleAdminGetPendingTransactions) {
+      await gameLogic.handleAdminGetPendingTransactions(socket);
+    }
+  });
+  
+  socket.on('admin:approveDeposit', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminApproveDeposit) {
+      gameLogic.handleAdminApproveDeposit(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:approveWithdrawal', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminApproveWithdrawal) {
+      gameLogic.handleAdminApproveWithdrawal(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:rejectTransaction', (transactionId) => {
+    if (socket.admin && gameLogic.handleAdminRejectTransaction) {
+      gameLogic.handleAdminRejectTransaction(socket, transactionId);
+    }
+  });
+  
+  // Disconnect handler
+  socket.on('disconnect', () => {
+    console.log(`🔌 Disconnected: ${socket.id}`);
+    if (socket.admin) {
+      console.log(`🔑 Admin disconnected: ${socket.id}`);
+    }
+    // Handle player disconnect in game logic
+    if (gameLogic.handleDisconnect) {
+      gameLogic.handleDisconnect(socket);
+    }
+  });
+  
+  // Forward game events to game logic
+  socket.on('join', (data) => {
+    if (gameLogic.handleJoin) {
+      gameLogic.handleJoin(socket, data);
+    }
+  });
+  
+  socket.on('selectBox', (data) => {
+    if (gameLogic.handleSelectBox) {
+      gameLogic.handleSelectBox(socket, data);
+    }
+  });
+  
+  socket.on('claimBingo', (data) => {
+    if (gameLogic.handleClaimBingo) {
+      gameLogic.handleClaimBingo(socket, data);
+    }
+  });
+  
+  socket.on('markNumber', (data) => {
+    if (gameLogic.handleMarkNumber) {
+      gameLogic.handleMarkNumber(socket, data);
+    }
+  });
+  
+  socket.on('depositRequest', (data) => {
+    if (gameLogic.handleDepositRequest) {
+      gameLogic.handleDepositRequest(socket, data);
+    }
+  });
+  
+  socket.on('withdrawRequest', (data) => {
+    if (gameLogic.handleWithdrawRequest) {
+      gameLogic.handleWithdrawRequest(socket, data);
+    }
+  });
+  
+  socket.on('getUserData', (data) => {
+    if (gameLogic.handleGetUserData) {
+      gameLogic.handleGetUserData(socket, data);
+    }
+  });
+});
+
 // ========== EXPRESS ROUTES ==========
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   const connectedSockets = gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
   const socketToUser = gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
   const adminSockets = gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
   const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
+  const telebirrNumber = await getTelebirrNumber();
   
   res.send(`
     <!DOCTYPE html>
@@ -248,7 +535,7 @@ app.get('/', (req, res) => {
             Bot Username: @ethio_games1_bot<br>
             Real-time Box Updates: ✅ ACTIVE<br>
             Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
-            Telebirr Number: ${gameLogic.getTelebirrNumber ? gameLogic.getTelebirrNumber() : '0962577855'}<br>
+            Telebirr Number: ${telebirrNumber}<br>
             Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
             Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} minute timeout<br>
@@ -279,7 +566,10 @@ app.get('/', (req, res) => {
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE - PROFESSIONAL UX ==========
-app.get('/telegram', (req, res) => {
+app.get('/telegram', async (req, res) => {
+  const telebirrNumber = await getTelebirrNumber();
+  const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+  
   res.send(`
     <!DOCTYPE html>
     <html lang="en">
@@ -838,7 +1128,7 @@ app.get('/telegram', (req, res) => {
             function showWalletInfo() {
                 tg.showPopup({
                     title: 'Wallet Information',
-                    message: '💳 Deposit to: ${gameLogic.getTelebirrNumber ? gameLogic.getTelebirrNumber() : '0962577855'}\\n💰 Min withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB\\n🎮 Play: @ethio_games1_bot',
+                    message: '💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -945,6 +1235,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const userName = message.from.first_name || 'Player';
       const username = message.from.username || '';
       
+      const telebirrNumber = await getTelebirrNumber();
+      const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+      
       if (text === '/start' || text === '/play') {
         let user = await User.findOne({ telegramId: userId });
         
@@ -990,7 +1283,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• ✅ Fixed: Game starts with 1 player after 30 seconds\n` +
                   `• ✅ Fixed: Game starts properly now!\n\n` +
                   `💳 *Deposit Instructions:*\n` +
-                  `1. Send money to Telebirr: *${gameLogic.getTelebirrNumber()}*\n` +
+                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Enter receipt number in game wallet\n` +
                   `3. Admin will approve within 24 hours\n\n` +
                   `_Need help? Contact admin_`,
@@ -1016,7 +1309,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `💳 *Deposit to:* ${gameLogic.getTelebirrNumber()}\n` +
+                  `💳 *Deposit to:* ${telebirrNumber}\n` +
                   `🎮 Play: @ethio_games1_bot\n` +
                   `👑 Admin: Contact for funds\n` +
                   `🆔 Your ID: \`${userId}\``,
@@ -1032,12 +1325,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             chat_id: chatId,
             text: `💳 *Bingo Elite Wallet*\n\n` +
                   `*How to Deposit:*\n` +
-                  `1. Send money to Telebirr: *${gameLogic.getTelebirrNumber()}*\n` +
+                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Open game and go to Wallet (💰 button)\n` +
                   `3. Enter receipt number and amount\n` +
                   `4. Admin will approve within 24 hours\n\n` +
                   `*How to Withdraw:*\n` +
-                  `1. Minimum withdrawal: ${gameLogic.CONFIG.MIN_WITHDRAWAL} ETB\n` +
+                  `1. Minimum withdrawal: ${minWithdrawal} ETB\n` +
                   `2. Open game Wallet\n` +
                   `3. Select amount and enter phone number\n` +
                   `4. Admin will send money within 24 hours\n\n` +
@@ -1096,8 +1389,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*✅ Fixed:* All players return to lobby after game ends\n` +
                   `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
                   `💳 *Wallet:*\n` +
-                  `Deposit to Telebirr: *${gameLogic.getTelebirrNumber()}*\n` +
-                  `Min withdrawal: ${gameLogic.CONFIG.MIN_WITHDRAWAL} ETB\n\n` +
+                  `Deposit to Telebirr: *${telebirrNumber}*\n` +
+                  `Min withdrawal: ${minWithdrawal} ETB\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
           })
@@ -1115,6 +1408,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
 // Setup endpoint for Telegram bot
 app.get('/setup-telegram', async (req, res) => {
   try {
+    const telebirrNumber = await getTelebirrNumber();
+    const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+    
     const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1171,8 +1467,8 @@ app.get('/setup-telegram', async (req, res) => {
             <p>5. ⏰ <strong>${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
             <p>6. ⏱️ <strong>Box Selection Timer:</strong> Countdown shows on box selection screen</p>
             <p><strong>Wallet Features:</strong></p>
-            <p>• Telebirr Number: ${gameLogic.getTelebirrNumber()}</p>
-            <p>• Minimum Withdrawal: ${gameLogic.CONFIG.MIN_WITHDRAWAL} ETB</p>
+            <p>• Telebirr Number: ${telebirrNumber}</p>
+            <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
             <p><strong>Real-time Features:</strong> Box tracking, Live updates</p>
             <p><strong>Fixed Issues:</strong> Double prize bug eliminated, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
@@ -1210,7 +1506,7 @@ app.get('/setup-telegram', async (req, res) => {
             
             <h4>Wallet Instructions for Players:</h4>
             <ol>
-              <li>Send money to Telebirr: ${gameLogic.getTelebirrNumber()}</li>
+              <li>Send money to Telebirr: ${telebirrNumber}</li>
               <li>In game, click Wallet (💰 button)</li>
               <li>Enter receipt number and amount</li>
               <li>Admin approves in Admin Panel</li>
@@ -1249,6 +1545,7 @@ app.get('/health', async (req, res) => {
     const totalTransactions = await Transaction.countDocuments();
     const pendingDeposits = await Transaction.countDocuments({ type: 'DEPOSIT_REQUEST', status: 'pending' });
     const pendingWithdrawals = await Transaction.countDocuments({ type: 'WITHDRAW_REQUEST', status: 'pending' });
+    const telebirrNumber = await getTelebirrNumber();
     
     res.json({
       status: 'ok',
@@ -1260,13 +1557,57 @@ app.get('/health', async (req, res) => {
       totalTransactions: totalTransactions,
       pendingDeposits: pendingDeposits,
       pendingWithdrawals: pendingWithdrawals,
+      telebirrNumber: telebirrNumber,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       telegramReady: true,
       botUsername: '@ethio_games1_bot',
       realTimeBoxUpdates: 'active',
-      walletSystem: 'active',
-      telebirrNumber: gameLogic.getTelebirrNumber()
+      walletSystem: 'active'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== DEBUG ENDPOINTS ==========
+app.get('/debug-connections', (req, res) => {
+  try {
+    const connectedSockets = gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
+    const socketToUser = gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
+    const adminSockets = gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
+    const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
+    
+    res.json({
+      connectedSockets: connectedSockets,
+      socketToUser: socketToUser,
+      adminSockets: adminSockets,
+      processingClaims: processingClaims,
+      serverTime: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/debug-users', async (req, res) => {
+  try {
+    const users = await User.find().sort({ lastSeen: -1 }).limit(50);
+    const onlineUsers = users.filter(u => u.isOnline);
+    
+    res.json({
+      totalUsers: users.length,
+      onlineUsers: onlineUsers.length,
+      users: users.map(u => ({
+        userId: u.userId,
+        userName: u.userName,
+        balance: u.balance,
+        isOnline: u.isOnline,
+        currentRoom: u.currentRoom,
+        box: u.box,
+        lastSeen: u.lastSeen,
+        telegramId: u.telegramId
+      }))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1275,7 +1616,8 @@ app.get('/health', async (req, res) => {
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  const telebirrNumber = await getTelebirrNumber();
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║             🤖 BINGO ELITE - TELEGRAM READY                   ║
@@ -1293,8 +1635,9 @@ server.listen(PORT, () => {
 ║  🎮 Four Corners Bonus: ${gameLogic.CONFIG.FOUR_CORNERS_BONUS} ETB ║
 ║  📦 Real-time Box Tracking: ✅ ACTIVE                         ║
 ║  💳 Wallet System: ✅ ACTIVE                                  ║
-║  📱 Telebirr: ${gameLogic.getTelebirrNumber()}                ║
+║  📱 Telebirr: ${telebirrNumber}                               ║
+║  💾 Telebirr Number: DATABASE PERSISTENCE ✅                 ║
 ╚════════════════════════════════════════════════════════════════╝
-✅ Server ready with split architecture
+✅ Server ready with database-persisted Telebirr number
   `);
 });
