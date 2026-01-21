@@ -1879,6 +1879,23 @@
             console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
         }
 
+        // Function to manually request Telebirr number
+        function fetchTelebirrNumber() {
+            if (state.isConnected) {
+                console.log('📱 Requesting Telebirr number from server...');
+                socket.emit('getTelebirrNumber', (data) => {
+                    console.log('📱 Telebirr number response:', data);
+                    if (data) {
+                        const number = typeof data === 'string' ? data : (data.telebirrNumber || data);
+                        if (number) {
+                            updateTelebirrNumberInUI(number);
+                            console.log('📱 Fetched and updated Telebirr number:', number);
+                        }
+                    }
+                });
+            }
+        }
+
         // Update connection status UI
         function updateConnectionStatus(connected, message) {
             const dot = document.getElementById('statusDot');
@@ -1949,6 +1966,9 @@
                     if (response && response.success) {
                         console.log('✅ Init SUCCESS:', response.message);
                         state.isInitialized = true;
+                        
+                        // After successful init, fetch Telebirr number
+                        fetchTelebirrNumber();
                     } else {
                         console.log('❌ Init FAILED:', response?.message || 'No response');
                         state.isInitialized = false;
@@ -2052,19 +2072,13 @@
             document.getElementById('customAmount').value = '';
             document.getElementById('withdrawPhoneNumber').value = '';
             
-            // ✅ Fetch current Telebirr number from server
+            // ✅ Always fetch current Telebirr number from server when opening wallet
             if (state.isConnected) {
-                socket.emit('getTelebirrNumber', (data) => {
-                    if (data && data.telebirrNumber) {
-                        updateTelebirrNumberInUI(data.telebirrNumber);
-                    } else {
-                        // Fallback to default if server doesn't respond
-                        updateTelebirrNumberInUI('0962577855');
-                    }
-                });
+                console.log('📱 Opening wallet, fetching Telebirr number...');
+                fetchTelebirrNumber();
             } else {
-                // Use default if not connected
-                updateTelebirrNumberInUI('0962577855');
+                // Use state value if not connected
+                updateTelebirrNumberInUI(state.telebirrNumber);
             }
             
             // Show wallet overlay
@@ -2274,21 +2288,41 @@
         });
 
         // ✅ Handle Telebirr number received from server
-        socket.on('telebirrNumber', (number) => {
-            console.log('📱 Received Telebirr number from server:', number);
-            state.telebirrNumber = number;
-            updateTelebirrNumberInUI(number);
+        socket.on('telebirrNumber', (data) => {
+            // Check if data is a string or object
+            const number = typeof data === 'string' ? data : (data?.telebirrNumber || data);
+            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number, 'Full data:', data);
+            if (number) {
+                state.telebirrNumber = number;
+                updateTelebirrNumberInUI(number);
+            }
         });
 
         // ✅ Handle Telebirr number updates in real-time
         socket.on('telebirrNumberUpdate', (data) => {
-            console.log('📱 Telebirr number updated in real-time:', data.telebirrNumber);
-            state.telebirrNumber = data.telebirrNumber;
-            updateTelebirrNumberInUI(data.telebirrNumber);
-            
-            // Show notification to user if they're viewing the wallet
-            if (document.getElementById('walletOverlay').classList.contains('active')) {
-                showNotification('📱 Telebirr number has been updated', 'info', 3000);
+            console.log('📱 [telebirrNumberUpdate] Telebirr number updated in real-time:', data);
+            if (data && data.telebirrNumber) {
+                state.telebirrNumber = data.telebirrNumber;
+                updateTelebirrNumberInUI(data.telebirrNumber);
+                
+                // Show notification to user if they're viewing the wallet
+                if (document.getElementById('walletOverlay')?.classList.contains('active')) {
+                    showNotification('📱 Telebirr number has been updated: ' + data.telebirrNumber, 'info', 3000);
+                }
+            }
+        });
+
+        // ✅ Handle Telebirr number updates from admin panel
+        socket.on('admin:telebirrNumberUpdated', (data) => {
+            console.log('📱 [admin:telebirrNumberUpdated] Received admin Telebirr number update:', data);
+            if (data && data.telebirrNumber) {
+                state.telebirrNumber = data.telebirrNumber;
+                updateTelebirrNumberInUI(data.telebirrNumber);
+                
+                // Show notification to user if they're viewing the wallet
+                if (document.getElementById('walletOverlay')?.classList.contains('active')) {
+                    showNotification('📱 Telebirr number has been updated by admin: ' + data.telebirrNumber, 'info', 3000);
+                }
             }
         });
 
