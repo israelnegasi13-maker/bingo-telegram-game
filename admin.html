@@ -1086,6 +1086,40 @@
             font-size: 0.85rem;
             min-height: 20px;
         }
+        
+        /* Telebirr Debug Panel */
+        .telebirr-debug-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .telebirr-debug-panel h4 {
+            margin-bottom: 10px;
+            color: var(--warning);
+        }
+        
+        .debug-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .debug-output {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -1650,11 +1684,35 @@
                                         onclick="getCurrentTelebirrNumber()" title="Get Current Number">
                                     <i class="fas fa-sync"></i>
                                 </button>
+                                <button class="btn-action" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);" 
+                                        onclick="testTelebirrUpdate()" title="Test Update">
+                                    <i class="fas fa-vial"></i> Test
+                                </button>
                             </div>
                             <small style="color: var(--text-muted); font-size: 0.85rem;">
                                 This number is shown to players for depositing funds. Must be an Ethiopian number (09xxxxxxxx)
                             </small>
                             <div id="telebirrNumberStatus" class="telebirr-status"></div>
+                        </div>
+                        
+                        <!-- Telebirr Debug Panel -->
+                        <div class="telebirr-debug-panel">
+                            <h4><i class="fas fa-bug"></i> Telebirr Debug Tools</h4>
+                            <div class="debug-buttons">
+                                <button class="btn-action" style="background: rgba(59, 130, 246, 0.15); color: var(--primary);" onclick="debugCheckConnection()">
+                                    <i class="fas fa-plug"></i> Check Connection
+                                </button>
+                                <button class="btn-action" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);" onclick="debugTestSocket()">
+                                    <i class="fas fa-bolt"></i> Test Socket
+                                </button>
+                                <button class="btn-action" style="background: rgba(6, 214, 160, 0.15); color: var(--success);" onclick="debugFetchCurrentNumber()">
+                                    <i class="fas fa-download"></i> Fetch Number
+                                </button>
+                                <button class="btn-action" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);" onclick="debugClearStatus()">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                            <div id="telebirrDebugOutput" class="debug-output"></div>
                         </div>
                         
                         <div class="form-group">
@@ -1915,7 +1973,7 @@
             debugInfo: {},
             showUserDetails: false,
             multiSocketUsers: 0,
-            telebirrNumber: "0962577855" // Default Telebirr number
+            telebirrNumber: "0962577855"
         };
 
         // Initialize
@@ -1934,7 +1992,7 @@
                 }
             }
             
-            addSystemLog('Admin panel initialized - House Earnings tracking enabled');
+            addSystemLog('Admin panel initialized - Telebirr number management enabled');
             attachNavListeners();
             setupUserInfoDisplay();
         });
@@ -1969,6 +2027,11 @@
                     
                     if (section === 'wallet-approvals') {
                         refreshPendingTransactions();
+                    }
+                    
+                    // Load Telebirr number when opening Controls section
+                    if (section === 'controls') {
+                        getCurrentTelebirrNumber();
                     }
                 });
             });
@@ -2036,12 +2099,6 @@
                 updateOnlineStatus(data.totalPlayers || 0);
                 document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
                 updateDebugStats();
-                
-                // Update Telebirr number if available
-                if (data.telebirrNumber) {
-                    state.telebirrNumber = data.telebirrNumber;
-                    document.getElementById('telebirrNumber').value = data.telebirrNumber;
-                }
             });
 
             state.socket.on('admin:players', (data) => {
@@ -2092,21 +2149,37 @@
                 updatePendingTransactionsBadge();
             });
 
-            // NEW: Telebirr number events
+            // Telebirr number events
             state.socket.on('admin:telebirrNumber', (number) => {
+                console.log('Received Telebirr number from server:', number);
                 state.telebirrNumber = number;
                 document.getElementById('telebirrNumber').value = number;
                 const statusEl = document.getElementById('telebirrNumberStatus');
                 statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Current: ${number}</span>`;
+                
+                // Update debug output
+                const debugOutput = document.getElementById('telebirrDebugOutput');
+                if (debugOutput) {
+                    debugOutput.innerHTML = `✅ Received Telebirr number: ${number}`;
+                    debugOutput.style.display = 'block';
+                }
             });
 
             state.socket.on('admin:telebirrNumberUpdated', (data) => {
+                console.log('Telebirr number updated:', data);
                 state.telebirrNumber = data.telebirrNumber;
                 document.getElementById('telebirrNumber').value = data.telebirrNumber;
                 const statusEl = document.getElementById('telebirrNumberStatus');
                 statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Updated to: ${data.telebirrNumber}</span>`;
                 showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
                 addSystemLog(`Telebirr number updated to ${data.telebirrNumber}`);
+                
+                // Update debug output
+                const debugOutput = document.getElementById('telebirrDebugOutput');
+                if (debugOutput) {
+                    debugOutput.innerHTML = `✅ Telebirr number updated successfully:\nNumber: ${data.telebirrNumber}\nTime: ${new Date(data.updatedAt).toLocaleString()}`;
+                    debugOutput.style.display = 'block';
+                }
             });
 
             state.socket.on('admin:newDepositRequest', (transaction) => {
@@ -2159,6 +2232,15 @@
             state.socket.on('admin:error', (message) => {
                 showToast('Error: ' + message, 'error');
                 addSystemLog('Error: ' + message, 'error');
+                
+                // Update debug output for Telebirr errors
+                if (message.includes('Telebirr') || message.includes('phone') || message.includes('number')) {
+                    const debugOutput = document.getElementById('telebirrDebugOutput');
+                    if (debugOutput) {
+                        debugOutput.innerHTML = `❌ Error: ${message}`;
+                        debugOutput.style.display = 'block';
+                    }
+                }
             });
 
             state.socket.on('admin:activity', (activity) => {
@@ -2190,7 +2272,7 @@
                 addSystemLog(`Withdrawal rejected: ${data.message}`);
             });
 
-            // ADDED: House earnings reset confirmation
+            // House earnings reset confirmation
             state.socket.on('admin:houseEarningsReset', (data) => {
                 showToast(`House earnings reset from ${data.previousAmount} to 0 ETB`, 'success');
                 addSystemLog(`House earnings reset: Was ${data.previousAmount} ETB`);
@@ -2284,7 +2366,7 @@
             }
         }
         
-        // ADDED: Reset House Earnings Function
+        // Reset House Earnings Function
         function resetHouseEarnings() {
             if (confirm('Are you sure you want to reset house earnings to zero? This will clear all accumulated commission/fee earnings.\n\nThis action cannot be undone.')) {
                 if (state.socket && state.isAdmin) {
@@ -2303,38 +2385,94 @@
             }
         }
         
-        // NEW: Update Telebirr Number Function
+        // Update Telebirr Number Function
         function updateTelebirrNumber() {
             const newNumber = document.getElementById('telebirrNumber').value.trim();
             const statusEl = document.getElementById('telebirrNumberStatus');
+            const debugOutput = document.getElementById('telebirrDebugOutput');
             
             if (!newNumber) {
                 statusEl.innerHTML = '<span style="color: var(--danger);">Please enter a phone number</span>';
+                if (debugOutput) {
+                    debugOutput.innerHTML = '❌ Error: Please enter a phone number';
+                    debugOutput.style.display = 'block';
+                }
+                showToast('Please enter a phone number', 'error');
                 return;
             }
             
-            // Basic validation
+            // Validate Ethiopian phone number format
             if (!/^09[0-9]{8}$/.test(newNumber)) {
                 statusEl.innerHTML = '<span style="color: var(--warning);">Format: 09xxxxxxxx (10 digits)</span>';
+                if (debugOutput) {
+                    debugOutput.innerHTML = '❌ Invalid format. Must be 09xxxxxxxx (10 digits)';
+                    debugOutput.style.display = 'block';
+                }
+                showToast('Invalid format. Must be 09xxxxxxxx (10 digits)', 'warning');
                 return;
             }
             
             if (state.socket && state.isAdmin) {
-                state.socket.emit('admin:updateTelebirrNumber', newNumber);
+                console.log('Updating Telebirr number to:', newNumber);
+                
+                // Show updating status
                 statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
+                
+                // Update debug output
+                if (debugOutput) {
+                    debugOutput.innerHTML = '🔄 Sending update request to server...';
+                    debugOutput.style.display = 'block';
+                }
+                
+                // Emit the event
+                state.socket.emit('admin:updateTelebirrNumber', newNumber);
+                
+                showToast('Updating Telebirr number...', 'info');
+                addSystemLog(`Attempting to update Telebirr number to ${newNumber}`);
+                
+                // Set a timeout to check if update was successful
+                setTimeout(() => {
+                    if (document.getElementById('telebirrNumber').value !== newNumber) {
+                        console.warn('Telebirr number may not have updated properly');
+                        if (debugOutput) {
+                            debugOutput.innerHTML += '\n⚠️ Update may have failed - checking again...';
+                        }
+                        // Try to get current number to verify
+                        state.socket.emit('admin:getTelebirrNumber');
+                    }
+                }, 3000);
+                
+            } else {
+                statusEl.innerHTML = '<span style="color: var(--danger);">Not connected or not admin</span>';
+                if (debugOutput) {
+                    debugOutput.innerHTML = '❌ Not connected to server or not admin';
+                    debugOutput.style.display = 'block';
+                }
+                showToast('Not connected to server or not admin', 'error');
+                console.error('Cannot update: socket=', state.socket, 'isAdmin=', state.isAdmin);
             }
         }
         
-        // NEW: Get current Telebirr number
+        // Get current Telebirr number
         function getCurrentTelebirrNumber() {
             if (state.socket && state.isAdmin) {
-                state.socket.emit('admin:getTelebirrNumber');
                 const statusEl = document.getElementById('telebirrNumberStatus');
+                const debugOutput = document.getElementById('telebirrDebugOutput');
+                
                 statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Fetching...</span>';
+                if (debugOutput) {
+                    debugOutput.innerHTML = '🔄 Requesting current Telebirr number...';
+                    debugOutput.style.display = 'block';
+                }
+                
+                state.socket.emit('admin:getTelebirrNumber');
+                showToast('Fetching current Telebirr number...', 'info');
+            } else {
+                showToast('Not connected to server', 'error');
             }
         }
         
-        // NEW: Focus on Telebirr number input
+        // Focus on Telebirr number input
         function focusTelebirrNumber() {
             // Switch to Controls section if not already
             document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
@@ -2356,6 +2494,66 @@
             
             // Get current number
             getCurrentTelebirrNumber();
+        }
+        
+        // Telebirr Debug Functions
+        function debugCheckConnection() {
+            const debugOutput = document.getElementById('telebirrDebugOutput');
+            if (state.socket) {
+                const connectionStatus = state.socket.connected ? '✅ Connected' : '❌ Disconnected';
+                const adminStatus = state.isAdmin ? '✅ Authenticated' : '❌ Not authenticated';
+                debugOutput.innerHTML = `Connection Status:\n${connectionStatus}\n${adminStatus}\n\nSocket ID: ${state.socket.id || 'N/A'}`;
+                debugOutput.style.display = 'block';
+                showToast('Connection check completed', 'info');
+            } else {
+                debugOutput.innerHTML = '❌ No socket connection established';
+                debugOutput.style.display = 'block';
+            }
+        }
+        
+        function debugTestSocket() {
+            const debugOutput = document.getElementById('telebirrDebugOutput');
+            if (state.socket && state.isAdmin) {
+                debugOutput.innerHTML = '🔄 Testing socket communication...';
+                debugOutput.style.display = 'block';
+                
+                // Test with a simple emit
+                const testNumber = '0962577855';
+                state.socket.emit('admin:updateTelebirrNumber', testNumber);
+                
+                debugOutput.innerHTML += '\n✅ Test update sent to server';
+                showToast('Test update sent: ' + testNumber, 'info');
+            } else {
+                debugOutput.innerHTML = '❌ Cannot test: Not connected or not admin';
+                debugOutput.style.display = 'block';
+            }
+        }
+        
+        function debugFetchCurrentNumber() {
+            getCurrentTelebirrNumber();
+        }
+        
+        function debugClearStatus() {
+            const debugOutput = document.getElementById('telebirrDebugOutput');
+            debugOutput.style.display = 'none';
+            debugOutput.innerHTML = '';
+        }
+        
+        function testTelebirrUpdate() {
+            const testNumber = '0962577855';
+            const debugOutput = document.getElementById('telebirrDebugOutput');
+            
+            if (state.socket && state.isAdmin) {
+                debugOutput.innerHTML = '🔄 Testing Telebirr update with number: ' + testNumber;
+                debugOutput.style.display = 'block';
+                
+                state.socket.emit('admin:updateTelebirrNumber', testNumber);
+                showToast('Test update sent: ' + testNumber, 'info');
+            } else {
+                debugOutput.innerHTML = '❌ Not connected or not admin';
+                debugOutput.style.display = 'block';
+                showToast('Not connected or not admin', 'error');
+            }
         }
         
         function updateOnlineStatus(onlineCount) {
@@ -3583,16 +3781,22 @@
                 refreshPendingTransactions();
             }
             
-            // NEW: Ctrl+T for Telebirr number
+            // Ctrl+T for Telebirr number
             if (e.ctrlKey && e.key === 't') {
                 e.preventDefault();
                 focusTelebirrNumber();
             }
             
-            // ADDED: Ctrl+Shift+R for reset house earnings
+            // Ctrl+Shift+R for reset house earnings
             if (e.ctrlKey && e.shiftKey && e.key === 'R') {
                 e.preventDefault();
                 resetHouseEarnings();
+            }
+            
+            // Ctrl+Shift+T for Telebirr test
+            if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+                e.preventDefault();
+                testTelebirrUpdate();
             }
         });
 
@@ -3601,7 +3805,7 @@
             if (state.isAdmin) {
                 addActivityItem({message: 'System initialized successfully'});
                 addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard v3.0'});
-                addSystemLog('Admin dashboard loaded with house earnings tracking and Telebirr number management');
+                addSystemLog('Admin dashboard loaded with Telebirr number management and debug tools');
             }
         }, 2000);
     </script>
