@@ -140,6 +140,50 @@ function cleanupRoomWinners() {
   });
 }
 
+// ========== NEW: PATTERN HELPER FUNCTIONS ==========
+function getPatternName(patternIndices) {
+  // All possible winning patterns
+  const patterns = [
+    { indices: [0,1,2,3,4], name: 'ROW 1' },
+    { indices: [5,6,7,8,9], name: 'ROW 2' },
+    { indices: [10,11,12,13,14], name: 'ROW 3' },
+    { indices: [15,16,17,18,19], name: 'ROW 4' },
+    { indices: [20,21,22,23,24], name: 'ROW 5' },
+    
+    { indices: [0,5,10,15,20], name: 'COLUMN B' },
+    { indices: [1,6,11,16,21], name: 'COLUMN I' },
+    { indices: [2,7,12,17,22], name: 'COLUMN N' },
+    { indices: [3,8,13,18,23], name: 'COLUMN G' },
+    { indices: [4,9,14,19,24], name: 'COLUMN O' },
+    
+    { indices: [0,6,12,18,24], name: 'DIAGONAL (Top-Left to Bottom-Right)' },
+    { indices: [4,8,12,16,20], name: 'DIAGONAL (Top-Right to Bottom-Left)' },
+    
+    { indices: [0,4,20,24], name: 'FOUR CORNERS' }
+  ];
+  
+  // Sort pattern indices for comparison
+  const sortedInput = patternIndices.slice().sort((a, b) => a - b);
+  
+  for (const pattern of patterns) {
+    const sortedPattern = pattern.indices.slice().sort((a, b) => a - b);
+    
+    // Check if arrays match (length and content)
+    if (sortedInput.length === sortedPattern.length &&
+        sortedInput.every((value, index) => value === sortedPattern[index])) {
+      return {
+        name: pattern.name,
+        isFourCorners: pattern.name === 'FOUR CORNERS'
+      };
+    }
+  }
+  
+  return {
+    name: 'LINE BINGO',
+    isFourCorners: false
+  };
+}
+
 // ========== IMPROVED HELPER FUNCTIONS ==========
 function getBingoLetter(number) {
   if (number >= 1 && number <= 15) return 'B';
@@ -708,29 +752,29 @@ async function startGameTimer(room) {
   console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
 }
 
-// ✅✅✅ UPDATED: Check if a player has bingo (now returns pattern info)
+// ✅✅✅ FIXED: Check if a player has bingo
 function checkBingo(markedNumbers, grid) {
   const patterns = [
     // Rows
-    { indices: [0,1,2,3,4], type: 'row', name: 'B Row', rowIndex: 0 },
-    { indices: [5,6,7,8,9], type: 'row', name: 'I Row', rowIndex: 1 },
-    { indices: [10,11,12,13,14], type: 'row', name: 'N Row', rowIndex: 2 },
-    { indices: [15,16,17,18,19], type: 'row', name: 'G Row', rowIndex: 3 },
-    { indices: [20,21,22,23,24], type: 'row', name: 'O Row', rowIndex: 4 },
+    { indices: [0,1,2,3,4], name: 'ROW 1' },
+    { indices: [5,6,7,8,9], name: 'ROW 2' },
+    { indices: [10,11,12,13,14], name: 'ROW 3' },
+    { indices: [15,16,17,18,19], name: 'ROW 4' },
+    { indices: [20,21,22,23,24], name: 'ROW 5' },
     
     // Columns
-    { indices: [0,5,10,15,20], type: 'column', name: 'B Column', columnIndex: 0 },
-    { indices: [1,6,11,16,21], type: 'column', name: 'I Column', columnIndex: 1 },
-    { indices: [2,7,12,17,22], type: 'column', name: 'N Column', columnIndex: 2 },
-    { indices: [3,8,13,18,23], type: 'column', name: 'G Column', columnIndex: 3 },
-    { indices: [4,9,14,19,24], type: 'column', name: 'O Column', columnIndex: 4 },
+    { indices: [0,5,10,15,20], name: 'COLUMN B' },
+    { indices: [1,6,11,16,21], name: 'COLUMN I' },
+    { indices: [2,7,12,17,22], name: 'COLUMN N' },
+    { indices: [3,8,13,18,23], name: 'COLUMN G' },
+    { indices: [4,9,14,19,24], name: 'COLUMN O' },
     
     // Diagonals
-    { indices: [0,6,12,18,24], type: 'diagonal', name: 'Main Diagonal' },
-    { indices: [4,8,12,16,20], type: 'diagonal', name: 'Anti-Diagonal' },
+    { indices: [0,6,12,18,24], name: 'DIAGONAL (Top-Left to Bottom-Right)' },
+    { indices: [4,8,12,16,20], name: 'DIAGONAL (Top-Right to Bottom-Left)' },
     
     // Four corners
-    { indices: [0,4,20,24], type: 'four-corners', name: 'Four Corners' }
+    { indices: [0,4,20,24], name: 'FOUR CORNERS', isFourCorners: true }
   ];
   
   for (const pattern of patterns) {
@@ -758,9 +802,8 @@ function checkBingo(markedNumbers, grid) {
       return {
         isBingo: true,
         pattern: pattern.indices,
-        patternType: pattern.type,
         patternName: pattern.name,
-        isFourCorners: pattern.type === 'four-corners'
+        isFourCorners: pattern.isFourCorners || false
       };
     }
   }
@@ -819,8 +862,8 @@ async function endGameWithNoWinner(room) {
                 gameEnded: true,
                 reason: 'no_winner',
                 commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0,
-                winningPattern: [], // No pattern for no winner
-                patternType: null
+                pattern: [],
+                patternName: ''
               });
               socket.emit('balanceUpdate', user.balance);
             }
@@ -1862,6 +1905,7 @@ function setupSocketHandlers() {
       }
     });
     
+    // ========== UPDATED: admin:forceEndGame with pattern support ==========
     socket.on('admin:forceEndGame', async (roomStake) => {
       if (!adminSockets.has(socket.id)) {
         socket.emit('admin:error', 'Unauthorized');
@@ -1912,8 +1956,8 @@ function setupSocketHandlers() {
                     gameEnded: true,
                     reason: 'admin_ended',
                     commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0,
-                    winningPattern: [],
-                    patternType: null
+                    pattern: [],
+                    patternName: ''
                   });
                   s.emit('balanceUpdate', user.balance);
                 }
@@ -2511,16 +2555,19 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== UPDATED: CLAIM BINGO WITH WINNING PATTERN SUPPORT ==========
+    // ========== FIXED: CLAIM BINGO WITH DOUBLE PRIZE PROTECTION ==========
     socket.on('claimBingo', async (data, callback) => {
       let claimKey = null;
       let roomClaimKey = null;
       let userId = null;
       let roomStake = null;
       let requestId = null;
+      let patternIndices = null;
+      let patternName = null;
+      let isFourCornersWin = false;
       
       try {
-        const { room, grid, marked, winningPattern, patternType } = data;
+        const { room, grid, marked, patternInfo } = data;
         userId = socketToUser.get(socket.id) || socket.userId;
         
         if (!userId) {
@@ -2644,8 +2691,6 @@ function setupSocketHandlers() {
         console.log('   User:', user.userName);
         console.log('   Room:', room);
         console.log('   Request ID:', requestId);
-        console.log('   Client winning pattern:', winningPattern);
-        console.log('   Client pattern type:', patternType);
         
         // Convert marked numbers properly for comparison
         const markedNumbers = marked.map(item => {
@@ -2665,13 +2710,16 @@ function setupSocketHandlers() {
           return;
         }
         
-        const isFourCornersWin = bingoCheck.isFourCorners;
-        
-        // Use the pattern from server-side check (more reliable)
-        const winningPatternData = bingoCheck.pattern || winningPattern;
-        const patternTypeData = bingoCheck.patternType || patternType;
-        
-        console.log(`✅ Valid BINGO claim! Pattern: ${patternTypeData}, Indices:`, winningPatternData);
+        // Use pattern info from client if provided, otherwise from server check
+        if (patternInfo && patternInfo.pattern) {
+          patternIndices = patternInfo.pattern;
+          patternName = patternInfo.patternName || getPatternName(patternIndices).name;
+          isFourCornersWin = patternInfo.isFourCorners || bingoCheck.isFourCorners;
+        } else {
+          patternIndices = bingoCheck.pattern;
+          patternName = bingoCheck.patternName || getPatternName(patternIndices).name;
+          isFourCornersWin = bingoCheck.isFourCorners;
+        }
         
         // Calculate total prize (FAST LOCAL CALCULATION)
         const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room] || 0;
@@ -2687,7 +2735,8 @@ function setupSocketHandlers() {
         console.log(`   Total prize: ${totalPrize} ETB`);
         console.log(`   Bonus: ${bonus} ETB`);
         console.log(`   House earnings: ${houseEarnings} ETB`);
-        console.log(`   Winning pattern type: ${patternTypeData}`);
+        console.log(`   Winning pattern: ${patternName}`);
+        console.log(`   Pattern indices:`, patternIndices);
         
         // ✅ IMMEDIATE RESPONSE TO USER
         if (callback) {
@@ -2695,9 +2744,7 @@ function setupSocketHandlers() {
             success: true, 
             message: 'BINGO claim received and being processed',
             isFourCornersWin: isFourCornersWin,
-            requestId: requestId,
-            winningPattern: winningPatternData,
-            patternType: patternTypeData
+            requestId: requestId
           });
         }
         
@@ -2738,8 +2785,8 @@ function setupSocketHandlers() {
                     ballsDrawn: roomData.ballsDrawn,
                     isFourCorners: isFourCornersWin,
                     commissionCollected: houseEarnings,
-                    winningPattern: winningPatternData,
-                    patternType: patternTypeData
+                    winningPattern: patternName,
+                    patternIndices: patternIndices
                   }
                 }
               },
@@ -2776,7 +2823,7 @@ function setupSocketHandlers() {
               userName: user.userName,
               amount: totalPrize,
               room: room,
-              description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''} - Pattern: ${patternTypeData}`
+              description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''} - Pattern: ${patternName}`
             });
             await transaction.save();
             
@@ -2814,7 +2861,7 @@ function setupSocketHandlers() {
             processingClaims.delete(roomClaimKey);
             console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
             
-            // Create game over data WITH WINNING PATTERN INFO
+            // Create game over data with pattern information
             const gameOverData = {
               room: room,
               winnerId: userId,
@@ -2829,11 +2876,12 @@ function setupSocketHandlers() {
               commissionPerPlayer: commissionPerPlayer,
               contributionPerPlayer: contributionPerPlayer,
               houseEarnings: houseEarnings,
-              winningPattern: winningPatternData,
-              patternType: patternTypeData
+              pattern: patternIndices,
+              patternName: patternName,
+              isFourCorners: isFourCornersWin
             };
             
-            // Notify all players WITH PATTERN DATA
+            // Notify all players
             for (const playerId of playersInRoom) {
               if (playerId !== userId) {
                 const losingUser = await models.User.findOne({ userId: playerId });
@@ -2871,7 +2919,7 @@ function setupSocketHandlers() {
             broadcastTakenBoxes(room, []);
             io.emit('boxesCleared', { room: room, reason: 'game_ended_bingo_win' });
             
-            console.log(`🎮 Game ended with bingo win for room ${room}. Winning pattern: ${patternTypeData}. Boxes cleared for next game.`);
+            console.log(`🎮 Game ended with bingo win for room ${room}. Pattern: ${patternName}. Boxes cleared for next game.`);
             
             // Update displays
             broadcastRoomStatus();
@@ -2887,8 +2935,8 @@ function setupSocketHandlers() {
               isFourCorners: isFourCornersWin,
               players: playersInRoom.length,
               commissionCollected: houseEarnings,
-              winningPattern: winningPatternData,
-              patternType: patternTypeData
+              pattern: patternName,
+              patternIndices: patternIndices
             });
             
           } catch (asyncError) {
@@ -3301,6 +3349,10 @@ module.exports = {
   getTelebirrNumber,
   setTelebirrNumber,
   
+  // Pattern helper functions
+  getPatternName,
+  checkBingo,
+  
   // State getters for server.js
   getSocketToUser: () => socketToUser,
   getAdminSockets: () => adminSockets,
@@ -3314,7 +3366,6 @@ module.exports = {
   // Game logic functions
   getBingoLetter,
   generateReferralCode,
-  checkBingo,
   startCountdownForRoom,
   startGameTimer,
   cleanupRoomTimer,
