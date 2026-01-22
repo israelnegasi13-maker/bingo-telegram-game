@@ -1096,129 +1096,6 @@
             background: rgba(239, 68, 68, 0.3);
         }
 
-        /* NEW: In-game Winning Pattern Display Styles */
-        .winning-pattern-game {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(2, 6, 23, 0.95);
-            backdrop-filter: blur(10px);
-            z-index: 999;
-            width: 100%;
-            height: 100%;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .winning-pattern-game.show {
-            display: flex;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .winning-pattern-game-content {
-            background: var(--card-bg);
-            border: 2px solid var(--secondary);
-            border-radius: var(--radius-lg);
-            padding: 20px;
-            text-align: center;
-            max-width: 300px;
-            width: 100%;
-        }
-
-        .winning-pattern-game-title {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 15px;
-        }
-
-        .bingo-card-overlay {
-            max-width: 200px;
-            margin: 0 auto 8px;
-        }
-
-        .bingo-header-overlay {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-            margin-bottom: 2px;
-        }
-
-        .bingo-letter-cell-overlay {
-            aspect-ratio: 1;
-            background: rgba(99, 102, 241, 0.3);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 11px;
-            color: var(--primary);
-        }
-
-        .bingo-grid-overlay {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-        }
-
-        .pattern-cell-overlay {
-            aspect-ratio: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 10px;
-            color: var(--gray);
-            position: relative;
-        }
-
-        .pattern-cell-overlay.winning-cell {
-            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-            color: white;
-            border: none;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
-            transform: scale(1.1);
-            z-index: 1;
-        }
-
-        .pattern-cell-overlay.free-space {
-            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-            color: white;
-            border: none;
-        }
-
-        .pattern-cell-overlay.winning-cell.free-space {
-            background: linear-gradient(135deg, #fbbf24, #d97706);
-            box-shadow: 0 0 15px rgba(251, 191, 36, 0.7);
-        }
-
-        .pattern-name {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--gray-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 5px;
-        }
-
-        /* Winning cell highlight animation */
-        @keyframes highlightWin {
-            0% { transform: scale(1); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
-            50% { transform: scale(1.15); box-shadow: 0 0 20px rgba(245, 158, 11, 0.7); }
-            100% { transform: scale(1.1); box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
-        }
-
-        .winning-cell {
-            animation: highlightWin 0.5s ease-out;
-        }
-
         /* Overlays */
         .overlay {
             position: fixed;
@@ -1407,6 +1284,115 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-bottom: 12px;
+        }
+
+        /* NEW: Winning Pattern Display Styles (for win/lose overlays only) */
+        .winning-pattern-overlay {
+            background: var(--card-bg);
+            border: 2px solid var(--secondary);
+            border-radius: var(--radius);
+            padding: 12px;
+            margin: 12px 0;
+            text-align: center;
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .winning-pattern-overlay.show {
+            display: block;
+        }
+
+        .winning-pattern-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .bingo-card-overlay {
+            max-width: 200px;
+            margin: 0 auto 8px;
+        }
+
+        .bingo-header-overlay {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            margin-bottom: 2px;
+        }
+
+        .bingo-letter-cell-overlay {
+            aspect-ratio: 1;
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 11px;
+            color: var(--primary);
+        }
+
+        .bingo-grid-overlay {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+        }
+
+        .pattern-cell-overlay {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 10px;
+            color: var(--gray);
+            position: relative;
+        }
+
+        .pattern-cell-overlay.winning-cell {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: white;
+            border: none;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+            transform: scale(1.1);
+            z-index: 1;
+        }
+
+        .pattern-cell-overlay.free-space {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: white;
+            border: none;
+        }
+
+        .pattern-cell-overlay.winning-cell.free-space {
+            background: linear-gradient(135deg, #fbbf24, #d97706);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.7);
+        }
+
+        .pattern-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 5px;
+        }
+
+        /* Winning cell highlight animation */
+        @keyframes highlightWin {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
+            50% { transform: scale(1.15); box-shadow: 0 0 20px rgba(245, 158, 11, 0.7); }
+            100% { transform: scale(1.1); box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+        }
+
+        .winning-cell {
+            animation: highlightWin 0.5s ease-out;
         }
 
         /* Animations */
@@ -1775,34 +1761,15 @@
                 </div>
             </div>
 
+            <!-- REMOVED: Winning Pattern Display during gameplay (as requested) -->
+
             <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
                 CLAIM BINGO!
             </button>
         </div>
     </div>
 
-    <!-- NEW: In-game Winning Pattern Display -->
-    <div class="winning-pattern-game" id="winningPatternGame">
-        <div class="winning-pattern-game-content">
-            <div class="winning-pattern-game-title">WINNING PATTERN!</div>
-            <div class="bingo-card-overlay">
-                <div class="bingo-header-overlay">
-                    <div class="bingo-letter-cell-overlay">B</div>
-                    <div class="bingo-letter-cell-overlay">I</div>
-                    <div class="bingo-letter-cell-overlay">N</div>
-                    <div class="bingo-letter-cell-overlay">G</div>
-                    <div class="bingo-letter-cell-overlay">O</div>
-                </div>
-                <div class="bingo-grid-overlay" id="gamePatternGrid">
-                    <!-- Pattern will be populated by JavaScript -->
-                </div>
-            </div>
-            <div class="pattern-name" id="gamePatternName">LINE BINGO</div>
-            <button class="overlay-button" onclick="hideGamePattern()" style="margin-top: 15px;">
-                Continue
-            </button>
-        </div>
-    </div>
+    <!-- REMOVED: In-game Winning Pattern Display (as requested) -->
 
     <!-- Overlays -->
     <!-- Wallet Overlay -->
@@ -1894,7 +1861,7 @@
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
             
-            <!-- Winning Pattern Display -->
+            <!-- KEPT: Winning Pattern Display in win overlay (after game ends) -->
             <div class="winning-pattern-overlay show">
                 <div class="winning-pattern-title">WINNING PATTERN</div>
                 <div class="bingo-card-overlay">
@@ -1930,7 +1897,7 @@
                 <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
             
-            <!-- Winning Pattern Display -->
+            <!-- KEPT: Winning Pattern Display in lose overlay (after game ends) -->
             <div class="winning-pattern-overlay show">
                 <div class="winning-pattern-title">WINNING PATTERN</div>
                 <div class="bingo-card-overlay">
@@ -2066,9 +2033,9 @@
             isFourCornersWin: false
         };
 
-        // NEW: Function to render winning pattern
+        // KEPT: Function to render winning pattern (for win/lose overlays only)
         function renderWinningPattern(patternIndices, patternName, isFourCorners, containerId, nameId) {
-            console.log('🎨 Rendering winning pattern:', patternIndices, patternName, isFourCorners);
+            console.log('🎨 Rendering winning pattern in overlay:', patternIndices, patternName, isFourCorners);
             
             const container = document.getElementById(containerId);
             const nameElement = document.getElementById(nameId);
@@ -2124,28 +2091,11 @@
                 container.appendChild(cell);
             }
             
-            console.log('✅ Winning pattern rendered');
+            console.log('✅ Winning pattern rendered in overlay');
         }
 
-        // NEW: Function to show winning pattern in-game
-        function showWinningPatternInGame(patternIndices, patternName, isFourCorners) {
-            console.log('🎮 Showing winning pattern in game');
-            
-            // Show the full-screen pattern display
-            const gamePatternDisplay = document.getElementById('winningPatternGame');
-            if (gamePatternDisplay) {
-                renderWinningPattern(patternIndices, patternName, isFourCorners, 'gamePatternGrid', 'gamePatternName');
-                gamePatternDisplay.classList.add('show');
-            }
-        }
-
-        // NEW: Function to hide game pattern display
-        function hideGamePattern() {
-            const gamePatternDisplay = document.getElementById('winningPatternGame');
-            if (gamePatternDisplay) {
-                gamePatternDisplay.classList.remove('show');
-            }
-        }
+        // REMOVED: Function to show winning pattern in-game (no longer needed)
+        // REMOVED: Function to hide game pattern display (no longer needed)
 
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
@@ -3088,14 +3038,12 @@
             state.lastActivityTime = Date.now();
         }
 
-        // NEW: Detect winning pattern from marked numbers
+        // Detect winning pattern from marked numbers (for checking only, not displaying)
         function detectWinningPattern() {
             const grid = state.grid;
             const marked = state.markedNumbers;
             
             console.log('🔍 Detecting winning pattern...');
-            console.log('Grid:', grid);
-            console.log('Marked:', Array.from(marked));
             
             // All possible winning patterns
             const patterns = [
@@ -3240,12 +3188,12 @@
                                 }
                             } catch(e){}
                             
-                            // Check for winning pattern
+                            // Check for winning pattern but DO NOT show the pattern overlay
                             if(checkWinningPattern()) {
                                 document.getElementById('claimBingoButton').disabled = false;
                                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                                 
-                                // Store the pattern for later use but DON'T display it yet
+                                // Detect the winning pattern for sending to server
                                 const pattern = detectWinningPattern();
                                 if (pattern) {
                                     state.winningPattern = pattern.indices;
@@ -3256,11 +3204,6 @@
                         } else {
                             cell.classList.remove('marked');
                             state.markedNumbers.delete(isFree ? 'FREE' : val);
-                            
-                            // Re-check if still winning
-                            if (!checkWinningPattern()) {
-                                document.getElementById('claimBingoButton').disabled = true;
-                            }
                         }
                     }
                     
@@ -3285,7 +3228,7 @@
                 console.log('   Grid:', state.grid);
                 console.log('   Marked numbers:', markedNumbers);
                 
-                // NEW: Send winning pattern info with the claim
+                // Send winning pattern info with the claim
                 const patternInfo = {
                     pattern: state.winningPattern || [],
                     patternName: state.winningPatternName || 'LINE BINGO',
@@ -3301,15 +3244,6 @@
                     if (response && response.success) {
                         console.log('✅ BINGO claim accepted by server');
                         showNotification('🎉 BINGO claim sent! Checking...', 'success', 2000);
-                        
-                        // NEW: Show winning pattern in-game while waiting for server response
-                        if (state.winningPattern) {
-                            showWinningPatternInGame(
-                                state.winningPattern, 
-                                state.winningPatternName, 
-                                state.isFourCornersWin
-                            );
-                        }
                     } else {
                         console.log('❌ BINGO claim rejected:', response?.message);
                         showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
@@ -3358,7 +3292,6 @@
             hideOverlay('loseOverlay');
             hideOverlay('insufficientOverlay');
             hideOverlay('roomLockedOverlay');
-            hideGamePattern();
             
             // Hide plate preview
             document.getElementById('platePreviewContainer').classList.remove('active');
@@ -3562,7 +3495,7 @@
             state.lastActivityTime = Date.now();
         });
 
-        // NEW: Updated gameOver event handler with pattern display
+        // Updated gameOver event handler (pattern display kept in overlays)
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
             
@@ -3586,7 +3519,7 @@
                         document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
                     }
                     
-                    // NEW: Show winning pattern in win overlay
+                    // Show winning pattern in win overlay (AFTER game ends)
                     if (d.pattern && d.patternName) {
                         renderWinningPattern(
                             d.pattern, 
@@ -3623,7 +3556,7 @@
                     document.getElementById('winnerName').textContent = d.winnerName || "Another player";
                     document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
                     
-                    // NEW: Show winning pattern in lose overlay
+                    // Show winning pattern in lose overlay (AFTER game ends)
                     if (d.pattern && d.patternName) {
                         renderWinningPattern(
                             d.pattern, 
