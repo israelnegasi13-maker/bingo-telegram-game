@@ -1286,6 +1286,86 @@
             margin-bottom: 12px;
         }
 
+        /* ========== WINNING PATTERN STYLES ========== */
+        /* Winning pattern highlight */
+        .winning-pattern {
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .winning-pattern::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(255, 215, 0, 0.3), rgba(255, 165, 0, 0.3));
+            border: 2px solid #ffd700;
+            border-radius: 5px;
+            z-index: -1;
+            animation: goldGlow 1.5s infinite alternate;
+        }
+
+        .winning-pattern.free {
+            background: linear-gradient(135deg, #d97706, #b45309) !important;
+            border: 2px solid #ffd700 !important;
+        }
+
+        .winning-pattern-row {
+            background: linear-gradient(45deg, rgba(0, 255, 0, 0.2), rgba(0, 200, 0, 0.2)) !important;
+            border: 2px solid #00ff00 !important;
+        }
+
+        .winning-pattern-column {
+            background: linear-gradient(45deg, rgba(0, 150, 255, 0.2), rgba(0, 100, 200, 0.2)) !important;
+            border: 2px solid #0088ff !important;
+        }
+
+        .winning-pattern-diagonal {
+            background: linear-gradient(45deg, rgba(255, 0, 255, 0.2), rgba(200, 0, 200, 0.2)) !important;
+            border: 2px solid #ff00ff !important;
+        }
+
+        .winning-pattern-four-corners {
+            background: linear-gradient(45deg, rgba(255, 100, 0, 0.2), rgba(200, 80, 0, 0.2)) !important;
+            border: 2px solid #ff5500 !important;
+        }
+
+        @keyframes goldGlow {
+            0% { box-shadow: 0 0 5px #ffd700, inset 0 0 5px rgba(255, 215, 0, 0.3); }
+            100% { box-shadow: 0 0 15px #ffd700, inset 0 0 10px rgba(255, 215, 0, 0.5); }
+        }
+
+        /* Pattern description in overlay */
+        .pattern-info {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 10px;
+            margin: 12px 0;
+            text-align: center;
+        }
+
+        .pattern-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 5px 5px 0;
+        }
+
+        .badge-row { background: rgba(0, 255, 0, 0.2); color: #00ff00; border: 1px solid rgba(0, 255, 0, 0.3); }
+        .badge-column { background: rgba(0, 150, 255, 0.2); color: #0088ff; border: 1px solid rgba(0, 150, 255, 0.3); }
+        .badge-diagonal { background: rgba(255, 0, 255, 0.2); color: #ff00ff; border: 1px solid rgba(255, 0, 255, 0.3); }
+        .badge-four-corners { background: rgba(255, 100, 0, 0.2); color: #ff5500; border: 1px solid rgba(255, 100, 0, 0.3); }
+
+        /* ========== END WINNING PATTERN STYLES ========== */
+
         /* Animations */
         @keyframes spin {
             100% { transform: rotate(360deg); }
@@ -1735,6 +1815,14 @@
             <h2 class="overlay-title win-title">BINGO!</h2>
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
+            
+            <!-- 🆕 WINNING PATTERN INFO FOR WINNER -->
+            <div class="pattern-info" id="winPatternInfo" style="display: none;">
+                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Winning Pattern</div>
+                <div id="winPatternBadge" class="pattern-badge badge-row"></div>
+                <div id="winPatternCells" style="font-size: 11px; color: var(--gray-light); margin-top: 5px;"></div>
+            </div>
+            
             <button class="overlay-button" onclick="resetToLobby()">
                 Return to Lobby
             </button>
@@ -1752,6 +1840,14 @@
                 <div style="font-size: 24px; font-weight: 700; color: white;" id="winnerName">Player</div>
                 <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
+            
+            <!-- 🆕 WINNING PATTERN INFO FOR LOSERS -->
+            <div class="pattern-info" id="losePatternInfo" style="display: none;">
+                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Winning Pattern</div>
+                <div id="losePatternBadge" class="pattern-badge badge-row"></div>
+                <div id="losePatternCells" style="font-size: 11px; color: var(--gray-light); margin-top: 5px;"></div>
+            </div>
+            
             <button class="overlay-button" onclick="resetToLobby()">
                 Return to Lobby
             </button>
@@ -1864,9 +1960,166 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0
+            selectedWithdrawAmount: 0,
+            winningPattern: null,
+            patternType: null
         };
 
+        // ========== WINNING PATTERN FUNCTIONS ==========
+        
+        // Function to highlight winning pattern on the bingo card
+        function highlightWinningPattern(patternIndices, patternType) {
+            // Clear any previous highlights
+            clearWinningPattern();
+            
+            // Remove 'marked' class from all cells first to avoid conflicts
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('winning-pattern', 'winning-pattern-row', 'winning-pattern-column', 
+                                    'winning-pattern-diagonal', 'winning-pattern-four-corners');
+            });
+            
+            // Add appropriate highlight class based on pattern type
+            let highlightClass = 'winning-pattern';
+            switch(patternType) {
+                case 'row': highlightClass = 'winning-pattern-row'; break;
+                case 'column': highlightClass = 'winning-pattern-column'; break;
+                case 'diagonal': highlightClass = 'winning-pattern-diagonal'; break;
+                case 'four-corners': highlightClass = 'winning-pattern-four-corners'; break;
+            }
+            
+            // Highlight each cell in the winning pattern
+            patternIndices.forEach(index => {
+                const cell = document.querySelector(`.cell[data-index="${index}"]`);
+                if (cell) {
+                    cell.classList.add('winning-pattern', highlightClass);
+                    
+                    // Special handling for FREE cell
+                    if (cell.classList.contains('free')) {
+                        cell.classList.add('winning-pattern');
+                    }
+                }
+            });
+            
+            // Store pattern for later reference
+            state.winningPattern = patternIndices;
+            state.patternType = patternType;
+            
+            console.log(`🎯 Highlighted winning pattern: ${patternType} at indices:`, patternIndices);
+        }
+
+        // Function to clear winning pattern highlights
+        function clearWinningPattern() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('winning-pattern', 'winning-pattern-row', 'winning-pattern-column', 
+                                    'winning-pattern-diagonal', 'winning-pattern-four-corners');
+            });
+            
+            state.winningPattern = null;
+            state.patternType = null;
+        }
+
+        // Function to get pattern description
+        function getPatternDescription(patternIndices) {
+            // Define standard patterns
+            const patterns = {
+                'rows': [
+                    [0,1,2,3,4],      // B row
+                    [5,6,7,8,9],      // I row
+                    [10,11,12,13,14], // N row
+                    [15,16,17,18,19], // G row
+                    [20,21,22,23,24]  // O row
+                ],
+                'columns': [
+                    [0,5,10,15,20],   // B column
+                    [1,6,11,16,21],   // I column
+                    [2,7,12,17,22],   // N column
+                    [3,8,13,18,23],   // G column
+                    [4,9,14,19,24]    // O column
+                ],
+                'diagonals': [
+                    [0,6,12,18,24],   // Diagonal top-left to bottom-right
+                    [4,8,12,16,20]    // Diagonal top-right to bottom-left
+                ],
+                'four-corners': [[0,4,20,24]]
+            };
+            
+            // Check which pattern it matches
+            let patternType = 'custom';
+            let patternName = 'Custom Pattern';
+            
+            // Sort indices for comparison
+            const sortedIndices = [...patternIndices].sort((a, b) => a - b);
+            const patternStr = JSON.stringify(sortedIndices);
+            
+            // Check rows
+            patterns.rows.forEach((row, i) => {
+                if (JSON.stringify(row) === patternStr) {
+                    patternType = 'row';
+                    patternName = `BINGO Row ${i+1} (${['B','I','N','G','O'][i]})`;
+                }
+            });
+            
+            // Check columns
+            patterns.columns.forEach((col, i) => {
+                if (JSON.stringify(col) === patternStr) {
+                    patternType = 'column';
+                    patternName = `BINGO Column ${i+1} (${['B','I','N','G','O'][i]})`;
+                }
+            });
+            
+            // Check diagonals
+            patterns.diagonals.forEach((diag, i) => {
+                if (JSON.stringify(diag) === patternStr) {
+                    patternType = 'diagonal';
+                    patternName = i === 0 ? 'Main Diagonal' : 'Anti-Diagonal';
+                }
+            });
+            
+            // Check four corners
+            if (JSON.stringify(patterns['four-corners'][0]) === patternStr) {
+                patternType = 'four-corners';
+                patternName = 'Four Corners';
+            }
+            
+            return { type: patternType, name: patternName };
+        }
+
+        // Function to update pattern info in overlays
+        function updatePatternInfo(patternIndices, isWinner = true) {
+            const patternInfo = getPatternDescription(patternIndices);
+            
+            if (isWinner) {
+                // Update win overlay
+                document.getElementById('winPatternInfo').style.display = 'block';
+                const badge = document.getElementById('winPatternBadge');
+                badge.textContent = patternInfo.name;
+                badge.className = `pattern-badge badge-${patternInfo.type}`;
+                
+                // Show the cells involved
+                const cellNames = patternIndices.map(index => {
+                    const cell = document.querySelector(`.cell[data-index="${index}"]`);
+                    return cell ? cell.textContent : `Cell ${index}`;
+                }).join(', ');
+                document.getElementById('winPatternCells').textContent = `Cells: ${cellNames}`;
+            } else {
+                // Update lose overlay
+                document.getElementById('losePatternInfo').style.display = 'block';
+                const badge = document.getElementById('losePatternBadge');
+                badge.textContent = patternInfo.name;
+                badge.className = `pattern-badge badge-${patternInfo.type}`;
+                
+                // Show the cells involved (we don't have the actual values, just positions)
+                const positions = patternIndices.map(index => {
+                    // Convert index to row/col for better description
+                    const row = Math.floor(index / 5) + 1;
+                    const col = (index % 5) + 1;
+                    const letters = ['B','I','N','G','O'];
+                    return `${letters[col-1]}${row}`;
+                }).join(', ');
+                document.getElementById('losePatternCells').textContent = `Positions: ${positions}`;
+            }
+        }
+        
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
             const displayElement = document.getElementById('telebirrNumberDisplay');
@@ -2833,7 +3086,12 @@
                 const rowBingo = isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4);
                 if (rowBingo) {
                     console.log(`✅ Row ${i+1} BINGO!`);
-                    return true;
+                    return {
+                        isBingo: true,
+                        pattern: [i*5, i*5+1, i*5+2, i*5+3, i*5+4],
+                        type: 'row',
+                        rowIndex: i
+                    };
                 }
             }
             
@@ -2842,7 +3100,12 @@
                 const colBingo = isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20);
                 if (colBingo) {
                     console.log(`✅ Column ${i+1} BINGO!`);
-                    return true;
+                    return {
+                        isBingo: true,
+                        pattern: [i, i+5, i+10, i+15, i+20],
+                        type: 'column',
+                        columnIndex: i
+                    };
                 }
             }
             
@@ -2850,19 +3113,38 @@
             const diag1 = isM(0) && isM(6) && isM(12) && isM(18) && isM(24);
             const diag2 = isM(4) && isM(8) && isM(12) && isM(16) && isM(20);
             
-            if (diag1 || diag2) {
-                console.log('✅ Diagonal BINGO!');
-                return true;
+            if (diag1) {
+                console.log('✅ Main Diagonal BINGO!');
+                return {
+                    isBingo: true,
+                    pattern: [0, 6, 12, 18, 24],
+                    type: 'diagonal',
+                    diagonalType: 'main'
+                };
+            }
+            
+            if (diag2) {
+                console.log('✅ Anti-Diagonal BINGO!');
+                return {
+                    isBingo: true,
+                    pattern: [4, 8, 12, 16, 20],
+                    type: 'diagonal',
+                    diagonalType: 'anti'
+                };
             }
             
             // Check four corners
             if (fourCorners) {
                 console.log('✅ Four Corners BINGO!');
-                return true;
+                return {
+                    isBingo: true,
+                    pattern: [0, 4, 20, 24],
+                    type: 'four-corners'
+                };
             }
             
             console.log('❌ No winning pattern yet');
-            return false;
+            return { isBingo: false };
         }
 
         function initGameBoard() {
@@ -2900,9 +3182,14 @@
                                 }
                             } catch(e){}
                             
-                            if(checkWinningPattern()) {
+                            const bingoResult = checkWinningPattern();
+                            if(bingoResult.isBingo) {
                                 document.getElementById('claimBingoButton').disabled = false;
                                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
+                                
+                                // Store the winning pattern for later display
+                                state.winningPattern = bingoResult.pattern;
+                                state.patternType = bingoResult.type;
                             }
                         } else {
                             cell.classList.remove('marked');
@@ -2930,11 +3217,15 @@
                 console.log('📤 Sending BINGO claim:');
                 console.log('   Grid:', state.grid);
                 console.log('   Marked numbers:', markedNumbers);
+                console.log('   Winning pattern:', state.winningPattern);
+                console.log('   Pattern type:', state.patternType);
                 
                 socket.emit('claimBingo', { 
                     room: state.stake, 
                     grid: state.grid, 
-                    marked: markedNumbers 
+                    marked: markedNumbers,
+                    winningPattern: state.winningPattern,
+                    patternType: state.patternType
                 }, (response) => {
                     if (response && response.success) {
                         console.log('✅ BINGO claim accepted by server');
@@ -2974,6 +3265,10 @@
             state.onlinePlayersCount = 0;
             state.totalPlayersCount = 0;
             
+            // 🆕 Clear winning pattern data
+            state.winningPattern = null;
+            state.patternType = null;
+            
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
@@ -2987,6 +3282,13 @@
             
             // Hide plate preview
             document.getElementById('platePreviewContainer').classList.remove('active');
+            
+            // 🆕 Clear any winning pattern highlights
+            clearWinningPattern();
+            
+            // 🆕 Hide pattern info in overlays
+            document.getElementById('winPatternInfo').style.display = 'none';
+            document.getElementById('losePatternInfo').style.display = 'none';
             
             // Reset UI
             showScreen('lobbyScreen');
@@ -3142,7 +3444,8 @@
 
         socket.on('enableBingo', () => {
             console.log('✅ Enable BINGO event received');
-            if (checkWinningPattern()) {
+            const bingoResult = checkWinningPattern();
+            if (bingoResult.isBingo) {
                 document.getElementById('claimBingoButton').disabled = false;
                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
             }
@@ -3210,6 +3513,16 @@
                         document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
                     }
                     
+                    // 🆕 HIGHLIGHT WINNING PATTERN FOR WINNER
+                    if (d.winningPattern) {
+                        highlightWinningPattern(d.winningPattern, d.patternType || 'row');
+                        updatePatternInfo(d.winningPattern, true);
+                    } else if (state.winningPattern) {
+                        // Fallback to client-side pattern if server didn't send it
+                        highlightWinningPattern(state.winningPattern, state.patternType || 'row');
+                        updatePatternInfo(state.winningPattern, true);
+                    }
+                    
                     showOverlay('winOverlay');
                     
                     try { 
@@ -3235,6 +3548,11 @@
                     document.getElementById('loseMessage').textContent = msg;
                     document.getElementById('winnerName').textContent = d.winnerName || "Another player";
                     document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
+                    
+                    // 🆕 SHOW WINNING PATTERN INFO FOR LOSERS
+                    if (d.winningPattern) {
+                        updatePatternInfo(d.winningPattern, false);
+                    }
                     
                     showOverlay('loseOverlay');
                     
