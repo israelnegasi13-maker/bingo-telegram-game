@@ -140,7 +140,7 @@ function cleanupRoomWinners() {
   });
 }
 
-// ========== PATTERN HELPER FUNCTIONS ==========
+// ========== NEW: PATTERN HELPER FUNCTIONS ==========
 function getPatternName(patternIndices) {
   // All possible winning patterns
   const patterns = [
@@ -1905,7 +1905,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== UPDATED: admin:forceEndGame ==========
+    // ========== UPDATED: admin:forceEndGame with pattern support ==========
     socket.on('admin:forceEndGame', async (roomStake) => {
       if (!adminSockets.has(socket.id)) {
         socket.emit('admin:error', 'Unauthorized');
@@ -2772,7 +2772,7 @@ function setupSocketHandlers() {
               { 
                 status: 'ended',
                 endTime: new Date(),
-                lastBoxUpdate: new Date(),
+                lastBoxUpdate = new Date(),
                 $push: { 
                   gameHistory: {
                     timestamp: new Date(),
@@ -2861,7 +2861,7 @@ function setupSocketHandlers() {
             processingClaims.delete(roomClaimKey);
             console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
             
-            // Create game over data with pattern information (for win/lose overlays)
+            // Create game over data with pattern information
             const gameOverData = {
               room: room,
               winnerId: userId,
