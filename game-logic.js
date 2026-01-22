@@ -21,7 +21,7 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
+  TELEBIRR_NUMBER: process.env.TELEBIRR_NUMBER || "0962577855",
   MIN_WITHDRAWAL: 50,
   MAX_WITHDRAWAL: 10000
 };
@@ -2402,7 +2402,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate = new Date()
+            lastBoxUpdate: new Date()
           });
           await roomData.save();
         }
@@ -2772,7 +2772,7 @@ function setupSocketHandlers() {
               { 
                 status: 'ended',
                 endTime: new Date(),
-                lastBoxUpdate = new Date(),
+                lastBoxUpdate: new Date(),
                 $push: { 
                   gameHistory: {
                     timestamp: new Date(),
