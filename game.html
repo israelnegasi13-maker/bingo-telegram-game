@@ -962,6 +962,70 @@
             color: var(--secondary);
         }
 
+        /* ========== WINNING PATTERN HIGHLIGHT STYLES ========== */
+        .cell.winning-pattern {
+            animation: winningGlow 2s infinite alternate;
+            position: relative;
+            z-index: 1;
+        }
+
+        @keyframes winningGlow {
+            0% {
+                box-shadow: 0 0 15px 5px rgba(245, 158, 11, 0.7);
+                border: 3px solid #f59e0b;
+                transform: scale(1.05);
+            }
+            100% {
+                box-shadow: 0 0 25px 10px rgba(245, 158, 11, 0.9);
+                border: 3px solid #fbbf24;
+                transform: scale(1.1);
+            }
+        }
+
+        .cell.winning-pattern::after {
+            content: "★";
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 8px;
+            color: #fbbf24;
+            animation: starTwinkle 1s infinite alternate;
+        }
+
+        @keyframes starTwinkle {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Pattern Info Display */
+        .pattern-info {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        .pattern-info.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .pattern-title {
+            font-size: 12px;
+            color: var(--gray);
+            margin-bottom: 5px;
+        }
+
+        .pattern-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--secondary);
+            text-transform: uppercase;
+        }
+
         /* Updated confirm button and back button */
         .action-buttons {
             display: flex;
@@ -1640,6 +1704,12 @@
                 </div>
             </div>
 
+            <!-- WINNING PATTERN INFO SECTION -->
+            <div class="pattern-info" id="patternInfo">
+                <div class="pattern-title">WINNING PATTERN</div>
+                <div class="pattern-name" id="patternName">--</div>
+            </div>
+
             <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
                 CLAIM BINGO!
             </button>
@@ -1734,6 +1804,13 @@
             <div class="overlay-icon">🏆</div>
             <h2 class="overlay-title win-title">BINGO!</h2>
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
+            
+            <!-- WINNING PATTERN INFO -->
+            <div class="pattern-info" style="background: rgba(245, 158, 11, 0.1); margin: 15px 0;">
+                <div class="pattern-title" style="color: var(--secondary-dark)">WINNING PATTERN</div>
+                <div class="pattern-name" id="winPatternName" style="color: white">--</div>
+            </div>
+            
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
             <button class="overlay-button" onclick="resetToLobby()">
                 Return to Lobby
@@ -1746,6 +1823,13 @@
         <div class="overlay-content">
             <div class="overlay-icon">😢</div>
             <h2 class="overlay-title lose-title">GAME OVER</h2>
+            
+            <!-- WINNING PATTERN INFO -->
+            <div class="pattern-info" style="background: rgba(239, 68, 68, 0.1); margin: 15px 0;">
+                <div class="pattern-title" style="color: var(--danger)">WINNING PATTERN</div>
+                <div class="pattern-name" id="losePatternName" style="color: white">--</div>
+            </div>
+            
             <div class="overlay-message" id="loseMessage">Someone else claimed Bingo first!</div>
             <div style="margin-bottom: 24px;">
                 <div style="font-size: 14px; color: var(--gray); margin-bottom: 8px;">Winner</div>
@@ -1864,8 +1948,157 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0
+            selectedWithdrawAmount: 0,
+            winningPattern: null,
+            patternName: null
         };
+
+        // ========== WINNING PATTERN FUNCTIONS ==========
+
+        // Function to highlight winning pattern on the board
+        function highlightWinningPattern(pattern, isWinner) {
+            console.log('🎯 Highlighting winning pattern:', pattern);
+            
+            // Clear any existing highlights
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('winning-pattern');
+            });
+            
+            // Highlight the pattern
+            if (pattern && Array.isArray(pattern)) {
+                pattern.forEach(index => {
+                    const cell = document.querySelector(`.cell[data-index="${index}"]`);
+                    if (cell) {
+                        cell.classList.add('winning-pattern');
+                        
+                        // Add special animation for winner
+                        if (isWinner) {
+                            setTimeout(() => {
+                                cell.style.animationDelay = `${index * 0.1}s`;
+                            }, 100);
+                        }
+                    }
+                });
+                
+                // Store pattern for reference
+                state.winningPattern = pattern;
+                
+                // Show pattern info
+                document.getElementById('patternInfo').classList.add('active');
+                
+                // Set pattern name
+                const patternName = state.patternName || getPatternName(pattern);
+                document.getElementById('patternName').textContent = patternName;
+                
+                // Also update overlays
+                document.getElementById('winPatternName').textContent = patternName;
+                document.getElementById('losePatternName').textContent = patternName;
+                
+                console.log('✅ Pattern highlighted:', patternName);
+            }
+        }
+
+        // Function to determine pattern name
+        function getPatternName(pattern) {
+            if (!pattern || !Array.isArray(pattern)) return 'Unknown';
+            
+            // Four corners
+            if (pattern.length === 4 && 
+                pattern.includes(0) && 
+                pattern.includes(4) && 
+                pattern.includes(20) && 
+                pattern.includes(24)) {
+                return 'FOUR CORNERS';
+            }
+            
+            // Check if it's a row
+            const rows = [
+                [0,1,2,3,4],     // Row 1
+                [5,6,7,8,9],     // Row 2
+                [10,11,12,13,14], // Row 3
+                [15,16,17,18,19], // Row 4
+                [20,21,22,23,24]  // Row 5
+            ];
+            
+            for (let i = 0; i < rows.length; i++) {
+                if (pattern.every(cell => rows[i].includes(cell))) {
+                    return `ROW ${i + 1}`;
+                }
+            }
+            
+            // Check if it's a column
+            const columns = [
+                [0,5,10,15,20],   // Column 1 (B)
+                [1,6,11,16,21],   // Column 2 (I)
+                [2,7,12,17,22],   // Column 3 (N)
+                [3,8,13,18,23],   // Column 4 (G)
+                [4,9,14,19,24]    // Column 5 (O)
+            ];
+            
+            const columnLetters = ['B', 'I', 'N', 'G', 'O'];
+            for (let i = 0; i < columns.length; i++) {
+                if (pattern.every(cell => columns[i].includes(cell))) {
+                    return `COLUMN ${columnLetters[i]}`;
+                }
+            }
+            
+            // Check if it's a diagonal
+            const diagonals = [
+                [0,6,12,18,24],   // Diagonal \
+                [4,8,12,16,20]    // Diagonal /
+            ];
+            
+            for (let i = 0; i < diagonals.length; i++) {
+                if (pattern.every(cell => diagonals[i].includes(cell))) {
+                    return i === 0 ? 'DIAGONAL \\' : 'DIAGONAL /';
+                }
+            }
+            
+            return 'CUSTOM PATTERN';
+        }
+
+        // Function to clear pattern highlights
+        function clearPatternHighlights() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('winning-pattern');
+            });
+            document.getElementById('patternInfo').classList.remove('active');
+            state.winningPattern = null;
+            state.patternName = null;
+        }
+
+        // Helper to determine pattern from grid and marked numbers
+        function determinePatternFromGrid(grid, markedNumbers) {
+            const patterns = {
+                'ROW 1': [0,1,2,3,4],
+                'ROW 2': [5,6,7,8,9],
+                'ROW 3': [10,11,12,13,14],
+                'ROW 4': [15,16,17,18,19],
+                'ROW 5': [20,21,22,23,24],
+                'COLUMN B': [0,5,10,15,20],
+                'COLUMN I': [1,6,11,16,21],
+                'COLUMN N': [2,7,12,17,22],
+                'COLUMN G': [3,8,13,18,23],
+                'COLUMN O': [4,9,14,19,24],
+                'DIAGONAL \\': [0,6,12,18,24],
+                'DIAGONAL /': [4,8,12,16,20],
+                'FOUR CORNERS': [0,4,20,24]
+            };
+            
+            for (const [name, pattern] of Object.entries(patterns)) {
+                const isComplete = pattern.every(index => {
+                    const value = grid[index];
+                    if (value === 'FREE') return true;
+                    return markedNumbers.includes(value) || markedNumbers.includes(parseInt(value));
+                });
+                
+                if (isComplete) {
+                    return pattern;
+                }
+            }
+            
+            return null;
+        }
 
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
@@ -2974,6 +3207,9 @@
             state.onlinePlayersCount = 0;
             state.totalPlayersCount = 0;
             
+            // Clear winning pattern highlights
+            clearPatternHighlights();
+            
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
@@ -3187,6 +3423,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // ========== UPDATED GAME OVER HANDLER WITH WINNING PATTERN ==========
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
             
@@ -3201,6 +3438,20 @@
                 
                 document.getElementById('claimBingoButton').disabled = true;
 
+                // Store pattern data from server
+                state.patternName = d.patternName || null;
+
+                // Highlight the winning pattern on the board
+                if (d.winningPattern && Array.isArray(d.winningPattern)) {
+                    highlightWinningPattern(d.winningPattern, isWinner);
+                } else {
+                    // Try to determine pattern from the grid
+                    const pattern = determinePatternFromGrid(state.grid, d.markedNumbers || []);
+                    if (pattern) {
+                        highlightWinningPattern(pattern, isWinner);
+                    }
+                }
+                
                 if(isWinner) {
                     document.getElementById('winPrizeAmount').textContent = `+${d.prize.toFixed(2)} ETB`;
                     
