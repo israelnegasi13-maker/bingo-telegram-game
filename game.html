@@ -962,68 +962,42 @@
             color: var(--secondary);
         }
 
-        /* ========== WINNING PATTERN HIGHLIGHT STYLES ========== */
-        .cell.winning-pattern {
-            animation: winningGlow 2s infinite alternate;
-            position: relative;
-            z-index: 1;
+        /* Winning Pattern Highlight Styles */
+        .cell.winning-cell {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+            color: #000 !important;
+            border: 2px solid #fff !important;
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.8) !important;
+            animation: pulse 1s infinite;
         }
 
-        @keyframes winningGlow {
-            0% {
-                box-shadow: 0 0 15px 5px rgba(245, 158, 11, 0.7);
-                border: 3px solid #f59e0b;
-                transform: scale(1.05);
-            }
-            100% {
-                box-shadow: 0 0 25px 10px rgba(245, 158, 11, 0.9);
-                border: 3px solid #fbbf24;
-                transform: scale(1.1);
-            }
+        .cell.winning-corner {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+            color: white !important;
+            border: 2px solid #fff !important;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.8) !important;
+            animation: pulse 1s infinite;
         }
 
-        .cell.winning-pattern::after {
-            content: "★";
+        .four-corners-indicator {
             position: absolute;
             top: 2px;
             right: 2px;
             font-size: 8px;
-            color: #fbbf24;
-            animation: starTwinkle 1s infinite alternate;
+            color: #8b5cf6;
+            font-weight: 900;
         }
 
-        @keyframes starTwinkle {
-            0% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        /* Pattern Info Display */
-        .pattern-info {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
+        .winning-pattern-message {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(79, 70, 229, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.3);
             border-radius: var(--radius);
             padding: 10px;
-            margin-bottom: 10px;
+            margin: 10px 0;
             text-align: center;
-            display: none;
-        }
-
-        .pattern-info.active {
-            display: block;
-            animation: fadeIn 0.5s ease;
-        }
-
-        .pattern-title {
             font-size: 12px;
-            color: var(--gray);
-            margin-bottom: 5px;
-        }
-
-        .pattern-name {
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--secondary);
-            text-transform: uppercase;
+            color: #818cf8;
+            font-weight: 600;
         }
 
         /* Updated confirm button and back button */
@@ -1702,12 +1676,7 @@
                 <div class="bingo-grid" id="bingoGrid">
                     <!-- Bingo grid will be populated by JavaScript -->
                 </div>
-            </div>
-
-            <!-- WINNING PATTERN INFO SECTION -->
-            <div class="pattern-info" id="patternInfo">
-                <div class="pattern-title">WINNING PATTERN</div>
-                <div class="pattern-name" id="patternName">--</div>
+                <!-- Winning pattern message will be inserted here -->
             </div>
 
             <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
@@ -1804,13 +1773,6 @@
             <div class="overlay-icon">🏆</div>
             <h2 class="overlay-title win-title">BINGO!</h2>
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
-            
-            <!-- WINNING PATTERN INFO -->
-            <div class="pattern-info" style="background: rgba(245, 158, 11, 0.1); margin: 15px 0;">
-                <div class="pattern-title" style="color: var(--secondary-dark)">WINNING PATTERN</div>
-                <div class="pattern-name" id="winPatternName" style="color: white">--</div>
-            </div>
-            
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
             <button class="overlay-button" onclick="resetToLobby()">
                 Return to Lobby
@@ -1823,13 +1785,6 @@
         <div class="overlay-content">
             <div class="overlay-icon">😢</div>
             <h2 class="overlay-title lose-title">GAME OVER</h2>
-            
-            <!-- WINNING PATTERN INFO -->
-            <div class="pattern-info" style="background: rgba(239, 68, 68, 0.1); margin: 15px 0;">
-                <div class="pattern-title" style="color: var(--danger)">WINNING PATTERN</div>
-                <div class="pattern-name" id="losePatternName" style="color: white">--</div>
-            </div>
-            
             <div class="overlay-message" id="loseMessage">Someone else claimed Bingo first!</div>
             <div style="margin-bottom: 24px;">
                 <div style="font-size: 14px; color: var(--gray); margin-bottom: 8px;">Winner</div>
@@ -1948,157 +1903,143 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0,
-            winningPattern: null,
-            patternName: null
+            selectedWithdrawAmount: 0
         };
 
         // ========== WINNING PATTERN FUNCTIONS ==========
-
-        // Function to highlight winning pattern on the board
-        function highlightWinningPattern(pattern, isWinner) {
-            console.log('🎯 Highlighting winning pattern:', pattern);
+        // Function to highlight winning pattern on bingo card
+        function highlightWinningPattern(pattern, isFourCorners = false) {
+            console.log('🎯 Highlighting winning pattern:', pattern, 'Four corners:', isFourCorners);
             
-            // Clear any existing highlights
+            // Remove any existing winning highlights
             document.querySelectorAll('.cell').forEach(cell => {
-                cell.classList.remove('winning-pattern');
+                cell.classList.remove('winning-cell');
+                cell.classList.remove('winning-corner');
             });
             
-            // Highlight the pattern
-            if (pattern && Array.isArray(pattern)) {
-                pattern.forEach(index => {
-                    const cell = document.querySelector(`.cell[data-index="${index}"]`);
-                    if (cell) {
-                        cell.classList.add('winning-pattern');
+            // Highlight each cell in the pattern
+            pattern.forEach(cellIndex => {
+                const cell = document.querySelector(`.cell[data-index="${cellIndex}"]`);
+                if (cell) {
+                    if (isFourCorners) {
+                        cell.classList.add('winning-corner');
                         
-                        // Add special animation for winner
-                        if (isWinner) {
-                            setTimeout(() => {
-                                cell.style.animationDelay = `${index * 0.1}s`;
-                            }, 100);
+                        // Add a star indicator for four corners
+                        if (!cell.querySelector('.four-corners-indicator')) {
+                            const indicator = document.createElement('div');
+                            indicator.className = 'four-corners-indicator';
+                            indicator.innerHTML = '★';
+                            cell.appendChild(indicator);
                         }
+                    } else {
+                        cell.classList.add('winning-cell');
                     }
-                });
-                
-                // Store pattern for reference
-                state.winningPattern = pattern;
-                
-                // Show pattern info
-                document.getElementById('patternInfo').classList.add('active');
-                
-                // Set pattern name
-                const patternName = state.patternName || getPatternName(pattern);
-                document.getElementById('patternName').textContent = patternName;
-                
-                // Also update overlays
-                document.getElementById('winPatternName').textContent = patternName;
-                document.getElementById('losePatternName').textContent = patternName;
-                
-                console.log('✅ Pattern highlighted:', patternName);
-            }
-        }
-
-        // Function to determine pattern name
-        function getPatternName(pattern) {
-            if (!pattern || !Array.isArray(pattern)) return 'Unknown';
-            
-            // Four corners
-            if (pattern.length === 4 && 
-                pattern.includes(0) && 
-                pattern.includes(4) && 
-                pattern.includes(20) && 
-                pattern.includes(24)) {
-                return 'FOUR CORNERS';
-            }
-            
-            // Check if it's a row
-            const rows = [
-                [0,1,2,3,4],     // Row 1
-                [5,6,7,8,9],     // Row 2
-                [10,11,12,13,14], // Row 3
-                [15,16,17,18,19], // Row 4
-                [20,21,22,23,24]  // Row 5
-            ];
-            
-            for (let i = 0; i < rows.length; i++) {
-                if (pattern.every(cell => rows[i].includes(cell))) {
-                    return `ROW ${i + 1}`;
                 }
-            }
-            
-            // Check if it's a column
-            const columns = [
-                [0,5,10,15,20],   // Column 1 (B)
-                [1,6,11,16,21],   // Column 2 (I)
-                [2,7,12,17,22],   // Column 3 (N)
-                [3,8,13,18,23],   // Column 4 (G)
-                [4,9,14,19,24]    // Column 5 (O)
-            ];
-            
-            const columnLetters = ['B', 'I', 'N', 'G', 'O'];
-            for (let i = 0; i < columns.length; i++) {
-                if (pattern.every(cell => columns[i].includes(cell))) {
-                    return `COLUMN ${columnLetters[i]}`;
-                }
-            }
-            
-            // Check if it's a diagonal
-            const diagonals = [
-                [0,6,12,18,24],   // Diagonal \
-                [4,8,12,16,20]    // Diagonal /
-            ];
-            
-            for (let i = 0; i < diagonals.length; i++) {
-                if (pattern.every(cell => diagonals[i].includes(cell))) {
-                    return i === 0 ? 'DIAGONAL \\' : 'DIAGONAL /';
-                }
-            }
-            
-            return 'CUSTOM PATTERN';
-        }
-
-        // Function to clear pattern highlights
-        function clearPatternHighlights() {
-            document.querySelectorAll('.cell').forEach(cell => {
-                cell.classList.remove('winning-pattern');
             });
-            document.getElementById('patternInfo').classList.remove('active');
-            state.winningPattern = null;
-            state.patternName = null;
+            
+            // Add a message below the bingo card
+            const bingoContainer = document.querySelector('.bingo-card-container');
+            let existingMessage = document.getElementById('winningPatternMessage');
+            
+            if (!existingMessage) {
+                existingMessage = document.createElement('div');
+                existingMessage.id = 'winningPatternMessage';
+                existingMessage.className = 'winning-pattern-message';
+                bingoContainer.appendChild(existingMessage);
+            }
+            
+            if (isFourCorners) {
+                existingMessage.innerHTML = `<div>🏆 FOUR CORNERS WIN!</div><div style="font-size: 10px; color: #a78bfa;">Corner cells highlighted in purple</div>`;
+            } else {
+                // Determine pattern type
+                let patternType = 'WINNING PATTERN';
+                if (pattern.length === 5) {
+                    // Check if it's a row, column, or diagonal
+                    const rows = [[0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24]];
+                    const cols = [[0,5,10,15,20], [1,6,11,16,21], [2,7,12,17,22], [3,8,13,18,23], [4,9,14,19,24]];
+                    const diags = [[0,6,12,18,24], [4,8,12,16,20]];
+                    
+                    if (rows.some(row => JSON.stringify(row) === JSON.stringify(pattern))) {
+                        const rowNum = rows.findIndex(row => JSON.stringify(row) === JSON.stringify(pattern)) + 1;
+                        patternType = `ROW ${rowNum}`;
+                    } else if (cols.some(col => JSON.stringify(col) === JSON.stringify(pattern))) {
+                        const colLetter = ['B','I','N','G','O'][cols.findIndex(col => JSON.stringify(col) === JSON.stringify(pattern))];
+                        patternType = `COLUMN ${colLetter}`;
+                    } else if (diags.some(diag => JSON.stringify(diag) === JSON.stringify(pattern))) {
+                        patternType = pattern[0] === 0 ? 'DIAGONAL (Top-left to Bottom-right)' : 'DIAGONAL (Top-right to Bottom-left)';
+                    }
+                }
+                
+                existingMessage.innerHTML = `<div>🎯 ${patternType}</div><div style="font-size: 10px; color: #a5b4fc;">Winning cells highlighted in gold</div>`;
+            }
         }
 
-        // Helper to determine pattern from grid and marked numbers
-        function determinePatternFromGrid(grid, markedNumbers) {
-            const patterns = {
-                'ROW 1': [0,1,2,3,4],
-                'ROW 2': [5,6,7,8,9],
-                'ROW 3': [10,11,12,13,14],
-                'ROW 4': [15,16,17,18,19],
-                'ROW 5': [20,21,22,23,24],
-                'COLUMN B': [0,5,10,15,20],
-                'COLUMN I': [1,6,11,16,21],
-                'COLUMN N': [2,7,12,17,22],
-                'COLUMN G': [3,8,13,18,23],
-                'COLUMN O': [4,9,14,19,24],
-                'DIAGONAL \\': [0,6,12,18,24],
-                'DIAGONAL /': [4,8,12,16,20],
-                'FOUR CORNERS': [0,4,20,24]
-            };
+        // Function to clear winning pattern highlights
+        function clearWinningPattern() {
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.classList.remove('winning-cell');
+                cell.classList.remove('winning-corner');
+            });
             
-            for (const [name, pattern] of Object.entries(patterns)) {
-                const isComplete = pattern.every(index => {
-                    const value = grid[index];
-                    if (value === 'FREE') return true;
-                    return markedNumbers.includes(value) || markedNumbers.includes(parseInt(value));
-                });
+            const message = document.getElementById('winningPatternMessage');
+            if (message) {
+                message.remove();
+            }
+        }
+
+        // Helper function to describe winning pattern
+        function getPatternDescription(pattern, isFourCorners = false) {
+            if (isFourCorners) {
+                return 'Four Corners (B1, B5, O1, O5)';
+            }
+            
+            if (pattern.length === 5) {
+                // Check for rows
+                const rows = [
+                    { indices: [0,1,2,3,4], name: 'Row 1 (B1-B5)' },
+                    { indices: [5,6,7,8,9], name: 'Row 2 (I1-I5)' },
+                    { indices: [10,11,12,13,14], name: 'Row 3 (N1-N5)' },
+                    { indices: [15,16,17,18,19], name: 'Row 4 (G1-G5)' },
+                    { indices: [20,21,22,23,24], name: 'Row 5 (O1-O5)' }
+                ];
                 
-                if (isComplete) {
-                    return pattern;
+                // Check for columns
+                const cols = [
+                    { indices: [0,5,10,15,20], name: 'Column B (B1-O1)' },
+                    { indices: [1,6,11,16,21], name: 'Column I (B2-O2)' },
+                    { indices: [2,7,12,17,22], name: 'Column N (B3-O3)' },
+                    { indices: [3,8,13,18,23], name: 'Column G (B4-O4)' },
+                    { indices: [4,9,14,19,24], name: 'Column O (B5-O5)' }
+                ];
+                
+                // Check for diagonals
+                const diags = [
+                    { indices: [0,6,12,18,24], name: 'Diagonal (B1 to O5)' },
+                    { indices: [4,8,12,16,20], name: 'Diagonal (B5 to O1)' }
+                ];
+                
+                for (const row of rows) {
+                    if (JSON.stringify(row.indices) === JSON.stringify(pattern)) {
+                        return row.name;
+                    }
+                }
+                
+                for (const col of cols) {
+                    if (JSON.stringify(col.indices) === JSON.stringify(pattern)) {
+                        return col.name;
+                    }
+                }
+                
+                for (const diag of diags) {
+                    if (JSON.stringify(diag.indices) === JSON.stringify(pattern)) {
+                        return diag.name;
+                    }
                 }
             }
             
-            return null;
+            return `${pattern.length} cells pattern`;
         }
+        // ========== END WINNING PATTERN FUNCTIONS ==========
 
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
@@ -3196,6 +3137,9 @@
             
             state.isResettingLobby = true;
             
+            // Clear winning pattern highlights
+            clearWinningPattern();
+            
             state.stake = 0;
             state.grid = [];
             state.calledNumbers.clear();
@@ -3206,9 +3150,6 @@
             state.selectedBox = null;
             state.onlinePlayersCount = 0;
             state.totalPlayersCount = 0;
-            
-            // Clear winning pattern highlights
-            clearPatternHighlights();
             
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
@@ -3423,13 +3364,29 @@
             state.lastActivityTime = Date.now();
         });
 
-        // ========== UPDATED GAME OVER HANDLER WITH WINNING PATTERN ==========
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
             
             if(d.room === state.stake) {
                 const isWinner = d.winnerId === state.userId;
                 console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
+                
+                // Clear any existing winning pattern
+                clearWinningPattern();
+                
+                // Highlight winning pattern if available
+                if (d.winningPattern && d.winningPattern.length > 0) {
+                    setTimeout(() => {
+                        highlightWinningPattern(d.winningPattern, d.isFourCornersWin);
+                    }, 100);
+                    
+                    // Show pattern info
+                    if (isWinner) {
+                        showNotification(`🎯 Your winning pattern: ${getPatternDescription(d.winningPattern, d.isFourCornersWin)}`, 'success', 4000);
+                    } else {
+                        showNotification(`🎯 ${d.winnerName}'s winning pattern: ${getPatternDescription(d.winningPattern, d.isFourCornersWin)}`, 'info', 4000);
+                    }
+                }
                 
                 if (state.isResettingLobby) {
                     console.log('⚠️ Already resetting lobby, ignoring gameOver event');
@@ -3438,20 +3395,6 @@
                 
                 document.getElementById('claimBingoButton').disabled = true;
 
-                // Store pattern data from server
-                state.patternName = d.patternName || null;
-
-                // Highlight the winning pattern on the board
-                if (d.winningPattern && Array.isArray(d.winningPattern)) {
-                    highlightWinningPattern(d.winningPattern, isWinner);
-                } else {
-                    // Try to determine pattern from the grid
-                    const pattern = determinePatternFromGrid(state.grid, d.markedNumbers || []);
-                    if (pattern) {
-                        highlightWinningPattern(pattern, isWinner);
-                    }
-                }
-                
                 if(isWinner) {
                     document.getElementById('winPrizeAmount').textContent = `+${d.prize.toFixed(2)} ETB`;
                     
@@ -3507,6 +3450,9 @@
                 console.log('⏰ Game timed out for our room, refunding stake');
                 
                 showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'warning', 4000);
+                
+                // Clear winning pattern
+                clearWinningPattern();
                 
                 // Reset to lobby after delay
                 setTimeout(() => {
