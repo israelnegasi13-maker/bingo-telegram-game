@@ -708,32 +708,86 @@ async function startGameTimer(room) {
   console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
 }
 
-// ✅✅✅ FIXED: Check if a player has bingo
-function checkBingo(markedNumbers, grid) {
-  const patterns = [
-    // Rows
+// ========== PATTERN NAME HELPER FUNCTION ==========
+function getPatternName(pattern) {
+  if (!pattern || !Array.isArray(pattern)) return 'Unknown';
+  
+  // Four corners
+  if (pattern.length === 4 && pattern[0] === 0 && pattern[1] === 4 && pattern[2] === 20 && pattern[3] === 24) {
+    return 'FOUR CORNERS';
+  }
+  
+  // Check rows
+  const rows = [
     [0,1,2,3,4],
     [5,6,7,8,9],
     [10,11,12,13,14],
     [15,16,17,18,19],
-    [20,21,22,23,24],
-    
-    // Columns
+    [20,21,22,23,24]
+  ];
+  
+  for (let i = 0; i < rows.length; i++) {
+    if (JSON.stringify(pattern.sort()) === JSON.stringify(rows[i].sort())) {
+      return `ROW ${i + 1}`;
+    }
+  }
+  
+  // Check columns
+  const columns = [
     [0,5,10,15,20],
     [1,6,11,16,21],
     [2,7,12,17,22],
     [3,8,13,18,23],
-    [4,9,14,19,24],
-    
-    // Diagonals
-    [0,6,12,18,24],
-    [4,8,12,16,20],
-    
-    // Four corners
-    [0,4,20,24]
+    [4,9,14,19,24]
   ];
   
-  for (const pattern of patterns) {
+  const columnNames = ['B', 'I', 'N', 'G', 'O'];
+  for (let i = 0; i < columns.length; i++) {
+    if (JSON.stringify(pattern.sort()) === JSON.stringify(columns[i].sort())) {
+      return `COLUMN ${columnNames[i]}`;
+    }
+  }
+  
+  // Check diagonals
+  const diag1 = [0,6,12,18,24];
+  const diag2 = [4,8,12,16,20];
+  
+  if (JSON.stringify(pattern.sort()) === JSON.stringify(diag1.sort())) {
+    return 'DIAGONAL \\';
+  }
+  if (JSON.stringify(pattern.sort()) === JSON.stringify(diag2.sort())) {
+    return 'DIAGONAL /';
+  }
+  
+  return 'CUSTOM PATTERN';
+}
+
+// ✅✅✅ FIXED: Check if a player has bingo
+function checkBingo(markedNumbers, grid) {
+  const patterns = [
+    // Rows
+    { pattern: [0,1,2,3,4], name: 'ROW 1' },
+    { pattern: [5,6,7,8,9], name: 'ROW 2' },
+    { pattern: [10,11,12,13,14], name: 'ROW 3' },
+    { pattern: [15,16,17,18,19], name: 'ROW 4' },
+    { pattern: [20,21,22,23,24], name: 'ROW 5' },
+    
+    // Columns
+    { pattern: [0,5,10,15,20], name: 'COLUMN B' },
+    { pattern: [1,6,11,16,21], name: 'COLUMN I' },
+    { pattern: [2,7,12,17,22], name: 'COLUMN N' },
+    { pattern: [3,8,13,18,23], name: 'COLUMN G' },
+    { pattern: [4,9,14,19,24], name: 'COLUMN O' },
+    
+    // Diagonals
+    { pattern: [0,6,12,18,24], name: 'DIAGONAL \\' },
+    { pattern: [4,8,12,16,20], name: 'DIAGONAL /' },
+    
+    // Four corners
+    { pattern: [0,4,20,24], name: 'FOUR CORNERS' }
+  ];
+  
+  for (const { pattern, name } of patterns) {
     const isBingo = pattern.every(index => {
       const cellValue = grid[index];
       
@@ -758,6 +812,7 @@ function checkBingo(markedNumbers, grid) {
       return {
         isBingo: true,
         pattern: pattern,
+        patternName: name,
         isFourCorners: pattern.length === 4 && pattern[0] === 0 && pattern[1] === 4 && pattern[2] === 20 && pattern[3] === 24
       };
     }
@@ -816,7 +871,9 @@ async function endGameWithNoWinner(room) {
                 isFourCornersWin: false,
                 gameEnded: true,
                 reason: 'no_winner',
-                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0
+                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0,
+                winningPattern: null,
+                patternName: 'NO WINNER'
               });
               socket.emit('balanceUpdate', user.balance);
             }
@@ -1907,7 +1964,9 @@ async function endGameWithNoWinner(room) {
                       isFourCornersWin: false,
                       gameEnded: true,
                       reason: 'admin_ended',
-                      commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0
+                      commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0,
+                      winningPattern: null,
+                      patternName: 'GAME ENDED BY ADMIN'
                     });
                     s.emit('balanceUpdate', user.balance);
                   }
@@ -2658,6 +2717,8 @@ async function endGameWithNoWinner(room) {
           }
           
           const isFourCornersWin = bingoCheck.isFourCorners;
+          const winningPattern = bingoCheck.pattern;
+          const patternName = bingoCheck.patternName;
           
           // Calculate total prize (FAST LOCAL CALCULATION)
           const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room] || 0;
@@ -2673,6 +2734,7 @@ async function endGameWithNoWinner(room) {
           console.log(`   Total prize: ${totalPrize} ETB`);
           console.log(`   Bonus: ${bonus} ETB`);
           console.log(`   House earnings: ${houseEarnings} ETB`);
+          console.log(`   Winning pattern: ${patternName} (${winningPattern})`);
           
           // ✅ IMMEDIATE RESPONSE TO USER
           if (callback) {
@@ -2720,6 +2782,8 @@ async function endGameWithNoWinner(room) {
                       players: roomData.players.length,
                       ballsDrawn: roomData.ballsDrawn,
                       isFourCorners: isFourCornersWin,
+                      winningPattern: winningPattern,
+                      patternName: patternName,
                       commissionCollected: houseEarnings
                     }
                   }
@@ -2757,7 +2821,7 @@ async function endGameWithNoWinner(room) {
                 userName: user.userName,
                 amount: totalPrize,
                 room: room,
-                description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
+                description: `Bingo win in ${room} ETB room with ${totalPlayers} players (${patternName})${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`
               });
               await transaction.save();
               
@@ -2768,7 +2832,7 @@ async function endGameWithNoWinner(room) {
                 userName: 'House',
                 amount: houseEarnings,
                 room: room,
-                description: `Commission from ${totalPlayers} players in ${room} ETB room`
+                description: `Commission from ${totalPlayers} players in ${room} ETB room (${patternName} win by ${user.userName})`
               });
               await houseTransaction.save();
               
@@ -2795,7 +2859,7 @@ async function endGameWithNoWinner(room) {
               processingClaims.delete(roomClaimKey);
               console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
               
-              // Create game over data
+              // Create game over data WITH WINNING PATTERN
               const gameOverData = {
                 room: room,
                 winnerId: userId,
@@ -2809,7 +2873,9 @@ async function endGameWithNoWinner(room) {
                 reason: 'bingo_win',
                 commissionPerPlayer: commissionPerPlayer,
                 contributionPerPlayer: contributionPerPlayer,
-                houseEarnings: houseEarnings
+                houseEarnings: houseEarnings,
+                winningPattern: winningPattern,
+                patternName: patternName
               };
               
               // Notify all players
@@ -2850,7 +2916,7 @@ async function endGameWithNoWinner(room) {
               broadcastTakenBoxes(room, []);
               io.emit('boxesCleared', { room: room, reason: 'game_ended_bingo_win' });
               
-              console.log(`🎮 Game ended with bingo win for room ${room}. Boxes cleared for next game.`);
+              console.log(`🎮 Game ended with bingo win for room ${room}. Pattern: ${patternName}. Boxes cleared for next game.`);
               
               // Update displays
               broadcastRoomStatus();
@@ -2864,6 +2930,7 @@ async function endGameWithNoWinner(room) {
                 bonus, 
                 basePrize: basePrize,
                 isFourCorners: isFourCornersWin,
+                pattern: patternName,
                 players: playersInRoom.length,
                 commissionCollected: houseEarnings
               });
@@ -3226,7 +3293,7 @@ async function endGameWithNoWinner(room) {
           { 
             lastSeen: { $lt: fiveMinutesAgo },
             isOnline: true 
-          },
+        },
           { 
             isOnline: false,
             currentRoom: null,
@@ -3290,6 +3357,7 @@ async function endGameWithNoWinner(room) {
     
     // Game logic functions
     getBingoLetter,
+    getPatternName,
     generateReferralCode,
     checkBingo,
     startCountdownForRoom,
