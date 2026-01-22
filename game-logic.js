@@ -140,7 +140,7 @@ function cleanupRoomWinners() {
   });
 }
 
-// ========== NEW: PATTERN HELPER FUNCTIONS ==========
+// ========== PATTERN HELPER FUNCTIONS ==========
 function getPatternName(patternIndices) {
   // All possible winning patterns
   const patterns = [
@@ -250,7 +250,7 @@ async function getRoom(stake) {
     let room = await models.Room.findOne({ stake: stake, status: { $in: ['waiting', 'starting', 'playing'] } });
     
     if (!room) {
-          room = new models.Room({
+      room = new models.Room({
         stake: stake,
         players: [],
         takenBoxes: [],
@@ -1905,7 +1905,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== UPDATED: admin:forceEndGame with pattern support ==========
+    // ========== UPDATED: admin:forceEndGame ==========
     socket.on('admin:forceEndGame', async (roomStake) => {
       if (!adminSockets.has(socket.id)) {
         socket.emit('admin:error', 'Unauthorized');
@@ -2771,8 +2771,8 @@ function setupSocketHandlers() {
               { _id: roomData._id, status: 'playing' },
               { 
                 status: 'ended',
-                endTime = new Date(),
-                lastBoxUpdate = new Date(),
+                endTime: new Date(),
+                lastBoxUpdate: new Date(),
                 $push: { 
                   gameHistory: {
                     timestamp: new Date(),
@@ -2861,7 +2861,7 @@ function setupSocketHandlers() {
             processingClaims.delete(roomClaimKey);
             console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
             
-            // Create game over data with pattern information
+            // Create game over data with pattern information (for win/lose overlays)
             const gameOverData = {
               room: room,
               winnerId: userId,
