@@ -1980,8 +1980,14 @@
             console.log('Running in browser mode (not Telegram)');
         }
 
-        // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
-        const SERVER_URL = "https://bingo-telegram-game.onrender.com";
+        // ⭐⭐ DYNAMIC SERVER URL FOR DEPLOYMENT ⭐⭐
+        // This will automatically use the current domain when deployed
+        // On localhost, it will default to localhost:3000
+        const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+            ? 'http://localhost:3000' 
+            : window.location.origin;
+        
+        console.log('🌐 Connecting to server:', SERVER_URL);
         
         const socket = io(SERVER_URL, {
             reconnectionAttempts: 10,
