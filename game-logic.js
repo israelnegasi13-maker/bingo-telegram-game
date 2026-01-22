@@ -861,9 +861,7 @@ async function endGameWithNoWinner(room) {
                 isFourCornersWin: false,
                 gameEnded: true,
                 reason: 'no_winner',
-                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0,
-                pattern: [],
-                patternName: ''
+                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0
               });
               socket.emit('balanceUpdate', user.balance);
             }
@@ -1905,7 +1903,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== UPDATED: admin:forceEndGame with pattern support ==========
+    // ========== UPDATED: admin:forceEndGame ==========
     socket.on('admin:forceEndGame', async (roomStake) => {
       if (!adminSockets.has(socket.id)) {
         socket.emit('admin:error', 'Unauthorized');
@@ -1955,9 +1953,7 @@ function setupSocketHandlers() {
                     isFourCornersWin: false,
                     gameEnded: true,
                     reason: 'admin_ended',
-                    commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0,
-                    pattern: [],
-                    patternName: ''
+                    commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0
                   });
                   s.emit('balanceUpdate', user.balance);
                 }
@@ -2402,7 +2398,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate: new Date()
+            lastBoxUpdate = new Date()
           });
           await roomData.save();
         }
@@ -2861,7 +2857,7 @@ function setupSocketHandlers() {
             processingClaims.delete(roomClaimKey);
             console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
             
-            // Create game over data with pattern information
+            // Create game over data WITHOUT pattern information
             const gameOverData = {
               room: room,
               winnerId: userId,
@@ -2875,10 +2871,7 @@ function setupSocketHandlers() {
               reason: 'bingo_win',
               commissionPerPlayer: commissionPerPlayer,
               contributionPerPlayer: contributionPerPlayer,
-              houseEarnings: houseEarnings,
-              pattern: patternIndices,
-              patternName: patternName,
-              isFourCorners: isFourCornersWin
+              houseEarnings: houseEarnings
             };
             
             // Notify all players
