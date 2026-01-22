@@ -1,3801 +1,3374 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Bingo Elite - Telegram Mini App</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+// game-logic.js - BINGO ELITE GAME LOGIC MODULE
+
+// ========== GAME CONFIGURATION ==========
+const CONFIG = {
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "admin1234",
+  INITIAL_BALANCE: 0.00,
+  ROOM_STAKES: [10, 20, 50, 100],
+  MAX_PLAYERS_PER_ROOM: 100,
+  GAME_TIMER: 3,
+  MIN_PLAYERS_TO_START: 1,
+  HOUSE_COMMISSION: {
+    10: 2,
+    20: 4,
+    50: 10,
+    100: 20
+  },
+  FOUR_CORNERS_BONUS: 50,
+  COUNTDOWN_TIMER: 30,
+  ROOM_STATUS_UPDATE_INTERVAL: 3000,
+  MAX_TRANSACTIONS: 1000,
+  AUTO_SAVE_INTERVAL: 60000,
+  SESSION_TIMEOUT: 86400000,
+  GAME_TIMEOUT_MINUTES: 7,
+  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
+  MIN_WITHDRAWAL: 50,
+  MAX_WITHDRAWAL: 10000
+};
+
+// ========== GLOBAL STATE ==========
+let io;
+let models;
+let socketToUser = new Map();
+let adminSockets = new Set();
+let activityLog = [];
+let roomTimers = new Map();
+let connectedSockets = new Set();
+let roomSubscriptions = new Map();
+let processingClaims = new Map(); // For preventing double prize bug
+let roomWinners = new Map(); // Track room winners
+let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+
+// ========== INITIALIZATION FUNCTION ==========
+async function initialize(socketIo, dbModels) {
+  io = socketIo;
+  models = dbModels;
+  
+  console.log('✅ Game logic initialized');
+  
+  // Set up Socket.IO event handlers
+  setupSocketHandlers();
+  
+  // Start periodic tasks
+  startPeriodicTasks();
+}
+
+// ========== TELEBIRR NUMBER FUNCTIONS ==========
+function getTelebirrNumber() {
+  return telebirrNumber;
+}
+
+function setTelebirrNumber(newNumber) {
+  telebirrNumber = newNumber;
+  console.log(`📱 Telebirr number updated in game logic: ${telebirrNumber}`);
+  
+  // Broadcast to all connected players
+  if (io) {
+    io.emit('telebirrNumber', telebirrNumber);
+  }
+}
+
+// ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
+function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
+  if (!io) return;
+  
+  const updateData = {
+    room: roomStake,
+    takenBoxes: takenBoxes,
+    playerCount: takenBoxes.length,
+    timestamp: Date.now()
+  };
+  
+  if (newBox && playerName) {
+    updateData.newBox = newBox;
+    updateData.playerName = playerName;
+    updateData.message = `${playerName} selected box ${newBox}!`;
+  }
+  
+  // Broadcast to all connected sockets
+  io.emit('boxesTakenUpdate', updateData);
+  
+  // Also update all admin panels
+  adminSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit('admin:boxesUpdate', {
+        room: roomStake,
+        takenBoxes: takenBoxes,
+        playerCount: takenBoxes.length,
+        timestamp: new Date().toISOString(),
+        newBox: newBox,
+        playerName: playerName
+      });
+    }
+  });
+  
+  console.log(`📦 Real-time box update for room ${roomStake}: ${takenBoxes.length} boxes taken${newBox ? `, new box ${newBox} by ${playerName}` : ''}`);
+}
+
+function cleanupRoomTimer(stake) {
+  if (roomTimers.has(stake)) {
+    clearInterval(roomTimers.get(stake));
+    roomTimers.delete(stake);
+    console.log(`🧹 Cleaned up timer for room ${stake}`);
+  }
+}
+
+// Clear stale processing claims
+function cleanupProcessingClaims() {
+  const now = Date.now();
+  const tenSecondsAgo = now - 10000;
+  
+  processingClaims.forEach((timestamp, key) => {
+    if (timestamp < tenSecondsAgo) {
+      processingClaims.delete(key);
+      console.log(`🧹 Cleaned up stale processing claim: ${key}`);
+    }
+  });
+}
+
+// Clear stale room winners
+function cleanupRoomWinners() {
+  const now = Date.now();
+  const oneMinuteAgo = now - 60000;
+  
+  roomWinners.forEach((timestamp, roomStake) => {
+    if (timestamp < oneMinuteAgo) {
+      roomWinners.delete(roomStake);
+      console.log(`🧹 Cleaned up stale room winner for room ${roomStake}`);
+    }
+  });
+}
+
+// ========== NEW: PATTERN HELPER FUNCTIONS ==========
+function getPatternName(patternIndices) {
+  // All possible winning patterns
+  const patterns = [
+    { indices: [0,1,2,3,4], name: 'ROW 1' },
+    { indices: [5,6,7,8,9], name: 'ROW 2' },
+    { indices: [10,11,12,13,14], name: 'ROW 3' },
+    { indices: [15,16,17,18,19], name: 'ROW 4' },
+    { indices: [20,21,22,23,24], name: 'ROW 5' },
     
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --primary-light: #818cf8;
-            --secondary: #f59e0b;
-            --secondary-dark: #d97706;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --dark: #0f172a;
-            --darker: #020617;
-            --light: #f8fafc;
-            --gray: #64748b;
-            --gray-light: #cbd5e1;
-            --card-bg: rgba(30, 41, 59, 0.7);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --glass: rgba(255, 255, 255, 0.05);
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --radius: 12px;
-            --radius-sm: 8px;
-            --radius-lg: 16px;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-            touch-action: manipulation;
-        }
-
-        html, body {
-            background: linear-gradient(135deg, var(--darker) 0%, #1e293b 100%);
-            color: var(--light);
-            overflow: hidden;
-            height: 100%;
-            width: 100%;
-            position: fixed;
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Background Effects */
-        .bg-effects {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -2;
-            overflow: hidden;
-        }
-
-        .gradient-bg {
-            position: absolute;
-            width: 300px;
-            height: 300px;
-            border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.15;
-        }
-
-        .gradient-1 {
-            top: -100px;
-            left: -100px;
-            background: var(--primary);
-        }
-
-        .gradient-2 {
-            bottom: -100px;
-            right: -100px;
-            background: var(--secondary);
-        }
-
-        /* Header */
-        .app-header {
-            padding: 16px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--card-border);
-            z-index: 100;
-            position: relative;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 18px;
-            color: white;
-            box-shadow: var(--shadow);
-        }
-
-        .user-details {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .user-name {
-            font-weight: 700;
-            font-size: 14px;
-        }
-
-        .user-status {
-            font-size: 11px;
-            color: var(--gray);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--danger);
-        }
-
-        .status-dot.connected {
-            background: var(--success);
-            animation: pulse 2s infinite;
-        }
-
-        .wallet-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .balance-card {
-            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.1));
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            border-radius: var(--radius);
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: var(--shadow);
-        }
-
-        .balance-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-            border-color: rgba(99, 102, 241, 0.4);
-        }
-
-        .balance-icon {
-            color: var(--primary-light);
-            font-size: 16px;
-        }
-
-        .balance-amount {
-            font-weight: 800;
-            font-size: 16px;
-            color: white;
-            letter-spacing: 0.5px;
-        }
-
-        .balance-currency {
-            font-size: 12px;
-            color: var(--gray-light);
-            font-weight: 600;
-        }
-
-        .refresh-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid var(--card-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gray-light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .refresh-btn:hover {
-            background: var(--primary);
-            color: white;
-            transform: rotate(90deg);
-        }
-
-        /* Main Container */
-        .main-container {
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-        }
-
-        /* Screens */
-        .screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            overflow-y: auto;
-        }
-
-        .screen.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-
-        /* Lobby Screen */
-        .lobby-header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .app-logo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-
-        .logo-icon {
-            font-size: 28px;
-            color: var(--secondary);
-        }
-
-        .logo-text {
-            font-size: 28px;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .app-tagline {
-            color: var(--gray);
-            font-size: 14px;
-            max-width: 300px;
-            margin: 0 auto;
-            line-height: 1.4;
-        }
-
-        /* UPDATED: Smaller rooms grid */
-        .rooms-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        /* UPDATED: Smaller room cards */
-        .room-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 15px 12px;
-            display: flex;
-            flex-direction: column;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            min-height: 130px; /* Reduced from 160px */
-        }
-
-        .room-card:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-lg);
-            border-color: var(--primary);
-        }
-
-        .room-card.locked {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .room-card.locked:hover {
-            transform: none;
-            box-shadow: none;
-            border-color: var(--card-border);
-        }
-
-        .room-badge {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            padding: 3px 6px;
-            border-radius: 12px;
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .badge-bronze {
-            background: linear-gradient(135deg, #92400e, #b45309);
-            color: #fef3c7;
-        }
-
-        .badge-silver {
-            background: linear-gradient(135deg, #374151, #6b7280);
-            color: #f9fafb;
-        }
-
-        .badge-gold {
-            background: linear-gradient(135deg, #b45309, #d97706);
-            color: #fef3c7;
-        }
-
-        .badge-elite {
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            color: #f5f3ff;
-        }
-
-        /* UPDATED: Smaller stake amount with ETB moved higher */
-        .room-stake {
-            font-size: 18px; /* Reduced from 24px */
-            font-weight: 800;
-            margin-bottom: 0; /* Removed bottom margin */
-            color: white;
-            display: flex;
-            align-items: flex-end;
-        }
-
-        .room-stake-currency {
-            font-size: 12px;
-            color: var(--gray-light);
-            font-weight: 600;
-            margin-left: 2px;
-            margin-bottom: 2px; /* Moved ETB up by reducing bottom margin */
-        }
-
-        .room-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--gray);
-            margin-bottom: 8px;
-            margin-top: 2px; /* Added top margin to separate from stake */
-        }
-
-        .room-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: auto;
-            padding-top: 8px; /* Increased from 5px to push status down */
-        }
-
-        .room-players {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 11px;
-            color: var(--gray);
-        }
-
-        .player-icon {
-            color: var(--success);
-            font-size: 10px;
-        }
-
-        .room-prize {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--secondary);
-        }
-
-        /* FIXED: Status moved MUCH higher to avoid overlap */
-        .room-status {
-            position: absolute;
-            top: 35px; /* Moved from bottom: 6px to top: 35px (about 3x higher) */
-            right: 6px;
-            font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 8px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .status-waiting {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .status-starting {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-
-        .status-playing, .status-locked {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .wallet-section {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .wallet-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .wallet-title {
-            font-size: 15px;
-            font-weight: 700;
-        }
-
-        .wallet-action {
-            color: var(--primary);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.3s ease;
-        }
-
-        .wallet-action:hover {
-            color: var(--primary-light);
-        }
-
-        .wallet-balance {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .balance-label {
-            font-size: 13px;
-            color: var(--gray);
-        }
-
-        .balance-value {
-            font-size: 22px;
-            font-weight: 800;
-            color: white;
-        }
-
-        .balance-currency {
-            font-size: 13px;
-            color: var(--gray-light);
-            margin-left: 3px;
-        }
-
-        /* Game Info */
-        .game-info {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 14px;
-            margin-bottom: 15px;
-        }
-
-        .info-title {
-            font-size: 13px;
-            font-weight: 700;
-            margin-bottom: 10px;
-            color: var(--gray-light);
-            text-align: center;
-        }
-
-        .bingo-letters {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
-        }
-
-        .letter-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 6px;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--card-border);
-        }
-
-        .letter {
-            font-size: 16px;
-            font-weight: 800;
-            color: var(--primary);
-            margin-bottom: 2px;
-        }
-
-        .letter-range {
-            font-size: 9px;
-            color: var(--gray);
-        }
-
-        /* Discovery Screen */
-        .discovery-header {
-            text-align: center;
-            margin-bottom: 12px;
-        }
-
-        .selected-room-info {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border-radius: var(--radius);
-            padding: 14px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--shadow);
-        }
-
-        .room-stake-large {
-            font-size: 22px;
-            font-weight: 800;
-            color: white;
-        }
-
-        .back-button {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .back-button:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .timer-container {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 14px;
-            text-align: center;
-            margin-bottom: 12px;
-        }
-
-        .timer-display {
-            font-size: 36px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 6px;
-            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
-        }
-
-        .timer-label {
-            font-size: 13px;
-            color: var(--gray);
-        }
-
-        .players-info {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .player-count {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .count-number {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--success);
-        }
-
-        .count-label {
-            font-size: 11px;
-            color: var(--gray);
-        }
-
-        /* Even smaller boxes grid */
-        .boxes-grid {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            gap: 2px;
-            margin-bottom: 12px;
-            max-height: 160px;
-            overflow-y: auto;
-            padding: 4px;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: var(--radius);
-            border: 1px solid var(--card-border);
-        }
-
-        .box-item {
-            aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.7);
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 9px;
-            color: var(--primary-light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-            position: relative;
-        }
-
-        .box-item:hover {
-            background: rgba(99, 102, 241, 0.2);
-            transform: translateY(-2px);
-            border-color: var(--primary);
-        }
-
-        .box-item.selected {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-        }
-
-        .box-item.taken {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--gray);
-            cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        .box-item.taken::after {
-            content: "✗";
-            position: absolute;
-            color: var(--danger);
-            font-size: 11px;
-        }
-
-        /* Plate Preview Section */
-        .plate-preview-container {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 10px;
-            margin-bottom: 12px;
-            display: none;
-        }
-
-        .plate-preview-container.active {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .plate-preview-title {
-            text-align: center;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--gray-light);
-            margin-bottom: 8px;
-        }
-
-        .preview-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-            max-width: 170px;
-            margin: 0 auto;
-        }
-
-        .preview-cell {
-            aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 8px;
-            color: var(--primary-light);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .preview-cell.free {
-            background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
-            color: white;
-        }
-
-        .preview-letter {
-            aspect-ratio: 1;
-            background: rgba(99, 102, 241, 0.2);
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 9px;
-            color: var(--primary);
-        }
-
-        /* Compact game screen elements */
-        .game-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .room-info-compact {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .room-stake-compact {
-            font-size: 15px;
-            font-weight: 800;
-        }
-
-        .room-status-compact {
-            font-size: 11px;
-            color: var(--gray);
-            margin-top: 2px;
-        }
-
-        .game-controls {
-            display: flex;
-            gap: 8px;
-        }
-
-        .control-button {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid var(--card-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gray-light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .control-button:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        .ball-display-container {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .ball-label {
-            font-size: 11px;
-            color: var(--gray);
-            margin-bottom: 5px;
-        }
-
-        .ball {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #fff, #cbd5e1);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #0f172a;
-            font-weight: 900;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-            border: 3px solid #fff;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-
-        .ball-letter {
-            font-size: 14px;
-            font-weight: 900;
-            position: absolute;
-            top: 6px;
-            height: 14px;
-            width: 100%;
-            text-align: center;
-            color: var(--primary);
-        }
-
-        .ball-number {
-            font-size: 24px;
-            margin-top: 16px;
-        }
-
-        .ball-history {
-            display: flex;
-            gap: 5px;
-            overflow-x: auto;
-            padding: 5px;
-            width: 100%;
-        }
-
-        .history-ball {
-            min-width: 26px;
-            width: 26px;
-            height: 26px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 50%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            color: #94a3b8;
-            border: 1px solid var(--card-border);
-            flex-shrink: 0;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .history-letter {
-            position: absolute;
-            top: 1px;
-            font-size: 8px;
-            font-weight: 900;
-            line-height: 1;
-            color: var(--primary);
-        }
-
-        .history-number {
-            margin-top: 6px;
-            font-size: 9px;
-            line-height: 1;
-        }
-
-        .bingo-card-container {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 10px;
-            margin-bottom: 12px;
-        }
-
-        .bingo-header {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
-            margin-bottom: 3px;
-        }
-
-        .bingo-letter-cell {
-            aspect-ratio: 1;
-            background: rgba(99, 102, 241, 0.2);
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 12px;
-            color: var(--primary);
-        }
-
-        .bingo-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
-        }
-
-        .cell {
-            aspect-ratio: 1;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 12px;
-            color: var(--primary);
-            cursor: pointer;
-            position: relative;
-            transition: all 0.3s ease;
-        }
-
-        .cell:hover {
-            background: rgba(99, 102, 241, 0.1);
-        }
-
-        .cell.marked {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
-            transform: scale(1.05);
-        }
-
-        .cell.free {
-            background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
-            color: white;
-            border: none;
-            font-weight: 900;
-            font-size: 9px;
-        }
-
-        .cell.corner::before {
-            content: "★";
-            position: absolute;
-            top: 1px;
-            right: 1px;
-            font-size: 6px;
-            color: var(--secondary);
-        }
-
-        /* Updated confirm button and back button */
-        .action-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .confirm-button {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            padding: 12px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: var(--shadow);
-        }
-
-        .confirm-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .confirm-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .back-button-bottom {
-            background: rgba(30, 41, 59, 0.7);
-            color: var(--gray-light);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 10px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .back-button-bottom:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-
-        .claim-button {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            padding: 14px;
-            font-size: 14px;
-            font-weight: 800;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: var(--shadow);
-            width: 100%;
-            margin-bottom: 15px;
-        }
-
-        .claim-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .claim-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* Wait Screen */
-        .wait-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            text-align: center;
-        }
-
-        .wait-icon {
-            font-size: 45px;
-            color: var(--primary);
-            margin-bottom: 12px;
-            animation: pulse 2s infinite;
-        }
-
-        .wait-timer {
-            font-size: 48px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 10px;
-            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
-        }
-
-        .wait-message {
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: white;
-        }
-
-        .wait-details {
-            font-size: 12px;
-            color: var(--gray);
-            max-width: 260px;
-            margin: 0 auto 15px;
-            line-height: 1.4;
-        }
-
-        .leave-button {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: var(--radius);
-            padding: 8px 16px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .leave-button:hover {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        /* NEW: In-game Winning Pattern Display Styles */
-        .winning-pattern-game {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(2, 6, 23, 0.95);
-            backdrop-filter: blur(10px);
-            z-index: 999;
-            width: 100%;
-            height: 100%;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .winning-pattern-game.show {
-            display: flex;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .winning-pattern-game-content {
-            background: var(--card-bg);
-            border: 2px solid var(--secondary);
-            border-radius: var(--radius-lg);
-            padding: 20px;
-            text-align: center;
-            max-width: 300px;
-            width: 100%;
-        }
-
-        .winning-pattern-game-title {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 15px;
-        }
-
-        .bingo-card-overlay {
-            max-width: 200px;
-            margin: 0 auto 8px;
-        }
-
-        .bingo-header-overlay {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-            margin-bottom: 2px;
-        }
-
-        .bingo-letter-cell-overlay {
-            aspect-ratio: 1;
-            background: rgba(99, 102, 241, 0.3);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 11px;
-            color: var(--primary);
-        }
-
-        .bingo-grid-overlay {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 2px;
-        }
-
-        .pattern-cell-overlay {
-            aspect-ratio: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 10px;
-            color: var(--gray);
-            position: relative;
-        }
-
-        .pattern-cell-overlay.winning-cell {
-            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-            color: white;
-            border: none;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
-            transform: scale(1.1);
-            z-index: 1;
-        }
-
-        .pattern-cell-overlay.free-space {
-            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
-            color: white;
-            border: none;
-        }
-
-        .pattern-cell-overlay.winning-cell.free-space {
-            background: linear-gradient(135deg, #fbbf24, #d97706);
-            box-shadow: 0 0 15px rgba(251, 191, 36, 0.7);
-        }
-
-        .pattern-name {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--gray-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 5px;
-        }
-
-        /* Winning cell highlight animation */
-        @keyframes highlightWin {
-            0% { transform: scale(1); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
-            50% { transform: scale(1.15); box-shadow: 0 0 20px rgba(245, 158, 11, 0.7); }
-            100% { transform: scale(1.1); box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
-        }
-
-        .winning-cell {
-            animation: highlightWin 0.5s ease-out;
-        }
-
-        /* Overlays */
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(2, 6, 23, 0.95);
-            backdrop-filter: blur(10px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            padding: 20px;
-        }
-
-        .overlay.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-
-        .overlay-content {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-lg);
-            padding: 22px;
-            max-width: 350px;
-            width: 100%;
-            text-align: center;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .overlay-icon {
-            font-size: 50px;
-            margin-bottom: 12px;
-        }
-
-        .overlay-title {
-            font-size: 24px;
-            font-weight: 800;
-            margin-bottom: 10px;
-        }
-
-        .win-title {
-            background: linear-gradient(135deg, var(--secondary), #fbbf24);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .lose-title {
-            background: linear-gradient(135deg, var(--danger), #b91c1c);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .overlay-message {
-            font-size: 15px;
-            color: var(--gray-light);
-            margin-bottom: 16px;
-            line-height: 1.5;
-        }
-
-        .overlay-amount {
-            font-size: 32px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 16px;
-        }
-
-        .overlay-button {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            padding: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            width: 100%;
-            margin-top: 12px;
-        }
-
-        .overlay-button:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow);
-        }
-
-        /* Wallet Overlay */
-        .wallet-tabs {
-            display: flex;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: var(--radius);
-            padding: 4px;
-            margin-bottom: 16px;
-        }
-
-        .wallet-tab {
-            flex: 1;
-            padding: 9px;
-            text-align: center;
-            border-radius: var(--radius-sm);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 13px;
-        }
-
-        .wallet-tab.active {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-        }
-
-        .wallet-form {
-            display: none;
-        }
-
-        .wallet-form.active {
-            display: block;
-        }
-
-        .form-group {
-            margin-bottom: 14px;
-            text-align: left;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 12px;
-            color: var(--gray-light);
-            font-weight: 600;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 11px;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            color: white;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-        }
-
-        .amount-buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 6px;
-            margin-bottom: 14px;
-        }
-
-        .amount-button {
-            padding: 9px;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            color: var(--gray-light);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 12px;
-        }
-
-        .amount-button:hover {
-            background: rgba(99, 102, 241, 0.2);
-            border-color: var(--primary);
-            color: var(--primary-light);
-        }
-
-        /* Loading Overlay */
-        .loading-spinner {
-            width: 45px;
-            height: 45px;
-            border: 4px solid rgba(99, 102, 241, 0.3);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 12px;
-        }
-
-        /* Animations */
-        @keyframes spin {
-            100% { transform: rotate(360deg); }
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Responsive Design */
-        @media (max-width: 480px) {
-            .rooms-grid {
-                grid-template-columns: 1fr;
-                gap: 10px;
+    { indices: [0,5,10,15,20], name: 'COLUMN B' },
+    { indices: [1,6,11,16,21], name: 'COLUMN I' },
+    { indices: [2,7,12,17,22], name: 'COLUMN N' },
+    { indices: [3,8,13,18,23], name: 'COLUMN G' },
+    { indices: [4,9,14,19,24], name: 'COLUMN O' },
+    
+    { indices: [0,6,12,18,24], name: 'DIAGONAL (Top-Left to Bottom-Right)' },
+    { indices: [4,8,12,16,20], name: 'DIAGONAL (Top-Right to Bottom-Left)' },
+    
+    { indices: [0,4,20,24], name: 'FOUR CORNERS' }
+  ];
+  
+  // Sort pattern indices for comparison
+  const sortedInput = patternIndices.slice().sort((a, b) => a - b);
+  
+  for (const pattern of patterns) {
+    const sortedPattern = pattern.indices.slice().sort((a, b) => a - b);
+    
+    // Check if arrays match (length and content)
+    if (sortedInput.length === sortedPattern.length &&
+        sortedInput.every((value, index) => value === sortedPattern[index])) {
+      return {
+        name: pattern.name,
+        isFourCorners: pattern.name === 'FOUR CORNERS'
+      };
+    }
+  }
+  
+  return {
+    name: 'LINE BINGO',
+    isFourCorners: false
+  };
+}
+
+// ========== IMPROVED HELPER FUNCTIONS ==========
+function getBingoLetter(number) {
+  if (number >= 1 && number <= 15) return 'B';
+  if (number >= 16 && number <= 30) return 'I';
+  if (number >= 31 && number <= 45) return 'N';
+  if (number >= 46 && number <= 60) return 'G';
+  if (number >= 61 && number <= 75) return 'O';
+  return '';
+}
+
+function generateReferralCode(userId) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code + userId.slice(-4);
+}
+
+async function getUser(userId, userName) {
+  try {
+    let user = await models.User.findOne({ userId: userId });
+    
+    if (!user) {
+      user = new models.User({
+        userId: userId,
+        userName: userName || 'Guest',
+        balance: CONFIG.INITIAL_BALANCE,
+        referralCode: generateReferralCode(userId),
+        telegramId: userId.startsWith('tg_') ? userId.replace('tg_', '') : null
+      });
+      await user.save();
+      
+      // Record first transaction
+      const transaction = new models.Transaction({
+        type: 'NEW_USER',
+        userId: userId,
+        userName: userName || 'Guest',
+        amount: 0,
+        description: 'New user registered'
+      });
+      await transaction.save();
+    } else {
+      user.lastSeen = new Date();
+      user.sessionCount = (user.sessionCount || 0) + 1;
+      user.isOnline = true;
+      
+      if (userName && user.userName !== userName) {
+        user.userName = userName;
+      }
+      
+      await user.save();
+    }
+    
+    return user;
+  } catch (error) {
+    console.error('Error getting user:', error);
+    return null;
+  }
+}
+
+async function getRoom(stake) {
+  try {
+    let room = await models.Room.findOne({ stake: stake, status: { $in: ['waiting', 'starting', 'playing'] } });
+    
+    if (!room) {
+          room = new models.Room({
+        stake: stake,
+        players: [],
+        takenBoxes: [],
+        status: 'waiting',
+        lastBoxUpdate: new Date()
+      });
+      await room.save();
+    }
+    
+    return room;
+  } catch (error) {
+    console.error('Error getting room:', error);
+    return null;
+  }
+}
+
+// ========== FIXED: getConnectedUsers - PROPERLY TRACKS ALL CONNECTED USERS ==========
+function getConnectedUsers() {
+  const connectedUsers = new Set();
+  
+  // Get from socketToUser map
+  socketToUser.forEach((userId, socketId) => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected) {
+      connectedUsers.add(userId);
+    }
+  });
+  
+  // Also check ALL connected sockets
+  io.sockets.sockets.forEach((socket) => {
+    if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
+      connectedUsers.add(socket.userId);
+    }
+  });
+  
+  return Array.from(connectedUsers);
+}
+
+// Function to get online players in a specific room
+async function getOnlinePlayersInRoom(roomStake) {
+  try {
+    const room = await models.Room.findOne({ stake: roomStake });
+    if (!room) return [];
+    
+    const onlinePlayers = [];
+    const connectedUserIds = getConnectedUsers();
+    
+    // Check each player in the room
+    for (const playerId of room.players) {
+      if (connectedUserIds.includes(playerId)) {
+        onlinePlayers.push(playerId);
+      }
+    }
+    
+    return onlinePlayers;
+  } catch (error) {
+    console.error('Error getting online players in room:', error);
+    return [];
+  }
+}
+
+// ========== BROADCAST FUNCTIONS ==========
+async function broadcastRoomStatus() {
+  try {
+    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    const roomStatus = {};
+    
+    for (const room of rooms) {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
+      const contributionPerPlayer = room.stake - commissionPerPlayer;
+      const potentialPrize = contributionPerPlayer * onlinePlayers.length;
+      const houseFee = commissionPerPlayer * onlinePlayers.length;
+      const potentialPrizeWithBonus = potentialPrize + CONFIG.FOUR_CORNERS_BONUS;
+      
+      // Mark room as locked if game is playing
+      const isLocked = room.status === 'playing';
+      
+      roomStatus[room.stake] = {
+        stake: room.stake,
+        playerCount: onlinePlayers.length,
+        totalPlayers: room.players.length,
+        status: isLocked ? 'locked' : room.status,
+        locked: isLocked,
+        takenBoxes: room.takenBoxes.length,
+        commissionPerPlayer: commissionPerPlayer,
+        contributionPerPlayer: contributionPerPlayer,
+        potentialPrize: potentialPrize,
+        potentialPrizeWithBonus: potentialPrizeWithBonus,
+        houseFee: houseFee,
+        currentBall: room.currentBall,
+        ballsDrawn: room.ballsDrawn,
+        minPlayers: CONFIG.MIN_PLAYERS_TO_START,
+        fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
+      };
+    }
+    
+    // Broadcast to all connected sockets
+    io.emit('roomStatus', roomStatus);
+    
+    // Also update admin panel
+    updateAdminPanel();
+    
+  } catch (error) {
+    console.error('Error broadcasting room status:', error);
+  }
+}
+
+async function updateAdminPanel() {
+  try {
+    const connectedPlayers = getConnectedUsers().length;
+    const activeGames = await models.Room.countDocuments({ status: 'playing' });
+    
+    // Get all users
+    const users = await models.User.find({}).sort({ balance: -1 }).limit(100);
+    
+    // Get connected user IDs for real-time status
+    const connectedUserIds = getConnectedUsers();
+    
+    // Count sockets per user
+    const userSocketCount = {};
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket && socket.connected) {
+        userSocketCount[userId] = (userSocketCount[userId] || 0) + 1;
+      }
+    });
+    
+    // Also count from all connected sockets
+    io.sockets.sockets.forEach((socket) => {
+      if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
+        const userId = socket.userId;
+        userSocketCount[userId] = (userSocketCount[userId] || 0) + 1;
+      }
+    });
+    
+    const userArray = users.map(user => {
+      let isOnline = false;
+      
+      if (connectedUserIds.includes(user.userId)) {
+        isOnline = true;
+      }
+      else if (user.lastSeen) {
+        const lastSeenTime = new Date(user.lastSeen);
+        const now = new Date();
+        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+        
+        if (secondsSinceLastSeen < 30) {
+          isOnline = true;
+        }
+      }
+      
+      return {
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        currentRoom: user.currentRoom,
+        box: user.box,
+        isOnline: isOnline,
+        socketCount: userSocketCount[user.userId] || 0,
+        totalWagered: user.totalWagered || 0,
+        totalWins: user.totalWins || 0,
+        totalBingos: user.totalBingos || 0,
+        lastSeen: user.lastSeen,
+        telegramId: user.telegramId || '',
+        phoneNumber: user.phoneNumber || '',
+        joinedAt: user.joinedAt,
+        sessionCount: user.sessionCount || 1
+      };
+    });
+    
+    // Get room data
+    const roomsData = {};
+    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    
+    for (const room of rooms) {
+      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
+      const contributionPerPlayer = room.stake - commissionPerPlayer;
+      const potentialPrize = contributionPerPlayer * onlinePlayers.length;
+      const houseFee = commissionPerPlayer * onlinePlayers.length;
+      
+      roomsData[room.stake] = {
+        stake: room.stake,
+        playerCount: onlinePlayers.length,
+        totalPlayers: room.players.length,
+        takenBoxes: room.takenBoxes,
+        status: room.status,
+        locked: room.status === 'playing',
+        currentBall: room.currentBall,
+        ballsDrawn: room.ballsDrawn,
+        commissionPerPlayer: commissionPerPlayer,
+        contributionPerPlayer: contributionPerPlayer,
+        potentialPrize: potentialPrize,
+        houseFee: houseFee,
+        players: room.players,
+        onlinePlayers: onlinePlayers,
+        startTime: room.startTime,
+        gameDuration: room.startTime ? Math.floor((Date.now() - room.startTime) / 1000 / 60) : 0
+      };
+    }
+    
+    // Calculate house earnings (only from HOUSE_EARNINGS transactions)
+    const houseEarnings = await models.Transaction.aggregate([
+      { $match: { type: 'HOUSE_EARNINGS' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Calculate total wagered (all negative transactions except ADMIN_ADD and HOUSE_EARNINGS)
+    const totalWagered = await models.Transaction.aggregate([
+      { $match: { 
+        type: { $nin: ['NEW_USER', 'ADMIN_ADD', 'HOUSE_EARNINGS'] },
+        amount: { $lt: 0 }
+      } },
+      { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Calculate total wins (all positive transactions except ADMIN_ADD)
+    const totalWins = await models.Transaction.aggregate([
+      { $match: { 
+        type: { $nin: ['ADMIN_ADD', 'HOUSE_EARNINGS'] },
+        amount: { $gt: 0 }
+      } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    // Calculate total bingos
+    const totalBingos = await models.Transaction.countDocuments({ 
+      type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] } 
+    });
+    
+    // Get real-time connected sockets count
+    const connectedSocketsCount = connectedSockets.size;
+    
+    // Count users with multiple sockets
+    const multiSocketUsers = Object.values(userSocketCount).filter(count => count > 1).length;
+    
+    // Send to all admin sockets
+    const adminData = {
+      totalPlayers: connectedPlayers,
+      activeGames: activeGames,
+      totalUsers: users.length,
+      connectedSockets: connectedSocketsCount,
+      houseEarnings: houseEarnings,
+      totalWagered: totalWagered,
+      totalWins: totalWins,
+      totalBingos: totalBingos,
+      timestamp: new Date().toISOString(),
+      serverUptime: process.uptime(),
+      gameTimeoutMinutes: CONFIG.GAME_TIMEOUT_MINUTES,
+      multiSocketUsers: multiSocketUsers,
+      telebirrNumber: telebirrNumber
+    };
+    
+    adminSockets.forEach(socketId => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('admin:update', adminData);
+        socket.emit('admin:players', userArray);
+        socket.emit('admin:rooms', roomsData);
+        
+        // Send recent transactions
+        models.Transaction.find().sort({ createdAt: -1 }).limit(50)
+          .then(transactions => {
+            socket.emit('admin:transactions', transactions);
+          })
+          .catch(err => console.error('Error fetching transactions:', err));
+      }
+    });
+    
+    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games, House Earnings: ${houseEarnings} ETB, Telebirr: ${telebirrNumber}`);
+    
+  } catch (error) {
+    console.error('Error updating admin panel:', error);
+  }
+}
+
+function logActivity(type, details, adminSocketId = null) {
+  const activity = {
+    id: Date.now().toString(),
+    timestamp: new Date().toISOString(),
+    type: type,
+    details: details,
+    adminSocketId: adminSocketId
+  };
+  activityLog.unshift(activity);
+  
+  if (activityLog.length > 200) {
+    activityLog = activityLog.slice(0, 200);
+  }
+  
+  // Send to admin panels
+  adminSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit('admin:activity', activity);
+    }
+  });
+}
+
+// ========== AUTO-CLEAR LONG RUNNING GAMES (7 MINUTES) ==========
+async function cleanupLongRunningGames() {
+  try {
+    const sevenMinutesAgo = new Date(Date.now() - CONFIG.GAME_TIMEOUT_MINUTES * 60 * 1000);
+    const longRunningRooms = await models.Room.find({
+      status: 'playing',
+      startTime: { $lt: sevenMinutesAgo }
+    });
+    
+    for (const room of longRunningRooms) {
+      console.log(`⏰ Room ${room.stake} has been playing for ${CONFIG.GAME_TIMEOUT_MINUTES}+ minutes. Auto-ending...`);
+      
+      // Clear game timer
+      cleanupRoomTimer(room.stake);
+      
+      // Store players list
+      const playersInRoom = [...room.players];
+      
+      // Return funds to all players
+      for (const userId of playersInRoom) {
+        const user = await models.User.findOne({ userId: userId });
+        if (user) {
+          const oldBalance = user.balance;
+          user.balance += room.stake;
+          user.currentRoom = null;
+          user.box = null;
+          await user.save();
+          
+          console.log(`💰 Auto-refunded ${room.stake} ETB to ${user.userName} after ${CONFIG.GAME_TIMEOUT_MINUTES}min timeout`);
+          
+          // Record transaction
+          const transaction = new models.Transaction({
+            type: 'TIMEOUT_REFUND',
+            userId: userId,
+            userName: user.userName,
+            amount: room.stake,
+            room: room.stake,
+            description: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes - stake refunded`
+          });
+          await transaction.save();
+          
+          // Notify player if online
+          for (const [socketId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket) {
+                socket.emit('gameTimeout', {
+                  room: room.stake,
+                  reason: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`,
+                  refunded: room.stake
+                });
+                socket.emit('balanceUpdate', user.balance);
+                socket.emit('boxesCleared', { 
+                  room: room.stake, 
+                  reason: 'game_timeout' 
+                });
+              }
             }
-            
-            .room-card {
-                min-height: 110px;
-                padding: 12px 10px;
-            }
-            
-            .room-stake {
-                font-size: 16px;
-            }
-            
-            /* Adjust status position for smaller screens */
-            .room-status {
-                top: 30px; /* Adjusted for smaller room card */
-            }
-            
-            .ball {
-                width: 65px;
-                height: 65px;
-            }
-            
-            .ball-number {
-                font-size: 22px;
-                margin-top: 14px;
-            }
-            
-            .ball-letter {
-                font-size: 12px;
-                top: 5px;
-            }
-            
-            .wait-timer {
-                font-size: 42px;
-            }
-            
-            .timer-display {
-                font-size: 28px;
-            }
-            
-            .overlay-content {
-                padding: 18px;
-            }
-            
-            .overlay-title {
-                font-size: 22px;
-            }
-            
-            .overlay-amount {
-                font-size: 28px;
-            }
-            
-            .boxes-grid {
-                max-height: 150px;
-            }
-            
-            .box-item {
-                font-size: 8px;
-            }
-            
-            .preview-grid {
-                max-width: 160px;
-            }
-            
-            .preview-cell {
-                font-size: 7px;
-            }
-            
-            .bingo-card-overlay {
-                max-width: 180px;
-            }
+          }
         }
+      }
+      
+      // Clear room data
+      room.players = [];
+      room.takenBoxes = [];
+      room.status = 'waiting';
+      room.calledNumbers = [];
+      room.currentBall = null;
+      room.ballsDrawn = 0;
+      room.startTime = null;
+      room.endTime = new Date();
+      room.lastBoxUpdate = new Date();
+      await room.save();
+      
+      // Broadcast empty boxes
+      broadcastTakenBoxes(room.stake, []);
+      
+      console.log(`✅ Auto-cleared room ${room.stake} after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`);
+    }
+  } catch (error) {
+    console.error('❌ Error in cleanupLongRunningGames:', error);
+  }
+}
 
-        @media (max-width: 360px) {
-            .app-header {
-                padding: 12px 16px;
+// ========== FIXED GAME TIMER FUNCTION ==========
+async function startGameTimer(room) {
+  console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
+  
+  // Clear any existing timer first
+  cleanupRoomTimer(room.stake);
+  
+  // Reset called numbers
+  room.calledNumbers = [];
+  room.currentBall = null;
+  room.ballsDrawn = 0;
+  room.startTime = new Date();
+  await room.save();
+  
+  console.log(`✅ Room ${room.stake} set to playing, starting ball timer...`);
+  
+  const timer = setInterval(async () => {
+    try {
+      // Get fresh room data
+      const currentRoom = await models.Room.findById(room._id);
+      if (!currentRoom || currentRoom.status !== 'playing') {
+        console.log(`⚠️ Game timer stopped: Room ${room.stake} status is ${currentRoom?.status || 'not found'}`);
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        return;
+      }
+      
+      // Check if 75 balls have been drawn
+      if (currentRoom.ballsDrawn >= 75) {
+        console.log(`⏰ Game timeout for room ${room.stake}: 75 balls drawn`);
+        clearInterval(timer);
+        roomTimers.delete(room.stake);
+        await endGameWithNoWinner(currentRoom);
+        return;
+      }
+      
+      // Generate a ball that hasn't been called
+      let ball;
+      let letter;
+      let attempts = 0;
+      
+      do {
+        ball = Math.floor(Math.random() * 75) + 1;
+        letter = getBingoLetter(ball);
+        attempts++;
+        
+        if (attempts > 150) {
+          // If we can't find a unique ball, use the first available
+          for (let i = 1; i <= 75; i++) {
+            if (!currentRoom.calledNumbers.includes(i)) {
+              ball = i;
+              letter = getBingoLetter(i);
+              break;
             }
-            
-            .balance-card {
-                padding: 8px 12px;
-            }
-            
-            .balance-amount {
-                font-size: 14px;
-            }
-            
-            .room-stake {
-                font-size: 15px;
-            }
-            
-            .room-card {
-                min-height: 100px;
-                padding: 10px 8px;
-            }
-            
-            /* Adjust status position for even smaller screens */
-            .room-status {
-                top: 25px; /* Further adjusted for smallest room card */
-            }
-            
-            .boxes-grid {
-                grid-template-columns: repeat(8, 1fr);
-                gap: 2px;
-            }
-            
-            .cell {
-                font-size: 10px;
-            }
-            
-            .box-item {
-                font-size: 7px;
-            }
-            
-            .preview-grid {
-                max-width: 150px;
-            }
-            
-            .preview-cell {
-                font-size: 6px;
-            }
-            
-            .bingo-card-overlay {
-                max-width: 160px;
-            }
-            
-            .pattern-cell-overlay {
-                font-size: 9px;
-            }
+          }
+          break;
         }
-    </style>
-</head>
-<body>
-    <!-- Background Effects -->
-    <div class="bg-effects">
-        <div class="gradient-bg gradient-1"></div>
-        <div class="gradient-bg gradient-2"></div>
-    </div>
+      } while (currentRoom.calledNumbers.includes(ball));
+      
+      console.log(`🎱 Drawing ball ${letter}-${ball} for room ${room.stake} (Ball #${currentRoom.ballsDrawn + 1})`);
+      
+      // Update room
+      currentRoom.calledNumbers.push(ball);
+      currentRoom.currentBall = ball;
+      currentRoom.ballsDrawn += 1;
+      currentRoom.lastBoxUpdate = new Date();
+      await currentRoom.save();
+      
+      const ballData = {
+        room: currentRoom.stake,
+        num: ball,
+        letter: letter,
+        ballsDrawn: currentRoom.ballsDrawn
+      };
+      
+      // Send to ALL players in the room
+      console.log(`📤 Broadcasting ball ${letter}-${ball} to ${currentRoom.players.length} players in room ${room.stake}`);
+      
+      // Send to all players in the room
+      currentRoom.players.forEach(userId => {
+        for (const [socketId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket && socket.connected) {
+              socket.emit('ballDrawn', ballData);
+              socket.emit('enableBingo');
+            }
+          }
+        }
+      });
+      
+      // Also send to admin panels
+      adminSockets.forEach(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.emit('admin:ballDrawn', {
+            room: room.stake,
+            ball: ball,
+            letter: letter,
+            ballsDrawn: currentRoom.ballsDrawn
+          });
+        }
+      });
+      
+      broadcastRoomStatus();
+      
+    } catch (error) {
+      console.error('❌ Error in game timer:', error);
+      clearInterval(timer);
+      roomTimers.delete(room.stake);
+    }
+  }, CONFIG.GAME_TIMER * 1000);
+  
+  roomTimers.set(room.stake, timer);
+  console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
+}
 
-    <!-- Header -->
-    <div class="app-header">
-        <div class="user-info">
-            <div class="avatar" id="userAvatar">P</div>
-            <div class="user-details">
-                <div class="user-name" id="userName">Player</div>
-                <div class="user-status">
-                    <div class="status-dot" id="statusDot"></div>
-                    <span id="connectionStatusText">Connecting...</span>
-                </div>
-            </div>
-        </div>
-        <div class="wallet-info">
-            <div class="balance-card" onclick="showWallet()">
-                <div class="balance-icon">💰</div>
-                <div>
-                    <span class="balance-amount" id="balanceAmount">0.00</span>
-                    <span class="balance-currency">ETB</span>
-                </div>
-            </div>
-            <div class="refresh-btn" onclick="refreshBalance()">
-                <i class="fas fa-sync-alt"></i>
-            </div>
-        </div>
-    </div>
+// ✅✅✅ FIXED: Check if a player has bingo
+function checkBingo(markedNumbers, grid) {
+  const patterns = [
+    // Rows
+    { indices: [0,1,2,3,4], name: 'ROW 1' },
+    { indices: [5,6,7,8,9], name: 'ROW 2' },
+    { indices: [10,11,12,13,14], name: 'ROW 3' },
+    { indices: [15,16,17,18,19], name: 'ROW 4' },
+    { indices: [20,21,22,23,24], name: 'ROW 5' },
+    
+    // Columns
+    { indices: [0,5,10,15,20], name: 'COLUMN B' },
+    { indices: [1,6,11,16,21], name: 'COLUMN I' },
+    { indices: [2,7,12,17,22], name: 'COLUMN N' },
+    { indices: [3,8,13,18,23], name: 'COLUMN G' },
+    { indices: [4,9,14,19,24], name: 'COLUMN O' },
+    
+    // Diagonals
+    { indices: [0,6,12,18,24], name: 'DIAGONAL (Top-Left to Bottom-Right)' },
+    { indices: [4,8,12,16,20], name: 'DIAGONAL (Top-Right to Bottom-Left)' },
+    
+    // Four corners
+    { indices: [0,4,20,24], name: 'FOUR CORNERS', isFourCorners: true }
+  ];
+  
+  for (const pattern of patterns) {
+    const isBingo = pattern.indices.every(index => {
+      const cellValue = grid[index];
+      
+      // Handle FREE space
+      if (cellValue === 'FREE') {
+        const hasFree = markedNumbers.includes('FREE') || markedNumbers.some(m => m === 'FREE');
+        return hasFree;
+      }
+      
+      // Check if the number is in markedNumbers
+      const cellValueNum = Number(cellValue);
+      const isMarked = markedNumbers.some(marked => {
+        if (marked === 'FREE') return false;
+        const markedNum = Number(marked);
+        return markedNum === cellValueNum;
+      });
+      
+      return isMarked;
+    });
+    
+    if (isBingo) {
+      return {
+        isBingo: true,
+        pattern: pattern.indices,
+        patternName: pattern.name,
+        isFourCorners: pattern.isFourCorners || false
+      };
+    }
+  }
+  
+  return { isBingo: false };
+}
 
-    <!-- Main Container -->
-    <div class="main-container">
-        <!-- Lobby Screen -->
-        <div class="screen active" id="lobbyScreen">
-            <div class="lobby-header">
-                <div class="app-logo">
-                    <div class="logo-icon">🎯</div>
-                    <div class="logo-text">BINGO ELITE</div>
-                </div>
-                <div class="app-tagline">Win big with every bingo. Select your arena below.</div>
-            </div>
+// ========== FIXED END GAME WITH NO WINNER ==========
+async function endGameWithNoWinner(room) {
+  try {
+    console.log(`🎮 Ending game with no winner for room ${room.stake}`);
+    
+    // Clear game timer FIRST
+    cleanupRoomTimer(room.stake);
+    
+    // Store players list before clearing
+    const playersInRoom = [...room.players];
+    
+    // Return funds to all players
+    for (const userId of playersInRoom) {
+      const user = await models.User.findOne({ userId: userId });
+      if (user) {
+        const oldBalance = user.balance;
+        user.balance += room.stake;
+        user.currentRoom = null;
+        user.box = null;
+        await user.save();
+        
+        console.log(`💰 Refunded ${room.stake} ETB to ${user.userName}, balance: ${oldBalance} → ${user.balance}`);
+        
+        // Record transaction
+        const transaction = new models.Transaction({
+          type: 'REFUND',
+          userId: userId,
+          userName: user.userName,
+          amount: room.stake,
+          room: room.stake,
+          description: `Game ended with no winner - stake refunded`
+        });
+        await transaction.save();
+        
+        // Notify player if online
+        for (const [socketId, uId] of socketToUser.entries()) {
+          if (uId === userId) {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('gameOver', {
+                room: room.stake,
+                winnerId: 'HOUSE',
+                winnerName: 'House',
+                prize: 0,
+                basePrize: 0,
+                bonus: 0,
+                playersCount: playersInRoom.length,
+                isFourCornersWin: false,
+                gameEnded: true,
+                reason: 'no_winner',
+                commissionPerPlayer: CONFIG.HOUSE_COMMISSION[room.stake] || 0,
+                pattern: [],
+                patternName: ''
+              });
+              socket.emit('balanceUpdate', user.balance);
+            }
+          }
+        }
+      }
+    }
+    
+    // Reset room for next game
+    room.players = [];
+    room.takenBoxes = [];
+    room.status = 'waiting';
+    room.calledNumbers = [];
+    room.currentBall = null;
+    room.ballsDrawn = 0;
+    room.startTime = null;
+    room.endTime = new Date();
+    room.lastBoxUpdate = new Date();
+    await room.save();
+    
+    // Broadcast empty boxes
+    broadcastTakenBoxes(room.stake, []);
+    io.emit('boxesCleared', { room: room.stake, reason: 'game_ended_no_winner' });
+    
+    console.log(`✅ Game ended with no winner for room ${room.stake}. Boxes cleared for next game.`);
+    
+    // Update displays
+    broadcastRoomStatus();
+    updateAdminPanel();
+    
+  } catch (error) {
+    console.error('❌ Error ending game with no winner:', error);
+  }
+}
 
-            <div class="rooms-grid" id="roomsGrid">
-                <!-- Rooms will be populated by JavaScript -->
-            </div>
-
-            <div class="wallet-section">
-                <div class="wallet-header">
-                    <div class="wallet-title">Your Wallet</div>
-                    <div class="wallet-action" onclick="showWallet()">
-                        <span>Manage</span>
-                        <i class="fas fa-arrow-right"></i>
-                    </div>
-                </div>
-                <div class="wallet-balance">
-                    <div class="balance-label">Available Balance</div>
-                    <div>
-                        <span class="balance-value" id="lobbyBalance">0.00</span>
-                        <span class="balance-currency">ETB</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="game-info">
-                <div class="info-title">BINGO LETTERS & RANGES</div>
-                <div class="bingo-letters">
-                    <div class="letter-card">
-                        <div class="letter">B</div>
-                        <div class="letter-range">1-15</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">I</div>
-                        <div class="letter-range">16-30</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">N</div>
-                        <div class="letter-range">31-45</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">G</div>
-                        <div class="letter-range">46-60</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">O</div>
-                        <div class="letter-range">61-75</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Discovery Screen -->
-        <div class="screen" id="discoveryScreen">
-            <div class="discovery-header">
-                <h2>Select Your Ticket</h2>
-                <p>Choose an available box to join the game</p>
-            </div>
-
-            <div class="selected-room-info">
-                <div>
-                    <div class="room-stake-large" id="selectedRoomStake">10 ETB</div>
-                    <div style="font-size: 12px; color: rgba(255,255,255,0.8);">Arena Entry</div>
-                </div>
-                <button class="back-button" onclick="leaveDiscovery()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-            </div>
-
-            <div class="timer-container" id="timerContainer" style="display: none;">
-                <div class="timer-display" id="discoveryTimer">30</div>
-                <div class="timer-label">Game starts in <span id="timerSeconds">30</span> seconds</div>
-            </div>
-
-            <div class="players-info">
-                <div class="player-count">
-                    <div class="count-number" id="availableBoxes">100</div>
-                    <div class="count-label">Available</div>
-                </div>
-                <div class="player-count">
-                    <div class="count-number" id="takenBoxes">0</div>
-                    <div class="count-label">Taken</div>
-                </div>
-                <div class="player-count">
-                    <div class="count-number" id="onlinePlayers">1</div>
-                    <div class="count-label">Online</div>
-                </div>
-            </div>
-
-            <div class="boxes-grid" id="boxesGrid">
-                <!-- Boxes will be populated by JavaScript -->
-            </div>
-
-            <!-- Plate Preview Section -->
-            <div class="plate-preview-container" id="platePreviewContainer">
-                <div class="plate-preview-title">Your Bingo Card Preview</div>
-                <div class="preview-grid" id="previewGrid">
-                    <!-- Preview grid will be populated by JavaScript -->
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button class="confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>
-                    Select a box first
-                </button>
-                <button class="back-button-bottom" onclick="leaveDiscovery()">
-                    <i class="fas fa-arrow-left"></i> Back to Lobby
-                </button>
-            </div>
-        </div>
-
-        <!-- Wait Screen -->
-        <div class="screen" id="waitScreen">
-            <div class="wait-container">
-                <div class="wait-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="wait-timer" id="waitTimer">30</div>
-                <div class="wait-message" id="waitMessage">Waiting for players...</div>
-                <div class="wait-details" id="waitDetails">
-                    Game starts with 1 online player after 30 seconds
-                </div>
-                <button class="leave-button" onclick="leaveLobby()">
-                    Leave Lobby
-                </button>
-            </div>
-        </div>
-
-        <!-- Game Screen -->
-        <div class="screen" id="gameScreen">
-            <div class="game-header">
-                <div class="room-info-compact">
-                    <div class="room-stake-compact" id="gameRoomStake">10 ETB</div>
-                    <div class="room-status-compact">Game in progress</div>
-                </div>
-                <div class="game-controls">
-                    <div class="control-button" onclick="showWallet()">
-                        <i class="fas fa-wallet"></i>
-                    </div>
-                    <div class="control-button" onclick="resetToLobby()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="ball-display-container">
-                <div class="ball-label">LAST BALL</div>
-                <div class="ball" id="lastBall">
-                    <div class="ball-letter" id="ballLetter">--</div>
-                    <div class="ball-number" id="ballNumber">--</div>
-                </div>
-                <div class="ball-history" id="ballHistory">
-                    <!-- History balls will be added by JavaScript -->
-                </div>
-            </div>
-
-            <div class="bingo-card-container">
-                <div class="bingo-header">
-                    <div class="bingo-letter-cell">B</div>
-                    <div class="bingo-letter-cell">I</div>
-                    <div class="bingo-letter-cell">N</div>
-                    <div class="bingo-letter-cell">G</div>
-                    <div class="bingo-letter-cell">O</div>
-                </div>
-                <div class="bingo-grid" id="bingoGrid">
-                    <!-- Bingo grid will be populated by JavaScript -->
-                </div>
-            </div>
-
-            <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
-                CLAIM BINGO!
-            </button>
-        </div>
-    </div>
-
-    <!-- NEW: In-game Winning Pattern Display -->
-    <div class="winning-pattern-game" id="winningPatternGame">
-        <div class="winning-pattern-game-content">
-            <div class="winning-pattern-game-title">WINNING PATTERN!</div>
-            <div class="bingo-card-overlay">
-                <div class="bingo-header-overlay">
-                    <div class="bingo-letter-cell-overlay">B</div>
-                    <div class="bingo-letter-cell-overlay">I</div>
-                    <div class="bingo-letter-cell-overlay">N</div>
-                    <div class="bingo-letter-cell-overlay">G</div>
-                    <div class="bingo-letter-cell-overlay">O</div>
-                </div>
-                <div class="bingo-grid-overlay" id="gamePatternGrid">
-                    <!-- Pattern will be populated by JavaScript -->
-                </div>
-            </div>
-            <div class="pattern-name" id="gamePatternName">LINE BINGO</div>
-            <button class="overlay-button" onclick="hideGamePattern()" style="margin-top: 15px;">
-                Continue
-            </button>
-        </div>
-    </div>
-
-    <!-- Overlays -->
-    <!-- Wallet Overlay -->
-    <div class="overlay" id="walletOverlay">
-        <div class="overlay-content">
-            <div class="overlay-icon">💰</div>
-            <h2 class="overlay-title">Wallet</h2>
+// ========== FIXED COUNTDOWN FUNCTION - AUTO STARTS GAME ==========
+async function startCountdownForRoom(room) {
+  try {
+    console.log(`⏱️ STARTING COUNTDOWN for room ${room.stake} at ${new Date().toISOString()}`);
+    
+    // Stop any existing countdown first
+    const countdownKey = `countdown_${room.stake}`;
+    if (roomTimers.has(countdownKey)) {
+      clearInterval(roomTimers.get(countdownKey));
+      roomTimers.delete(countdownKey);
+    }
+    
+    // Update room status
+    room.status = 'starting';
+    room.countdownStartTime = new Date();
+    room.countdownStartedWith = room.players.length;
+    await room.save();
+    
+    let countdown = CONFIG.COUNTDOWN_TIMER;
+    const countdownInterval = setInterval(async () => {
+      try {
+        // Get fresh room data
+        const currentRoom = await models.Room.findById(room._id);
+        if (!currentRoom || currentRoom.status !== 'starting') {
+          console.log(`⏹️ Countdown stopped: Room ${room.stake} status changed to ${currentRoom?.status || 'deleted'}`);
+          clearInterval(countdownInterval);
+          roomTimers.delete(countdownKey);
+          return;
+        }
+        
+        // Get online players
+        const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+        
+        // Send countdown to ALL players in room AND subscribed sockets
+        console.log(`⏱️ Room ${room.stake}: Countdown ${countdown}s, ${onlinePlayers.length} online players`);
+        
+        // Send to ALL players in the room AND subscribed sockets
+        const socketsToSend = new Set();
+        
+        // Add sockets of players in the room
+        currentRoom.players.forEach(userId => {
+          for (const [socketId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                socketsToSend.add(socketId);
+              }
+            }
+          }
+        });
+        
+        // Add subscribed sockets (for discovery overlay)
+        const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+        subscribedSockets.forEach(socketId => {
+          if (io.sockets.sockets.get(socketId)?.connected) {
+            socketsToSend.add(socketId);
+          }
+        });
+        
+        // Send to all collected sockets
+        socketsToSend.forEach(socketId => {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket && socket.connected) {
+            socket.emit('gameCountdown', {
+              room: room.stake,
+              timer: countdown,
+              onlinePlayers: onlinePlayers.length
+            });
+            socket.emit('lobbyUpdate', {
+              room: room.stake,
+              count: onlinePlayers.length
+            });
+          }
+        });
+        
+        // Broadcast to admin
+        adminSockets.forEach(socketId => {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) {
+            socket.emit('admin:countdownUpdate', {
+              room: room.stake,
+              timer: countdown,
+              onlinePlayers: onlinePlayers.length
+            });
+          }
+        });
+        
+        countdown--;
+        
+        // Countdown finished - AUTO START GAME
+        if (countdown < 0) {
+          clearInterval(countdownInterval);
+          roomTimers.delete(countdownKey);
+          
+          console.log(`🎮 Countdown finished for room ${room.stake} - AUTO STARTING GAME`);
+          
+          // Get final room data
+          const finalRoom = await models.Room.findById(room._id);
+          if (!finalRoom || finalRoom.status !== 'starting') {
+            console.log(`⚠️ Countdown finished but room ${room.stake} is no longer in starting status`);
+            return;
+          }
+          
+          const finalOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
+          
+          // ✅ AUTO START GAME with any players remaining
+          if (finalOnlinePlayers.length >= 1) {
+            console.log(`🎮 AUTO STARTING game for room ${room.stake} with ${finalOnlinePlayers.length} online player(s)`);
             
-            <div class="wallet-tabs">
-                <div class="wallet-tab active" onclick="switchWalletTab('deposit')">Deposit</div>
-                <div class="wallet-tab" onclick="switchWalletTab('withdraw')">Withdraw</div>
-            </div>
+            // Update room to playing
+            finalRoom.status = 'playing';
+            finalRoom.startTime = new Date();
+            finalRoom.countdownStartTime = null;
+            finalRoom.countdownStartedWith = 0;
+            await finalRoom.save();
             
-            <!-- Deposit Tab -->
-            <div class="wallet-form active" id="depositForm">
-                <div class="form-group">
-                    <label class="form-label">Telebirr Number</label>
-                    <div id="telebirrNumberDisplay" style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
-                        Loading...
-                    </div>
-                    <div style="font-size: 11px; color: var(--gray); margin-top: 5px; text-align: center;">
-                        Send money to this number and enter receipt below
-                    </div>
-                </div>
+            // Notify ALL players in the room AND subscribed sockets
+            const finalSocketsToSend = new Set();
+            
+            // Add sockets of players in the room
+            finalRoom.players.forEach(userId => {
+              for (const [socketId, uId] of socketToUser.entries()) {
+                if (uId === userId) {
+                  if (io.sockets.sockets.get(socketId)?.connected) {
+                    finalSocketsToSend.add(socketId);
+                  }
+                }
+              }
+            });
+            
+            // Add subscribed sockets
+            const finalSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+            finalSubscribedSockets.forEach(socketId => {
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                finalSocketsToSend.add(socketId);
+              }
+            });
+            
+            // Send game started event
+            finalSocketsToSend.forEach(socketId => {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket && socket.connected) {
+                socket.emit('gameStarted', { 
+                  room: room.stake,
+                  players: finalOnlinePlayers.length
+                });
                 
-                <div class="form-group">
-                    <label class="form-label">Receipt Number</label>
-                    <input type="text" class="form-input" id="receiptNumber" placeholder="Enter receipt number">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Amount Sent (ETB)</label>
-                    <input type="number" class="form-input" id="depositAmount" placeholder="Enter amount">
-                </div>
-                
-                <button class="overlay-button" onclick="submitDeposit()">
-                    Submit Deposit Request
-                </button>
-                
-                <div style="margin-top: 16px; font-size: 12px; color: var(--gray); text-align: center;">
-                    Funds will be added within 24 hours after verification
-                </div>
-            </div>
+                // Send final countdown message
+                socket.emit('gameCountdown', {
+                  room: room.stake,
+                  timer: 0,
+                  gameStarting: true
+                });
+              }
+            });
             
-            <!-- Withdraw Tab -->
-            <div class="wallet-form" id="withdrawForm">
-                <div class="form-group">
-                    <label class="form-label">Select Amount</label>
-                    <div class="amount-buttons">
-                        <button class="amount-button" onclick="selectWithdrawAmount(50)">50 ETB</button>
-                        <button class="amount-button" onclick="selectWithdrawAmount(100)">100 ETB</button>
-                        <button class="amount-button" onclick="selectWithdrawAmount(200)">200 ETB</button>
-                        <button class="amount-button" onclick="selectWithdrawAmount(500)">500 ETB</button>
-                        <button class="amount-button" onclick="selectWithdrawAmount(1000)">1000 ETB</button>
-                    </div>
-                    <input type="number" class="form-input" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Phone Number</label>
-                    <input type="tel" class="form-input" id="withdrawPhoneNumber" placeholder="e.g., 0912345678">
-                </div>
-                
-                <div style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-radius: var(--radius); margin-bottom: 20px;">
-                    <div style="font-size: 12px; color: var(--secondary); margin-bottom: 4px;">Selected Amount</div>
-                    <div style="font-size: 24px; font-weight: 800; color: white;" id="selectedWithdrawAmount">0 ETB</div>
-                </div>
-                
-                <button class="overlay-button" onclick="submitWithdrawal()" id="withdrawSubmitBtn">
-                    Submit Withdrawal
-                </button>
-                
-                <div style="margin-top: 16px; font-size: 12px; color: var(--danger); text-align: center;">
-                    Minimum withdrawal: 50 ETB • Processed within 24 hours
-                </div>
-            </div>
+            // Start the game timer IMMEDIATELY
+            await startGameTimer(finalRoom);
             
-            <button class="overlay-button" onclick="hideWallet()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 16px;">
-                Back to Game
-            </button>
-        </div>
-    </div>
-
-    <!-- Win Overlay -->
-    <div class="overlay" id="winOverlay">
-        <div class="overlay-content">
-            <div class="overlay-icon">🏆</div>
-            <h2 class="overlay-title win-title">BINGO!</h2>
-            <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
-            <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
+            // Broadcast room status update
+            broadcastRoomStatus();
             
-            <!-- Winning Pattern Display -->
-            <div class="winning-pattern-overlay show">
-                <div class="winning-pattern-title">WINNING PATTERN</div>
-                <div class="bingo-card-overlay">
-                    <div class="bingo-header-overlay">
-                        <div class="bingo-letter-cell-overlay">B</div>
-                        <div class="bingo-letter-cell-overlay">I</div>
-                        <div class="bingo-letter-cell-overlay">N</div>
-                        <div class="bingo-letter-cell-overlay">G</div>
-                        <div class="bingo-letter-cell-overlay">O</div>
-                    </div>
-                    <div class="bingo-grid-overlay" id="winOverlayPatternGrid">
-                        <!-- Pattern will be populated by JavaScript -->
-                    </div>
-                </div>
-                <div class="pattern-name" id="winOverlayPatternName">LINE BINGO</div>
-            </div>
+            console.log(`✅ Game AUTO STARTED for room ${room.stake}, timer active`);
+          } else {
+            // No players - reset room
+            console.log(`⚠️ Game start aborted for room ${room.stake}: no online players`);
+            finalRoom.status = 'waiting';
+            finalRoom.countdownStartTime = null;
+            finalRoom.countdownStartedWith = 0;
+            await finalRoom.save();
             
-            <button class="overlay-button" onclick="resetToLobby()">
-                Return to Lobby
-            </button>
-        </div>
-    </div>
-
-    <!-- Lose Overlay -->
-    <div class="overlay" id="loseOverlay">
-        <div class="overlay-content">
-            <div class="overlay-icon">😢</div>
-            <h2 class="overlay-title lose-title">GAME OVER</h2>
-            <div class="overlay-message" id="loseMessage">Someone else claimed Bingo first!</div>
-            <div style="margin-bottom: 16px;">
-                <div style="font-size: 14px; color: var(--gray); margin-bottom: 8px;">Winner</div>
-                <div style="font-size: 24px; font-weight: 700; color: white;" id="winnerName">Player</div>
-                <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
-            </div>
+            // Notify players about reset
+            const resetSocketsToSend = new Set();
             
-            <!-- Winning Pattern Display -->
-            <div class="winning-pattern-overlay show">
-                <div class="winning-pattern-title">WINNING PATTERN</div>
-                <div class="bingo-card-overlay">
-                    <div class="bingo-header-overlay">
-                        <div class="bingo-letter-cell-overlay">B</div>
-                        <div class="bingo-letter-cell-overlay">I</div>
-                        <div class="bingo-letter-cell-overlay">N</div>
-                        <div class="bingo-letter-cell-overlay">G</div>
-                        <div class="bingo-letter-cell-overlay">O</div>
-                    </div>
-                    <div class="bingo-grid-overlay" id="loseOverlayPatternGrid">
-                        <!-- Pattern will be populated by JavaScript -->
-                    </div>
-                </div>
-                <div class="pattern-name" id="loseOverlayPatternName">LINE BINGO</div>
-            </div>
+            // Add sockets of players in the room
+            finalRoom.players.forEach(userId => {
+              for (const [socketId, uId] of socketToUser.entries()) {
+                if (uId === userId) {
+                  if (io.sockets.sockets.get(socketId)?.connected) {
+                    resetSocketsToSend.add(socketId);
+                  }
+                }
+              }
+            });
             
-            <button class="overlay-button" onclick="resetToLobby()">
-                Return to Lobby
-            </button>
-        </div>
-    </div>
+            // Add subscribed sockets
+            const resetSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+            resetSubscribedSockets.forEach(socketId => {
+              if (io.sockets.sockets.get(socketId)?.connected) {
+                resetSocketsToSend.add(socketId);
+              }
+            });
+            
+            // Send reset notifications
+            resetSocketsToSend.forEach(socketId => {
+              const socket = io.sockets.sockets.get(socketId);
+              if (socket && socket.connected) {
+                socket.emit('countdownStopped', {
+                  room: room.stake,
+                  reason: 'no_players_online'
+                });
+                socket.emit('lobbyUpdate', {
+                  room: room.stake,
+                  count: 0,
+                  reason: 'not_enough_players'
+                });
+              }
+            });
+            
+            broadcastRoomStatus();
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in countdown interval:', error);
+        clearInterval(countdownInterval);
+        roomTimers.delete(countdownKey);
+      }
+    }, 1000);
+    
+    roomTimers.set(countdownKey, countdownInterval);
+    console.log(`✅ Countdown timer started for room ${room.stake}`);
+    
+  } catch (error) {
+    console.error('❌ Error starting countdown:', error);
+  }
+}
 
-    <!-- Insufficient Funds Overlay -->
-    <div class="overlay" id="insufficientOverlay">
-        <div class="overlay-content">
-            <div class="overlay-icon">💰</div>
-            <h2 class="overlay-title lose-title">INSUFFICIENT FUNDS</h2>
-            <div class="overlay-message" id="insufficientMessage">You need 10 ETB to join this room</div>
-            <button class="overlay-button" onclick="showWallet()">
-                Add Funds
-            </button>
-            <button class="overlay-button" onclick="hideInsufficientOverlay()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 12px;">
-                Cancel
-            </button>
-        </div>
-    </div>
+// ========== CLEANUP STUCK COUNTDOWNS ==========
+async function cleanupStuckCountdowns() {
+  try {
+    const now = new Date();
+    const rooms = await models.Room.find({ status: 'starting' });
+    
+    for (const room of rooms) {
+      if (room.countdownStartTime) {
+        const timeSinceStart = now - new Date(room.countdownStartTime);
+        // If countdown has been "starting" for more than 45 seconds (should be 30), something's wrong
+        if (timeSinceStart > 45000) {
+          console.log(`⚠️ Cleaning up stuck countdown for room ${room.stake} (${timeSinceStart/1000}s)`);
+          
+          // Stop countdown
+          const countdownKey = `countdown_${room.stake}`;
+          if (roomTimers.has(countdownKey)) {
+            clearInterval(roomTimers.get(countdownKey));
+            roomTimers.delete(countdownKey);
+          }
+          
+          // Reset room status
+          room.status = 'waiting';
+          room.countdownStartTime = null;
+          room.countdownStartedWith = 0;
+          await room.save();
+          
+          // Notify all subscribed sockets and players
+          const socketsToSend = new Set();
+          
+          // Add sockets of players in the room
+          room.players.forEach(userId => {
+            for (const [socketId, uId] of socketToUser.entries()) {
+              if (uId === userId) {
+                if (io.sockets.sockets.get(socketId)?.connected) {
+                  socketsToSend.add(socketId);
+                }
+              }
+            }
+          });
+          
+          // Add subscribed sockets
+          const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+          subscribedSockets.forEach(socketId => {
+            if (io.sockets.sockets.get(socketId)?.connected) {
+              socketsToSend.add(socketId);
+            }
+          });
+          
+          // Send notifications
+          const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+          socketsToSend.forEach(socketId => {
+            const socket = io.sockets.sockets.get(socketId);
+            if (socket) {
+              socket.emit('gameCountdown', {
+                room: room.stake,
+                timer: 0
+              });
+              socket.emit('lobbyUpdate', {
+                room: room.stake,
+                count: onlinePlayers.length
+              });
+            }
+          });
+          
+          console.log(`✅ Reset stuck room ${room.stake} back to waiting`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in cleanupStuckCountdowns:', error);
+  }
+}
 
-    <!-- Room Locked Overlay -->
-    <div class="overlay" id="roomLockedOverlay">
-        <div class="overlay-content">
-            <div class="overlay-icon">🔒</div>
-            <h2 class="overlay-title lose-title">ROOM LOCKED</h2>
-            <div class="overlay-message">Game is in progress. Please wait for the current game to finish.</div>
-            <button class="overlay-button" onclick="hideRoomLockedOverlay()">
-                OK
-            </button>
-        </div>
-    </div>
+// ========== ROOM CLEANUP FUNCTION ==========
+async function cleanupStaleRooms() {
+  try {
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    
+    const staleRooms = await models.Room.find({
+      status: 'ended',
+      endTime: { $lt: oneHourAgo }
+    });
+    
+    for (const room of staleRooms) {
+      console.log(`🧹 Cleaning up stale room: ${room.stake} ETB`);
+      
+      // Clear all boxes and reset room
+      if (room.takenBoxes.length > 0 || room.players.length > 0) {
+        console.log(`⚠️ Room ${room.stake} still has ${room.takenBoxes.length} taken boxes and ${room.players.length} players. Clearing...`);
+        room.players = [];
+        room.takenBoxes = [];
+        room.status = 'waiting';
+        room.lastBoxUpdate = new Date();
+        await room.save();
+        
+        // Broadcast that boxes are cleared
+        broadcastTakenBoxes(room.stake, []);
+        io.emit('boxesCleared', { room: room.stake, reason: 'stale_room_cleanup' });
+      }
+      
+      // Delete only very old rooms (1 day)
+      const oneDayAgo = new Date(Date.now() - 86400000);
+      if (room.endTime && room.endTime < oneDayAgo) {
+        await models.Room.deleteOne({ _id: room._id });
+        console.log(`🗑️ Deleted stale room from database: ${room.stake} ETB`);
+      }
+    }
+    
+    // Also clean up rooms with status 'playing' but no players for a while
+    const emptyPlayingRooms = await models.Room.find({
+      status: 'playing',
+      players: { $size: 0 }
+    });
+    
+    for (const room of emptyPlayingRooms) {
+      console.log(`🧹 Cleaning up empty playing room: ${room.stake} ETB`);
+      cleanupRoomTimer(room.stake);
+      
+      // Reset room
+      room.players = [];
+      room.takenBoxes = [];
+      room.status = 'waiting';
+      room.calledNumbers = [];
+      room.currentBall = null;
+      room.ballsDrawn = 0;
+      room.startTime = null;
+      room.lastBoxUpdate = new Date();
+      await room.save();
+      
+      // Broadcast cleared boxes
+      broadcastTakenBoxes(room.stake, []);
+      io.emit('boxesCleared', { room: room.stake, reason: 'empty_room_cleanup' });
+    }
+    
+  } catch (error) {
+    console.error('Error in cleanupStaleRooms:', error);
+  }
+}
 
-    <!-- Loading Overlay -->
-    <div class="overlay active" id="loadingOverlay">
-        <div class="overlay-content">
-            <div class="loading-spinner"></div>
-            <h2 class="overlay-title">CONNECTING</h2>
-            <div class="overlay-message" id="loadingMessage">Connecting to Bingo Elite server...</div>
-        </div>
-    </div>
+// ========== CONNECTION CLEANUP FUNCTION ==========
+async function cleanupStaleConnections() {
+  console.log('🧹 Running connection cleanup...');
+  
+  const now = new Date();
+  const thirtySecondsAgo = new Date(now.getTime() - 30000);
+  
+  try {
+    // Update users who haven't been seen in 30 seconds
+    await models.User.updateMany(
+      { 
+        lastSeen: { $lt: thirtySecondsAgo },
+        isOnline: true 
+      },
+      { 
+        isOnline: false 
+      }
+    );
+    
+    // Clean up socketToUser map
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket || !socket.connected) {
+        socketToUser.delete(socketId);
+        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in cleanupStaleConnections:', error);
+  }
+}
 
-    <script>
-        // Telegram Web App initialization
-        const tg = window.Telegram.WebApp || {
-            ready: () => {},
-            expand: () => {},
-            isVersionAtLeast: () => false,
-            initDataUnsafe: { user: { first_name: "GUEST", id: Date.now() } },
-            HapticFeedback: { impactOccurred: () => {} },
-            showPopup: (p, callback) => { if(callback) callback(); }
+// ========== NEW: RESET HOUSE EARNINGS FUNCTION ==========
+async function resetHouseEarnings(adminSocketId) {
+  try {
+    console.log('💰 Attempting to reset house earnings...');
+    
+    // Calculate current house earnings
+    const currentEarnings = await models.Transaction.aggregate([
+      { $match: { type: 'HOUSE_EARNINGS' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]).then(result => result[0]?.total || 0);
+    
+    if (currentEarnings === 0) {
+      return {
+        success: false,
+        message: 'House earnings are already at zero'
+      };
+    }
+    
+    // Create a reset transaction that negates the current earnings
+    const resetTransaction = new models.Transaction({
+      type: 'HOUSE_EARNINGS_RESET',
+      userId: 'ADMIN',
+      userName: 'Admin',
+      amount: -currentEarnings,
+      description: `House earnings reset by admin (was ${currentEarnings.toFixed(2)} ETB)`,
+      adminSocketId: adminSocketId,
+      timestamp: new Date()
+    });
+    
+    await resetTransaction.save();
+    
+    console.log(`✅ House earnings reset from ${currentEarnings.toFixed(2)} to 0 ETB`);
+    
+    // Notify admin
+    const adminSocket = io.sockets.sockets.get(adminSocketId);
+    if (adminSocket) {
+      adminSocket.emit('admin:houseEarningsReset', {
+        previousAmount: currentEarnings.toFixed(2),
+        newAmount: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Update admin panel
+    updateAdminPanel();
+    
+    logActivity('HOUSE_EARNINGS_RESET', { 
+      adminSocketId: adminSocketId,
+      previousAmount: currentEarnings.toFixed(2),
+      newAmount: 0
+    }, adminSocketId);
+    
+    return {
+      success: true,
+      message: `House earnings reset from ${currentEarnings.toFixed(2)} to 0 ETB`,
+      previousAmount: currentEarnings
+    };
+    
+  } catch (error) {
+    console.error('❌ Error resetting house earnings:', error);
+    
+    // Notify admin of error
+    const adminSocket = io.sockets.sockets.get(adminSocketId);
+    if (adminSocket) {
+      adminSocket.emit('admin:houseEarningsResetError', error.message);
+    }
+    
+    return {
+      success: false,
+      message: 'Failed to reset house earnings: ' + error.message
+    };
+  }
+}
+
+// ========== NEW: DISCONNECT USER FUNCTION ==========
+async function disconnectUser(userId, adminSocketId) {
+  try {
+    console.log(`🔌 Disconnecting all sockets for user ${userId}`);
+    
+    let disconnectedCount = 0;
+    
+    // Find all sockets for this user from socketToUser map
+    socketToUser.forEach((uId, socketId) => {
+      if (uId === userId) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          socket.disconnect();
+          disconnectedCount++;
+          console.log(`🔌 Disconnected socket ${socketId} for user ${userId}`);
+        }
+      }
+    });
+    
+    // Also check all connected sockets
+    io.sockets.sockets.forEach((socket) => {
+      if (socket && socket.connected && socket.userId === userId) {
+        socket.disconnect();
+        disconnectedCount++;
+        console.log(`🔌 Disconnected socket ${socket.id} for user ${userId}`);
+      }
+    });
+    
+    logActivity('ADMIN_DISCONNECT_USER', { 
+      adminSocketId: adminSocketId,
+      userId: userId,
+      disconnectedSockets: disconnectedCount
+    }, adminSocketId);
+    
+    return {
+      success: true,
+      message: `Disconnected ${disconnectedCount} socket(s) for user ${userId}`,
+      disconnectedCount: disconnectedCount
+    };
+    
+  } catch (error) {
+    console.error('❌ Error disconnecting user:', error);
+    return {
+      success: false,
+      message: 'Failed to disconnect user: ' + error.message
+    };
+  }
+}
+
+// ========== SOCKET.IO EVENT HANDLERS ==========
+function setupSocketHandlers() {
+  io.on('connection', (socket) => {
+    console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
+    connectedSockets.add(socket.id);
+    
+    // Enhanced connection tracking
+    const query = socket.handshake.query;
+    if (query.userId) {
+      console.log(`👤 User connected via query: ${query.userId}`);
+      socket.userId = query.userId;
+    }
+    
+    // Send connection test immediately
+    socket.emit('connectionTest', { 
+      status: 'connected', 
+      serverTime: new Date().toISOString(),
+      socketId: socket.id,
+      server: 'Bingo Elite Telegram',
+      userId: query.userId || 'unknown'
+    });
+    
+    // ========== ADMIN AUTHENTICATION ==========
+    socket.on('admin:auth', (password) => {
+      console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
+      
+      if (password === CONFIG.ADMIN_PASSWORD) {
+        adminSockets.add(socket.id);
+        socket.emit('admin:authSuccess');
+        updateAdminPanel();
+        
+        // Send Telebirr number to admin
+        socket.emit('admin:telebirrNumber', telebirrNumber);
+        
+        logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
+        console.log(`✅ Admin authenticated: ${socket.id}`);
+      } else {
+        console.log(`❌ Admin auth failed for socket ${socket.id}`);
+        socket.emit('admin:authError', 'Invalid password');
+      }
+    });
+    
+    socket.on('admin:getData', () => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized - Please authenticate first');
+        return;
+      }
+      updateAdminPanel();
+    });
+    
+    // ========== HOUSE EARNINGS RESET ==========
+    socket.on('admin:resetHouseEarnings', async () => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const result = await resetHouseEarnings(socket.id);
+      
+      if (!result.success) {
+        socket.emit('admin:error', result.message);
+      } else {
+        socket.emit('admin:success', result.message);
+      }
+    });
+    
+    // ========== DISCONNECT USER ==========
+    socket.on('admin:disconnectUser', async (userId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const result = await disconnectUser(userId, socket.id);
+      
+      if (!result.success) {
+        socket.emit('admin:error', result.message);
+      } else {
+        socket.emit('admin:success', result.message);
+      }
+      
+      // Update admin panel after disconnecting
+      updateAdminPanel();
+    });
+    
+    socket.on('admin:addFunds', async ({ userId, amount }) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const user = await models.User.findOne({ userId: userId });
+      if (!user) {
+        socket.emit('admin:error', 'User not found');
+        return;
+      }
+      
+      const oldBalance = user.balance;
+      user.balance += parseFloat(amount);
+      await user.save();
+      
+      // Record transaction
+      const transaction = new models.Transaction({
+        type: 'ADMIN_ADD',
+        userId: userId,
+        userName: user.userName,
+        amount: amount,
+        admin: true,
+        description: `Admin added ${amount} ETB`
+      });
+      await transaction.save();
+      
+      // Notify player if online
+      for (const [sId, uId] of socketToUser.entries()) {
+        if (uId === userId) {
+          const playerSocket = io.sockets.sockets.get(sId);
+          if (playerSocket) {
+            playerSocket.emit('balanceUpdate', user.balance);
+            playerSocket.emit('fundsAdded', {
+              amount: amount,
+              newBalance: user.balance
+            });
+          }
+        }
+      }
+      
+      socket.emit('admin:success', `Added ${amount} ETB to ${user.userName}`);
+      updateAdminPanel();
+      
+      logActivity('ADMIN_ADD_FUNDS', { adminSocket: socket.id, userId, amount }, socket.id);
+    });
+    
+    socket.on('admin:approveDeposit', async (transactionId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        const transaction = await models.Transaction.findOne({ _id: transactionId, type: 'DEPOSIT_REQUEST', status: 'pending' });
+        if (!transaction) {
+          socket.emit('admin:error', 'Transaction not found or already processed');
+          return;
+        }
+        
+        const user = await models.User.findOne({ userId: transaction.userId });
+        if (!user) {
+          socket.emit('admin:error', 'User not found');
+          return;
+        }
+        
+        // Update user balance
+        const oldBalance = user.balance;
+        user.balance += transaction.amount;
+        await user.save();
+        
+        // Update transaction status
+        transaction.status = 'approved';
+        transaction.approvedBy = socket.id;
+        transaction.approvedAt = new Date();
+        transaction.description = `Deposit approved by admin - Receipt: ${transaction.receiptNumber}`;
+        await transaction.save();
+        
+        // Notify user
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === transaction.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('balanceUpdate', user.balance);
+              playerSocket.emit('wallet:depositApproved', {
+                amount: transaction.amount,
+                newBalance: user.balance,
+                message: `Deposit of ${transaction.amount} ETB approved by admin`
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Approved deposit of ${transaction.amount} ETB for ${user.userName}`);
+        updateAdminPanel();
+        
+        logActivity('ADMIN_APPROVE_DEPOSIT', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          amount: transaction.amount,
+          receiptNumber: transaction.receiptNumber 
+        }, socket.id);
+        
+      } catch (error) {
+        console.error('Error approving deposit:', error);
+        socket.emit('admin:error', 'Error approving deposit: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:approveWithdrawal', async (transactionId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        const transaction = await models.Transaction.findOne({ _id: transactionId, type: 'WITHDRAW_REQUEST', status: 'pending' });
+        if (!transaction) {
+          socket.emit('admin:error', 'Transaction not found or already processed');
+          return;
+        }
+        
+        const user = await models.User.findOne({ userId: transaction.userId });
+        if (!user) {
+          socket.emit('admin:error', 'User not found');
+          return;
+        }
+        
+        // Check if user has enough balance (should be already checked, but double-check)
+        if (user.balance < Math.abs(transaction.amount)) {
+          socket.emit('admin:error', 'User has insufficient balance');
+          return;
+        }
+        
+        // Update user balance (amount is negative for withdrawal)
+        const oldBalance = user.balance;
+        user.balance += transaction.amount; // Add negative amount
+        await user.save();
+        
+        // Update user phone number if not set
+        if (!user.phoneNumber && transaction.phoneNumber) {
+          user.phoneNumber = transaction.phoneNumber;
+          await user.save();
+        }
+        
+        // Update transaction status
+        transaction.status = 'approved';
+        transaction.approvedBy = socket.id;
+        transaction.approvedAt = new Date();
+        transaction.description = `Withdrawal approved by admin - Sent to: ${transaction.phoneNumber}`;
+        await transaction.save();
+        
+        // Create a separate transaction for the actual withdrawal
+        const withdrawalTransaction = new models.Transaction({
+          type: 'WITHDRAWAL',
+          userId: transaction.userId,
+          userName: transaction.userName,
+          amount: transaction.amount, // Negative
+          phoneNumber: transaction.phoneNumber,
+          description: `Withdrawal of ${Math.abs(transaction.amount)} ETB sent to ${transaction.phoneNumber}`
+        });
+        await withdrawalTransaction.save();
+        
+        // Notify user
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === transaction.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              playerSocket.emit('balanceUpdate', user.balance);
+              playerSocket.emit('wallet:withdrawalApproved', {
+                amount: Math.abs(transaction.amount),
+                phoneNumber: transaction.phoneNumber,
+                newBalance: user.balance,
+                message: `Withdrawal of ${Math.abs(transaction.amount)} ETB approved and sent to ${transaction.phoneNumber}`
+              });
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Approved withdrawal of ${Math.abs(transaction.amount)} ETB for ${user.userName} to ${transaction.phoneNumber}`);
+        updateAdminPanel();
+        
+        logActivity('ADMIN_APPROVE_WITHDRAWAL', { 
+          adminSocket: socket.id, 
+          userId: user.userId, 
+          amount: Math.abs(transaction.amount),
+          phoneNumber: transaction.phoneNumber 
+        }, socket.id);
+        
+      } catch (error) {
+        console.error('Error approving withdrawal:', error);
+        socket.emit('admin:error', 'Error approving withdrawal: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:rejectTransaction', async (transactionId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        const transaction = await models.Transaction.findOne({ _id: transactionId, status: 'pending' });
+        if (!transaction) {
+          socket.emit('admin:error', 'Transaction not found or already processed');
+          return;
+        }
+        
+        // Update transaction status
+        transaction.status = 'rejected';
+        transaction.approvedBy = socket.id;
+        transaction.approvedAt = new Date();
+        transaction.description = `${transaction.description} - Rejected by admin`;
+        await transaction.save();
+        
+        // Notify user if online
+        for (const [sId, uId] of socketToUser.entries()) {
+          if (uId === transaction.userId) {
+            const playerSocket = io.sockets.sockets.get(sId);
+            if (playerSocket) {
+              if (transaction.type === 'DEPOSIT_REQUEST') {
+                playerSocket.emit('wallet:depositRejected', {
+                  amount: transaction.amount,
+                  message: 'Deposit request rejected by admin. Please contact support.'
+                });
+              } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                playerSocket.emit('wallet:withdrawalRejected', {
+                  amount: Math.abs(transaction.amount),
+                  message: 'Withdrawal request rejected by admin. Please contact support.'
+                });
+              }
+            }
+          }
+        }
+        
+        socket.emit('admin:success', `Rejected ${transaction.type} for ${transaction.userName}`);
+        updateAdminPanel();
+        
+        logActivity('ADMIN_REJECT_TRANSACTION', { 
+          adminSocket: socket.id, 
+          userId: transaction.userId, 
+          transactionId: transactionId,
+          type: transaction.type 
+        }, socket.id);
+        
+      } catch (error) {
+        console.error('Error rejecting transaction:', error);
+        socket.emit('admin:error', 'Error rejecting transaction: ' + error.message);
+      }
+    });
+    
+    socket.on('admin:getPendingTransactions', async () => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      try {
+        const pendingTransactions = await models.Transaction.find({ 
+          status: 'pending',
+          type: { $in: ['DEPOSIT_REQUEST', 'WITHDRAW_REQUEST'] }
+        }).sort({ createdAt: -1 });
+        
+        socket.emit('admin:pendingTransactions', pendingTransactions);
+      } catch (error) {
+        console.error('Error getting pending transactions:', error);
+        socket.emit('admin:error', 'Error getting pending transactions');
+      }
+    });
+    
+    socket.on('admin:forceDraw', async (roomStake) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const room = await models.Room.findOne({ stake: parseInt(roomStake), status: 'playing' });
+      if (room) {
+        let ball;
+        let letter;
+        do {
+          ball = Math.floor(Math.random() * 75) + 1;
+          letter = getBingoLetter(ball);
+        } while (room.calledNumbers.includes(ball));
+        
+        room.calledNumbers.push(ball);
+        room.currentBall = ball;
+        room.ballsDrawn += 1;
+        room.lastBoxUpdate = new Date();
+        await room.save();
+        
+        const ballData = {
+          room: room.stake,
+          num: ball,
+          letter: letter
         };
         
-        // Initialize Telegram Web App
+        room.players.forEach(userId => {
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              const s = io.sockets.sockets.get(sId);
+              if (s) {
+                s.emit('ballDrawn', ballData);
+              }
+            }
+          }
+        });
+        
+        socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
+        broadcastRoomStatus();
+        
+        logActivity('ADMIN_FORCE_DRAW', { adminSocket: socket.id, roomStake, ball, letter }, socket.id);
+      }
+    });
+    
+    socket.on('admin:banPlayer', async (userId) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const user = await models.User.findOne({ userId: userId });
+      if (!user) {
+        socket.emit('admin:error', 'User not found');
+        return;
+      }
+      
+      // Notify the user if online
+      for (const [sId, uId] of socketToUser.entries()) {
+        if (uId === userId) {
+          const playerSocket = io.sockets.sockets.get(sId);
+          if (playerSocket) {
+            playerSocket.emit('banned');
+            playerSocket.disconnect();
+          }
+        }
+      }
+      
+      socket.emit('admin:success', `Banned user ${user.userName}`);
+      updateAdminPanel();
+      
+      logActivity('ADMIN_BAN', { adminSocket: socket.id, userId }, socket.id);
+    });
+    
+    socket.on('admin:forceStartGame', async (roomStake) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const room = await models.Room.findOne({ stake: parseInt(roomStake) });
+      if (room) {
+        // Force start game immediately
+        room.status = 'playing';
+        room.startTime = new Date();
+        await room.save();
+        
+        // Start game timer
+        await startGameTimer(room);
+        
+        // Notify all players in room AND subscribed sockets
+        const socketsToSend = new Set();
+        
+        // Add sockets of players in the room
+        room.players.forEach(userId => {
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              if (io.sockets.sockets.get(sId)?.connected) {
+                socketsToSend.add(sId);
+              }
+            }
+          }
+        });
+        
+        // Add subscribed sockets
+        const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+        subscribedSockets.forEach(socketId => {
+          if (io.sockets.sockets.get(socketId)?.connected) {
+            socketsToSend.add(socketId);
+          }
+        });
+        
+        // Send game started event
+        socketsToSend.forEach(socketId => {
+          const s = io.sockets.sockets.get(socketId);
+          if (s) {
+            s.emit('gameStarted', { 
+              room: roomStake,
+              players: room.players.length
+            });
+          }
+        });
+        
+        socket.emit('admin:success', `Force started ${roomStake} ETB room`);
+        broadcastRoomStatus();
+        
+        logActivity('ADMIN_FORCE_START', { adminSocket: socket.id, roomStake }, socket.id);
+      }
+    });
+    
+    // ========== UPDATED: admin:forceEndGame with pattern support ==========
+    socket.on('admin:forceEndGame', async (roomStake) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const room = await models.Room.findOne({ stake: parseInt(roomStake) });
+      if (room) {
+        // Clear game timer
+        cleanupRoomTimer(roomStake);
+        
+        // Store players list before clearing
+        const playersInRoom = [...room.players];
+        
+        // Return funds to all players
+        for (const userId of playersInRoom) {
+          const user = await models.User.findOne({ userId: userId });
+          if (user) {
+            user.balance += roomStake;
+            user.currentRoom = null;
+            user.box = null;
+            await user.save();
+            
+            const transaction = new models.Transaction({
+              type: 'REFUND',
+              userId: userId,
+              userName: user.userName,
+              amount: roomStake,
+              room: roomStake,
+              description: `Game force ended by admin - stake refunded`
+            });
+            await transaction.save();
+            
+            // Notify player
+            for (const [sId, uId] of socketToUser.entries()) {
+              if (uId === userId) {
+                const s = io.sockets.sockets.get(sId);
+                if (s) {
+                  s.emit('gameOver', {
+                    room: roomStake,
+                    winnerId: 'ADMIN',
+                    winnerName: 'Admin',
+                    prize: 0,
+                    basePrize: 0,
+                    bonus: 0,
+                    playersCount: playersInRoom.length,
+                    isFourCornersWin: false,
+                    gameEnded: true,
+                    reason: 'admin_ended',
+                    commissionPerPlayer: CONFIG.HOUSE_COMMISSION[roomStake] || 0,
+                    pattern: [],
+                    patternName: ''
+                  });
+                  s.emit('balanceUpdate', user.balance);
+                }
+              }
+            }
+          }
+        }
+        
+        // Clear room data
+        room.players = [];
+        room.takenBoxes = [];
+        room.status = 'ended';
+        room.endTime = new Date();
+        room.lastBoxUpdate = new Date();
+        await room.save();
+        
+        // Broadcast empty boxes
+        broadcastTakenBoxes(roomStake, []);
+        
+        socket.emit('admin:success', `Force ended ${roomStake} ETB game`);
+        broadcastRoomStatus();
+        
+        logActivity('ADMIN_FORCE_END', { adminSocket: socket.id, roomStake }, socket.id);
+      }
+    });
+    
+    socket.on('admin:clearBoxes', async (roomStake) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const room = await models.Room.findOne({ stake: parseInt(roomStake) });
+      if (!room) {
+        socket.emit('admin:error', 'Room not found');
+        return;
+      }
+      
+      // Store players list before clearing
+      const playersInRoom = [...room.players];
+      
+      // Refund all players
+      for (const userId of playersInRoom) {
+        const user = await models.User.findOne({ userId: userId });
+        if (user) {
+          user.balance += roomStake;
+          user.currentRoom = null;
+          user.box = null;
+          await user.save();
+          
+          const transaction = new models.Transaction({
+            type: 'REFUND',
+            userId: userId,
+            userName: user.userName,
+            amount: roomStake,
+            room: roomStake,
+            description: `Boxes cleared by admin - stake refunded`
+          });
+          await transaction.save();
+          
+          // Notify player
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === userId) {
+              const s = io.sockets.sockets.get(sId);
+              if (s) {
+                s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
+                s.emit('balanceUpdate', user.balance);
+                s.emit('lobbyUpdate', { room: roomStake, count: 0 });
+              }
+            }
+          }
+        }
+      }
+      
+      // Clear room
+      room.players = [];
+      room.takenBoxes = [];
+      room.status = 'waiting';
+      room.lastBoxUpdate = new Date();
+      await room.save();
+      
+      // Broadcast cleared boxes
+      broadcastTakenBoxes(roomStake, []);
+      socket.emit('admin:success', `Cleared all boxes in ${roomStake} ETB room`);
+      
+      logActivity('ADMIN_CLEAR_BOXES', { adminSocket: socket.id, roomStake }, socket.id);
+    });
+    
+    // Admin debugging for countdown
+    socket.on('admin:debugCountdown', async (roomStake) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+      
+      const room = await models.Room.findOne({ stake: parseInt(roomStake) });
+      if (room) {
+        const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+        
+        socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}`);
+      }
+    });
+    
+    // ========== WALLET EVENT HANDLERS ==========
+    socket.on('wallet:depositRequest', async (data) => {
+      try {
+        const { receiptNumber, amount, userId, userName } = data;
+        
+        console.log(`💰 Deposit request from ${userName} (${userId}): ${amount} ETB, Receipt: ${receiptNumber}`);
+        
+        // Create a transaction record
+        const transaction = new models.Transaction({
+          type: 'DEPOSIT_REQUEST',
+          userId: userId,
+          userName: userName,
+          amount: parseFloat(amount),
+          receiptNumber: receiptNumber,
+          description: `Deposit request - Receipt: ${receiptNumber}, Amount: ${amount} ETB`,
+          status: 'pending'
+        });
+        await transaction.save();
+        
+        // Notify the user
+        socket.emit('wallet:depositRequestSuccess', {
+          message: 'Deposit request submitted successfully. Admin will process it soon.',
+          telebirrNumber: telebirrNumber
+        });
+        
+        // Notify admin
+        adminSockets.forEach(socketId => {
+          const adminSocket = io.sockets.sockets.get(socketId);
+          if (adminSocket) {
+            adminSocket.emit('admin:newDepositRequest', {
+              userId,
+              userName,
+              amount: parseFloat(amount),
+              receiptNumber,
+              transactionId: transaction._id,
+              timestamp: new Date()
+            });
+          }
+        });
+        
+        logActivity('DEPOSIT_REQUEST', { userId, userName, amount, receiptNumber }, socket.id);
+        
+      } catch (error) {
+        console.error('Error processing deposit request:', error);
+        socket.emit('wallet:error', 'Failed to submit deposit request');
+      }
+    });
+    
+    socket.on('wallet:withdrawRequest', async (data) => {
+      try {
+        const { amount, phoneNumber, userId, userName } = data;
+        
+        console.log(`💰 Withdrawal request from ${userName} (${userId}): ${amount} ETB to ${phoneNumber}`);
+        
+        // Check if user has sufficient balance
+        const user = await models.User.findOne({ userId: userId });
+        if (!user) {
+          socket.emit('wallet:error', 'User not found');
+          return;
+        }
+        
+        if (user.balance < amount) {
+          socket.emit('wallet:error', 'Insufficient balance for withdrawal');
+          return;
+        }
+        
+        // Check minimum withdrawal amount
+        if (amount < CONFIG.MIN_WITHDRAWAL) {
+          socket.emit('wallet:error', `Minimum withdrawal amount is ${CONFIG.MIN_WITHDRAWAL} ETB`);
+          return;
+        }
+        
+        // Check maximum withdrawal amount
+        if (amount > CONFIG.MAX_WITHDRAWAL) {
+          socket.emit('wallet:error', `Maximum withdrawal amount is ${CONFIG.MAX_WITHDRAWAL} ETB`);
+          return;
+        }
+        
+        // Create a transaction record
+        const transaction = new models.Transaction({
+          type: 'WITHDRAW_REQUEST',
+          userId: userId,
+          userName: userName,
+          amount: -parseFloat(amount), // Negative for withdrawal
+          phoneNumber: phoneNumber,
+          description: `Withdrawal request to phone: ${phoneNumber}, Amount: ${amount} ETB`,
+          status: 'pending'
+        });
+        await transaction.save();
+        
+        // Update user phone number if not set
+        if (!user.phoneNumber) {
+          user.phoneNumber = phoneNumber;
+          await user.save();
+        }
+        
+        // Notify the user
+        socket.emit('wallet:withdrawRequestSuccess', {
+          message: 'Withdrawal request submitted successfully. Admin will process it soon.'
+        });
+        
+        // Notify admin
+        adminSockets.forEach(socketId => {
+          const adminSocket = io.sockets.sockets.get(socketId);
+          if (adminSocket) {
+            adminSocket.emit('admin:newWithdrawRequest', {
+              userId,
+              userName,
+              amount: parseFloat(amount),
+              phoneNumber,
+              transactionId: transaction._id,
+              timestamp: new Date()
+            });
+          }
+        });
+        
+        logActivity('WITHDRAW_REQUEST', { userId, userName, amount, phoneNumber }, socket.id);
+        
+      } catch (error) {
+        console.error('Error processing withdrawal request:', error);
+        socket.emit('wallet:error', 'Failed to submit withdrawal request');
+      }
+    });
+    
+    // Telebirr number request from players
+    socket.on('getTelebirrNumber', (callback) => {
+      if (callback) {
+        callback({ telebirrNumber: telebirrNumber });
+      } else {
+        socket.emit('telebirrNumber', telebirrNumber);
+      }
+    });
+    
+    // Player events
+    socket.on('init', async (data, callback) => {
+      try {
+        const { userId, userName } = data;
+        
+        console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
+        
+        // Store userId on socket for tracking
+        socket.userId = userId;
+        
+        const user = await getUser(userId, userName);
+        
+        if (user) {
+          // Store in socketToUser map
+          socketToUser.set(socket.id, userId);
+          
+          // Also update user's lastSeen immediately
+          await models.User.findOneAndUpdate(
+            { userId: userId },
+            { 
+              isOnline: true,
+              lastSeen: new Date(),
+              sessionCount: (user.sessionCount || 0) + 1
+            }
+          );
+          
+          socket.emit('balanceUpdate', user.balance);
+          socket.emit('userData', {
+            userId: userId,
+            userName: user.userName,
+            balance: user.balance,
+            referralCode: user.referralCode,
+            phoneNumber: user.phoneNumber || ''
+          });
+          
+          // Send Telebirr number to player
+          socket.emit('telebirrNumber', telebirrNumber);
+          
+          socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
+          
+          // Send callback response
+          if (callback) {
+            callback({ success: true, message: 'User initialized successfully' });
+          }
+          
+          // Log the successful connection
+          console.log(`✅ User connected successfully: ${userName} (${userId})`);
+          
+          // Update admin panel with new connection IN REAL-TIME
+          updateAdminPanel();
+          broadcastRoomStatus();
+          
+          logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
+        } else {
+          if (callback) {
+            callback({ success: false, message: 'Failed to initialize user' });
+          }
+        }
+      } catch (error) {
+        console.error('Error in init:', error);
+        if (callback) {
+          callback({ success: false, message: 'Server error during initialization' });
+        }
+      }
+    });
+    
+    socket.on('refreshBalance', async () => {
+      const userId = socketToUser.get(socket.id);
+      if (userId) {
+        const user = await models.User.findOne({ userId: userId });
+        if (user) {
+          socket.emit('balanceUpdate', user.balance);
+          socket.emit('balanceRefreshed', user.balance);
+        }
+      }
+    });
+    
+    // Get room countdown status for discovery overlay
+    socket.on('getRoomCountdown', async ({ room }, callback) => {
+      try {
+        const roomData = await models.Room.findOne({ stake: parseInt(room) });
+        
+        if (!roomData) {
+          if (callback) callback({ countdownActive: false });
+          return;
+        }
+        
+        if (roomData.status === 'starting' && roomData.countdownStartTime) {
+          const elapsed = Date.now() - roomData.countdownStartTime;
+          const secondsRemaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor(elapsed / 1000));
+          const onlinePlayers = await getOnlinePlayersInRoom(room);
+          
+          if (callback) {
+            callback({
+              countdownActive: true,
+              seconds: secondsRemaining,
+              onlinePlayers: onlinePlayers.length,
+              totalPlayers: roomData.players.length
+            });
+          }
+        } else {
+          if (callback) callback({ countdownActive: false });
+        }
+      } catch (error) {
+        console.error('Error in getRoomCountdown:', error);
+        if (callback) callback({ countdownActive: false });
+      }
+    });
+    
+    // FIXED: Get taken boxes from ALL rooms
+    socket.on('getTakenBoxes', async ({ room }, callback) => {
+      try {
+        const roomData = await models.Room.findOne({ 
+          stake: parseInt(room)
+        });
+        
+        if (roomData) {
+          console.log(`📦 Getting taken boxes for room ${room}: ${roomData.takenBoxes.length} boxes`);
+          callback(roomData.takenBoxes || []);
+        } else {
+          console.log(`📦 No room found for ${room}, creating new one`);
+          callback([]);
+        }
+      } catch (error) {
+        console.error('Error getting taken boxes:', error);
+        callback([]);
+      }
+    });
+    
+    socket.on('subscribeToRoom', (data) => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId && data.room) {
+        console.log(`👤 User ${userId} subscribed to room ${data.room} updates`);
+        
+        // Store subscription
+        if (!roomSubscriptions.has(data.room)) {
+          roomSubscriptions.set(data.room, new Set());
+        }
+        roomSubscriptions.get(data.room).add(socket.id);
+        
+        // Send current taken boxes immediately
+        models.Room.findOne({ stake: data.room })
+          .then(room => {
+            if (room) {
+              socket.emit('boxesTakenUpdate', {
+                room: data.room,
+                takenBoxes: room.takenBoxes || [],
+                playerCount: room.players.length,
+                timestamp: Date.now()
+              });
+            } else {
+              socket.emit('boxesTakenUpdate', {
+                room: data.room,
+                takenBoxes: [],
+                playerCount: 0,
+                timestamp: Date.now()
+              });
+            }
+          })
+          .catch(console.error);
+      }
+    });
+    
+    socket.on('unsubscribeFromRoom', (data) => {
+      const roomStake = data.room;
+      if (roomSubscriptions.has(roomStake)) {
+        roomSubscriptions.get(roomStake).delete(socket.id);
+      }
+    });
+    
+    // UPDATED: Improved joinRoom function with timer synchronization
+    socket.on('joinRoom', async (data, callback) => {
+      try {
+        const { room, box, userName } = data;
+        const userId = socketToUser.get(socket.id) || socket.userId;
+        
+        if (!userId) {
+          socket.emit('error', 'Player not initialized');
+          if (callback) callback({ success: false, message: 'Player not initialized' });
+          return;
+        }
+        
+        const user = await models.User.findOne({ userId: userId });
+        if (!user) {
+          socket.emit('error', 'User not found');
+          if (callback) callback({ success: false, message: 'User not found' });
+          return;
+        }
+        
+        if (user.balance < room) {
+          socket.emit('insufficientFunds');
+          if (callback) callback({ success: false, message: 'Insufficient funds' });
+          return;
+        }
+        
+        // Get or create room
+        let roomData = await models.Room.findOne({ 
+          stake: room, 
+          status: { $in: ['waiting', 'starting', 'playing'] } 
+        });
+        
+        if (!roomData) {
+          // Create a new active room if none exists
+          roomData = new models.Room({
+            stake: room,
+            players: [],
+            takenBoxes: [],
+            status: 'waiting',
+            lastBoxUpdate = new Date()
+          });
+          await roomData.save();
+        }
+        
+        // Check if room is locked (game is playing)
+        if (roomData.status === 'playing') {
+          socket.emit('roomLocked', { 
+            room: room, 
+            message: 'Game is in progress. Please wait for the current game to finish.' 
+          });
+          if (callback) callback({ success: false, message: 'Room is locked - game in progress' });
+          return;
+        }
+        
+        if (box < 1 || box > 100) {
+          socket.emit('error', 'Invalid box number. Must be between 1 and 100');
+          if (callback) callback({ success: false, message: 'Invalid box number' });
+          return;
+        }
+        
+        if (roomData.takenBoxes.includes(box)) {
+          socket.emit('boxTaken');
+          if (callback) callback({ success: false, message: 'Box already taken' });
+          return;
+        }
+        
+        if (user.currentRoom) {
+          if (user.currentRoom === room) {
+            socket.emit('joinedRoom');
+            if (callback) callback({ success: true, message: 'Already in room' });
+            return;
+          }
+          socket.emit('error', 'Already in a different room');
+          if (callback) callback({ success: false, message: 'Already in different room' });
+          return;
+        }
+        
+        // Update user balance and room info
+        user.balance -= room;
+        user.totalWagered = (user.totalWagered || 0) + room;
+        user.currentRoom = room;
+        user.box = box;
+        await user.save();
+        
+        // Record transaction
+        const transaction = new models.Transaction({
+          type: 'STAKE',
+          userId: user.userId,
+          userName: user.userName,
+          amount: -room,
+          room: room,
+          description: `Joined ${room} ETB room with ticket ${box}`
+        });
+        await transaction.save();
+        
+        // Update room
+        roomData.players.push(user.userId);
+        roomData.takenBoxes.push(box);
+        roomData.lastBoxUpdate = new Date();
+        
+        const onlinePlayers = await getOnlinePlayersInRoom(room);
+        
+        console.log(`🚀 joinRoom - Room ${room}:`);
+        console.log(`   Players in room: ${roomData.players.length}`);
+        console.log(`   Online players: ${onlinePlayers.length}`);
+        console.log(`   Room status: ${roomData.status}`);
+        
+        // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
+        broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
+        
+        await roomData.save();
+        
+        // Send success to joining player
+        socket.emit('joinedRoom');
+        socket.emit('balanceUpdate', user.balance);
+        
+        // Send lobby update to ALL players in the room
+        const playersInRoom = roomData.players;
+        playersInRoom.forEach(playerUserId => {
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === playerUserId) {
+              const s = io.sockets.sockets.get(sId);
+              if (s) {
+                s.emit('lobbyUpdate', {
+                  room: room,
+                  count: onlinePlayers.length
+                });
+              }
+            }
+          }
+        });
+        
+        // Send immediate countdown update if room is starting
+        if (roomData.status === 'starting' && roomData.countdownStartTime) {
+          const elapsed = Date.now() - roomData.countdownStartTime;
+          const secondsRemaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor(elapsed / 1000));
+          
+          // Send immediate countdown update to the joining player
+          socket.emit('gameCountdown', {
+            room: room,
+            timer: secondsRemaining,
+            onlinePlayers: onlinePlayers.length
+          });
+        }
+        
+        // FIXED: Start countdown if we have at least 1 online player
+        if (onlinePlayers.length >= CONFIG.MIN_PLAYERS_TO_START && roomData.status === 'waiting') {
+          console.log(`🚀 STARTING COUNTDOWN for room ${room} with ${onlinePlayers.length} online player(s)!`);
+          await startCountdownForRoom(roomData);
+        } else {
+          console.log(`⏸️ NOT starting countdown:`);
+          console.log(`   Online players: ${onlinePlayers.length} (need ${CONFIG.MIN_PLAYERS_TO_START})`);
+          console.log(`   Room status: ${roomData.status} (need 'waiting')`);
+        }
+        
+        // Send personal confirmation
+        socket.emit('boxesTakenUpdate', {
+          room: room,
+          takenBoxes: roomData.takenBoxes,
+          personalBox: box,
+          message: `You selected box ${box}! Waiting for players...`
+        });
+        
+        // Broadcast updates
+        broadcastRoomStatus();
+        updateAdminPanel();
+        
+        logActivity('BOX_TAKEN', { 
+          userId: user.userId, 
+          userName: user.userName, 
+          room, 
+          box,
+          takenBoxes: roomData.takenBoxes.length,
+          playerCount: roomData.players.length,
+          onlinePlayers: onlinePlayers.length
+        });
+        
+        if (callback) {
+          callback({ 
+            success: true, 
+            message: 'Joined room successfully',
+            onlinePlayers: onlinePlayers.length
+          });
+        }
+        
+      } catch (error) {
+        console.error('Error joining room:', error);
+        socket.emit('error', 'Server error while joining room');
+        if (callback) callback({ success: false, message: 'Server error' });
+      }
+    });
+    
+    // ========== FIXED: CLAIM BINGO WITH DOUBLE PRIZE PROTECTION ==========
+    socket.on('claimBingo', async (data, callback) => {
+      let claimKey = null;
+      let roomClaimKey = null;
+      let userId = null;
+      let roomStake = null;
+      let requestId = null;
+      let patternIndices = null;
+      let patternName = null;
+      let isFourCornersWin = false;
+      
+      try {
+        const { room, grid, marked, patternInfo } = data;
+        userId = socketToUser.get(socket.id) || socket.userId;
+        
+        if (!userId) {
+          socket.emit('error', 'Player not initialized');
+          if (callback) callback({ success: false, message: 'Player not initialized' });
+          return;
+        }
+        
+        const user = await models.User.findOne({ userId: userId });
+        if (!user) {
+          socket.emit('error', 'User not found');
+          if (callback) callback({ success: false, message: 'User not found' });
+          return;
+        }
+        
+        roomStake = parseInt(room);
+        
+        // ✅ ENHANCED LOCK CHECK: Add unique request ID for each claim
+        requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        claimKey = `${roomStake}_${userId}_${requestId}`;
+        roomClaimKey = `room_${roomStake}`;
+        
+        // Check if this room already has a winner (in memory cache for fast check)
+        if (roomWinners.has(roomStake)) {
+          const winnerTime = roomWinners.get(roomStake);
+          const timeSinceWin = Date.now() - winnerTime;
+          
+          if (timeSinceWin < 30000) { // 30 seconds
+            console.log(`🚨 ROOM ALREADY WON: Room ${roomStake} had a winner ${Math.floor(timeSinceWin/1000)}s ago`);
+            socket.emit('error', 'This room already has a winner');
+            if (callback) callback({ 
+              success: false, 
+              message: 'This game already has a winner. Please join a new game.' 
+            });
+            return;
+          }
+        }
+        
+        // Check if this exact user already has a claim in progress for this room
+        const userClaimKeyPattern = `${roomStake}_${userId}_`;
+        let hasExistingUserClaim = false;
+        processingClaims.forEach((timestamp, key) => {
+          if (key.startsWith(userClaimKeyPattern)) {
+            hasExistingUserClaim = true;
+          }
+        });
+        
+        if (hasExistingUserClaim) {
+          console.log(`🚨 DOUBLE CLICK PREVENTED: User ${user.userName} already has a claim in progress`);
+          socket.emit('error', 'Your bingo claim is already being processed');
+          if (callback) callback({ 
+            success: false, 
+            message: 'Your claim is already being processed. Please wait.' 
+          });
+          return;
+        }
+        
+        // Also check if ANY claim is being processed for this room (global room lock)
+        if (processingClaims.has(roomClaimKey)) {
+          console.log(`🚨 ROOM CLAIM LOCKED: Room ${roomStake} has a claim being processed`);
+          socket.emit('error', 'A bingo claim is already being processed for this room');
+          if (callback) callback({ 
+            success: false, 
+            message: 'A bingo claim is already being processed for this room. Please wait.' 
+          });
+          return;
+        }
+        
+        // ✅ ATOMIC SET: Set both locks immediately
+        processingClaims.set(claimKey, Date.now());
+        processingClaims.set(roomClaimKey, Date.now());
+        
+        console.log(`🔒 Locked claim ${requestId} for user ${user.userName} in room ${roomStake}`);
+        
+        // Get room data WITH A TIMEOUT
+        const roomData = await Promise.race([
+          models.Room.findOne({ stake: roomStake, status: 'playing' }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database timeout')), 5000)
+          )
+        ]);
+        
+        if (!roomData) {
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          socket.emit('error', 'Game not found or not in progress');
+          if (callback) callback({ success: false, message: 'Game not found or not in progress' });
+          return;
+        }
+        
+        if (!roomData.players.includes(userId)) {
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          socket.emit('error', 'You are not in this game');
+          if (callback) callback({ success: false, message: 'You are not in this game' });
+          return;
+        }
+        
+        // ✅ CHECK IF THIS ROOM ALREADY HAS A WINNER IN THE LAST 10 SECONDS
+        const recentWin = await models.Transaction.findOne({
+          room: roomStake,
+          type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] },
+          createdAt: { $gt: new Date(Date.now() - 10000) } // Last 10 seconds
+        });
+        
+        if (recentWin) {
+          console.log(`⚠️ Room ${roomStake} already has a recent winner: ${recentWin.userName}`);
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          socket.emit('error', 'This room already has a winner');
+          if (callback) callback({ 
+            success: false, 
+            message: 'This game already has a winner. Please join a new game.' 
+          });
+          return;
+        }
+        
+        console.log('🎯 BINGO CLAIM PROCESSING:');
+        console.log('   User:', user.userName);
+        console.log('   Room:', room);
+        console.log('   Request ID:', requestId);
+        
+        // Convert marked numbers properly for comparison
+        const markedNumbers = marked.map(item => {
+          if (item === 'FREE') return 'FREE';
+          return Number(item);
+        }).filter(item => !isNaN(item) || item === 'FREE');
+        
+        // Check if bingo is valid (FAST LOCAL CHECK)
+        const bingoCheck = checkBingo(markedNumbers, grid);
+        if (!bingoCheck.isBingo) {
+          // Clean up locks
+          processingClaims.delete(claimKey);
+          processingClaims.delete(roomClaimKey);
+          console.log('❌ Invalid bingo claim - no winning pattern found');
+          socket.emit('error', 'Invalid bingo claim');
+          if (callback) callback({ success: false, message: 'Invalid bingo claim - no winning pattern' });
+          return;
+        }
+        
+        // Use pattern info from client if provided, otherwise from server check
+        if (patternInfo && patternInfo.pattern) {
+          patternIndices = patternInfo.pattern;
+          patternName = patternInfo.patternName || getPatternName(patternIndices).name;
+          isFourCornersWin = patternInfo.isFourCorners || bingoCheck.isFourCorners;
+        } else {
+          patternIndices = bingoCheck.pattern;
+          patternName = bingoCheck.patternName || getPatternName(patternIndices).name;
+          isFourCornersWin = bingoCheck.isFourCorners;
+        }
+        
+        // Calculate total prize (FAST LOCAL CALCULATION)
+        const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room] || 0;
+        const contributionPerPlayer = room - commissionPerPlayer;
+        const totalPlayers = roomData.players.length;
+        const basePrize = contributionPerPlayer * totalPlayers;
+        const bonus = isFourCornersWin ? CONFIG.FOUR_CORNERS_BONUS : 0;
+        const totalPrize = basePrize + bonus;
+        const houseEarnings = commissionPerPlayer * totalPlayers;
+        
+        console.log(`🎰 WIN CALCULATION for ${room} ETB room:`);
+        console.log(`   Total players: ${totalPlayers}`);
+        console.log(`   Total prize: ${totalPrize} ETB`);
+        console.log(`   Bonus: ${bonus} ETB`);
+        console.log(`   House earnings: ${houseEarnings} ETB`);
+        console.log(`   Winning pattern: ${patternName}`);
+        console.log(`   Pattern indices:`, patternIndices);
+        
+        // ✅ IMMEDIATE RESPONSE TO USER
+        if (callback) {
+          callback({ 
+            success: true, 
+            message: 'BINGO claim received and being processed',
+            isFourCornersWin: isFourCornersWin,
+            requestId: requestId
+          });
+        }
+        
+        // Now process the win (this can be async)
+        setTimeout(async () => {
+          try {
+            // Double-check if already won (database safety check) - MORE STRICT
+            const strictRecentWin = await models.Transaction.findOne({
+              userId: userId,
+              room: room,
+              type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] },
+              createdAt: { $gt: new Date(Date.now() - 30000) } // Last 30 seconds
+            });
+            
+            if (strictRecentWin) {
+              console.log(`⚠️ User ${user.userName} already won in room ${room} recently (strict check)`);
+              processingClaims.delete(claimKey);
+              processingClaims.delete(roomClaimKey);
+              return;
+            }
+            
+            // ✅ ENSURE ROOM IS STILL PLAYING and atomically update to ended with the winner
+            const updatedRoom = await models.Room.findOneAndUpdate(
+              { _id: roomData._id, status: 'playing' },
+              { 
+                status: 'ended',
+                endTime = new Date(),
+                lastBoxUpdate = new Date(),
+                $push: { 
+                  gameHistory: {
+                    timestamp: new Date(),
+                    winner: userId,
+                    winnerName: user.userName,
+                    prize: totalPrize,
+                    bonus: bonus,
+                    basePrize: basePrize,
+                    players: roomData.players.length,
+                    ballsDrawn: roomData.ballsDrawn,
+                    isFourCorners: isFourCornersWin,
+                    commissionCollected: houseEarnings,
+                    winningPattern: patternName,
+                    patternIndices: patternIndices
+                  }
+                }
+              },
+              { new: true }
+            );
+            
+            // If the room was not updated (because it's already ended), then abort
+            if (!updatedRoom) {
+              console.log(`⚠️ Room ${roomStake} was already ended, aborting win for ${user.userName}`);
+              processingClaims.delete(claimKey);
+              processingClaims.delete(roomClaimKey);
+              return;
+            }
+            
+            // Mark room as having a winner (in memory cache)
+            roomWinners.set(roomStake, Date.now());
+            
+            // Update user balance
+            const oldBalance = user.balance;
+            user.balance += totalPrize;
+            user.totalWins = (user.totalWins || 0) + 1;
+            user.totalBingos = (user.totalBingos || 0) + 1;
+            user.currentRoom = null;
+            user.box = null;
+            await user.save();
+            
+            console.log(`💰 User ${user.userName} won ${totalPrize} ETB (balance: ${oldBalance} -> ${user.balance})`);
+            
+            // Record transaction
+            const transactionType = isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN';
+            const transaction = new models.Transaction({
+              type: transactionType,
+              userId: userId,
+              userName: user.userName,
+              amount: totalPrize,
+              room: room,
+              description: `Bingo win in ${room} ETB room with ${totalPlayers} players${isFourCornersWin ? ' (Four Corners Bonus)' : ''} - Pattern: ${patternName}`
+            });
+            await transaction.save();
+            
+            // Record house earnings
+            const houseTransaction = new models.Transaction({
+              type: 'HOUSE_EARNINGS',
+              userId: 'HOUSE',
+              userName: 'House',
+              amount: houseEarnings,
+              room: room,
+              description: `Commission from ${totalPlayers} players in ${room} ETB room`
+            });
+            await houseTransaction.save();
+            
+            // Store players list BEFORE clearing
+            const playersInRoom = [...roomData.players];
+            
+            // Clear game timer FIRST
+            cleanupRoomTimer(room);
+            
+            // ✅ Reset the room for the next game
+            updatedRoom.players = [];
+            updatedRoom.takenBoxes = [];
+            updatedRoom.status = 'waiting';
+            updatedRoom.calledNumbers = [];
+            updatedRoom.currentBall = null;
+            updatedRoom.ballsDrawn = 0;
+            updatedRoom.startTime = null;
+            updatedRoom.endTime = new Date();
+            updatedRoom.lastBoxUpdate = new Date();
+            await updatedRoom.save();
+            
+            // RELEASE THE PROCESSING LOCKS
+            processingClaims.delete(claimKey);
+            processingClaims.delete(roomClaimKey);
+            console.log(`🔓 Released locks for user ${user.userName} in room ${roomStake}`);
+            
+            // Create game over data with pattern information
+            const gameOverData = {
+              room: room,
+              winnerId: userId,
+              winnerName: user.userName,
+              prize: totalPrize,
+              basePrize: basePrize,
+              bonus: bonus,
+              playersCount: playersInRoom.length,
+              isFourCornersWin: isFourCornersWin,
+              gameEnded: true,
+              reason: 'bingo_win',
+              commissionPerPlayer: commissionPerPlayer,
+              contributionPerPlayer: contributionPerPlayer,
+              houseEarnings: houseEarnings,
+              pattern: patternIndices,
+              patternName: patternName,
+              isFourCorners: isFourCornersWin
+            };
+            
+            // Notify all players
+            for (const playerId of playersInRoom) {
+              if (playerId !== userId) {
+                const losingUser = await models.User.findOne({ userId: playerId });
+                if (losingUser) {
+                  losingUser.currentRoom = null;
+                  losingUser.box = null;
+                  await losingUser.save();
+                }
+              }
+              
+              // Find and notify each player's socket
+              for (const [sId, uId] of socketToUser.entries()) {
+                if (uId === playerId) {
+                  const s = io.sockets.sockets.get(sId);
+                  if (s && s.connected) {
+                    s.emit('gameOver', gameOverData);
+                    
+                    // Update balance for winner
+                    if (uId === userId) {
+                      s.emit('balanceUpdate', user.balance);
+                    }
+                    // Update balance for losers
+                    else {
+                      const losingUser = await models.User.findOne({ userId: playerId });
+                      if (losingUser) {
+                        s.emit('balanceUpdate', losingUser.balance);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            
+            // ✅ BROADCAST EMPTY BOXES and send boxesCleared event
+            broadcastTakenBoxes(room, []);
+            io.emit('boxesCleared', { room: room, reason: 'game_ended_bingo_win' });
+            
+            console.log(`🎮 Game ended with bingo win for room ${room}. Pattern: ${patternName}. Boxes cleared for next game.`);
+            
+            // Update displays
+            broadcastRoomStatus();
+            updateAdminPanel();
+            
+            logActivity('BINGO_WIN', { 
+              userId, 
+              userName: user.userName, 
+              room, 
+              prize: totalPrize, 
+              bonus, 
+              basePrize: basePrize,
+              isFourCorners: isFourCornersWin,
+              players: playersInRoom.length,
+              commissionCollected: houseEarnings,
+              pattern: patternName,
+              patternIndices: patternIndices
+            });
+            
+          } catch (asyncError) {
+            // Release locks on async error
+            if (claimKey) processingClaims.delete(claimKey);
+            if (roomClaimKey) processingClaims.delete(roomClaimKey);
+            console.error('❌ Error in async claim processing:', asyncError);
+          }
+        }, 100); // Small delay to ensure callback is sent first
+        
+      } catch (error) {
+        // Release locks on sync error
+        if (claimKey) processingClaims.delete(claimKey);
+        if (roomClaimKey) processingClaims.delete(roomClaimKey);
+        
+        console.error('❌ Error in claimBingo:', error);
+        
+        // Only send error if socket is still connected
+        if (socket.connected) {
+          socket.emit('error', 'Server error processing bingo claim');
+          if (callback) {
+            callback({ 
+              success: false, 
+              message: 'Server error processing bingo claim: ' + error.message
+            });
+          }
+        }
+      }
+    });
+    
+    socket.on('player:activity', async (data) => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId) {
         try {
-            tg.ready();
-            tg.expand();
-            if (tg.isVersionAtLeast('7.0') && tg.requestFullscreen) {
-                tg.requestFullscreen();
-            }
-            
-            // Set Telegram theme colors
-            tg.setHeaderColor('#6366f1');
-            tg.setBackgroundColor('#0f172a');
-            
-            console.log('Telegram Web App initialized successfully');
-        } catch (e) {
-            console.log('Running in browser mode (not Telegram)');
+          await models.User.findOneAndUpdate(
+            { userId: userId },
+            { lastSeen: new Date() }
+          );
+          
+          // Update admin panel with activity
+          updateAdminPanel();
+        } catch (error) {
+          console.error('Error updating player activity:', error);
         }
-
-        // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
-        const SERVER_URL = "https://bingo-telegram-game.onrender.com";
-        
-        const socket = io(SERVER_URL, {
-            reconnectionAttempts: 10,
-            timeout: 10000,
-            transports: ['websocket', 'polling'],
-            forceNew: true,
-            autoConnect: true,
-            query: {
-                userId: 'pending',
-                source: 'telegram_game',
-                version: '3.0.0'
-            }
-        });
-
-        let state = {
-            stake: 0,
-            grid: [],
-            calledNumbers: new Set(),
-            markedNumbers: new Set(['FREE']),
-            history: [],
-            isConnected: false,
-            balance: 0.00,
-            userId: null,
-            userName: 'Guest',
-            telebirrNumber: '0962577855', // Default value, will be updated from server
-            roomStatuses: {},
-            connectionAttempts: 0,
-            lastActivityTime: Date.now(),
-            socketId: null,
-            isInitialized: false,
-            lastBoxCount: 0,
-            previousTakenBoxes: [],
-            selectedBox: null,
-            roomSubscribed: false,
-            onlinePlayersCount: 0,
-            totalPlayersCount: 0,
-            isResettingLobby: false,
-            discoveryTimerInterval: null,
-            currentDiscoveryTimer: 30,
-            walletTab: 'deposit',
-            selectedWithdrawAmount: 0,
-            winningPattern: null,
-            winningPatternName: null,
-            isFourCornersWin: false
-        };
-
-        // NEW: Function to render winning pattern
-        function renderWinningPattern(patternIndices, patternName, isFourCorners, containerId, nameId) {
-            console.log('🎨 Rendering winning pattern:', patternIndices, patternName, isFourCorners);
-            
-            const container = document.getElementById(containerId);
-            const nameElement = document.getElementById(nameId);
-            
-            if (!container) {
-                console.log('❌ Container not found:', containerId);
-                return;
-            }
-            
-            container.innerHTML = '';
-            
-            if (nameElement) {
-                nameElement.textContent = patternName || 'LINE BINGO';
-            }
-            
-            // Create 5x5 grid
-            for (let i = 0; i < 25; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'pattern-cell-overlay';
-                
-                // Check if this is the free space (center)
-                if (i === 12) {
-                    cell.classList.add('free-space');
-                    cell.textContent = 'FREE';
-                } else {
-                    // Calculate BINGO letter and number range
-                    const letters = ['B', 'I', 'N', 'G', 'O'];
-                    const col = i % 5;
-                    const row = Math.floor(i / 5) + 1;
-                    
-                    // Show the letter and row number (e.g., B1, I2, etc.)
-                    cell.textContent = letters[col] + row;
-                }
-                
-                // Check if this cell is part of the winning pattern
-                if (patternIndices && patternIndices.includes(i)) {
-                    cell.classList.add('winning-cell');
-                    
-                    // Special handling for four corners
-                    if (isFourCorners && [0, 4, 20, 24].includes(i)) {
-                        // Add star indicator for corners
-                        const star = document.createElement('div');
-                        star.innerHTML = '★';
-                        star.style.position = 'absolute';
-                        star.style.top = '1px';
-                        star.style.right = '1px';
-                        star.style.fontSize = '8px';
-                        star.style.color = '#fef3c7';
-                        cell.appendChild(star);
-                    }
-                }
-                
-                container.appendChild(cell);
-            }
-            
-            console.log('✅ Winning pattern rendered');
-        }
-
-        // NEW: Function to show winning pattern in-game
-        function showWinningPatternInGame(patternIndices, patternName, isFourCorners) {
-            console.log('🎮 Showing winning pattern in game');
-            
-            // Show the full-screen pattern display
-            const gamePatternDisplay = document.getElementById('winningPatternGame');
-            if (gamePatternDisplay) {
-                renderWinningPattern(patternIndices, patternName, isFourCorners, 'gamePatternGrid', 'gamePatternName');
-                gamePatternDisplay.classList.add('show');
-            }
-        }
-
-        // NEW: Function to hide game pattern display
-        function hideGamePattern() {
-            const gamePatternDisplay = document.getElementById('winningPatternGame');
-            if (gamePatternDisplay) {
-                gamePatternDisplay.classList.remove('show');
-            }
-        }
-
-        // Update Telebirr number in UI
-        function updateTelebirrNumberInUI(telebirrNumber) {
-            const displayElement = document.getElementById('telebirrNumberDisplay');
-            if (displayElement) {
-                displayElement.textContent = telebirrNumber;
-            }
-            
-            // Also update state for reference
-            state.telebirrNumber = telebirrNumber;
-            console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
-        }
-
-        // Function to manually request Telebirr number
-        function fetchTelebirrNumber() {
-            if (state.isConnected) {
-                console.log('📱 Requesting Telebirr number from server...');
-                socket.emit('getTelebirrNumber', (data) => {
-                    console.log('📱 Telebirr number response:', data);
-                    if (data) {
-                        const number = typeof data === 'string' ? data : (data.telebirrNumber || data);
-                        if (number) {
-                            updateTelebirrNumberInUI(number);
-                            console.log('📱 Fetched and updated Telebirr number:', number);
-                        }
-                    }
-                });
-            }
-        }
-
-        // Update connection status UI
-        function updateConnectionStatus(connected, message) {
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('connectionStatusText');
-            
-            if (connected) {
-                dot.className = 'status-dot connected';
-                text.textContent = 'CONNECTED';
-                text.style.color = '#10b981';
-            } else {
-                dot.className = 'status-dot';
-                text.textContent = message || 'DISCONNECTED';
-                text.style.color = '#ef4444';
-            }
-        }
-
-        function generateUserId() {
-            const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.id) {
-                return `tg_${telegramUser.id}`;
-            }
-            
-            let guestId = localStorage.getItem('bingo_guest_id');
-            if (!guestId) {
-                guestId = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-                localStorage.setItem('bingo_guest_id', guestId);
-            }
-            return guestId;
-        }
-
-        function getUserName() {
-            const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.first_name) {
-                return telegramUser.first_name;
-            }
-            
-            const savedName = localStorage.getItem('bingo_user_name');
-            if (savedName) return savedName;
-            
-            return `Player${Math.floor(Math.random() * 1000)}`;
-        }
-
-        function saveUserInfo() {
-            if (state.userId && !state.userId.startsWith('tg_')) {
-                localStorage.setItem('bingo_guest_id', state.userId);
-            }
-            if (state.userName) {
-                localStorage.setItem('bingo_user_name', state.userName);
-            }
-        }
-
-        function updateSocketQuery() {
-            if (state.userId) {
-                socket.io.opts.query.userId = state.userId;
-                socket.io.opts.query.userName = state.userName;
-                console.log('Socket query updated with userId:', state.userId, 'userName:', state.userName);
-            }
-        }
-
-        function sendInitEvent() {
-            if (state.isConnected && state.userId && !state.isInitialized) {
-                console.log('📤 SENDING INIT EVENT for user:', state.userName, 'ID:', state.userId);
-                
-                socket.emit('init', { 
-                    userId: state.userId,
-                    userName: state.userName 
-                }, (response) => {
-                    if (response && response.success) {
-                        console.log('✅ Init SUCCESS:', response.message);
-                        state.isInitialized = true;
-                        
-                        // After successful init, fetch Telebirr number
-                        fetchTelebirrNumber();
-                    } else {
-                        console.log('❌ Init FAILED:', response?.message || 'No response');
-                        state.isInitialized = false;
-                    }
-                });
-            }
-        }
-
-        // Show notification
-        function showNotification(message, type = 'info', duration = 3000) {
-            // Don't show in-game notifications for marking numbers
-            if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) {
-                return;
-            }
-            if (type === 'error' && message.includes("hasn't been called")) {
-                return;
-            }
-            
-            // Create notification element
-            const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.style.cssText = `
-                position: fixed;
-                top: 80px;
-                left: 50%;
-                transform: translateX(-50%);
-                z-index: 10000;
-                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#6366f1'};
-                color: white;
-                padding: 12px 20px;
-                border-radius: var(--radius);
-                font-weight: 600;
-                font-size: 14px;
-                box-shadow: var(--shadow-lg);
-                animation: fadeIn 0.3s ease;
-                max-width: 90%;
-                text-align: center;
-            `;
-            
-            notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div>
-                    <div>${message}</div>
-                </div>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(-50%) translateY(-20px)';
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.parentNode.removeChild(notification);
-                    }
-                }, 300);
-            }, duration);
-        }
-
-        // Screen management
-        function showScreen(screenId) {
-            // Hide all screens
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-            });
-            
-            // Show target screen
-            const targetScreen = document.getElementById(screenId);
-            if (targetScreen) {
-                targetScreen.classList.add('active');
-            }
-        }
-
-        function showOverlay(overlayId) {
-            const overlay = document.getElementById(overlayId);
-            if (overlay) {
-                overlay.classList.add('active');
-            }
-        }
-
-        function hideOverlay(overlayId) {
-            const overlay = document.getElementById(overlayId);
-            if (overlay) {
-                overlay.classList.remove('active');
-            }
-        }
-
-        function hideInsufficientOverlay() {
-            hideOverlay('insufficientOverlay');
-        }
-
-        function hideRoomLockedOverlay() {
-            hideOverlay('roomLockedOverlay');
-        }
-
-        // Wallet Functions
-        function showWallet() {
-            // Update wallet balance display
-            document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
-            state.selectedWithdrawAmount = 0;
-            document.getElementById('customAmount').value = '';
-            document.getElementById('withdrawPhoneNumber').value = '';
-            
-            // ✅ Always fetch current Telebirr number from server when opening wallet
-            if (state.isConnected) {
-                console.log('📱 Opening wallet, fetching Telebirr number...');
-                fetchTelebirrNumber();
-            } else {
-                // Use state value if not connected
-                updateTelebirrNumberInUI(state.telebirrNumber);
-            }
-            
-            // Show wallet overlay
-            showOverlay('walletOverlay');
-            
-            // Add haptic feedback
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('light'); 
-                }
-            } catch(e){}
-        }
-
-        function hideWallet() {
-            hideOverlay('walletOverlay');
-        }
-
-        function switchWalletTab(tab) {
-            state.walletTab = tab;
-            
-            // Update tab buttons
-            document.querySelectorAll('.wallet-tab').forEach(tabElement => {
-                tabElement.classList.remove('active');
-            });
-            
-            if (tab === 'deposit') {
-                document.querySelectorAll('.wallet-tab')[0].classList.add('active');
-                document.getElementById('depositForm').classList.add('active');
-                document.getElementById('withdrawForm').classList.remove('active');
-            } else {
-                document.querySelectorAll('.wallet-tab')[1].classList.add('active');
-                document.getElementById('withdrawForm').classList.add('active');
-                document.getElementById('depositForm').classList.remove('active');
-            }
-        }
-
-        function selectWithdrawAmount(amount) {
-            state.selectedWithdrawAmount = amount;
-            document.getElementById('selectedWithdrawAmount').textContent = amount + ' ETB';
-            document.getElementById('customAmount').value = '';
-            
-            // Add haptic feedback
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('light'); 
-                }
-            } catch(e){}
-        }
-
-        function updateCustomAmount() {
-            const customAmount = parseFloat(document.getElementById('customAmount').value) || 0;
-            if (customAmount >= 50) {
-                state.selectedWithdrawAmount = customAmount;
-                document.getElementById('selectedWithdrawAmount').textContent = customAmount.toFixed(0) + ' ETB';
-            }
-        }
-
-        function submitDeposit() {
-            const receiptNumber = document.getElementById('receiptNumber').value.trim();
-            const depositAmount = parseFloat(document.getElementById('depositAmount').value);
-            
-            if (!receiptNumber) {
-                showNotification('Please enter your receipt number', 'error');
-                return;
-            }
-            
-            if (!depositAmount || depositAmount < 10) {
-                showNotification('Please enter valid amount (minimum 10 ETB)', 'error');
-                return;
-            }
-            
-            if (state.isConnected) {
-                socket.emit('wallet:depositRequest', {
-                    receiptNumber: receiptNumber,
-                    amount: depositAmount,
-                    userId: state.userId,
-                    userName: state.userName,
-                    telebirrNumber: state.telebirrNumber || '0962577855'
-                });
-                
-                showNotification(`Deposit request submitted! Send ${depositAmount} ETB to: ${state.telebirrNumber || '0962577855'}`, 'success');
-                hideWallet();
-                
-                // Clear form
-                document.getElementById('receiptNumber').value = '';
-                document.getElementById('depositAmount').value = '';
-            } else {
-                showNotification('Not connected to server', 'error');
-            }
-        }
-
-        function submitWithdrawal() {
-            const phoneNumber = document.getElementById('withdrawPhoneNumber').value.trim();
-            const amount = state.selectedWithdrawAmount;
-            
-            if (amount < 50) {
-                showNotification('Minimum withdrawal amount is 50 ETB', 'error');
-                return;
-            }
-            
-            if (amount > state.balance) {
-                showNotification('Insufficient balance for withdrawal', 'error');
-                return;
-            }
-            
-            if (!phoneNumber || phoneNumber.length < 10) {
-                showNotification('Please enter valid phone number', 'error');
-                return;
-            }
-            
-            if (state.isConnected) {
-                socket.emit('wallet:withdrawRequest', {
-                    amount: amount,
-                    phoneNumber: phoneNumber,
-                    userId: state.userId,
-                    userName: state.userName
-                });
-                
-                showNotification(`Withdrawal request submitted! ${amount} ETB will be sent to ${phoneNumber}`, 'success');
-                hideWallet();
-                
-                // Clear form
-                state.selectedWithdrawAmount = 0;
-                document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
-                document.getElementById('customAmount').value = '';
-                document.getElementById('withdrawPhoneNumber').value = '';
-            } else {
-                showNotification('Not connected to server', 'error');
-            }
-        }
-
-        // Handle socket connection
-        socket.on('connect', () => {
-            console.log('✅ Socket connected:', socket.id);
-            state.isConnected = true;
-            state.socketId = socket.id;
-            state.connectionAttempts = 0;
-            state.isInitialized = false;
-            
-            updateConnectionStatus(true, 'CONNECTED');
-            hideOverlay('loadingOverlay');
-            
-            state.userId = generateUserId();
-            state.userName = getUserName();
-            
-            console.log('👤 Generated User ID:', state.userId);
-            console.log('👤 User Name:', state.userName);
-            
-            // Update user info in UI
-            document.getElementById('userName').textContent = state.userName;
-            document.getElementById('userAvatar').textContent = state.userName.charAt(0).toUpperCase();
-            
-            saveUserInfo();
-            updateSocketQuery();
-            sendInitEvent();
-            
-            console.log('Connected to server as:', state.userName, 'ID:', state.userId, 'Socket:', socket.id);
-            
-            startActivityMonitoring();
-        });
-
-        // Handle socket disconnection
-        socket.on('disconnect', (reason) => {
-            console.log('❌ Socket disconnected:', reason);
-            state.isConnected = false;
-            state.isInitialized = false;
-            
-            updateConnectionStatus(false, 'DISCONNECTED');
-            showOverlay('loadingOverlay');
-            document.getElementById('loadingMessage').textContent = 'Reconnecting to server...';
-            
-            state.connectionAttempts++;
-            
-            const delay = Math.min(3000 * state.connectionAttempts, 10000);
-            setTimeout(() => {
-                if (!state.isConnected) {
-                    console.log(`Attempting to reconnect (attempt ${state.connectionAttempts})...`);
-                    updateConnectionStatus(false, 'RECONNECTING...');
-                    socket.connect();
-                }
-            }, delay);
-        });
-
-        // Handle connection errors
-        socket.on('connect_error', (error) => {
-            console.error('Connection error:', error.message);
-            updateConnectionStatus(false, 'CONNECTION ERROR');
-            document.getElementById('loadingMessage').textContent = `Connection error: ${error.message}`;
-            
-            setTimeout(() => {
-                if (!state.isConnected) {
-                    socket.connect();
-                }
-            }, 3000);
-        });
-
-        // Handle user data from server
-        socket.on('userData', (data) => {
-            console.log('User data received:', data);
-            state.userId = data.userId || state.userId;
-            state.userName = data.userName || state.userName;
-            
-            document.getElementById('userName').textContent = data.userName.toUpperCase();
-            document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
-            
-            saveUserInfo();
-        });
-
-        // ✅ Handle Telebirr number received from server
-        socket.on('telebirrNumber', (data) => {
-            // Check if data is a string or object
-            const number = typeof data === 'string' ? data : (data?.telebirrNumber || data);
-            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number, 'Full data:', data);
-            if (number) {
-                state.telebirrNumber = number;
-                updateTelebirrNumberInUI(number);
-            }
-        });
-
-        // ✅ Handle Telebirr number updates in real-time
-        socket.on('telebirrNumberUpdate', (data) => {
-            console.log('📱 [telebirrNumberUpdate] Telebirr number updated in real-time:', data);
-            if (data && data.telebirrNumber) {
-                state.telebirrNumber = data.telebirrNumber;
-                updateTelebirrNumberInUI(data.telebirrNumber);
-                
-                // Show notification to user if they're viewing the wallet
-                if (document.getElementById('walletOverlay')?.classList.contains('active')) {
-                    showNotification('📱 Telebirr number has been updated: ' + data.telebirrNumber, 'info', 3000);
-                }
-            }
-        });
-
-        // ✅ Handle Telebirr number updates from admin panel
-        socket.on('admin:telebirrNumberUpdated', (data) => {
-            console.log('📱 [admin:telebirrNumberUpdated] Received admin Telebirr number update:', data);
-            if (data && data.telebirrNumber) {
-                state.telebirrNumber = data.telebirrNumber;
-                updateTelebirrNumberInUI(data.telebirrNumber);
-                
-                // Show notification to user if they're viewing the wallet
-                if (document.getElementById('walletOverlay')?.classList.contains('active')) {
-                    showNotification('📱 Telebirr number has been updated by admin: ' + data.telebirrNumber, 'info', 3000);
-                }
-            }
-        });
-
-        // Handle room status updates
-        socket.on('roomStatus', (roomData) => {
-            console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
-            
-            state.roomStatuses = roomData;
-            updateRoomsDisplay();
-            state.lastActivityTime = Date.now();
-            
-            let totalOnline = 0;
-            Object.values(roomData).forEach(room => {
-                totalOnline += room.playerCount || 0;
-            });
-            
-            state.onlinePlayersCount = totalOnline;
-        });
-
-        function updateRoomsDisplay() {
-            const roomsGrid = document.getElementById('roomsGrid');
-            roomsGrid.innerHTML = '';
-            
-            const rooms = [
-                { stake: 10, name: 'Bronze', badge: 'badge-bronze' },
-                { stake: 20, name: 'Silver', badge: 'badge-silver' },
-                { stake: 50, name: 'Gold', badge: 'badge-gold' },
-                { stake: 100, name: 'Elite', badge: 'badge-elite' }
-            ];
-            
-            rooms.forEach(room => {
-                const roomInfo = state.roomStatuses[room.stake] || {
-                    status: 'waiting',
-                    playerCount: 0,
-                    totalPlayers: 0,
-                    potentialPrize: 0,
-                    locked: false
-                };
-                
-                const isLocked = roomInfo.locked || roomInfo.status === 'locked';
-                
-                const roomCard = document.createElement('div');
-                roomCard.className = 'room-card' + (isLocked ? ' locked' : '');
-                roomCard.onclick = isLocked ? null : () => selectStake(room.stake);
-                
-                let statusClass = 'status-waiting';
-                let statusText = 'WAITING';
-                
-                if (isLocked) {
-                    statusClass = 'status-locked';
-                    statusText = 'LOCKED';
-                } else if (roomInfo.status === 'starting') {
-                    statusClass = 'status-starting';
-                    statusText = 'STARTING';
-                } else if (roomInfo.status === 'playing') {
-                    statusClass = 'status-playing';
-                    statusText = 'PLAYING';
-                }
-                
-                roomCard.innerHTML = `
-                    <div class="room-badge ${room.badge}">${room.name}</div>
-                    <div class="room-stake">${room.stake}<span class="room-stake-currency">ETB</span></div>
-                    <div class="room-name">${room.name} Arena</div>
-                    <div class="room-info">
-                        <div class="room-players">
-                            <div class="player-icon"><i class="fas fa-user"></i></div>
-                            <div>${roomInfo.playerCount}/100</div>
-                        </div>
-                        <div class="room-prize">${roomInfo.potentialPrize || 0} ETB</div>
-                    </div>
-                    <div class="room-status ${statusClass}">${statusText}</div>
-                `;
-                
-                roomsGrid.appendChild(roomCard);
-            });
-        }
-
-        // Handle balance updates
-        socket.on('balanceUpdate', (bal) => {
-            state.balance = parseFloat(bal);
-            const val = state.balance.toFixed(2);
-            document.getElementById('balanceAmount').textContent = val;
-            document.getElementById('lobbyBalance').textContent = val;
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        // Wallet events
-        socket.on('wallet:depositRequestSuccess', (data) => {
-            showNotification(data.message, 'success', 5000);
-        });
-
-        socket.on('wallet:withdrawRequestSuccess', (data) => {
-            showNotification(data.message, 'success', 5000);
-        });
-
-        socket.on('wallet:depositApproved', (data) => {
-            showNotification(`✅ Deposit approved! ${data.amount} ETB added to your account.`, 'success', 5000);
-        });
-
-        socket.on('wallet:withdrawalApproved', (data) => {
-            showNotification(`✅ Withdrawal approved! ${data.amount} ETB sent to ${data.phoneNumber}.`, 'success', 5000);
-        });
-
-        function refreshBalance() {
-            const refreshBtn = document.querySelector('.refresh-btn');
-            refreshBtn.style.transform = 'rotate(180deg)';
-            
-            console.log('🔄 Refreshing balance...');
-            
-            if(state.isConnected && state.isInitialized) {
-                socket.emit('refreshBalance');
-                console.log('✅ Balance refresh requested');
-            } else {
-                console.log('⚠️ Cannot refresh balance - not connected or not initialized');
-                if (!state.isConnected) {
-                    socket.connect();
-                } else if (!state.isInitialized) {
-                    sendInitEvent();
-                }
-            }
-            
-            setTimeout(() => {
-                refreshBtn.style.transform = 'rotate(0deg)';
-            }, 500);
-            
-            state.lastActivityTime = Date.now();
-        }
-
-        function selectStake(amt) {
-            if(state.balance < amt) {
-                document.getElementById('insufficientMessage').textContent = `You need ${amt} ETB to join this room`;
-                showOverlay('insufficientOverlay');
-                return;
-            }
-
-            state.stake = amt;
-            document.getElementById('selectedRoomStake').textContent = `${amt} ETB`;
-            document.getElementById('gameRoomStake').textContent = `${amt} ETB`;
-            
-            showScreen('discoveryScreen');
-            
-            // Reset box counter
-            state.lastBoxCount = 0;
-            state.previousTakenBoxes = [];
-            state.selectedBox = null;
-            
-            // Hide timer container initially
-            document.getElementById('timerContainer').style.display = 'none';
-            // Hide plate preview initially
-            document.getElementById('platePreviewContainer').classList.remove('active');
-            
-            if(state.isConnected) {
-                // Subscribe to room updates
-                socket.emit('subscribeToRoom', { room: amt });
-                state.roomSubscribed = true;
-                
-                // Request taken boxes
-                console.log(`📤 Requesting taken boxes for room ${amt}...`);
-                socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
-                    console.log(`📦 Received taken boxes for room ${amt}:`, takenBoxes);
-                    renderBoxes(takenBoxes);
-                    updateBoxCounters(takenBoxes);
-                });
-                
-                // Request countdown status for discovery overlay
-                socket.emit('getRoomCountdown', { room: amt }, (response) => {
-                    if (response && response.countdownActive) {
-                        console.log(`⏱️ Discovery timer active: ${response.seconds} seconds, ${response.onlinePlayers} online players`);
-                        updateDiscoveryTimer(response.seconds, response.onlinePlayers);
-                    } else {
-                        // Hide timer if no countdown
-                        document.getElementById('timerContainer').style.display = 'none';
-                    }
-                });
-            }
-            
-            state.lastActivityTime = Date.now();
-        }
-
-        function renderBoxes(taken) {
-            const grid = document.getElementById('boxesGrid');
-            grid.innerHTML = '';
-            
-            // Create boxes 1-100
-            for(let i=1; i<=100; i++) {
-                const box = document.createElement('div');
-                const isTaken = taken.includes(i);
-                
-                box.className = 'box-item' + (isTaken ? ' taken' : '');
-                box.textContent = i;
-                box.dataset.number = i;
-                
-                if (!isTaken) {
-                    box.onclick = function() {
-                        selectBox(i);
-                    };
-                }
-                
-                if (state.selectedBox === i) {
-                    box.classList.add('selected');
-                }
-                
-                grid.appendChild(box);
-            }
-            
-            state.previousTakenBoxes = taken;
-            state.lastActivityTime = Date.now();
+      }
+    });
+    
+    // ========== FIXED: player:leaveRoom - Proper cleanup and refund ==========
+    socket.on('player:leaveRoom', async (data) => {
+      try {
+        const userId = socketToUser.get(socket.id) || socket.userId;
+        if (!userId) {
+          socket.emit('error', 'User not found');
+          return;
         }
         
-        function selectBox(boxNumber) {
-            // Deselect all boxes
-            document.querySelectorAll('.box-item').forEach(box => {
-                box.classList.remove('selected');
-            });
-            
-            // Select the clicked box
-            const selectedBox = document.querySelector(`.box-item[data-number="${boxNumber}"]`);
-            if (selectedBox && !selectedBox.classList.contains('taken')) {
-                selectedBox.classList.add('selected');
-                state.selectedBox = boxNumber;
-                
-                // Show plate preview
-                showPlatePreview(boxNumber);
-                
-                // Enable confirm button
-                const confirmButton = document.getElementById('confirmBoxButton');
-                confirmButton.disabled = false;
-                confirmButton.textContent = `Select Box ${boxNumber}`;
-                
-                // Add haptic feedback
-                try { 
-                    if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                        tg.HapticFeedback.impactOccurred('light'); 
-                    }
-                } catch(e){}
-            }
+        console.log(`👤 Player ${userId} requesting to leave room`);
+        
+        const user = await models.User.findOne({ userId: userId });
+        if (!user || !user.currentRoom) {
+          socket.emit('leftRoom', { message: 'Not in a room' });
+          return;
         }
         
-        function showPlatePreview(seed) {
-            // Generate preview grid
-            generateTraditionalBingoCard(seed);
-            
-            const previewGrid = document.getElementById('previewGrid');
-            previewGrid.innerHTML = '';
-            
-            // Add header letters
-            const letters = ['B', 'I', 'N', 'G', 'O'];
-            letters.forEach(letter => {
-                const letterCell = document.createElement('div');
-                letterCell.className = 'preview-letter';
-                letterCell.textContent = letter;
-                previewGrid.appendChild(letterCell);
-            });
-            
-            // Add cells
-            state.grid.forEach((val, index) => {
-                const cell = document.createElement('div');
-                const isFree = val === 'FREE';
-                cell.className = 'preview-cell' + (isFree ? ' free' : '');
-                cell.textContent = isFree ? 'FREE' : val;
-                previewGrid.appendChild(cell);
-            });
-            
-            // Show preview container
-            document.getElementById('platePreviewContainer').classList.add('active');
+        const roomStake = user.currentRoom;
+        const room = await models.Room.findOne({ stake: roomStake });
+        
+        if (!room) {
+          // Clean up user if room doesn't exist
+          user.currentRoom = null;
+          user.box = null;
+          await user.save();
+          socket.emit('leftRoom', { message: 'Left room (room not found)' });
+          return;
         }
         
-        function updateBoxCounters(takenBoxes) {
-            const takenCount = takenBoxes.length;
-            const availableCount = 100 - takenCount;
-            
-            document.getElementById('availableBoxes').textContent = availableCount;
-            document.getElementById('takenBoxes').textContent = takenCount;
-            
-            if (takenCount > state.lastBoxCount) {
-                const newBoxes = takenCount - state.lastBoxCount;
-                if (newBoxes > 0 && state.lastBoxCount > 0) {
-                    showNotification(`📦 ${newBoxes} new box${newBoxes > 1 ? 'es' : ''} taken!`, 'info', 2000);
-                }
-            }
-            
-            state.lastBoxCount = takenCount;
+        // Prevent leaving if game is already playing
+        if (room.status === 'playing') {
+          console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
+          socket.emit('error', 'Cannot leave room during active game! Wait for game to end.');
+          return;
         }
-
-        // Update discovery timer
-        function updateDiscoveryTimer(seconds, onlinePlayers) {
-            const timerContainer = document.getElementById('timerContainer');
-            const discoveryTimer = document.getElementById('discoveryTimer');
-            const timerSeconds = document.getElementById('timerSeconds');
-            
-            if (timerContainer && discoveryTimer && timerSeconds) {
-                // Show the timer container
-                timerContainer.style.display = 'block';
-                
-                // Update timer display
-                discoveryTimer.textContent = seconds;
-                timerSeconds.textContent = seconds;
-                state.currentDiscoveryTimer = seconds;
-                
-                // Update player count
-                document.getElementById('onlinePlayers').textContent = onlinePlayers || 1;
-                
-                // Update timer styling
-                if (seconds > 0) {
-                    if (seconds <= 5) {
-                        discoveryTimer.style.color = '#ef4444';
-                    } else if (seconds <= 10) {
-                        discoveryTimer.style.color = '#f59e0b';
-                    } else {
-                        discoveryTimer.style.color = '#f59e0b';
-                    }
-                } else {
-                    // Timer reached 0
-                    discoveryTimer.style.color = '#ef4444';
-                }
-            }
+        
+        // Remove user from room
+        const playerIndex = room.players.indexOf(userId);
+        const boxIndex = room.takenBoxes.indexOf(user.box);
+        
+        if (playerIndex > -1) {
+          room.players.splice(playerIndex, 1);
         }
-
-        function joinLobby() {
-            if (!state.selectedBox) {
-                showNotification('Please select a box first', 'error');
-                return;
-            }
-            
-            generateTraditionalBingoCard(state.selectedBox);
-            showScreen('waitScreen');
-            
-            if(state.isConnected) {
-                socket.emit('joinRoom', { 
-                    room: state.stake, 
-                    box: state.selectedBox, 
-                    userName: state.userName
+        
+        if (boxIndex > -1) {
+          room.takenBoxes.splice(boxIndex, 1);
+        }
+        
+        room.lastBoxUpdate = new Date();
+        
+        // Get online players after removal
+        const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
+        
+        // Don't stop countdown when player leaves
+        await room.save();
+        
+        // Reset user
+        user.currentRoom = null;
+        user.box = null;
+        
+        // Refund stake if game hasn't started
+        if (room.status !== 'playing') {
+          const oldBalance = user.balance;
+          user.balance += roomStake;
+          
+          console.log(`💰 Refunded ${roomStake} ETB to ${user.userName}, new balance: ${user.balance}`);
+          
+          // Record transaction
+          const transaction = new models.Transaction({
+            type: 'REFUND',
+            userId: userId,
+            userName: user.userName,
+            amount: roomStake,
+            room: roomStake,
+            description: `Left room before game start - stake refunded`
+          });
+          await transaction.save();
+          
+          socket.emit('balanceUpdate', user.balance);
+        }
+        
+        await user.save();
+        
+        // Broadcast updated boxes
+        broadcastTakenBoxes(roomStake, room.takenBoxes);
+        
+        // Send success message
+        socket.emit('leftRoom', { 
+          message: 'Left room successfully',
+          refunded: room.status !== 'playing'
+        });
+        
+        // Update lobby for remaining players
+        onlinePlayers.forEach(playerUserId => {
+          for (const [sId, uId] of socketToUser.entries()) {
+            if (uId === playerUserId) {
+              const s = io.sockets.sockets.get(sId);
+              if (s) {
+                s.emit('lobbyUpdate', {
+                  room: roomStake,
+                  count: onlinePlayers.length
                 });
+              }
+            }
+          }
+        });
+        
+        console.log(`✅ User ${user.userName} left room ${roomStake}, ${room.takenBoxes.length} boxes remain, ${onlinePlayers.length} online players`);
+        
+        // Update admin panel
+        broadcastRoomStatus();
+        updateAdminPanel();
+        
+        logActivity('PLAYER_LEFT_ROOM', { 
+          userId, 
+          userName: user.userName, 
+          room: roomStake,
+          remainingPlayers: room.players.length,
+          onlinePlayers: onlinePlayers.length,
+          remainingBoxes: room.takenBoxes.length,
+          status: room.status
+        });
+        
+      } catch (error) {
+        console.error('❌ Error in player:leaveRoom:', error);
+        socket.emit('error', 'Failed to leave room: ' + error.message);
+      }
+    });
+    
+    // Add new event for getting room info
+    socket.on('getRoomInfo', async (data) => {
+      try {
+        const { room } = data;
+        const userId = socketToUser.get(socket.id) || socket.userId;
+        
+        const roomData = await models.Room.findOne({ stake: parseInt(room) });
+        if (roomData) {
+          const onlinePlayers = await getOnlinePlayersInRoom(room);
+          
+          socket.emit('lobbyUpdate', {
+            room: room,
+            count: onlinePlayers.length
+          });
+          
+          // Also send countdown status if room is starting
+          if (roomData.status === 'starting') {
+            socket.emit('gameCountdown', {
+              room: room,
+              timer: Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor((Date.now() - roomData.countdownStartTime) / 1000))
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error getting room info:', error);
+      }
+    });
+    
+    socket.on('game:ready', async (data) => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId) {
+        console.log(`🎮 Player ${userId} is ready for game`);
+        await models.User.findOneAndUpdate(
+          { userId: userId },
+          { lastSeen: new Date() }
+        );
+      }
+    });
+    
+    socket.on('game:started', async (data) => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId) {
+        console.log(`✅ Player ${userId} confirmed game started`);
+      }
+    });
+    
+    // ========== FIXED: disconnect event - Proper cleanup on disconnect ==========
+    socket.on('disconnect', async () => {
+      console.log(`❌ Socket disconnected: ${socket.id}`);
+      connectedSockets.delete(socket.id);
+      adminSockets.delete(socket.id);
+      
+      // Remove from room subscriptions
+      roomSubscriptions.forEach((sockets, room) => {
+        sockets.delete(socket.id);
+      });
+      
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId) {
+        console.log(`👤 User ${userId} disconnected`);
+        
+        try {
+          // Find user
+          const user = await models.User.findOne({ userId: userId });
+          if (user && user.currentRoom) {
+            const roomStake = user.currentRoom;
+            const room = await models.Room.findOne({ stake: roomStake });
+            
+            if (room) {
+              // Only remove from room if game is NOT playing
+              if (room.status !== 'playing') {
+                const playerIndex = room.players.indexOf(userId);
+                const boxIndex = room.takenBoxes.indexOf(user.box);
                 
-                socket.emit('player:activity', { action: 'joined_lobby', room: state.stake, box: state.selectedBox });
+                if (playerIndex > -1) {
+                  room.players.splice(playerIndex, 1);
+                }
                 
-                setTimeout(() => {
-                    socket.emit('getRoomInfo', { room: state.stake });
-                }, 500);
+                if (boxIndex > -1) {
+                  room.takenBoxes.splice(boxIndex, 1);
+                }
+                
+                room.lastBoxUpdate = new Date();
+                
+                // Countdown continues even if players disconnect
+                await room.save();
+                
+                // Broadcast updated boxes
+                broadcastTakenBoxes(roomStake, room.takenBoxes);
+                
+                console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect`);
+              } else {
+                console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, keeping in game`);
+              }
             }
             
-            state.lastActivityTime = Date.now();
+            // Update user status
+            user.isOnline = false;
+            user.lastSeen = new Date();
+            await user.save();
+          } else {
+            // Just update last seen
+            await models.User.findOneAndUpdate(
+              { userId: userId },
+              { 
+                isOnline: false,
+                lastSeen: new Date() 
+              }
+            );
+          }
+        } catch (error) {
+          console.error('❌ Error handling disconnect cleanup:', error);
         }
         
-        function leaveDiscovery() {
-            // Unsubscribe from room updates
-            if (state.isConnected && state.roomSubscribed) {
-                socket.emit('unsubscribeFromRoom', { room: state.stake });
-                state.roomSubscribed = false;
-            }
-            
-            // Clear selected box
-            state.selectedBox = null;
-            
-            showScreen('lobbyScreen');
+        // Remove from socketToUser map
+        socketToUser.delete(socket.id);
+      }
+      
+      // Update admin panel
+      setTimeout(() => {
+        updateAdminPanel();
+        broadcastRoomStatus();
+      }, 1000);
+    });
+    
+    // Heartbeat for connection monitoring
+    socket.on('ping', () => {
+      socket.emit('pong', { time: Date.now() });
+    });
+  });
+}
+
+// ========== PERIODIC TASKS ==========
+function startPeriodicTasks() {
+  // Run cleanup every 10 seconds
+  setInterval(cleanupProcessingClaims, 10000);
+  
+  // Cleanup room winners every 30 seconds
+  setInterval(cleanupRoomWinners, 30000);
+  
+  // Room status updates
+  setInterval(() => {
+    broadcastRoomStatus();
+  }, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
+  
+  // Update admin panel every 2 seconds for real-time tracking
+  setInterval(() => {
+    updateAdminPanel();
+  }, 2000);
+  
+  // Run 7-minute game timeout check every 30 seconds
+  setInterval(cleanupLongRunningGames, 30000);
+  
+  // Clean up disconnected sockets periodically
+  setInterval(() => {
+    socketToUser.forEach((userId, socketId) => {
+      const socket = io.sockets.sockets.get(socketId);
+      if (!socket || !socket.connected) {
+        socketToUser.delete(socketId);
+        console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
+      }
+    });
+  }, 10000);
+  
+  // Run cleanup every 30 seconds
+  setInterval(cleanupStaleConnections, 30000);
+  
+  // Run every 10 seconds
+  setInterval(cleanupStuckCountdowns, 10000);
+  
+  // Run every 5 minutes
+  setInterval(cleanupStaleRooms, 300000);
+  
+  // Health check
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+      const fiveMinutesAgo = new Date(now - 300000);
+      
+      // Update users who haven't been active
+      await models.User.updateMany(
+        { 
+          lastSeen: { $lt: fiveMinutesAgo },
+          isOnline: true 
+        },
+        { 
+          isOnline: false,
+          currentRoom: null,
+          box: null
         }
-        
-        function leaveLobby() {
-            if(state.isConnected) {
-                socket.emit('player:leaveRoom', { 
-                    action: 'left_lobby',
-                    room: state.stake,
-                    timestamp: Date.now()
-                });
-                
-                showScreen('lobbyScreen');
-                showNotification('Left lobby successfully', 'info', 2000);
-            }
-        }
+      );
+      
+      // Clean up ONLY abandoned rooms with no players
+      const abandonedRooms = await models.Room.find({
+        status: 'playing',
+        players: { $size: 0 },
+        startTime: { $lt: fiveMinutesAgo }
+      });
+      
+      for (const room of abandonedRooms) {
+        console.log(`⚠️ Cleaning up abandoned room: ${room.stake} ETB`);
+        cleanupRoomTimer(room.stake);
+        await models.Room.deleteOne({ _id: room._id });
+      }
+      
+    } catch (error) {
+      console.error('Error in health check:', error);
+    }
+  }, 60000);
+}
 
-        function generateTraditionalBingoCard(seed) {
-            const letters = ['B', 'I', 'N', 'G', 'O'];
-            const ranges = {
-                'B': { min: 1, max: 15, count: 15 },
-                'I': { min: 16, max: 30, count: 15 },
-                'N': { min: 31, max: 45, count: 15 },
-                'G': { min: 46, max: 60, count: 15 },
-                'O': { min: 61, max: 75, count: 15 }
-            };
-            
-            function seededRandom(s) {
-                var mask = 0xffffffff;
-                var m_w = (123456789 + s) & mask;
-                var m_z = (987654321 - s) & mask;
-
-                return function() {
-                    m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & mask;
-                    m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & mask;
-                    var result = ((m_z << 16) + (m_w & 65535)) >>> 0;
-                    return result / 4294967296;
-                }
-            }
-
-            const random = seededRandom(seed * 777);
-            state.grid = [];
-            
-            const availableNumbers = {};
-            
-            for (const letter of letters) {
-                const range = ranges[letter];
-                availableNumbers[letter] = [];
-                for (let i = range.min; i <= range.max; i++) {
-                    availableNumbers[letter].push(i);
-                }
-                
-                for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
-                    const j = Math.floor(random() * (i + 1));
-                    [availableNumbers[letter][i], availableNumbers[letter][j]] = [availableNumbers[letter][j], availableNumbers[letter][i]];
-                }
-            }
-            
-            for (let row = 0; row < 5; row++) {
-                for (let col = 0; col < 5; col++) {
-                    const index = row * 5 + col;
-                    const letter = letters[col];
-                    
-                    if (col === 2 && row === 2) {
-                        state.grid[index] = 'FREE';
-                        continue;
-                    }
-                    
-                    const available = availableNumbers[letter];
-                    
-                    if (available.length > 0) {
-                        const selectedNumber = available.shift();
-                        state.grid[index] = selectedNumber;
-                    } else {
-                        const range = ranges[letter];
-                        state.grid[index] = Math.floor(random() * (range.max - range.min + 1)) + range.min;
-                    }
-                }
-            }
-        }
-
-        function getBingoLetter(number) {
-            if (number >= 1 && number <= 15) return 'B';
-            if (number >= 16 && number <= 30) return 'I';
-            if (number >= 31 && number <= 45) return 'N';
-            if (number >= 46 && number <= 60) return 'G';
-            if (number >= 61 && number <= 75) return 'O';
-            return '';
-        }
-
-        function triggerNewBall(num, letter) {
-            console.log(`🎱 Ball drawn: ${letter}-${num}`);
-            
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('medium'); 
-                }
-            } catch(e){}
-            
-            const ballDisplay = document.getElementById('lastBall');
-            const ballLetter = document.getElementById('ballLetter');
-            const ballNumber = document.getElementById('ballNumber');
-            
-            ballLetter.textContent = letter;
-            ballNumber.textContent = num;
-            
-            ballDisplay.style.animation = 'none';
-            void ballDisplay.offsetWidth;
-            ballDisplay.style.animation = 'pulse 0.8s ease-out';
-
-            state.history.unshift({ num, letter });
-            const historyContainer = document.getElementById('ballHistory');
-            historyContainer.innerHTML = '';
-            
-            state.history.slice(0, 8).forEach(ball => {
-                const historyBall = document.createElement('div');
-                historyBall.className = 'history-ball';
-                historyBall.innerHTML = `
-                    <div class="history-letter">${ball.letter}</div>
-                    <div class="history-number">${ball.num}</div>
-                `;
-                historyContainer.appendChild(historyBall);
-            });
-            
-            state.calledNumbers.add(num);
-            
-            console.log(`📌 Number ${letter}-${num} added to called numbers.`);
-            
-            state.lastActivityTime = Date.now();
-        }
-
-        // NEW: Detect winning pattern from marked numbers
-        function detectWinningPattern() {
-            const grid = state.grid;
-            const marked = state.markedNumbers;
-            
-            console.log('🔍 Detecting winning pattern...');
-            console.log('Grid:', grid);
-            console.log('Marked:', Array.from(marked));
-            
-            // All possible winning patterns
-            const patterns = [
-                // Rows
-                { indices: [0,1,2,3,4], name: 'ROW 1' },
-                { indices: [5,6,7,8,9], name: 'ROW 2' },
-                { indices: [10,11,12,13,14], name: 'ROW 3' },
-                { indices: [15,16,17,18,19], name: 'ROW 4' },
-                { indices: [20,21,22,23,24], name: 'ROW 5' },
-                
-                // Columns
-                { indices: [0,5,10,15,20], name: 'COLUMN B' },
-                { indices: [1,6,11,16,21], name: 'COLUMN I' },
-                { indices: [2,7,12,17,22], name: 'COLUMN N' },
-                { indices: [3,8,13,18,23], name: 'COLUMN G' },
-                { indices: [4,9,14,19,24], name: 'COLUMN O' },
-                
-                // Diagonals
-                { indices: [0,6,12,18,24], name: 'DIAGONAL (Top-Left to Bottom-Right)' },
-                { indices: [4,8,12,16,20], name: 'DIAGONAL (Top-Right to Bottom-Left)' },
-                
-                // Four corners (special pattern)
-                { indices: [0,4,20,24], name: 'FOUR CORNERS', isFourCorners: true }
-            ];
-            
-            // Helper function to check if a cell is marked
-            const isCellMarked = (index) => {
-                const cellValue = grid[index];
-                if (cellValue === 'FREE') {
-                    return marked.has('FREE');
-                }
-                return marked.has(cellValue);
-            };
-            
-            // Check each pattern
-            for (const pattern of patterns) {
-                const isWinning = pattern.indices.every(isCellMarked);
-                
-                if (isWinning) {
-                    console.log(`✅ Found winning pattern: ${pattern.name}`);
-                    return {
-                        indices: pattern.indices,
-                        name: pattern.name,
-                        isFourCorners: pattern.isFourCorners || false
-                    };
-                }
-            }
-            
-            console.log('❌ No winning pattern found');
-            return null;
-        }
-
-        function checkWinningPattern() {
-            const grid = state.grid;
-            const marked = state.markedNumbers;
-            
-            const isM = (idx) => {
-                const cellValue = grid[idx];
-                if (cellValue === 'FREE') {
-                    return marked.has('FREE');
-                }
-                return marked.has(cellValue);
-            };
-            
-            console.log('🔍 Client-side BINGO check:');
-            console.log('   Grid:', grid);
-            console.log('   Marked:', Array.from(marked));
-            console.log('   Called numbers:', Array.from(state.calledNumbers));
-            
-            const fourCorners = isM(0) && isM(4) && isM(20) && isM(24);
-            console.log('   Four corners check:', fourCorners);
-            
-            // Check rows
-            for(let i=0; i<5; i++) {
-                const rowBingo = isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4);
-                if (rowBingo) {
-                    console.log(`✅ Row ${i+1} BINGO!`);
-                    return true;
-                }
-            }
-            
-            // Check columns
-            for(let i=0; i<5; i++) {
-                const colBingo = isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20);
-                if (colBingo) {
-                    console.log(`✅ Column ${i+1} BINGO!`);
-                    return true;
-                }
-            }
-            
-            // Check diagonals
-            const diag1 = isM(0) && isM(6) && isM(12) && isM(18) && isM(24);
-            const diag2 = isM(4) && isM(8) && isM(12) && isM(16) && isM(20);
-            
-            if (diag1 || diag2) {
-                console.log('✅ Diagonal BINGO!');
-                return true;
-            }
-            
-            // Check four corners
-            if (fourCorners) {
-                console.log('✅ Four Corners BINGO!');
-                return true;
-            }
-            
-            console.log('❌ No winning pattern yet');
-            return false;
-        }
-
-        function initGameBoard() {
-            const target = document.getElementById('bingoGrid');
-            target.innerHTML = '';
-            state.markedNumbers = new Set(['FREE']);
-            
-            state.grid.forEach((val, index) => {
-                const cell = document.createElement('div');
-                const isFree = val === 'FREE';
-                const isCorner = [0, 4, 20, 24].includes(index);
-                
-                cell.className = 'cell' + (isFree ? ' free' : '');
-                if (isCorner) {
-                    cell.classList.add('corner');
-                }
-                
-                cell.textContent = isFree ? 'FREE' : val;
-                cell.dataset.index = index;
-                cell.dataset.value = val;
-                
-                if (!isFree) {
-                    cell.style.color = '#6366f1';
-                }
-                
-                cell.onclick = () => {
-                    if (state.calledNumbers.has(val) || isFree) {
-                        if(!cell.classList.contains('marked')) {
-                            cell.classList.add('marked');
-                            state.markedNumbers.add(isFree ? 'FREE' : val);
-                            
-                            try { 
-                                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                                    tg.HapticFeedback.impactOccurred('light'); 
-                                }
-                            } catch(e){}
-                            
-                            // Check for winning pattern
-                            if(checkWinningPattern()) {
-                                document.getElementById('claimBingoButton').disabled = false;
-                                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-                                
-                                // Store the pattern for later use but DON'T display it yet
-                                const pattern = detectWinningPattern();
-                                if (pattern) {
-                                    state.winningPattern = pattern.indices;
-                                    state.winningPatternName = pattern.name;
-                                    state.isFourCornersWin = pattern.isFourCorners;
-                                }
-                            }
-                        } else {
-                            cell.classList.remove('marked');
-                            state.markedNumbers.delete(isFree ? 'FREE' : val);
-                            
-                            // Re-check if still winning
-                            if (!checkWinningPattern()) {
-                                document.getElementById('claimBingoButton').disabled = true;
-                            }
-                        }
-                    }
-                    
-                    state.lastActivityTime = Date.now();
-                };
-                target.appendChild(cell);
-            });
-            
-            console.log('✅ Game board initialized');
-            console.log('Grid:', state.grid);
-            
-            state.lastActivityTime = Date.now();
-        }
-
-        function claimBingo() {
-            if(state.isConnected && !document.getElementById('claimBingoButton').disabled) {
-                console.log('🎯 Claiming BINGO!');
-                
-                const markedNumbers = Array.from(state.markedNumbers);
-                
-                console.log('📤 Sending BINGO claim:');
-                console.log('   Grid:', state.grid);
-                console.log('   Marked numbers:', markedNumbers);
-                
-                // NEW: Send winning pattern info with the claim
-                const patternInfo = {
-                    pattern: state.winningPattern || [],
-                    patternName: state.winningPatternName || 'LINE BINGO',
-                    isFourCorners: state.isFourCornersWin || false
-                };
-                
-                socket.emit('claimBingo', { 
-                    room: state.stake, 
-                    grid: state.grid, 
-                    marked: markedNumbers,
-                    patternInfo: patternInfo
-                }, (response) => {
-                    if (response && response.success) {
-                        console.log('✅ BINGO claim accepted by server');
-                        showNotification('🎉 BINGO claim sent! Checking...', 'success', 2000);
-                        
-                        // NEW: Show winning pattern in-game while waiting for server response
-                        if (state.winningPattern) {
-                            showWinningPatternInGame(
-                                state.winningPattern, 
-                                state.winningPatternName, 
-                                state.isFourCornersWin
-                            );
-                        }
-                    } else {
-                        console.log('❌ BINGO claim rejected:', response?.message);
-                        showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
-                        setTimeout(() => {
-                            document.getElementById('claimBingoButton').disabled = false;
-                        }, 1000);
-                    }
-                });
-                
-                document.getElementById('claimBingoButton').disabled = true;
-                state.lastActivityTime = Date.now();
-            }
-        }
-
-        function resetToLobby() {
-            console.log('🔄 Resetting to lobby...');
-            
-            if (state.isResettingLobby) {
-                console.log('⚠️ Already resetting lobby, skipping');
-                return;
-            }
-            
-            state.isResettingLobby = true;
-            
-            state.stake = 0;
-            state.grid = [];
-            state.calledNumbers.clear();
-            state.markedNumbers = new Set(['FREE']);
-            state.history = [];
-            state.lastBoxCount = 0;
-            state.previousTakenBoxes = [];
-            state.selectedBox = null;
-            state.onlinePlayersCount = 0;
-            state.totalPlayersCount = 0;
-            state.winningPattern = null;
-            state.winningPatternName = null;
-            state.isFourCornersWin = false;
-            
-            if (state.isConnected && state.roomSubscribed) {
-                socket.emit('unsubscribeFromRoom', { room: state.stake });
-                state.roomSubscribed = false;
-            }
-            
-            // Hide all overlays
-            hideOverlay('winOverlay');
-            hideOverlay('loseOverlay');
-            hideOverlay('insufficientOverlay');
-            hideOverlay('roomLockedOverlay');
-            hideGamePattern();
-            
-            // Hide plate preview
-            document.getElementById('platePreviewContainer').classList.remove('active');
-            
-            // Reset UI
-            showScreen('lobbyScreen');
-            
-            document.getElementById('claimBingoButton').disabled = true;
-            document.getElementById('ballLetter').textContent = '--';
-            document.getElementById('ballNumber').textContent = '--';
-            document.getElementById('ballHistory').innerHTML = '';
-            document.getElementById('bingoGrid').innerHTML = '';
-            
-            document.getElementById('waitTimer').textContent = "30";
-            document.getElementById('waitMessage').textContent = "Waiting for players...";
-            document.getElementById('waitDetails').textContent = "Game starts with 1 online player after 30 seconds";
-            
-            updateRoomsDisplay();
-            
-            if (state.isConnected) {
-                socket.emit('player:activity', { action: 'returned_to_lobby' });
-            }
-            
-            refreshBalance();
-            state.lastActivityTime = Date.now();
-            state.isResettingLobby = false;
-            
-            console.log('✅ Lobby reset complete');
-        }
-
-        // lobbyUpdate event handler
-        socket.on('lobbyUpdate', (d) => {
-            console.log('👥 Lobby update:', d);
-            
-            if(d.room === state.stake) {
-                const playerCount = d.count;
-                document.getElementById('waitMessage').textContent = playerCount >= 1 ? 
-                    "Game starting soon!" : "Waiting for players...";
-                
-                document.getElementById('waitDetails').innerHTML = playerCount >= 1 ?
-                    `✅ <span style="color: #10b981;">${playerCount} online player${playerCount > 1 ? 's' : ''}</span> - Game will start when timer reaches 0` :
-                    `Need at least 1 player to start`;
-                
-                // Update discovery overlay if active
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    document.getElementById('onlinePlayers').textContent = playerCount;
-                }
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        // gameCountdown event handler
-        socket.on('gameCountdown', (d) => {
-            console.log('⏱️ Game countdown event:', d);
-            
-            if(d.room === state.stake) {
-                const timerElement = document.getElementById('waitTimer');
-                timerElement.textContent = d.timer;
-                
-                if (d.timer > 0) {
-                    document.getElementById('waitMessage').textContent = "Game starting in " + d.timer + " seconds!";
-                    
-                    if (d.timer <= 5) {
-                        timerElement.style.color = '#ef4444';
-                    } else if (d.timer <= 10) {
-                        timerElement.style.color = '#f59e0b';
-                    } else {
-                        timerElement.style.color = '#f59e0b';
-                    }
-                } else {
-                    document.getElementById('waitMessage').textContent = "Game starting now!";
-                    timerElement.style.color = '#ef4444';
-                    
-                    showNotification('🎮 Game starting now!', 'success', 2000);
-                }
-                
-                // Also update discovery overlay timer if visible
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    updateDiscoveryTimer(d.timer, d.onlinePlayers);
-                }
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('countdownStopped', (data) => {
-            if (data.room === state.stake) {
-                console.log('Countdown stopped:', data.reason);
-                
-                const timerElement = document.getElementById('waitTimer');
-                timerElement.textContent = "30";
-                timerElement.style.color = '#f59e0b';
-                
-                if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
-                    document.getElementById('waitMessage').textContent = "Need more online players";
-                    document.getElementById('waitDetails').textContent = "Countdown stopped - need 1 online player";
-                    
-                    showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
-                }
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('gameStarted', (d) => {
-            console.log('🎮 Game started event received:', d);
-            
-            if(d.room === state.stake) {
-                console.log(`✅ Game started in our room ${state.stake}`);
-                
-                showScreen('gameScreen');
-                initGameBoard();
-                
-                showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
-                
-                try { 
-                    if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                        tg.HapticFeedback.impactOccurred('heavy'); 
-                    }
-                } catch(e){}
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('admin:forceStartGame', (data) => {
-            if (data.room === state.stake) {
-                console.log('🎮 Admin force starting game');
-                showScreen('gameScreen');
-                initGameBoard();
-                showNotification('🎮 Game starting now by admin!', 'success', 3000);
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('admin:forceEndGame', (data) => {
-            if (data.room === state.stake) {
-                console.log('🎮 Admin force ending game');
-                resetToLobby();
-                showNotification('⚠️ Game ended by admin', 'warning', 3000);
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('ballDrawn', (d) => {
-            console.log('🎱 Ball drawn event received:', d);
-            
-            if(d.room === state.stake) {
-                console.log(`✅ Ball ${d.letter}-${d.num} drawn for our room`);
-                triggerNewBall(d.num, d.letter);
-            }
-        });
-
-        socket.on('enableBingo', () => {
-            console.log('✅ Enable BINGO event received');
-            if (checkWinningPattern()) {
-                document.getElementById('claimBingoButton').disabled = false;
-                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-            }
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        socket.on('joinedRoom', () => {
-            console.log('Successfully joined room');
-            state.lastActivityTime = Date.now();
-        });
-
-        socket.on('boxTaken', () => {
-            showNotification('This ticket is already taken! Please select another.', 'error', 3000);
-            showScreen('discoveryScreen');
-            state.lastActivityTime = Date.now();
-        });
-
-        // Handle room locked event
-        socket.on('roomLocked', (data) => {
-            console.log('🔒 Room locked event received:', data);
-            
-            showNotification(`🔒 ${data.message}`, 'warning', 3000);
-            showOverlay('roomLockedOverlay');
-            
-            // Automatically return to lobby after 3 seconds
-            setTimeout(() => {
-                hideOverlay('roomLockedOverlay');
-                showScreen('lobbyScreen');
-                
-                // Reset state
-                state.stake = 0;
-                state.selectedBox = null;
-                state.roomSubscribed = false;
-            }, 3000);
-        });
-
-        socket.on('insufficientFunds', () => {
-            document.getElementById('insufficientMessage').textContent = `You need ${state.stake} ETB to join this room`;
-            showOverlay('insufficientOverlay');
-            showScreen('lobbyScreen');
-            state.lastActivityTime = Date.now();
-        });
-
-        // NEW: Updated gameOver event handler with pattern display
-        socket.on('gameOver', (d) => {
-            console.log('🎮 Game over event received:', d);
-            
-            if(d.room === state.stake) {
-                const isWinner = d.winnerId === state.userId;
-                console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
-                
-                if (state.isResettingLobby) {
-                    console.log('⚠️ Already resetting lobby, ignoring gameOver event');
-                    return;
-                }
-                
-                document.getElementById('claimBingoButton').disabled = true;
-
-                if(isWinner) {
-                    document.getElementById('winPrizeAmount').textContent = `+${d.prize.toFixed(2)} ETB`;
-                    
-                    if (d.isFourCornersWin && d.bonus) {
-                        document.getElementById('winMessage').textContent = `Congratulations! You won with FOUR CORNERS BONUS!`;
-                    } else {
-                        document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
-                    }
-                    
-                    // NEW: Show winning pattern in win overlay
-                    if (d.pattern && d.patternName) {
-                        renderWinningPattern(
-                            d.pattern, 
-                            d.patternName, 
-                            d.isFourCorners, 
-                            'winOverlayPatternGrid', 
-                            'winOverlayPatternName'
-                        );
-                    }
-                    
-                    showOverlay('winOverlay');
-                    
-                    try { 
-                        if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                            tg.HapticFeedback.impactOccurred('heavy'); 
-                        }
-                    } catch(e){}
-                    
-                    setTimeout(() => {
-                        hideOverlay('winOverlay');
-                        resetToLobby();
-                    }, 5000);
-                } else {
-                    let msg = "";
-                    if (d.winnerId === 'HOUSE') {
-                        msg = "Game ended - no winner!";
-                    } else if (d.winnerId === 'ADMIN') {
-                        msg = "Game ended by admin!";
-                    } else {
-                        msg = `${d.winnerName} claimed Bingo first!`;
-                    }
-                    
-                    document.getElementById('loseMessage').textContent = msg;
-                    document.getElementById('winnerName').textContent = d.winnerName || "Another player";
-                    document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
-                    
-                    // NEW: Show winning pattern in lose overlay
-                    if (d.pattern && d.patternName) {
-                        renderWinningPattern(
-                            d.pattern, 
-                            d.patternName, 
-                            d.isFourCorners, 
-                            'loseOverlayPatternGrid', 
-                            'loseOverlayPatternName'
-                        );
-                    }
-                    
-                    showOverlay('loseOverlay');
-                    
-                    setTimeout(() => {
-                        hideOverlay('loseOverlay');
-                        resetToLobby();
-                    }, 4000);
-                }
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        // Handle game timeout event
-        socket.on('gameTimeout', (data) => {
-            console.log('⏰ Game timeout event received:', data);
-            
-            if(data.room === state.stake) {
-                console.log('⏰ Game timed out for our room, refunding stake');
-                
-                showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'warning', 4000);
-                
-                // Reset to lobby after delay
-                setTimeout(() => {
-                    resetToLobby();
-                }, 2000);
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('banned', () => {
-            showNotification('You have been banned from the game.', 'error', 5000);
-            setTimeout(() => {
-                window.location.reload();
-            }, 3000);
-        });
-
-        socket.on('balanceRefreshed', (balance) => {
-            state.balance = parseFloat(balance);
-            const val = balance.toFixed(2);
-            document.getElementById('balanceAmount').textContent = val;
-            document.getElementById('lobbyBalance').textContent = val;
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        socket.on('fundsAdded', (data) => {
-            showNotification(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`, 'success', 5000);
-            state.balance = parseFloat(data.newBalance);
-            const val = data.newBalance.toFixed(2);
-            document.getElementById('balanceAmount').textContent = val;
-            document.getElementById('lobbyBalance').textContent = val;
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        socket.on('boxesTakenUpdate', (data) => {
-            console.log('📦 Real-time box update received:', data);
-            
-            if (data.room === state.stake) {
-                console.log(`📦 Updating display for room ${state.stake} with ${data.takenBoxes.length} boxes`);
-                
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    renderBoxes(data.takenBoxes);
-                    updateBoxCounters(data.takenBoxes);
-                }
-                
-                if (data.newBox && data.playerName) {
-                    if (data.playerName !== state.userName) {
-                        showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 3000);
-                    }
-                }
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('boxesCleared', (data) => {
-            console.log('📦 Boxes cleared event received:', data);
-            if (data.room === state.stake) {
-                console.log(`📦 Clearing boxes for room ${state.stake}`);
-                
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    renderBoxes([]);
-                    updateBoxCounters([]);
-                }
-                
-                state.lastBoxCount = 0;
-                state.previousTakenBoxes = [];
-                
-                showNotification('🎮 Room reset - all boxes are now available!', 'info', 3000);
-                
-                state.lastActivityTime = Date.now();
-            }
-        });
-
-        socket.on('leftRoom', (data) => {
-            showNotification(data.message || 'Left room successfully', 'info', 2000);
-            resetToLobby();
-        });
-
-        // Activity monitoring to keep connection alive
-        function startActivityMonitoring() {
-            setInterval(() => {
-                if (state.isConnected) {
-                    const now = Date.now();
-                    const timeSinceLastActivity = now - state.lastActivityTime;
-                    
-                    if (timeSinceLastActivity < 30000) {
-                        socket.emit('player:activity', { 
-                            action: 'heartbeat',
-                            timestamp: now,
-                            userId: state.userId,
-                            userName: state.userName,
-                            room: state.stake
-                        });
-                    }
-                    
-                    socket.emit('ping');
-                    
-                    if (!state.isInitialized && state.userId) {
-                        sendInitEvent();
-                    }
-                }
-            }, 15000);
-        }
-
-        // Auto-reconnect on load
-        window.onload = () => {
-            state.userName = getUserName();
-            document.getElementById('userName').textContent = state.userName;
-            document.getElementById('userAvatar').textContent = state.userName.charAt(0).toUpperCase();
-            
-            state.userId = generateUserId();
-            
-            updateSocketQuery();
-            
-            setTimeout(() => {
-                if (!state.isConnected) {
-                    document.getElementById('loadingMessage').textContent = "Connecting to Bingo Elite server...";
-                    updateConnectionStatus(false, 'CONNECTING...');
-                    socket.connect();
-                }
-            }, 1000);
-            
-            document.addEventListener('click', () => {
-                state.lastActivityTime = Date.now();
-            });
-            
-            document.addEventListener('touchstart', () => {
-                state.lastActivityTime = Date.now();
-            });
-            
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && state.isConnected) {
-                    state.lastActivityTime = Date.now();
-                    if (state.isConnected) {
-                        socket.emit('player:activity', { action: 'tab_visible' });
-                    }
-                }
-            });
-        };
-    </script>
-</body>
-</html>
+// ========== EXPORT FUNCTIONS AND STATE ==========
+module.exports = {
+  // Configuration
+  CONFIG,
+  
+  // Initialization
+  initialize,
+  
+  // Helper functions
+  getConnectedUsers,
+  getOnlinePlayersInRoom,
+  broadcastRoomStatus,
+  updateAdminPanel,
+  broadcastTakenBoxes,
+  getUser,
+  getRoom,
+  
+  // NEW FUNCTIONS FOR ADMIN PANEL
+  resetHouseEarnings,
+  disconnectUser,
+  
+  // Telebirr number functions
+  getTelebirrNumber,
+  setTelebirrNumber,
+  
+  // Pattern helper functions
+  getPatternName,
+  checkBingo,
+  
+  // State getters for server.js
+  getSocketToUser: () => socketToUser,
+  getAdminSockets: () => adminSockets,
+  getProcessingClaims: () => processingClaims,
+  getConnectedSockets: () => connectedSockets,
+  getActivityLog: () => activityLog,
+  getRoomSubscriptions: () => roomSubscriptions,
+  getRoomTimers: () => roomTimers,
+  getRoomWinners: () => roomWinners,
+  
+  // Game logic functions
+  getBingoLetter,
+  generateReferralCode,
+  startCountdownForRoom,
+  startGameTimer,
+  cleanupRoomTimer,
+  cleanupLongRunningGames,
+  endGameWithNoWinner
+};
