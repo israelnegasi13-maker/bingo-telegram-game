@@ -858,6 +858,7 @@
             background: rgba(255, 255, 255, 0.05);
             border-radius: 50%;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-weight: 900;
@@ -1095,7 +1096,7 @@
             background: rgba(239, 68, 68, 0.3);
         }
 
-        /* Winning Pattern Display Styles (ONLY in win/lose overlays) */
+        /* NEW: Winning Pattern Display Styles */
         .winning-pattern-overlay {
             background: var(--card-bg);
             border: 2px solid var(--secondary);
@@ -1202,6 +1203,45 @@
 
         .winning-cell {
             animation: highlightWin 0.5s ease-out;
+        }
+
+        /* NEW: In-game winning pattern highlight */
+        .winning-pattern-game {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(2, 6, 23, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 999;
+            width: 100%;
+            height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .winning-pattern-game.show {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .winning-pattern-game-content {
+            background: var(--card-bg);
+            border: 2px solid var(--secondary);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+            max-width: 300px;
+            width: 100%;
+        }
+
+        .winning-pattern-game-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--secondary);
+            margin-bottom: 15px;
         }
 
         /* Overlays */
@@ -1766,6 +1806,29 @@
         </div>
     </div>
 
+    <!-- NEW: In-game Winning Pattern Display -->
+    <div class="winning-pattern-game" id="winningPatternGame">
+        <div class="winning-pattern-game-content">
+            <div class="winning-pattern-game-title">WINNING PATTERN!</div>
+            <div class="bingo-card-overlay">
+                <div class="bingo-header-overlay">
+                    <div class="bingo-letter-cell-overlay">B</div>
+                    <div class="bingo-letter-cell-overlay">I</div>
+                    <div class="bingo-letter-cell-overlay">N</div>
+                    <div class="bingo-letter-cell-overlay">G</div>
+                    <div class="bingo-letter-cell-overlay">O</div>
+                </div>
+                <div class="bingo-grid-overlay" id="gamePatternGrid">
+                    <!-- Pattern will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="pattern-name" id="gamePatternName">LINE BINGO</div>
+            <button class="overlay-button" onclick="hideGamePattern()" style="margin-top: 15px;">
+                Continue
+            </button>
+        </div>
+    </div>
+
     <!-- Overlays -->
     <!-- Wallet Overlay -->
     <div class="overlay" id="walletOverlay">
@@ -1856,7 +1919,7 @@
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
             
-            <!-- Winning Pattern Display (ONLY after win) -->
+            <!-- NEW: Winning Pattern Display -->
             <div class="winning-pattern-overlay show">
                 <div class="winning-pattern-title">WINNING PATTERN</div>
                 <div class="bingo-card-overlay">
@@ -1892,7 +1955,7 @@
                 <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
             
-            <!-- Winning Pattern Display (ONLY after loss) -->
+            <!-- NEW: Winning Pattern Display -->
             <div class="winning-pattern-overlay show">
                 <div class="winning-pattern-title">WINNING PATTERN</div>
                 <div class="bingo-card-overlay">
@@ -1980,14 +2043,8 @@
             console.log('Running in browser mode (not Telegram)');
         }
 
-        // ⭐⭐ DYNAMIC SERVER URL FOR DEPLOYMENT ⭐⭐
-        // This will automatically use the current domain when deployed
-        // On localhost, it will default to localhost:3000
-        const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'http://localhost:3000' 
-            : window.location.origin;
-        
-        console.log('🌐 Connecting to server:', SERVER_URL);
+        // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
+        const SERVER_URL = "https://bingo-telegram-game.onrender.com";
         
         const socket = io(SERVER_URL, {
             reconnectionAttempts: 10,
@@ -2034,7 +2091,7 @@
             isFourCornersWin: false
         };
 
-        // Function to render winning pattern (ONLY in win/lose overlays)
+        // NEW: Function to render winning pattern
         function renderWinningPattern(patternIndices, patternName, isFourCorners, containerId, nameId) {
             console.log('🎨 Rendering winning pattern:', patternIndices, patternName, isFourCorners);
             
@@ -2093,6 +2150,26 @@
             }
             
             console.log('✅ Winning pattern rendered');
+        }
+
+        // NEW: Function to show winning pattern in-game
+        function showWinningPatternInGame(patternIndices, patternName, isFourCorners) {
+            console.log('🎮 Showing winning pattern in game');
+            
+            // Show the full-screen pattern display
+            const gamePatternDisplay = document.getElementById('winningPatternGame');
+            if (gamePatternDisplay) {
+                renderWinningPattern(patternIndices, patternName, isFourCorners, 'gamePatternGrid', 'gamePatternName');
+                gamePatternDisplay.classList.add('show');
+            }
+        }
+
+        // NEW: Function to hide game pattern display
+        function hideGamePattern() {
+            const gamePatternDisplay = document.getElementById('winningPatternGame');
+            if (gamePatternDisplay) {
+                gamePatternDisplay.classList.remove('show');
+            }
         }
 
         // Update Telebirr number in UI
@@ -3036,7 +3113,7 @@
             state.lastActivityTime = Date.now();
         }
 
-        // Detect winning pattern from marked numbers (but don't display it)
+        // NEW: Detect winning pattern from marked numbers
         function detectWinningPattern() {
             const grid = state.grid;
             const marked = state.markedNumbers;
@@ -3188,12 +3265,12 @@
                                 }
                             } catch(e){}
                             
-                            // Check for winning pattern but DON'T show it
+                            // NEW: Check for winning pattern
                             if(checkWinningPattern()) {
                                 document.getElementById('claimBingoButton').disabled = false;
                                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                                 
-                                // Detect the winning pattern but DO NOT show it
+                                // Detect and store winning pattern for claiming (but don't show it)
                                 const pattern = detectWinningPattern();
                                 if (pattern) {
                                     state.winningPattern = pattern.indices;
@@ -3204,6 +3281,11 @@
                         } else {
                             cell.classList.remove('marked');
                             state.markedNumbers.delete(isFree ? 'FREE' : val);
+                            
+                            // If no longer winning, disable the claim button
+                            if (!checkWinningPattern()) {
+                                document.getElementById('claimBingoButton').disabled = true;
+                            }
                         }
                     }
                     
@@ -3228,7 +3310,7 @@
                 console.log('   Grid:', state.grid);
                 console.log('   Marked numbers:', markedNumbers);
                 
-                // Send winning pattern info with the claim
+                // NEW: Send winning pattern info with the claim
                 const patternInfo = {
                     pattern: state.winningPattern || [],
                     patternName: state.winningPatternName || 'LINE BINGO',
@@ -3292,6 +3374,7 @@
             hideOverlay('loseOverlay');
             hideOverlay('insufficientOverlay');
             hideOverlay('roomLockedOverlay');
+            hideGamePattern();
             
             // Hide plate preview
             document.getElementById('platePreviewContainer').classList.remove('active');
@@ -3495,7 +3578,7 @@
             state.lastActivityTime = Date.now();
         });
 
-        // Updated gameOver event handler with pattern display
+        // NEW: Updated gameOver event handler with pattern display
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
             
@@ -3519,7 +3602,7 @@
                         document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
                     }
                     
-                    // Show winning pattern in win overlay (ONLY after win)
+                    // NEW: Show winning pattern in win overlay
                     if (d.pattern && d.patternName) {
                         renderWinningPattern(
                             d.pattern, 
@@ -3556,7 +3639,7 @@
                     document.getElementById('winnerName').textContent = d.winnerName || "Another player";
                     document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
                     
-                    // Show winning pattern in lose overlay (ONLY after loss)
+                    // NEW: Show winning pattern in lose overlay
                     if (d.pattern && d.patternName) {
                         renderWinningPattern(
                             d.pattern, 
