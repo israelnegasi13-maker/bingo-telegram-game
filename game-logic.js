@@ -21,7 +21,7 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  TELEBIRR_NUMBER: process.env.TELEBIRR_NUMBER || "0962577855",
+  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
   MIN_WITHDRAWAL: 50,
   MAX_WITHDRAWAL: 10000
 };
@@ -825,7 +825,7 @@ async function endGameWithNoWinner(room) {
     // Return funds to all players
     for (const userId of playersInRoom) {
       const user = await models.User.findOne({ userId: userId });
-      if (user) {
+        if (user) {
         const oldBalance = user.balance;
         user.balance += room.stake;
         user.currentRoom = null;
