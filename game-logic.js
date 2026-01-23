@@ -825,7 +825,7 @@ async function endGameWithNoWinner(room) {
     // Return funds to all players
     for (const userId of playersInRoom) {
       const user = await models.User.findOne({ userId: userId });
-        if (user) {
+      if (user) {
         const oldBalance = user.balance;
         user.balance += room.stake;
         user.currentRoom = null;
@@ -2402,7 +2402,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate: new Date()
+            lastBoxUpdate = new Date()
           });
           await roomData.save();
         }
@@ -2771,8 +2771,8 @@ function setupSocketHandlers() {
               { _id: roomData._id, status: 'playing' },
               { 
                 status: 'ended',
-                endTime: new Date(),
-                lastBoxUpdate: new Date(),
+                endTime = new Date(),
+                lastBoxUpdate = new Date(),
                 $push: { 
                   gameHistory: {
                     timestamp: new Date(),
