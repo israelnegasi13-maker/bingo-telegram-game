@@ -3265,12 +3265,12 @@
                                 }
                             } catch(e){}
                             
-                            // NEW: Check for winning pattern
+                            // Check for winning pattern
                             if(checkWinningPattern()) {
                                 document.getElementById('claimBingoButton').disabled = false;
                                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
                                 
-                                // Detect and store winning pattern for claiming (but don't show it)
+                                // Save the pattern for when they claim (but don't show it)
                                 const pattern = detectWinningPattern();
                                 if (pattern) {
                                     state.winningPattern = pattern.indices;
@@ -3281,11 +3281,6 @@
                         } else {
                             cell.classList.remove('marked');
                             state.markedNumbers.delete(isFree ? 'FREE' : val);
-                            
-                            // If no longer winning, disable the claim button
-                            if (!checkWinningPattern()) {
-                                document.getElementById('claimBingoButton').disabled = true;
-                            }
                         }
                     }
                     
@@ -3310,7 +3305,7 @@
                 console.log('   Grid:', state.grid);
                 console.log('   Marked numbers:', markedNumbers);
                 
-                // NEW: Send winning pattern info with the claim
+                // Send winning pattern info with the claim
                 const patternInfo = {
                     pattern: state.winningPattern || [],
                     patternName: state.winningPatternName || 'LINE BINGO',
