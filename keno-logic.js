@@ -1,27 +1,18 @@
-[file name]: keno-logic.js
-[file content begin]
 // keno-logic.js - KENO GAME LOGIC MODULE
 module.exports = {
     // Game configuration - UPDATED
     CONFIG: {
-        KENO_GAME_TIMER: 30, // 30 seconds between rounds
-        KENO_MIN_BET: 5,
-        KENO_MAX_BET: 100,
-        KENO_MAX_SELECTIONS: 5, // Changed from 10 to 5
+        KENO_GAME_TIMER: 30, // seconds between rounds
+        KENO_MIN_BET: 5,     // Updated from 1
+        KENO_MAX_BET: 100,   // Updated from 1000
+        KENO_SELECTIONS: 5,  // Fixed: Players can only choose 5 numbers
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
-        DRAW_DELAY_MS: 3000, // 3 seconds between drawn numbers
-        BET_VALUES: [5, 10, 20, 50, 100], // Updated bet amounts
+        NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
         PAYOUT_TABLE: {
-            1: {1: 2},
-            2: {2: 5},
-            3: {2: 1, 3: 10},
-            4: {2: 1, 3: 2, 4: 20},
-            5: {3: 1, 4: 5, 5: 100}
+            5: {1: 0, 2: 0, 3: 1, 4: 5, 5: 50} // Payout for 5 numbers only
         },
-        COMMISSION_PERCENTAGE: 5, // 5% house commission
-        MIN_PLAYERS: 1, // Minimum players to continue game
-        AUTO_RESTART_DELAY: 10000 // 10 seconds delay before auto-restart when players join
+        COMMISSION_PERCENTAGE: 5 // 5% house commission
     },
 
     // Initialize Keno logic
@@ -40,29 +31,18 @@ module.exports = {
         this.isKenoRoundActive = false;
         this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
         this.kenoCountdownInterval = null;
-        this.gamePaused = false;
-        this.pauseCheckInterval = null;
-        this.numberDrawInterval = null;
         this.totalKenoEarnings = 0;
-        this.currentDrawIndex = 0;
-        this.drawnNumbers = [];
+        this.minimumPlayers = 1; // Game stops if no players
         
-        console.log('✅ Keno game logic initialized');
+        console.log('✅ Keno game logic initialized - 5 numbers only, bets: 5,10,20,50,100');
         
         // Load existing stats
         this.loadKenoStats();
-        
-        // Start pause checking
-        this.startPauseCheck();
-        
-        // Start game server
-        this.startKenoServer();
     },
 
     // Load Keno stats from database
     loadKenoStats: async function() {
         try {
-            // Try to get today's stats
             const today = new Date().toISOString().split('T')[0];
             let stats = await this.Stats.findOne({ date: today });
             
@@ -87,78 +67,6 @@ module.exports = {
         } catch (error) {
             console.error('Error loading Keno stats:', error);
         }
-    },
-
-    // Start pause checking for empty games
-    startPauseCheck: function() {
-        const self = this;
-        
-        if (self.pauseCheckInterval) {
-            clearInterval(self.pauseCheckInterval);
-        }
-        
-        self.pauseCheckInterval = setInterval(() => {
-            const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-            
-            // If no players and game is not already paused
-            if (onlinePlayers < self.CONFIG.MIN_PLAYERS && !self.gamePaused) {
-                self.pauseKenoGame();
-            }
-            // If players are back and game is paused
-            else if (onlinePlayers >= self.CONFIG.MIN_PLAYERS && self.gamePaused) {
-                self.resumeKenoGame();
-            }
-        }, 5000); // Check every 5 seconds
-    },
-
-    // Pause Keno game when no players
-    pauseKenoGame: function() {
-        const self = this;
-        
-        console.log('⏸️ Pausing Keno game - no players online');
-        
-        // Stop any active timers
-        if (self.kenoCountdownInterval) {
-            clearInterval(self.kenoCountdownInterval);
-            self.kenoCountdownInterval = null;
-        }
-        
-        if (self.numberDrawInterval) {
-            clearInterval(self.numberDrawInterval);
-            self.numberDrawInterval = null;
-        }
-        
-        self.gamePaused = true;
-        self.isKenoRoundActive = false;
-        
-        // Broadcast game paused to all connected players
-        self.io.to('keno').emit('keno:game_paused', {
-            message: 'Game paused - waiting for players to join...',
-            playersNeeded: self.CONFIG.MIN_PLAYERS,
-            autoRestart: true
-        });
-    },
-
-    // Resume Keno game when players return
-    resumeKenoGame: function() {
-        const self = this;
-        
-        console.log('▶️ Resuming Keno game - players are back');
-        
-        self.gamePaused = false;
-        
-        // Broadcast game resumed
-        self.io.to('keno').emit('keno:game_resumed', {
-            message: 'Game resumed! Next round starting soon...',
-            playersOnline: Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length
-        });
-        
-        // Start a new round after a short delay
-        setTimeout(() => {
-            if (!self.gamePaused) {
-                self.startKenoRound();
-            }
-        }, 5000); // 5 second delay before starting new round
     },
 
     // Handle Keno socket connection
@@ -228,24 +136,23 @@ module.exports = {
                     payoutTable: self.CONFIG.PAYOUT_TABLE,
                     playersCount: activeGame ? activeGame.players.length : 0,
                     totalBets: activeGame ? activeGame.totalBets : 0,
-                    gamePaused: self.gamePaused,
                     config: {
                         minBet: self.CONFIG.KENO_MIN_BET,
                         maxBet: self.CONFIG.KENO_MAX_BET,
-                        maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
+                        selections: self.CONFIG.KENO_SELECTIONS,
                         totalNumbers: self.CONFIG.KENO_TOTAL_NUMBERS,
                         drawCount: self.CONFIG.KENO_DRAW_COUNT,
-                        gameTimer: self.CONFIG.KENO_GAME_TIMER,
-                        betValues: self.CONFIG.BET_VALUES
+                        gameTimer: self.CONFIG.KENO_GAME_TIMER
                     }
                 });
                 
-                console.log(`🎰 Keno player authenticated: ${userName} (${userId}) - Balance: ${user.balance} ETB`);
+                console.log(`🎰 Keno player authenticated: ${userName} - Balance: ${user.balance} ETB`);
                 
-                // Check if we should resume game
-                const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-                if (onlinePlayers >= self.CONFIG.MIN_PLAYERS && self.gamePaused) {
-                    self.resumeKenoGame();
+                // If no active round and we have players, start a round
+                if (!self.isKenoRoundActive && self.kenoPlayers.size >= self.minimumPlayers) {
+                    setTimeout(() => {
+                        self.startKenoRound();
+                    }, 2000);
                 }
                 
             } catch (error) {
@@ -270,12 +177,6 @@ module.exports = {
                     return;
                 }
                 
-                // Check if game is paused
-                if (self.gamePaused) {
-                    socket.emit('keno:error', 'Game is paused. Please wait for more players.');
-                    return;
-                }
-                
                 // Check if round is active
                 if (!self.isKenoRoundActive) {
                     socket.emit('keno:error', 'Round not active. Please wait for next round.');
@@ -288,16 +189,17 @@ module.exports = {
                     return;
                 }
                 
-                // Validate bet amount
+                // Validate bet amount - ONLY 5,10,20,50,100 allowed
                 const bet = parseFloat(betAmount);
-                if (isNaN(bet) || !self.CONFIG.BET_VALUES.includes(bet)) {
-                    socket.emit('keno:error', `Bet amount must be one of: ${self.CONFIG.BET_VALUES.join(', ')} ETB`);
+                const allowedBets = [5, 10, 20, 50, 100];
+                if (isNaN(bet) || !allowedBets.includes(bet)) {
+                    socket.emit('keno:error', 'Bet amount must be 5, 10, 20, 50, or 100 ETB');
                     return;
                 }
                 
-                // Validate numbers
-                if (!Array.isArray(numbers) || numbers.length < 1 || numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                    socket.emit('keno:error', `Select 1-${self.CONFIG.KENO_MAX_SELECTIONS} numbers`);
+                // Validate numbers - MUST be exactly 5 numbers
+                if (!Array.isArray(numbers) || numbers.length !== self.CONFIG.KENO_SELECTIONS) {
+                    socket.emit('keno:error', `You must select exactly ${self.CONFIG.KENO_SELECTIONS} numbers`);
                     return;
                 }
                 
@@ -362,7 +264,7 @@ module.exports = {
                     userId: socket.userId,
                     userName: player.userName,
                     amount: -bet,
-                    description: `Keno bet: ${bet} ETB on ${sortedNumbers.length} numbers`,
+                    description: `Keno bet: ${bet} ETB on 5 numbers`,
                     game: 'keno',
                     status: 'completed'
                 });
@@ -383,7 +285,7 @@ module.exports = {
                 // Broadcast updated player count
                 self.broadcastKenoPlayersUpdate();
                 
-                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on ${sortedNumbers.length} numbers`);
+                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on 5 numbers`);
                 
             } catch (error) {
                 console.error('Keno place bet error:', error);
@@ -391,7 +293,7 @@ module.exports = {
             }
         });
         
-        // Quick pick numbers
+        // Quick pick numbers - Always returns 5 numbers
         socket.on('keno:quickPick', (data) => {
             try {
                 if (!socket.userId) {
@@ -399,12 +301,9 @@ module.exports = {
                     return;
                 }
                 
-                const { count } = data;
-                const pickCount = Math.min(count || self.CONFIG.KENO_MAX_SELECTIONS, self.CONFIG.KENO_MAX_SELECTIONS);
-                
-                // Generate random unique numbers
+                // Always generate 5 numbers
                 const numbers = [];
-                while (numbers.length < pickCount) {
+                while (numbers.length < self.CONFIG.KENO_SELECTIONS) {
                     const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
                     if (!numbers.includes(num)) {
                         numbers.push(num);
@@ -450,8 +349,7 @@ module.exports = {
                     totalBets: activeGame ? activeGame.totalBets : 0,
                     hasPlacedBet: player.hasPlacedBet,
                     selectedNumbers: player.selectedNumbers,
-                    currentBet: player.currentBet,
-                    gamePaused: self.gamePaused
+                    currentBet: player.currentBet
                 });
                 
             } catch (error) {
@@ -533,47 +431,6 @@ module.exports = {
             console.log(`🎰 Player joined Keno room: ${socket.id}`);
         });
         
-        // Restart game (admin/player request)
-        socket.on('keno:restartGame', () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                // Check if game is paused
-                if (!self.gamePaused) {
-                    socket.emit('keno:error', 'Game is already running');
-                    return;
-                }
-                
-                // Check if we have enough players
-                const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-                if (onlinePlayers < self.CONFIG.MIN_PLAYERS) {
-                    socket.emit('keno:error', `Need at least ${self.CONFIG.MIN_PLAYERS} player(s) to start`);
-                    return;
-                }
-                
-                // Resume game
-                self.resumeKenoGame();
-                
-                socket.emit('keno:gameRestarted', {
-                    success: true,
-                    message: 'Game restarted successfully'
-                });
-                
-            } catch (error) {
-                console.error('Keno restart game error:', error);
-                socket.emit('keno:error', 'Failed to restart game');
-            }
-        });
-        
         // Handle disconnection
         socket.on('disconnect', () => {
             self.handleKenoDisconnect(socket);
@@ -602,25 +459,31 @@ module.exports = {
                         lastSeen: new Date()
                     }
                 ).catch(err => console.error('Error updating user status:', err));
+                
+                // Remove from active game if no bet placed
+                const activeGame = self.getActiveKenoGame();
+                if (activeGame && !player.hasPlacedBet) {
+                    const index = activeGame.players.indexOf(socket.userId);
+                    if (index > -1) {
+                        activeGame.players.splice(index, 1);
+                    }
+                }
             }
         }
         
         // Remove from keno sockets
         self.kenoSockets.delete(socket.id);
         
-        // Note: We don't remove from players map to preserve data
-        // but we do remove from active game
-        if (socket.userId) {
-            const activeGame = self.getActiveKenoGame();
-            if (activeGame) {
-                const index = activeGame.players.indexOf(socket.userId);
-                if (index > -1) {
-                    activeGame.players.splice(index, 1);
-                }
-                
-                // Broadcast updated player count
-                self.broadcastKenoPlayersUpdate();
-            }
+        // Broadcast updated player count
+        self.broadcastKenoPlayersUpdate();
+        
+        // Check if we need to pause the game (no players left)
+        const activeGame = self.getActiveKenoGame();
+        const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
+        
+        if (onlinePlayers === 0 && self.isKenoRoundActive) {
+            console.log('🎰 No players online, pausing game...');
+            self.pauseKenoGame();
         }
     },
     
@@ -628,17 +491,15 @@ module.exports = {
     startKenoRound: function() {
         const self = this;
         
-        // Check if game is paused
-        if (self.gamePaused) {
-            console.log('🎰 Game is paused, skipping round start');
-            return;
-        }
-        
-        // Check if we have enough players
+        // Check if we have minimum players
         const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-        if (onlinePlayers < self.CONFIG.MIN_PLAYERS) {
-            console.log('🎰 Not enough players to start round');
-            self.pauseKenoGame();
+        if (onlinePlayers < self.minimumPlayers) {
+            console.log('🎰 Not enough players to start round. Waiting...');
+            // Broadcast waiting status
+            self.io.to('keno').emit('keno:waiting', {
+                message: 'Waiting for players...',
+                playersNeeded: self.minimumPlayers
+            });
             return;
         }
         
@@ -662,7 +523,8 @@ module.exports = {
             totalBets: 0,
             totalBetAmount: 0,
             totalPayout: 0,
-            commissionCollected: 0
+            commissionCollected: 0,
+            drawComplete: false
         };
         
         self.activeKenoGames.set('current', activeGame);
@@ -686,6 +548,25 @@ module.exports = {
         self.startKenoCountdown();
     },
     
+    // Pause Keno game when no players
+    pauseKenoGame: function() {
+        const self = this;
+        
+        if (self.kenoCountdownInterval) {
+            clearInterval(self.kenoCountdownInterval);
+            self.kenoCountdownInterval = null;
+        }
+        
+        self.isKenoRoundActive = false;
+        
+        // Broadcast game paused
+        self.io.to('keno').emit('keno:game_paused', {
+            message: 'Game paused. Waiting for players...'
+        });
+        
+        console.log('🎰 Game paused due to no players');
+    },
+    
     // Start Keno countdown
     startKenoCountdown: function() {
         const self = this;
@@ -698,14 +579,15 @@ module.exports = {
         self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
         
         self.kenoCountdownInterval = setInterval(() => {
-            // Check if game is paused
-            if (self.gamePaused) {
+            self.kenoCountdown--;
+            
+            // Check if we still have players
+            const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
+            if (onlinePlayers === 0) {
                 clearInterval(self.kenoCountdownInterval);
-                self.kenoCountdownInterval = null;
+                self.pauseKenoGame();
                 return;
             }
-            
-            self.kenoCountdown--;
             
             // Broadcast countdown update
             self.io.to('keno').emit('keno:countdown_update', {
@@ -730,13 +612,12 @@ module.exports = {
             
             if (self.kenoCountdown <= 0) {
                 clearInterval(self.kenoCountdownInterval);
-                self.kenoCountdownInterval = null;
                 self.drawKenoNumbers();
             }
         }, 1000);
     },
     
-    // Draw Keno numbers with 3-second delay
+    // Draw Keno numbers
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
@@ -748,59 +629,44 @@ module.exports = {
         activeGame.status = 'drawing';
         self.isKenoRoundActive = false;
         
-        // Reset draw state
-        self.currentDrawIndex = 0;
-        self.drawnNumbers = [];
-        activeGame.drawnNumbers = [];
-        
         // Broadcast draw start
         self.io.to('keno').emit('keno:draw_start', {
             round: activeGame.roundNumber,
-            message: 'Drawing numbers...'
+            message: 'Drawing numbers...',
+            popInterval: self.CONFIG.NUMBER_POP_INTERVAL
         });
         
-        // Wait a bit for dramatic effect
-        setTimeout(() => {
-            // Start drawing numbers one by one with 3-second delay
-            self.numberDrawInterval = setInterval(() => {
-                // Generate a random unique number
-                let num;
-                do {
-                    num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
-                } while (self.drawnNumbers.includes(num));
-                
-                self.drawnNumbers.push(num);
-                activeGame.drawnNumbers.push(num);
-                self.currentDrawIndex++;
-                
-                // Sort the drawn numbers for display
-                const sortedDrawnNumbers = [...self.drawnNumbers].sort((a, b) => a - b);
-                
-                // Broadcast each drawn number
-                self.io.to('keno').emit('keno:number_drawn', {
-                    round: activeGame.roundNumber,
-                    number: num,
-                    drawnNumbers: sortedDrawnNumbers,
-                    currentIndex: self.currentDrawIndex,
-                    totalToDraw: self.CONFIG.KENO_DRAW_COUNT
-                });
-                
-                console.log(`🎰 Drawn number ${self.currentDrawIndex}/${self.CONFIG.KENO_DRAW_COUNT}: ${num}`);
-                
-                // Check if we've drawn all numbers
-                if (self.currentDrawIndex >= self.CONFIG.KENO_DRAW_COUNT) {
-                    clearInterval(self.numberDrawInterval);
-                    self.numberDrawInterval = null;
-                    
-                    // Sort final drawn numbers
-                    activeGame.drawnNumbers.sort((a, b) => a - b);
-                    
-                    // Wait a moment then process results
-                    setTimeout(() => {
-                        self.processKenoResults(activeGame);
-                    }, 2000);
+        // Wait 2 seconds for dramatic effect
+        setTimeout(async () => {
+            // Generate 20 random unique numbers
+            const drawnNumbers = [];
+            while (drawnNumbers.length < self.CONFIG.KENO_DRAW_COUNT) {
+                const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
+                if (!drawnNumbers.includes(num)) {
+                    drawnNumbers.push(num);
                 }
-            }, self.CONFIG.DRAW_DELAY_MS); // 3 seconds between numbers
+            }
+            
+            drawnNumbers.sort((a, b) => a - b);
+            activeGame.drawnNumbers = drawnNumbers;
+            
+            // Broadcast drawn numbers (ALL AT ONCE for all players to see same numbers)
+            self.io.to('keno').emit('keno:round_results', {
+                round: activeGame.roundNumber,
+                drawnNumbers: drawnNumbers,
+                playersCount: activeGame.players.length,
+                totalBets: activeGame.totalBets,
+                popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
+                message: `Round ${activeGame.roundNumber} results!`
+            });
+            
+            // Mark draw as complete
+            activeGame.drawComplete = true;
+            
+            // Process results after numbers are shown
+            setTimeout(async () => {
+                await self.processKenoResults(activeGame);
+            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 5000);
             
         }, 2000);
     },
@@ -811,15 +677,6 @@ module.exports = {
         
         console.log('🎰 Processing Keno results...');
         
-        // Broadcast final results
-        self.io.to('keno').emit('keno:round_results', {
-            round: activeGame.roundNumber,
-            drawnNumbers: activeGame.drawnNumbers,
-            playersCount: activeGame.players.length,
-            totalBets: activeGame.totalBets,
-            message: `Round ${activeGame.roundNumber} results!`
-        });
-        
         // Calculate winnings for each player
         for (const [playerId, bet] of Object.entries(activeGame.bets)) {
             try {
@@ -828,10 +685,10 @@ module.exports = {
                     activeGame.drawnNumbers.includes(num)
                 ).length;
                 
-                // Calculate winnings
+                // Calculate winnings based on 5-number payout table
                 let winnings = 0;
-                if (matches > 0 && self.CONFIG.PAYOUT_TABLE[bet.numbers.length]) {
-                    const payout = self.CONFIG.PAYOUT_TABLE[bet.numbers.length][matches];
+                if (matches >= 3 && self.CONFIG.PAYOUT_TABLE[5]) {
+                    const payout = self.CONFIG.PAYOUT_TABLE[5][matches];
                     if (payout) {
                         winnings = bet.amount * payout;
                     }
@@ -851,7 +708,7 @@ module.exports = {
                             userId: playerId,
                             userName: user.userName,
                             amount: winnings,
-                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB, matched ${matches} of ${bet.numbers.length} numbers)`,
+                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB, matched ${matches} of 5 numbers)`,
                             game: 'keno',
                             status: 'completed'
                         });
@@ -895,7 +752,7 @@ module.exports = {
                             });
                         }
                         
-                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (matched ${matches} numbers)`);
+                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (matched ${matches}/5 numbers)`);
                     }
                 } else {
                     // Send loss result
@@ -961,17 +818,21 @@ module.exports = {
         // Increment round number
         self.kenoRoundNumber++;
         
-        // Check if we have enough players to continue
+        // Check if we have players for next round
         const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-        if (onlinePlayers < self.CONFIG.MIN_PLAYERS) {
-            self.pauseKenoGame();
-        } else {
-            // Start next round after a short delay
+        
+        if (onlinePlayers >= self.minimumPlayers) {
+            // Start next round after 5 seconds
             setTimeout(() => {
-                if (!self.gamePaused) {
-                    self.startKenoRound();
-                }
-            }, 5000); // 5 second delay between rounds
+                self.startKenoRound();
+            }, 5000);
+        } else {
+            console.log('🎰 No players online. Game will wait for players.');
+            // Broadcast waiting message
+            self.io.to('keno').emit('keno:waiting', {
+                message: 'Waiting for players to start next round...',
+                playersNeeded: self.minimumPlayers
+            });
         }
     },
     
@@ -990,7 +851,7 @@ module.exports = {
                         totalKenoWagered: wagered,
                         totalKenoEarnings: wagered - payout,
                         totalKenoGames: games,
-                        totalKenoWins: wagered > payout ? 1 : 0
+                        totalKenoWins: payout > 0 ? 1 : 0
                     }
                 },
                 { upsert: true, new: true }
@@ -1003,15 +864,14 @@ module.exports = {
     
     // Helper methods
     getActiveKenoGame: function() {
-        const game = this.activeKenoGames.get('current');
+        let game = this.activeKenoGames.get('current');
         if (!game) {
-            // Create a default game if none exists
-            const defaultGame = {
+            game = {
                 id: Date.now(),
                 roundNumber: this.kenoRoundNumber,
                 startTime: new Date(),
                 endTime: null,
-                status: 'betting',
+                status: 'waiting',
                 players: [],
                 bets: {},
                 drawnNumbers: [],
@@ -1019,17 +879,20 @@ module.exports = {
                 totalBets: 0,
                 totalBetAmount: 0,
                 totalPayout: 0,
-                commissionCollected: 0
+                commissionCollected: 0,
+                drawComplete: false
             };
-            this.activeKenoGames.set('current', defaultGame);
-            return defaultGame;
+            this.activeKenoGames.set('current', game);
         }
         return game;
     },
     
     getKenoSocketByUserId: function(userId) {
         const player = this.kenoPlayers.get(userId);
-        return player ? this.kenoSockets.get(player.socketId) : null;
+        if (player && this.kenoSockets.get(player.socketId)) {
+            return this.kenoSockets.get(player.socketId);
+        }
+        return null;
     },
     
     broadcastKenoPlayersUpdate: function() {
@@ -1053,22 +916,16 @@ module.exports = {
         
         console.log('🎰 Starting Keno game server...');
         
-        // Start first round after 5 seconds
-        setTimeout(() => {
-            // Check if we have players
-            const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
-            if (onlinePlayers >= self.CONFIG.MIN_PLAYERS) {
+        // Start first round if we have players
+        const onlinePlayers = Array.from(self.kenoPlayers.values()).filter(p => p.isOnline).length;
+        
+        if (onlinePlayers >= self.minimumPlayers) {
+            setTimeout(() => {
                 self.startKenoRound();
-            } else {
-                console.log('🎰 Waiting for players to join...');
-                self.pauseKenoGame();
-            }
-        }, 5000);
-    },
-    
-    // Handle Keno socket connection (alternative method)
-    handleKenoSocketConnection: function(socket) {
-        this.handleKenoConnection(socket);
+            }, 5000);
+        } else {
+            console.log('🎰 Waiting for players to start first round...');
+        }
     },
     
     // Get Keno players count
@@ -1076,9 +933,9 @@ module.exports = {
         return this.kenoPlayers.size;
     },
     
-    // Get Keno active games count
-    getKenoActiveGamesCount: function() {
-        return this.activeKenoGames.size;
+    // Get online players count
+    getOnlinePlayersCount: function() {
+        return Array.from(this.kenoPlayers.values()).filter(p => p.isOnline).length;
     },
     
     // Get all Keno players
@@ -1088,10 +945,9 @@ module.exports = {
     
     // Force start Keno round (admin)
     forceStartKenoRound: function() {
-        const activeGame = this.getActiveKenoGame();
-        if (activeGame && activeGame.status === 'betting') {
-            clearInterval(this.kenoCountdownInterval);
-            this.drawKenoNumbers();
+        const onlinePlayers = this.getOnlinePlayersCount();
+        if (onlinePlayers >= this.minimumPlayers) {
+            this.startKenoRound();
             return true;
         }
         return false;
@@ -1100,7 +956,7 @@ module.exports = {
     // Get Keno game stats
     getKenoGameStats: function() {
         const activeGame = this.getActiveKenoGame();
-        const onlinePlayers = Array.from(this.kenoPlayers.values()).filter(p => p.isOnline).length;
+        const onlinePlayers = this.getOnlinePlayersCount();
         
         return {
             roundNumber: this.kenoRoundNumber,
@@ -1108,23 +964,16 @@ module.exports = {
             countdown: this.kenoCountdown,
             playersCount: this.kenoPlayers.size,
             onlinePlayers: onlinePlayers,
-            gamePaused: this.gamePaused,
             totalEarnings: this.totalKenoEarnings,
             activeGame: activeGame ? {
                 players: activeGame.players.length,
                 totalBets: activeGame.totalBets,
                 totalBetAmount: activeGame.totalBetAmount,
                 status: activeGame.status,
-                drawnNumbersCount: activeGame.drawnNumbers.length
+                drawnNumbers: activeGame.drawnNumbers
             } : null,
             historyCount: this.kenoRoundHistory.length,
-            config: {
-                minPlayers: this.CONFIG.MIN_PLAYERS,
-                gameTimer: this.CONFIG.KENO_GAME_TIMER,
-                drawDelay: this.CONFIG.DRAW_DELAY_MS,
-                maxSelections: this.CONFIG.KENO_MAX_SELECTIONS,
-                betValues: this.CONFIG.BET_VALUES
-            }
+            minimumPlayers: this.minimumPlayers
         };
     },
     
@@ -1201,6 +1050,20 @@ module.exports = {
         
         if (removedCount > 0) {
             console.log(`🧹 Cleaned up ${removedCount} inactive Keno players`);
+        }
+    },
+    
+    // Check if game should be active
+    checkGameStatus: function() {
+        const onlinePlayers = this.getOnlinePlayersCount();
+        if (onlinePlayers === 0 && this.isKenoRoundActive) {
+            this.pauseKenoGame();
+        } else if (onlinePlayers >= this.minimumPlayers && !this.isKenoRoundActive) {
+            // Check if no active game, start one
+            const activeGame = this.getActiveKenoGame();
+            if (activeGame.status === 'waiting' || activeGame.status === 'completed') {
+                this.startKenoRound();
+            }
         }
     }
 };
