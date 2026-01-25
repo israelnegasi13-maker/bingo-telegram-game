@@ -2689,7 +2689,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate = new Date()
+            lastBoxUpdate: new Date()
           });
           await roomData.save();
         }
