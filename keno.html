@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Keno Premium - Telegram Mini App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #8b5cf6;
+            --secondary-color: #7c3aed;
+            --accent-color: #fbbf24;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-tertiary: #64748b;
+            --shadow-heavy: 0 10px 25px rgba(0, 0, 0, 0.5);
+            --shadow-medium: 0 5px 15px rgba(0, 0, 0, 0.3);
+            --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.2);
+            --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            --gradient-gold: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+            background-image: 
+                radial-gradient(at 20% 30%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
+                radial-gradient(at 80% 80%, rgba(251, 191, 36, 0.1) 0px, transparent 50%);
+        }
+        
+        .container {
+            max-width: 100%;
+            padding: 16px;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .app-header {
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 24px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+        
+        .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient-primary);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+        }
+        
+        .logo-text h1 {
+            font-size: 28px;
+            font-weight: 900;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .logo-text p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* User Info */
+        .user-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .info-card {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 16px;
+            padding: 18px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--gradient-primary);
+        }
+        
+        .info-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .info-value {
+            font-size: 22px;
+            font-weight: 900;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Connection Status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 14px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            border: 1px solid;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .status-connected {
+            border-color: rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+        
+        .status-disconnected {
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .dot-connected {
+            background: var(--success-color);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+            animation: pulse 2s infinite;
+        }
+        
+        /* Game Container */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Numbers Grid */
+        .numbers-section {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .selection-info {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-weight: 800;
+            font-size: 14px;
+            color: var(--primary-color);
+        }
+        
+        .numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        
+        @media (min-width: 480px) {
+            .numbers-grid {
+                grid-template-columns: repeat(10, 1fr);
+            }
+        }
+        
+        .keno-number {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            border: 2px solid transparent;
+            color: var(--text-primary);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .keno-number:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .keno-number.selected {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: var(--accent-color);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+        }
+        
+        .keno-number.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .keno-number.drawn {
+            background: var(--gradient-gold);
+            color: #000;
+            font-weight: 900;
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.6);
+            animation: popIn 0.4s ease-out;
+        }
+        
+        .keno-number.matched {
+            background: var(--gradient-success);
+            color: white;
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
+            position: relative;
+        }
+        
+        .keno-number.matched::after {
+            content: '🎯';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 12px;
+        }
+        
+        /* Quick Pick Button */
+        .quick-pick-btn {
+            width: 100%;
+            padding: 18px;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            color: var(--primary-color);
+            font-weight: 800;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 16px;
+        }
+        
+        .quick-pick-btn:hover {
+            background: rgba(139, 92, 246, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        /* Control Panel */
+        .control-panel {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+        
+        /* Round Timer */
+        .round-timer {
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid var(--accent-color);
+        }
+        
+        .timer-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 800;
+        }
+        
+        .timer-display {
+            font-size: 48px;
+            font-weight: 900;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-color);
+            margin: 16px 0;
+            text-shadow: 0 0 20px rgba(251, 191, 36, 0.8);
+        }
+        
+        .game-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            gap: 12px;
+        }
+        
+        .stat-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 6px;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Bet Controls */
+        .bet-controls {
+            margin-bottom: 24px;
+        }
+        
+        .bet-amount-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .bet-amount-display label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .current-bet {
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Chips Grid */
+        .chips-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .chip {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            color: var(--text-primary);
+            font-weight: 800;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chip:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(139, 92, 246, 0.4);
+            transform: translateY(-3px);
+        }
+        
+        .chip.selected {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: var(--accent-color);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .btn {
+            padding: 22px;
+            border: none;
+            border-radius: 18px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+            border: 2px solid var(--accent-color);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(139, 92, 246, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+            border-color: rgba(139, 92, 246, 0.4);
+        }
+        
+        /* Results Panel */
+        .results-panel {
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 20px;
+            padding: 24px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            margin-top: 20px;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .results-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .round-number {
+            font-size: 13px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .drawn-numbers-container {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            min-height: 120px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .drawn-numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            min-height: 72px;
+        }
+        
+        /* Win Result */
+        .win-result {
+            background: var(--gradient-success);
+            border-radius: 20px;
+            padding: 32px;
+            border: 2px solid var(--accent-color);
+            animation: slideIn 0.6s ease-out;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(16, 185, 129, 0.4);
+        }
+        
+        .win-title {
+            color: white;
+            font-size: 24px;
+            font-weight: 900;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .win-amount {
+            font-size: 48px;
+            font-weight: 900;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 0 0 25px rgba(251, 191, 36, 0.8);
+        }
+        
+        .match-details {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 700;
+            text-align: center;
+        }
+        
+        /* Waiting Overlay */
+        .waiting-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(20px);
+        }
+        
+        .waiting-text {
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .waiting-timer {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--accent-color);
+            font-family: 'JetBrains Mono', monospace;
+            text-shadow: 0 0 30px rgba(251, 191, 36, 0.8);
+            margin-bottom: 24px;
+        }
+        
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-50px);
+            padding: 20px 32px;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 15px;
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.4s;
+            text-align: center;
+            max-width: 90%;
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(30px);
+            border: 2px solid;
+        }
+        
+        .notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        .notification.success {
+            background: rgba(16, 185, 129, 0.9);
+            color: white;
+            border-color: var(--success-color);
+        }
+        
+        .notification.error {
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-color: var(--danger-color);
+        }
+        
+        .notification.info {
+            background: rgba(139, 92, 246, 0.9);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .notification.warning {
+            background: rgba(251, 191, 36, 0.9);
+            color: #000;
+            border-color: var(--accent-color);
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Animations */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Footer */
+        .app-footer {
+            text-align: center;
+            padding: 24px 0;
+            margin-top: 30px;
+            border-top: 1px solid rgba(139, 92, 246, 0.2);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 380px) {
+            .numbers-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 8px;
+            }
+            
+            .chips-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .user-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .timer-display {
+                font-size: 38px;
+            }
+            
+            .win-amount {
+                font-size: 38px;
+            }
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 500px;
+                padding: 20px;
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--gradient-primary);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Connection Status -->
+        <div class="connection-status status-connected" id="connection-status">
+            <div class="status-dot dot-connected"></div>
+            <span id="status-text">CONNECTED TO SERVER</span>
+        </div>
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    🎰
+                </div>
+                <div class="logo-text">
+                    <h1>KENO PREMIUM</h1>
+                    <p>TELEGRAM MINI APP</p>
+                </div>
+            </div>
+        </header>
+        
+        <!-- User Info -->
+        <div class="user-info">
+            <div class="info-card">
+                <div class="info-label">BALANCE</div>
+                <div class="info-value" id="balance">0 ETB</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">TOTAL WINS</div>
+                <div class="info-value" id="total-wins">0 ETB</div>
+            </div>
+        </div>
+        
+        <!-- Main Game Container -->
+        <div class="game-container">
+            <!-- Numbers Section -->
+            <div class="numbers-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="fas fa-dice"></i>
+                        SELECT NUMBERS (1-80)
+                    </div>
+                    <div class="selection-info" id="selection-info">
+                        SELECTED: <span id="selected-count">0</span>/10
+                    </div>
+                </div>
+                
+                <div class="numbers-grid" id="keno-grid">
+                    <!-- Numbers 1-80 will be generated here -->
+                </div>
+                
+                <button class="quick-pick-btn" id="quick-pick">
+                    <i class="fas fa-random"></i> QUICK PICK 10 NUMBERS
+                </button>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="control-panel" id="control-panel">
+                <!-- Round Timer -->
+                <div class="round-timer">
+                    <div class="timer-label">NEXT DRAW IN</div>
+                    <div class="timer-display" id="countdown">01:00</div>
+                    <div class="game-stats">
+                        <div class="stat-item">
+                            <div class="stat-value" id="players-count">0</div>
+                            <div class="stat-label">PLAYERS</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="bets-count">0</div>
+                            <div class="stat-label">BETS</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" id="round-number">1</div>
+                            <div class="stat-label">ROUND</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Bet Controls -->
+                <div class="bet-controls">
+                    <div class="bet-amount-display">
+                        <label>BET AMOUNT PER NUMBER</label>
+                        <div class="current-bet"><span id="current-bet">10</span> ETB</div>
+                    </div>
+                    
+                    <div class="chips-grid">
+                        <div class="chip selected" data-value="1">1 ETB</div>
+                        <div class="chip" data-value="5">5 ETB</div>
+                        <div class="chip" data-value="10">10 ETB</div>
+                        <div class="chip" data-value="25">25 ETB</div>
+                        <div class="chip" data-value="50">50 ETB</div>
+                        <div class="chip" data-value="100">100 ETB</div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="place-bet-btn">
+                        <i class="fas fa-play-circle"></i> PLACE BET
+                    </button>
+                    <button class="btn btn-secondary" id="clear-btn">
+                        <i class="fas fa-undo"></i> CLEAR SELECTION
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Results Panel -->
+            <div class="results-panel" id="results-panel">
+                <div class="results-header">
+                    <div class="results-title">
+                        <i class="fas fa-trophy"></i>
+                        DRAWN NUMBERS
+                    </div>
+                    <div class="round-number">ROUND #<span id="current-round">1</span></div>
+                </div>
+                
+                <div class="drawn-numbers-container">
+                    <div class="drawn-numbers" id="drawn-numbers">
+                        <div style="color: var(--text-secondary); text-align: center; padding: 40px; font-weight: 700; font-size: 15px;">
+                            <i class="fas fa-hourglass-half" style="margin-right: 10px;"></i>
+                            Waiting for next draw...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Winning Result -->
+                <div class="win-result" id="win-result" style="display: none;">
+                    <div class="win-title">🎉 CONGRATULATIONS! 🎉</div>
+                    <div class="win-amount"><span id="win-amount">0</span> ETB</div>
+                    <div class="match-details">
+                        Matched <span id="match-count">0</span> of <span id="selected-count-2">0</span> numbers
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>KENO PREMIUM • SHARED BALANCE WITH BINGO</p>
+            <p style="margin-top: 12px; font-size: 12px; color: var(--text-tertiary);">
+                <i class="fas fa-shield-alt" style="margin-right: 8px;"></i>
+                Secured by Telegram & Real-time Server
+            </p>
+        </footer>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script>
+        // ========== KENO GAME STATE ==========
+        const gameState = {
+            userId: null,
+            userName: null,
+            balance: 0,
+            totalWins: 0,
+            selectedNumbers: [],
+            betAmount: 10,
+            currentStake: 10, // Default stake amount
+            isConnected: false,
+            hasPlacedBet: false,
+            roundActive: false,
+            currentRound: 1,
+            countdown: 60,
+            drawnNumbers: [],
+            playersCount: 0,
+            betsCount: 0,
+            socket: null,
+            reconnectAttempts: 0,
+            maxReconnectAttempts: 10,
+            reconnectDelay: 3000
+        };
+        
+        // ========== DOM ELEMENTS ==========
+        const elements = {
+            connectionStatus: document.getElementById('connection-status'),
+            statusText: document.getElementById('status-text'),
+            balance: document.getElementById('balance'),
+            totalWins: document.getElementById('total-wins'),
+            kenoGrid: document.getElementById('keno-grid'),
+            selectedCount: document.getElementById('selected-count'),
+            selectionInfo: document.getElementById('selection-info'),
+            countdown: document.getElementById('countdown'),
+            playersCount: document.getElementById('players-count'),
+            betsCount: document.getElementById('bets-count'),
+            roundNumber: document.getElementById('round-number'),
+            currentRound: document.getElementById('current-round'),
+            currentBet: document.getElementById('current-bet'),
+            quickPickBtn: document.getElementById('quick-pick'),
+            placeBetBtn: document.getElementById('place-bet-btn'),
+            clearBtn: document.getElementById('clear-btn'),
+            drawnNumbers: document.getElementById('drawn-numbers'),
+            winResult: document.getElementById('win-result'),
+            winAmount: document.getElementById('win-amount'),
+            matchCount: document.getElementById('match-count'),
+            selectedCount2: document.getElementById('selected-count-2'),
+            controlPanel: document.getElementById('control-panel'),
+            resultsPanel: document.getElementById('results-panel')
+        };
+        
+        // ========== INITIALIZATION ==========
+        function initGame() {
+            console.log('🎰 Initializing Keno game...');
+            
+            // Get user data from localStorage or Telegram
+            loadUserData();
+            
+            // Create numbers grid
+            createNumbersGrid();
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Connect to WebSocket server
+            connectWebSocket();
+            
+            // Prevent zoom on double tap
+            document.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 1) e.preventDefault();
+            }, { passive: false });
+            
+            // Prevent context menu
+            document.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            });
+            
+            console.log('✅ Keno game initialized');
+        }
+        
+        function loadUserData() {
+            // Try to get user data from localStorage
+            const savedUser = localStorage.getItem('kenoUser');
+            if (savedUser) {
+                try {
+                    const userData = JSON.parse(savedUser);
+                    gameState.userId = userData.userId;
+                    gameState.userName = userData.userName;
+                    console.log(`👤 Loaded user from storage: ${gameState.userName}`);
+                } catch (e) {
+                    console.error('Error parsing saved user data:', e);
+                }
+            }
+            
+            // Try to get from Telegram WebApp
+            if (window.Telegram && Telegram.WebApp) {
+                const tg = Telegram.WebApp;
+                const user = tg.initDataUnsafe?.user;
+                
+                if (user) {
+                    gameState.userId = `tg_${user.id}`;
+                    gameState.userName = user.first_name || 'Telegram User';
+                    
+                    // Save to localStorage
+                    localStorage.setItem('kenoUser', JSON.stringify({
+                        userId: gameState.userId,
+                        userName: gameState.userName
+                    }));
+                    
+                    console.log(`👤 Telegram user detected: ${gameState.userName}`);
+                    
+                    // Expand WebApp
+                    tg.expand();
+                    tg.enableClosingConfirmation();
+                }
+            }
+            
+            // If no user found, generate a temporary one
+            if (!gameState.userId) {
+                gameState.userId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                gameState.userName = 'Guest Player';
+                console.log(`👤 Generated temporary user: ${gameState.userName}`);
+            }
+        }
+        
+        function createNumbersGrid() {
+            elements.kenoGrid.innerHTML = '';
+            
+            for (let i = 1; i <= 80; i++) {
+                const numElement = document.createElement('div');
+                numElement.className = 'keno-number';
+                numElement.textContent = i;
+                numElement.dataset.number = i;
+                
+                // Add click event
+                numElement.addEventListener('click', () => toggleNumberSelection(i));
+                
+                // Add touch event for mobile
+                numElement.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    toggleNumberSelection(i);
+                }, { passive: false });
+                
+                elements.kenoGrid.appendChild(numElement);
+            }
+        }
+        
+        function setupEventListeners() {
+            // Bet chips
+            document.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    if (!gameState.roundActive || !gameState.isConnected) return;
+                    
+                    // Remove selected class from all chips
+                    document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+                    
+                    // Add selected class to clicked chip
+                    this.classList.add('selected');
+                    
+                    // Update bet amount
+                    gameState.betAmount = parseInt(this.dataset.value);
+                    elements.currentBet.textContent = gameState.betAmount;
+                    
+                    // Provide haptic feedback if available
+                    if (navigator.vibrate) navigator.vibrate(50);
+                });
+            });
+            
+            // Quick pick button
+            elements.quickPickBtn.addEventListener('click', requestQuickPick);
+            elements.quickPickBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                requestQuickPick();
+            }, { passive: false });
+            
+            // Place bet button
+            elements.placeBetBtn.addEventListener('click', placeBet);
+            elements.placeBetBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                placeBet();
+            }, { passive: false });
+            
+            // Clear selection button
+            elements.clearBtn.addEventListener('click', clearSelection);
+            elements.clearBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                clearSelection();
+            }, { passive: false });
+            
+            // Handle page visibility changes
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && !gameState.isConnected) {
+                    connectWebSocket();
+                }
+            });
+            
+            // Prevent form submission
+            document.addEventListener('submit', (e) => e.preventDefault());
+        }
+        
+        // ========== WEBSOCKET CONNECTION ==========
+        function connectWebSocket() {
+            try {
+                // Close existing connection if any
+                if (gameState.socket) {
+                    gameState.socket.close();
+                }
+                
+                // Connect to server
+                gameState.socket = io();
+                
+                // Setup event handlers
+                gameState.socket.on('connect', handleSocketConnect);
+                gameState.socket.on('disconnect', handleSocketDisconnect);
+                gameState.socket.on('connect_error', handleSocketError);
+                
+                // Keno game events
+                gameState.socket.on('keno:welcome', handleWelcome);
+                gameState.socket.on('keno:balanceUpdate', handleBalanceUpdate);
+                gameState.socket.on('keno:roomStatus', handleRoomStatus);
+                gameState.socket.on('keno:roomJoined', handleRoomJoined);
+                gameState.socket.on('keno:betConfirmed', handleBetConfirmed);
+                gameState.socket.on('keno:quickPickResult', handleQuickPickResult);
+                gameState.socket.on('keno:roundStart', handleRoundStart);
+                gameState.socket.on('keno:countdownUpdate', handleCountdownUpdate);
+                gameState.socket.on('keno:drawStart', handleDrawStart);
+                gameState.socket.on('keno:numberDrawn', handleNumberDrawn);
+                gameState.socket.on('keno:drawComplete', handleDrawComplete);
+                gameState.socket.on('keno:roundResults', handleRoundResults);
+                gameState.socket.on('keno:playerWin', handlePlayerWin);
+                gameState.socket.on('keno:waitingPeriod', handleWaitingPeriod);
+                gameState.socket.on('keno:waitingUpdate', handleWaitingUpdate);
+                gameState.socket.on('keno:roomReset', handleRoomReset);
+                gameState.socket.on('keno:roomLeft', handleRoomLeft);
+                gameState.socket.on('keno:error', handleError);
+                gameState.socket.on('keno:insufficientBalance', handleInsufficientBalance);
+                gameState.socket.on('keno:selectionCleared', handleSelectionCleared);
+                gameState.socket.on('keno:heartbeat', handleHeartbeat);
+                gameState.socket.on('keno:statusUpdate', handleStatusUpdate);
+                
+            } catch (error) {
+                console.error('❌ WebSocket connection error:', error);
+                updateConnectionStatus(false, 'Connection failed');
+                attemptReconnect();
+            }
+        }
+        
+        function handleSocketConnect() {
+            console.log('✅ Connected to Keno server');
+            gameState.isConnected = true;
+            gameState.reconnectAttempts = 0;
+            updateConnectionStatus(true, 'CONNECTED');
+            
+            // Initialize game with server
+            initializeWithServer();
+            
+            // Start heartbeat
+            startHeartbeat();
+            
+            // Vibrate on successful connection
+            if (navigator.vibrate) navigator.vibrate(100);
+        }
+        
+        function handleSocketDisconnect() {
+            console.log('❌ Disconnected from server');
+            gameState.isConnected = false;
+            updateConnectionStatus(false, 'DISCONNECTED');
+            attemptReconnect();
+        }
+        
+        function handleSocketError(error) {
+            console.error('❌ Socket connection error:', error);
+            updateConnectionStatus(false, 'CONNECTION ERROR');
+        }
+        
+        function attemptReconnect() {
+            if (gameState.reconnectAttempts < gameState.maxReconnectAttempts) {
+                gameState.reconnectAttempts++;
+                const delay = Math.min(gameState.reconnectDelay * Math.pow(1.5, gameState.reconnectAttempts), 30000);
+                
+                updateConnectionStatus(false, `RECONNECTING IN ${Math.ceil(delay/1000)}S...`);
+                
+                setTimeout(() => {
+                    if (!gameState.isConnected) {
+                        connectWebSocket();
+                    }
+                }, delay);
+            } else {
+                updateConnectionStatus(false, 'FAILED TO CONNECT. REFRESH PAGE.');
+                showNotification('Failed to connect to server. Please refresh the page.', 'error');
+            }
+        }
+        
+        function updateConnectionStatus(connected, message) {
+            if (connected) {
+                elements.connectionStatus.className = 'connection-status status-connected';
+                elements.connectionStatus.innerHTML = `
+                    <div class="status-dot dot-connected"></div>
+                    <span id="status-text">${message}</span>
+                `;
+                elements.statusText = elements.connectionStatus.querySelector('#status-text');
+            } else {
+                elements.connectionStatus.className = 'connection-status status-disconnected';
+                elements.connectionStatus.innerHTML = `
+                    <div class="status-dot dot-disconnected"></div>
+                    <span id="status-text">${message}</span>
+                `;
+                elements.statusText = elements.connectionStatus.querySelector('#status-text');
+            }
+        }
+        
+        function startHeartbeat() {
+            setInterval(() => {
+                if (gameState.socket && gameState.socket.connected) {
+                    gameState.socket.emit('keno:heartbeat');
+                }
+            }, 25000);
+        }
+        
+        // ========== GAME EVENT HANDLERS ==========
+        function initializeWithServer() {
+            if (!gameState.socket || !gameState.socket.connected) {
+                console.error('Cannot initialize: Socket not connected');
+                return;
+            }
+            
+            console.log(`🎰 Initializing Keno for ${gameState.userName} (${gameState.userId})`);
+            
+            gameState.socket.emit('keno:init', {
+                userId: gameState.userId,
+                userName: gameState.userName
+            }, (response) => {
+                if (response && response.success) {
+                    console.log('✅ Keno initialization successful');
+                    
+                    // Join default room
+                    joinRoom(gameState.currentStake);
+                } else {
+                    console.error('❌ Keno initialization failed:', response?.message);
+                    showNotification('Failed to initialize game: ' + (response?.message || 'Unknown error'), 'error');
+                }
+            });
+        }
+        
+        function joinRoom(stake) {
+            if (!gameState.socket || !gameState.socket.connected) {
+                showNotification('Not connected to server', 'error');
+                return;
+            }
+            
+            console.log(`🎰 Joining Keno room ${stake} ETB`);
+            gameState.currentStake = stake;
+            
+            gameState.socket.emit('keno:joinRoom', {
+                stake: stake
+            }, (response) => {
+                if (response && response.success) {
+                    console.log(`✅ Joined Keno room ${stake} ETB`);
+                } else {
+                    console.error('❌ Failed to join room:', response?.message);
+                }
+            });
+        }
+        
+        function handleWelcome(data) {
+            console.log('🎰 Welcome to Keno:', data.message);
+            
+            // Update balance
+            if (data.balance !== undefined) {
+                gameState.balance = data.balance;
+                updateBalanceDisplay();
+            }
+            
+            // Show welcome notification
+            showNotification('Welcome to Keno Premium! Select numbers and place your bet.', 'info');
+        }
+        
+        function handleBalanceUpdate(balance) {
+            gameState.balance = balance;
+            updateBalanceDisplay();
+        }
+        
+        function handleRoomStatus(data) {
+            // Update room status display
+            console.log('📊 Room status update:', data);
+        }
+        
+        function handleRoomJoined(data) {
+            console.log(`✅ Joined room ${data.stake} ETB`);
+            
+            // Update game state
+            gameState.roundActive = data.status === 'betting';
+            gameState.currentRound = data.roundNumber || 1;
+            gameState.countdown = data.countdown || 60;
+            
+            // Update displays
+            updateRoundDisplay();
+            updateCountdownDisplay();
+            
+            if (data.status === 'betting') {
+                showNotification(`Round ${data.roundNumber} started! Place your bet.`, 'info');
+            }
+        }
+        
+        function handleBetConfirmed(data) {
+            console.log('✅ Bet confirmed:', data);
+            
+            gameState.hasPlacedBet = true;
+            gameState.balance = data.newBalance;
+            
+            // Update balance display
+            updateBalanceDisplay();
+            
+            // Disable bet button
+            elements.placeBetBtn.disabled = true;
+            elements.placeBetBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
+            
+            // Show success notification
+            showNotification(`Bet placed: ${data.totalBet} ETB on ${data.selectedNumbers.length} numbers`, 'success');
+            
+            // Provide haptic feedback
+            if (navigator.vibrate) navigator.vibrate(100);
+        }
+        
+        function handleQuickPickResult(data) {
+            console.log('🎰 Quick pick result:', data);
+            
+            if (data.success) {
+                // Clear current selection
+                clearSelection();
+                
+                // Select the quick pick numbers
+                data.numbers.forEach(number => {
+                    toggleNumberSelection(number);
+                });
+                
+                showNotification(`Quick pick: ${data.numbers.length} numbers selected`, 'info');
+                
+                // Provide haptic feedback
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+        }
+        
+        function handleRoundStart(data) {
+            console.log('🎰 Round started:', data);
+            
+            gameState.roundActive = true;
+            gameState.hasPlacedBet = false;
+            gameState.currentRound = data.roundNumber;
+            gameState.countdown = data.duration || 60;
+            gameState.drawnNumbers = [];
+            
+            // Update displays
+            updateRoundDisplay();
+            updateCountdownDisplay();
+            
+            // Enable bet button
+            elements.placeBetBtn.disabled = false;
+            elements.placeBetBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            
+            // Clear previous drawn numbers
+            clearDrawnNumbersDisplay();
+            
+            // Hide win result
+            elements.winResult.style.display = 'none';
+            
+            // Clear selection
+            clearSelection();
+            
+            showNotification(`Round ${data.roundNumber} started! Place your bet.`, 'info');
+            
+            // Provide haptic feedback
+            if (navigator.vibrate) navigator.vibrate(150);
+        }
+        
+        function handleCountdownUpdate(data) {
+            gameState.countdown = data.countdown;
+            gameState.playersCount = data.playersCount || 0;
+            gameState.betsCount = data.totalPrizePool || 0;
+            
+            updateCountdownDisplay();
+            updatePlayersDisplay();
+        }
+        
+        function handleDrawStart(data) {
+            console.log('🎰 Draw starting:', data);
+            
+            gameState.roundActive = false;
+            gameState.hasPlacedBet = true;
+            
+            // Disable controls
+            elements.placeBetBtn.disabled = true;
+            document.querySelectorAll('.chip').forEach(chip => chip.style.pointerEvents = 'none');
+            document.querySelectorAll('.keno-number').forEach(num => num.style.pointerEvents = 'none');
+            
+            showNotification('Drawing numbers...', 'info');
+            
+            // Provide haptic feedback
+            if (navigator.vibrate) navigator.vibrate(100);
+        }
+        
+        function handleNumberDrawn(data) {
+            console.log(`🎰 Number drawn: ${data.number} (${data.drawNumber}/${data.totalDraws})`);
+            
+            gameState.drawnNumbers = data.drawnNumbers || [];
+            
+            // Update drawn numbers display
+            updateDrawnNumbersDisplay();
+            
+            // Highlight number in grid
+            const numberElement = document.querySelector(`.keno-number[data-number="${data.number}"]`);
+            if (numberElement) {
+                // Add drawn class
+                numberElement.classList.add('drawn');
+                
+                // Check if this number was selected by the player
+                if (gameState.selectedNumbers.includes(data.number)) {
+                    numberElement.classList.add('matched');
+                    
+                    // Provide haptic feedback for match
+                    if (navigator.vibrate) navigator.vibrate(50);
+                }
+                
+                // Add animation
+                numberElement.style.animation = 'popIn 0.4s ease-out';
+                setTimeout(() => {
+                    numberElement.style.animation = '';
+                }, 400);
+            }
+        }
+        
+        function handleDrawComplete(data) {
+            console.log('🎰 Draw complete:', data);
+            
+            showNotification(`Draw complete! ${data.drawnNumbers.length} numbers drawn.`, 'info');
+            
+            // Provide haptic feedback
+            if (navigator.vibrate) navigator.vibrate(150);
+        }
+        
+        function handleRoundResults(data) {
+            console.log('🎰 Round results:', data);
+            
+            // Update game stats
+            gameState.playersCount = data.playersCount || 0;
+            updatePlayersDisplay();
+            
+            showNotification(`Round ${data.roundNumber} completed! ${data.winnersCount} winner(s).`, 'info');
+        }
+        
+        function handlePlayerWin(data) {
+            console.log('🎰 Player win:', data);
+            
+            // Check if this win is for the current player
+            if (data.playerId === gameState.userId) {
+                gameState.totalWins += data.winnings;
+                gameState.balance = data.newBalance;
+                
+                // Update displays
+                updateBalanceDisplay();
+                elements.totalWins.textContent = gameState.totalWins.toLocaleString() + ' ETB';
+                
+                // Show win result
+                elements.winAmount.textContent = data.winnings.toLocaleString();
+                elements.matchCount.textContent = data.matches;
+                elements.selectedCount2.textContent = gameState.selectedNumbers.length;
+                elements.winResult.style.display = 'block';
+                
+                // Scroll to results
+                elements.resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                // Show big win notification
+                showNotification(`🎉 YOU WON ${data.winnings.toLocaleString()} ETB! 🎉`, 'success');
+                
+                // Provide celebration haptic feedback
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
+            }
+        }
+        
+        function handleWaitingPeriod(data) {
+            console.log('⏱️ Waiting period:', data);
+            
+            showNotification(`Next round starts in ${data.duration} seconds...`, 'info');
+        }
+        
+        function handleWaitingUpdate(data) {
+            // Update waiting timer if displayed
+            console.log('⏱️ Waiting update:', data);
+        }
+        
+        function handleRoomReset(data) {
+            console.log('🔄 Room reset:', data);
+            
+            gameState.roundActive = false;
+            gameState.hasPlacedBet = false;
+            gameState.currentRound = data.roundNumber;
+            
+            // Update displays
+            updateRoundDisplay();
+            
+            // Enable controls
+            elements.placeBetBtn.disabled = false;
+            elements.placeBetBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            document.querySelectorAll('.chip').forEach(chip => chip.style.pointerEvents = 'auto');
+            document.querySelectorAll('.keno-number').forEach(num => num.style.pointerEvents = 'auto');
+            
+            // Clear drawn numbers display
+            clearDrawnNumbersDisplay();
+            
+            // Hide win result
+            elements.winResult.style.display = 'none';
+            
+            showNotification(`Round ${data.roundNumber} starting soon...`, 'info');
+        }
+        
+        function handleRoomLeft(data) {
+            console.log('🚪 Left room:', data);
+            
+            // Reset game state for this room
+            gameState.hasPlacedBet = false;
+            gameState.selectedNumbers = [];
+            updateSelectionDisplay();
+            
+            showNotification(`Left room ${data.stake} ETB`, 'info');
+        }
+        
+        function handleError(data) {
+            console.error('❌ Keno error:', data);
+            showNotification(data.message || 'An error occurred', 'error');
+        }
+        
+        function handleInsufficientBalance(data) {
+            console.log('💰 Insufficient balance:', data);
+            showNotification(`Insufficient balance. Required: ${data.required} ETB, Available: ${data.current} ETB`, 'error');
+        }
+        
+        function handleSelectionCleared() {
+            clearSelection();
+        }
+        
+        function handleHeartbeat(data) {
+            // Keep connection alive
+            console.log('💓 Heartbeat received:', data);
+        }
+        
+        function handleStatusUpdate(data) {
+            // Update overall game status
+            console.log('📊 Status update:', data);
+        }
+        
+        // ========== GAME FUNCTIONS ==========
+        function toggleNumberSelection(number) {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+            
+            const index = gameState.selectedNumbers.indexOf(number);
+            const element = document.querySelector(`.keno-number[data-number="${number}"]`);
+            
+            if (index === -1) {
+                // Add number if we haven't reached the limit
+                if (gameState.selectedNumbers.length < 10) {
+                    gameState.selectedNumbers.push(number);
+                    element.classList.add('selected');
+                    
+                    // Animate selection counter
+                    elements.selectionInfo.classList.add('updated');
+                    setTimeout(() => {
+                        elements.selectionInfo.classList.remove('updated');
+                    }, 300);
+                    
+                    // Provide haptic feedback
+                    if (navigator.vibrate) navigator.vibrate(30);
+                } else {
+                    showNotification('Maximum 10 numbers can be selected', 'warning');
+                }
+            } else {
+                // Remove number
+                gameState.selectedNumbers.splice(index, 1);
+                element.classList.remove('selected');
+                
+                // Provide haptic feedback
+                if (navigator.vibrate) navigator.vibrate(30);
+            }
+            
+            updateSelectionDisplay();
+        }
+        
+        function clearSelection() {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+            
+            // Remove selected class from all numbers
+            gameState.selectedNumbers.forEach(number => {
+                const element = document.querySelector(`.keno-number[data-number="${number}"]`);
+                if (element) element.classList.remove('selected');
+            });
+            
+            // Clear selection array
+            gameState.selectedNumbers = [];
+            
+            // Update display
+            updateSelectionDisplay();
+            
+            // Provide haptic feedback
+            if (navigator.vibrate) navigator.vibrate(50);
+        }
+        
+        function requestQuickPick() {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) {
+                showNotification('Cannot quick pick now', 'error');
+                return;
+            }
+            
+            if (!gameState.socket || !gameState.socket.connected) {
+                showNotification('Not connected to server', 'error');
+                return;
+            }
+            
+            console.log('🎰 Requesting quick pick...');
+            
+            gameState.socket.emit('keno:quickPick', {
+                count: 10
+            }, (response) => {
+                if (response && response.success) {
+                    console.log('✅ Quick pick successful');
+                } else {
+                    console.error('❌ Quick pick failed:', response?.message);
+                }
+            });
+        }
+        
+        function placeBet() {
+            if (!gameState.roundActive || !gameState.isConnected) {
+                showNotification('Round not active', 'error');
+                return;
+            }
+            
+            if (gameState.hasPlacedBet) {
+                showNotification('Already placed bet', 'error');
+                return;
+            }
+            
+            if (!gameState.socket || !gameState.socket.connected) {
+                showNotification('Not connected to server', 'error');
+                return;
+            }
+            
+            if (gameState.selectedNumbers.length === 0) {
+                showNotification('Please select numbers', 'error');
+                return;
+            }
+            
+            // Calculate total bet
+            const totalBet = gameState.betAmount * gameState.selectedNumbers.length;
+            
+            if (gameState.balance < totalBet) {
+                showNotification(`Insufficient balance. Required: ${totalBet} ETB`, 'error');
+                return;
+            }
+            
+            console.log(`🎰 Placing bet: ${totalBet} ETB on ${gameState.selectedNumbers.length} numbers`);
+            
+            // Send bet to server
+            gameState.socket.emit('keno:placeBet', {
+                stake: gameState.currentStake,
+                selectedNumbers: gameState.selectedNumbers,
+                betAmount: gameState.betAmount
+            }, (response) => {
+                if (response && response.success) {
+                    console.log('✅ Bet placed successfully');
+                } else {
+                    console.error('❌ Bet placement failed:', response?.message);
+                    showNotification(response?.message || 'Failed to place bet', 'error');
+                }
+            });
+        }
+        
+        // ========== DISPLAY FUNCTIONS ==========
+        function updateBalanceDisplay() {
+            elements.balance.textContent = gameState.balance.toLocaleString() + ' ETB';
+        }
+        
+        function updateSelectionDisplay() {
+            elements.selectedCount.textContent = gameState.selectedNumbers.length;
+        }
+        
+        function updateCountdownDisplay() {
+            const minutes = Math.floor(gameState.countdown / 60);
+            const seconds = gameState.countdown % 60;
+            elements.countdown.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Change color when time is running out
+            if (gameState.countdown <= 10) {
+                elements.countdown.style.color = '#ef4444';
+                elements.countdown.style.textShadow = '0 0 20px rgba(239, 68, 68, 0.8)';
+                
+                // Provide haptic feedback for last 5 seconds
+                if (gameState.countdown <= 5 && navigator.vibrate) {
+                    navigator.vibrate(100);
+                }
+            } else {
+                elements.countdown.style.color = '#fbbf24';
+                elements.countdown.style.textShadow = '0 0 20px rgba(251, 191, 36, 0.8)';
+            }
+        }
+        
+        function updateRoundDisplay() {
+            elements.roundNumber.textContent = gameState.currentRound;
+            elements.currentRound.textContent = gameState.currentRound;
+        }
+        
+        function updatePlayersDisplay() {
+            elements.playersCount.textContent = gameState.playersCount;
+            elements.betsCount.textContent = gameState.betsCount;
+        }
+        
+        function updateDrawnNumbersDisplay() {
+            elements.drawnNumbers.innerHTML = '';
+            
+            if (gameState.drawnNumbers.length === 0) {
+                elements.drawnNumbers.innerHTML = `
+                    <div style="color: var(--text-secondary); text-align: center; padding: 40px; font-weight: 700; font-size: 15px;">
+                        <i class="fas fa-hourglass-half" style="margin-right: 10px;"></i>
+                        Waiting for draw...
+                    </div>
+                `;
+                return;
+            }
+            
+            gameState.drawnNumbers.forEach(number => {
+                const numElement = document.createElement('div');
+                numElement.className = 'keno-number drawn';
+                numElement.textContent = number;
+                
+                // Check if this number was selected by the player
+                if (gameState.selectedNumbers.includes(number)) {
+                    numElement.classList.add('matched');
+                }
+                
+                elements.drawnNumbers.appendChild(numElement);
+            });
+        }
+        
+        function clearDrawnNumbersDisplay() {
+            // Remove drawn and matched classes from all numbers
+            document.querySelectorAll('.keno-number').forEach(element => {
+                element.classList.remove('drawn', 'matched');
+            });
+            
+            // Clear drawn numbers container
+            elements.drawnNumbers.innerHTML = `
+                <div style="color: var(--text-secondary); text-align: center; padding: 40px; font-weight: 700; font-size: 15px;">
+                    <i class="fas fa-hourglass-half" style="margin-right: 10px;"></i>
+                    Waiting for next draw...
+                </div>
+            `;
+        }
+        
+        // ========== NOTIFICATION SYSTEM ==========
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 400);
+            }, 3500);
+        }
+        
+        // ========== INITIALIZE GAME ==========
+        document.addEventListener('DOMContentLoaded', initGame);
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', (e) => {
+            if (gameState.roundActive || gameState.hasPlacedBet) {
+                e.preventDefault();
+                e.returnValue = 'You have an active game. Are you sure you want to leave?';
+                return 'You have an active game. Are you sure you want to leave?';
+            }
+        });
+        
+        // Handle page visibility
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && (gameState.roundActive || gameState.hasPlacedBet)) {
+                showNotification('Game is still running in background', 'warning');
+            }
+        });
+    </script>
+</body>
+</html>
