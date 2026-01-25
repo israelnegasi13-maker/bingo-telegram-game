@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KENO ULTRA - Telegram Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -36,8 +35,8 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: var(--dark-bg);
             color: var(--text-primary);
-            min-height: 100vh;
-            overflow-x: hidden;
+            height: 100vh;
+            overflow: hidden;
             background-image: 
                 radial-gradient(at 40% 20%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
                 radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
@@ -47,44 +46,45 @@
         }
         
         .container {
-            min-height: 100vh;
-            padding: 16px;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            padding: 8px;
         }
         
-        /* Header */
+        /* Header - Compact */
         .app-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px;
+            padding: 10px 12px;
             background: var(--glass-bg);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
+            border-radius: 12px;
             border: 1px solid var(--glass-border);
-            margin-bottom: 16px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
         }
         
         .logo-section {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
         }
         
         .logo-icon {
-            width: 44px;
-            height: 44px;
+            width: 36px;
+            height: 36px;
             background: var(--primary-gradient);
-            border-radius: 12px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 18px;
         }
         
         .logo-text h1 {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 800;
             background: var(--primary-gradient);
             -webkit-background-clip: text;
@@ -94,66 +94,68 @@
         }
         
         .logo-text p {
-            font-size: 11px;
+            font-size: 9px;
             color: var(--text-secondary);
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
         
-        /* User Info */
+        /* User Info - Compact */
         .user-info {
             display: flex;
-            gap: 10px;
+            gap: 6px;
         }
         
         .balance-card {
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 12px;
-            padding: 12px 16px;
-            min-width: 120px;
+            border-radius: 8px;
+            padding: 8px 10px;
+            min-width: 80px;
         }
         
         .balance-label {
-            font-size: 10px;
+            font-size: 8px;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
         }
         
         .balance-amount {
-            font-size: 20px;
+            font-size: 14px;
             font-weight: 800;
             color: var(--accent-color);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
         
         .balance-amount::before {
             content: '💰';
+            font-size: 12px;
         }
         
         /* Connection Status */
         .connection-status {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
+            gap: 6px;
+            padding: 6px 10px;
             background: rgba(16, 185, 129, 0.1);
             border: 1px solid rgba(16, 185, 129, 0.2);
-            border-radius: 12px;
-            font-size: 12px;
+            border-radius: 8px;
+            font-size: 10px;
             font-weight: 600;
             color: var(--success);
-            margin-bottom: 16px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
         }
         
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             background: var(--success);
             border-radius: 50%;
             animation: pulse 2s infinite;
@@ -164,63 +166,59 @@
             50% { opacity: 0.5; }
         }
         
-        /* Game Container */
-        .game-container {
+        /* Main Content Area - Fixed height, no scroll */
+        .main-content {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 8px;
             flex: 1;
+            overflow: hidden;
         }
         
-        /* Game Board */
+        /* Game Board - Fixed height */
         .game-board {
             background: var(--glass-bg);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 12px;
             border: 1px solid var(--glass-border);
+            flex: 0 0 auto;
         }
         
         .board-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .board-title h2 {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         
         .board-title p {
-            font-size: 12px;
+            font-size: 10px;
             color: var(--text-secondary);
         }
         
         .selection-info {
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.2);
-            border-radius: 8px;
-            padding: 8px 12px;
+            border-radius: 6px;
+            padding: 6px 8px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 11px;
             color: var(--danger);
         }
         
-        /* Numbers Grid */
+        /* Numbers Grid - More compact */
         .numbers-grid {
             display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-        
-        @media (min-width: 480px) {
-            .numbers-grid {
-                grid-template-columns: repeat(10, 1fr);
-            }
+            grid-template-columns: repeat(10, 1fr);
+            gap: 4px;
+            margin-bottom: 12px;
         }
         
         .keno-number {
@@ -229,14 +227,15 @@
             align-items: center;
             justify-content: center;
             background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
+            border-radius: 4px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 11px;
             cursor: pointer;
             transition: all 0.2s;
             user-select: none;
             border: 1px solid transparent;
             color: var(--text-primary);
+            position: relative;
         }
         
         .keno-number:hover {
@@ -249,18 +248,18 @@
             color: white;
             border-color: var(--accent-color);
             transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(245, 87, 108, 0.5);
+            box-shadow: 0 0 10px rgba(245, 87, 108, 0.5);
         }
         
         .keno-number.selected::after {
             content: '✓';
             position: absolute;
-            top: 2px;
-            right: 2px;
-            font-size: 8px;
+            top: 1px;
+            right: 1px;
+            font-size: 7px;
             background: rgba(0, 0, 0, 0.3);
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -271,28 +270,41 @@
             background: var(--primary-gradient);
             color: white;
             font-weight: 800;
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+            animation: pop 0.5s ease;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
         }
         
         .keno-number.matched {
             background: var(--success);
             color: white;
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+            animation: celebrate 0.5s ease;
+        }
+        
+        @keyframes celebrate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
         }
         
         .quick-pick-btn {
             width: 100%;
-            padding: 14px;
+            padding: 10px;
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 12px;
+            border-radius: 8px;
             color: var(--info);
             font-weight: 700;
-            font-size: 14px;
+            font-size: 11px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
             cursor: pointer;
             transition: all 0.3s;
         }
@@ -305,42 +317,44 @@
         .control-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 12px;
             border: 1px solid var(--glass-border);
+            flex: 0 0 auto;
+            position: relative;
         }
         
-        /* Round Timer */
+        /* Round Timer - Compact */
         .round-timer {
             background: var(--secondary-gradient);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 12px;
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .timer-label {
-            font-size: 12px;
+            font-size: 10px;
             color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
         
         .timer-display {
-            font-size: 36px;
+            font-size: 24px;
             font-weight: 900;
             color: white;
-            margin: 12px 0;
+            margin: 8px 0;
             font-family: 'Courier New', monospace;
-            text-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
         }
         
         .game-stats {
             display: flex;
             justify-content: space-around;
-            margin-top: 16px;
-            gap: 8px;
+            margin-top: 8px;
+            gap: 6px;
         }
         
         .stat-item {
@@ -348,75 +362,77 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 10px;
+            padding: 6px;
             background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
+            border-radius: 6px;
         }
         
         .stat-value {
-            font-size: 20px;
+            font-size: 14px;
             font-weight: 800;
             color: white;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         
         .stat-label {
-            font-size: 10px;
+            font-size: 8px;
             color: rgba(255, 255, 255, 0.8);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
         
         /* Bet Controls */
         .bet-controls {
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         .bet-amount-display {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .bet-amount-display label {
-            font-size: 12px;
+            font-size: 10px;
             color: var(--text-secondary);
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
         }
         
         .current-bet {
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 800;
             color: var(--accent-color);
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
         
         .current-bet::before {
             content: '🎯';
+            font-size: 16px;
         }
         
-        /* Chips */
+        /* Chips - Updated to 5,10,20,50,100 */
         .chips-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
         }
         
         .chip {
-            padding: 16px;
+            padding: 10px 4px;
             background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
+            border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: var(--text-primary);
             font-weight: 700;
+            font-size: 11px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s;
@@ -425,36 +441,36 @@
         .chip:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: rgba(59, 130, 246, 0.3);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }
         
         .chip.selected {
             background: var(--secondary-gradient);
             color: white;
             border-color: var(--accent-color);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(245, 87, 108, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
         }
         
         /* Action Buttons */
         .action-buttons {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
         
         .btn {
-            padding: 18px;
+            padding: 12px;
             border: none;
-            border-radius: 12px;
+            border-radius: 8px;
             font-weight: 700;
-            font-size: 15px;
+            font-size: 12px;
             cursor: pointer;
             transition: all 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 8px;
         }
         
         .btn-primary {
@@ -464,8 +480,8 @@
         }
         
         .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
         }
         
         .btn-primary:disabled {
@@ -482,200 +498,130 @@
         
         .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             border-color: rgba(59, 130, 246, 0.3);
         }
         
-        /* Results Panel */
+        /* Results Panel - Fixed height with scroll if needed */
         .results-panel {
             background: var(--glass-bg);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 12px;
+            padding: 12px;
             border: 1px solid var(--glass-border);
-            margin-top: 16px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
         
         .results-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
+            margin-bottom: 10px;
+            flex-shrink: 0;
         }
         
         .results-title {
-            font-size: 16px;
+            font-size: 13px;
             font-weight: 700;
             color: var(--accent-color);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
         
         .results-title::before {
             content: '🎯';
+            font-size: 12px;
         }
         
         .round-number {
-            font-size: 12px;
+            font-size: 10px;
             color: var(--text-secondary);
             background: rgba(255, 255, 255, 0.05);
-            padding: 6px 12px;
-            border-radius: 20px;
+            padding: 4px 8px;
+            border-radius: 12px;
             font-weight: 600;
         }
         
         .drawn-numbers-container {
             background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 20px;
-            min-height: 100px;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            flex: 1;
+            overflow-y: auto;
         }
         
         .drawn-numbers {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 6px;
             justify-content: center;
             align-items: center;
-            min-height: 60px;
+            min-height: 50px;
         }
         
         /* Win Result */
         .win-result {
             background: var(--success);
-            border-radius: 16px;
-            padding: 24px;
+            border-radius: 12px;
+            padding: 16px;
             border: 2px solid var(--accent-color);
             animation: slideIn 0.6s ease;
             display: none;
+            margin-top: 8px;
         }
         
         @keyframes slideIn {
-            from { transform: translateY(-20px); opacity: 0; }
+            from { transform: translateY(-10px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
         
         .win-title {
             color: white;
-            font-size: 20px;
+            font-size: 14px;
             font-weight: 800;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             text-align: center;
         }
         
         .win-amount {
-            font-size: 36px;
+            font-size: 24px;
             font-weight: 900;
             color: var(--accent-color);
-            margin-bottom: 16px;
+            margin-bottom: 10px;
             text-align: center;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
         
         .match-details {
-            font-size: 14px;
+            font-size: 11px;
             color: rgba(255, 255, 255, 0.9);
             font-weight: 600;
             text-align: center;
         }
         
-        /* Game History */
-        .game-history {
-            margin-top: 20px;
-        }
-        
-        .history-title {
-            font-size: 14px;
-            color: var(--accent-color);
-            margin-bottom: 12px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .history-title::before {
-            content: '📊';
-        }
-        
-        .history-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            padding-right: 8px;
-        }
-        
-        .history-item {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 14px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.3s;
-        }
-        
-        .history-item.win {
-            border-left: 4px solid var(--success);
-        }
-        
-        .history-item.loss {
-            border-left: 4px solid var(--danger);
-        }
-        
-        .history-round {
-            font-size: 10px;
-            color: var(--text-secondary);
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .history-numbers {
-            font-size: 13px;
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-        
-        .history-result {
-            font-size: 13px;
-            font-weight: 700;
-            padding: 8px 12px;
-            border-radius: 20px;
-            min-width: 90px;
-            text-align: center;
-        }
-        
-        .history-result.win {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-        }
-        
-        .history-result.loss {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-        }
-        
-        /* Footer */
+        /* Footer - Smaller */
         .app-footer {
             text-align: center;
-            padding: 20px 0;
-            margin-top: 20px;
+            padding: 10px 0;
+            margin-top: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             color: var(--text-secondary);
             font-weight: 500;
-            font-size: 12px;
+            font-size: 10px;
+            flex-shrink: 0;
         }
         
         /* Loading Spinner */
         .spinner {
-            width: 24px;
-            height: 24px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             border-top-color: var(--accent-color);
             animation: spin 1s linear infinite;
@@ -697,7 +643,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-radius: 16px;
+            border-radius: 12px;
             z-index: 100;
             backdrop-filter: blur(20px);
         }
@@ -707,37 +653,37 @@
         }
         
         .waiting-text {
-            font-size: 20px;
+            font-size: 14px;
             font-weight: 800;
             color: var(--accent-color);
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             text-align: center;
         }
         
         .waiting-timer {
-            font-size: 48px;
+            font-size: 32px;
             font-weight: 900;
             color: var(--accent-color);
             font-family: 'Courier New', monospace;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
         
         /* Notification */
         .notification {
             position: fixed;
-            top: 20px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%) translateY(-100px);
-            padding: 16px 24px;
-            border-radius: 12px;
+            padding: 10px 16px;
+            border-radius: 8px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 12px;
             z-index: 1000;
             opacity: 0;
             transition: all 0.4s;
             text-align: center;
             max-width: 90%;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(20px);
             border: 1px solid;
         }
@@ -771,48 +717,86 @@
             border-color: var(--warning);
         }
         
-        /* Responsive */
-        @media (max-width: 380px) {
-            .numbers-grid {
-                grid-template-columns: repeat(6, 1fr);
-                gap: 6px;
-            }
-            
-            .chips-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .user-info {
-                flex-direction: column;
-                gap: 8px;
-            }
-            
-            .balance-card {
-                min-width: 100%;
-            }
-            
-            .timer-display {
-                font-size: 32px;
-            }
-            
-            .win-amount {
-                font-size: 32px;
-            }
-        }
-        
         /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         
         ::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
+            border-radius: 2px;
         }
         
         ::-webkit-scrollbar-thumb {
             background: var(--primary-gradient);
-            border-radius: 3px;
+            border-radius: 2px;
+        }
+        
+        /* No Players Warning */
+        .no-players-warning {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 11px;
+            color: var(--danger);
+            font-weight: 600;
+            display: none;
+        }
+        
+        /* Game Ended Overlay */
+        .game-ended-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .game-ended-overlay.active {
+            display: flex;
+        }
+        
+        .game-ended-text {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--accent-color);
+            margin-bottom: 12px;
+        }
+        
+        .game-ended-subtext {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        
+        .restart-btn {
+            padding: 10px 20px;
+            background: var(--secondary-gradient);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .restart-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
         }
     </style>
 </head>
@@ -822,6 +806,12 @@
         <div class="connection-status" id="connection-status">
             <div class="status-dot"></div>
             <span id="status-text">CONNECTING...</span>
+        </div>
+        
+        <!-- No Players Warning -->
+        <div class="no-players-warning" id="no-players-warning">
+            <i class="fas fa-users-slash" style="margin-right: 6px;"></i>
+            WAITING FOR PLAYERS - GAME PAUSED
         </div>
         
         <!-- Header -->
@@ -847,17 +837,17 @@
             </div>
         </header>
         
-        <!-- Main Game -->
-        <div class="game-container">
+        <!-- Main Content -->
+        <div class="main-content">
             <!-- Game Board -->
             <div class="game-board">
                 <div class="board-header">
                     <div class="board-title">
                         <h2>SELECT NUMBERS</h2>
-                        <p>Choose 1-10 numbers from 1-80</p>
+                        <p>Choose 1-5 numbers from 1-80</p>
                     </div>
                     <div class="selection-info">
-                        SELECTED: <span id="selected-count">0</span>/10
+                        SELECTED: <span id="selected-count">0</span>/5
                     </div>
                 </div>
                 
@@ -872,11 +862,21 @@
             
             <!-- Control Panel -->
             <div class="control-panel" id="control-panel">
+                <!-- Game Ended Overlay -->
+                <div class="game-ended-overlay" id="game-ended-overlay">
+                    <div class="game-ended-text">GAME PAUSED</div>
+                    <div class="game-ended-subtext">Waiting for players to join...</div>
+                    <button class="restart-btn" id="restart-game-btn">
+                        <i class="fas fa-play"></i> RESTART GAME
+                    </button>
+                </div>
+                
+                <!-- Waiting Overlay -->
                 <div class="waiting-overlay" id="waiting-overlay">
                     <div class="waiting-text">NEXT ROUND STARTS IN</div>
-                    <div class="waiting-timer" id="wait-timer">10</div>
-                    <div style="color: var(--text-secondary); margin-top: 16px; font-weight: 600; font-size: 14px;">
-                        Please wait for the next round
+                    <div class="waiting-timer" id="wait-timer">30</div>
+                    <div style="color: var(--text-secondary); margin-top: 12px; font-weight: 600; font-size: 11px;">
+                        Get ready for next round!
                     </div>
                 </div>
                 
@@ -904,14 +904,13 @@
                 <div class="bet-controls">
                     <div class="bet-amount-display">
                         <label>BET AMOUNT</label>
-                        <div class="current-bet"><span id="current-bet">10</span> ETB</div>
+                        <div class="current-bet"><span id="current-bet">5</span> ETB</div>
                     </div>
                     
                     <div class="chips-grid">
-                        <div class="chip selected" data-value="1">1 ETB</div>
-                        <div class="chip" data-value="5">5 ETB</div>
+                        <div class="chip selected" data-value="5">5 ETB</div>
                         <div class="chip" data-value="10">10 ETB</div>
-                        <div class="chip" data-value="25">25 ETB</div>
+                        <div class="chip" data-value="20">20 ETB</div>
                         <div class="chip" data-value="50">50 ETB</div>
                         <div class="chip" data-value="100">100 ETB</div>
                     </div>
@@ -937,8 +936,8 @@
                 
                 <div class="drawn-numbers-container">
                     <div class="drawn-numbers" id="drawn-numbers">
-                        <div style="color: var(--text-secondary); text-align: center; padding: 30px; font-weight: 600; font-size: 14px;">
-                            <i class="fas fa-hourglass-half" style="margin-right: 8px;"></i>
+                        <div style="color: var(--text-secondary); text-align: center; padding: 20px; font-weight: 600; font-size: 12px;">
+                            <i class="fas fa-hourglass-half" style="margin-right: 6px;"></i>
                             Waiting for next draw...
                         </div>
                     </div>
@@ -953,24 +952,13 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- Game History -->
-            <div class="game-history">
-                <div class="history-title">RECENT GAMES</div>
-                <div class="history-list" id="history-list">
-                    <div style="color: var(--text-secondary); text-align: center; padding: 30px; font-weight: 600; font-size: 13px;">
-                        <i class="fas fa-history" style="margin-right: 8px;"></i>
-                        Game history will appear here
-                    </div>
-                </div>
-            </div>
         </div>
         
         <!-- Footer -->
         <footer class="app-footer">
             <p>KENO ULTRA • SHARED WALLET WITH BINGO ELITE</p>
-            <p style="margin-top: 8px; font-size: 11px; color: rgba(148, 163, 184, 0.7);">
-                <i class="fas fa-shield-alt" style="margin-right: 6px;"></i>
+            <p style="margin-top: 4px; font-size: 9px; color: rgba(148, 163, 184, 0.7);">
+                <i class="fas fa-shield-alt" style="margin-right: 4px;"></i>
                 Secured by Premium Gaming Server
             </p>
         </footer>
@@ -990,7 +978,7 @@
             playerId: null,
             userName: null,
             selectedNumbers: [],
-            betAmount: 10,
+            betAmount: 5,
             balance: 0,
             totalWinnings: 0,
             roundActive: false,
@@ -1004,8 +992,10 @@
             isConnected: false,
             hasPlacedBet: false,
             waitingPeriod: false,
-            waitingTime: 10,
-            lastUpdate: Date.now()
+            waitingTime: 30,
+            lastUpdate: Date.now(),
+            maxSelections: 5, // Changed from 10 to 5
+            gamePaused: false
         };
         
         // DOM Elements
@@ -1028,12 +1018,14 @@
             winAmount: document.getElementById('win-amount'),
             matchCount: document.getElementById('match-count'),
             selectedCount2: document.getElementById('selected-count-2'),
-            historyList: document.getElementById('history-list'),
             connectionStatus: document.getElementById('connection-status'),
             statusText: document.getElementById('status-text'),
             controlPanel: document.getElementById('control-panel'),
             waitingOverlay: document.getElementById('waiting-overlay'),
-            waitTimer: document.getElementById('wait-timer')
+            waitTimer: document.getElementById('wait-timer'),
+            noPlayersWarning: document.getElementById('no-players-warning'),
+            gameEndedOverlay: document.getElementById('game-ended-overlay'),
+            restartGameBtn: document.getElementById('restart-game-btn')
         };
         
         // Initialize Game
@@ -1116,7 +1108,7 @@
             // Bet Chips
             document.querySelectorAll('.chip').forEach(chip => {
                 chip.addEventListener('click', function() {
-                    if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+                    if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet || gameState.gamePaused) return;
                     
                     document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
                     this.classList.add('selected');
@@ -1149,6 +1141,18 @@
                 requestQuickPick();
             }, { passive: false });
             
+            // Restart Game Button
+            elements.restartGameBtn.addEventListener('click', () => {
+                if (gameState.ws && gameState.ws.readyState === WebSocket.OPEN) {
+                    gameState.ws.send(JSON.stringify({
+                        type: 'keno:restartGame'
+                    }));
+                    elements.gameEndedOverlay.classList.remove('active');
+                    gameState.gamePaused = false;
+                    showNotification('Game restarted!', 'success');
+                }
+            });
+            
             // Refresh balance button (on header click)
             document.querySelector('.balance-card').addEventListener('click', () => {
                 if (gameState.ws && gameState.ws.readyState === WebSocket.OPEN) {
@@ -1174,15 +1178,6 @@
                     }
                 }
             });
-            
-            // Handle page unload
-            window.addEventListener('beforeunload', (e) => {
-                if (gameState.hasPlacedBet && gameState.roundActive) {
-                    e.preventDefault();
-                    e.returnValue = 'You have an active bet. Are you sure you want to leave?';
-                    return 'You have an active bet. Are you sure you want to leave?';
-                }
-            });
         }
         
         // WebSocket Connection
@@ -1206,7 +1201,7 @@
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
                 showNotification('Connection failed. Retrying...', 'error');
-                setTimeout(connectWebSocket, 5000);
+                setTimeout(connectWebSocket, 3000);
             }
         }
         
@@ -1302,8 +1297,15 @@
                         break;
                         
                     case 'keno:countdown_warning':
-                        // Optional: Play sound or vibrate on countdown
                         if (data.countdown <= 3) vibrate(100);
+                        break;
+                        
+                    case 'keno:game_paused':
+                        handleGamePaused(data);
+                        break;
+                        
+                    case 'keno:game_resumed':
+                        handleGameResumed(data);
                         break;
                         
                     case 'keno:error':
@@ -1367,15 +1369,20 @@
             gameState.playersCount = data.playersCount || 0;
             gameState.roundHistory = data.roundHistory || [];
             gameState.countdown = data.countdown || 30;
+            gameState.gamePaused = data.gamePaused || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
             updatePlayersCount(gameState.playersCount, 0);
             updateCountdown(gameState.countdown);
             
-            // Update history if available
-            if (data.roundHistory && data.roundHistory.length > 0) {
-                updateHistoryList(data.roundHistory);
+            // Show/hide game paused overlay
+            if (gameState.gamePaused) {
+                elements.gameEndedOverlay.classList.add('active');
+                elements.noPlayersWarning.style.display = 'block';
+            } else {
+                elements.gameEndedOverlay.classList.remove('active');
+                elements.noPlayersWarning.style.display = 'none';
             }
             
             showNotification(`Welcome to KENO ULTRA, ${gameState.userName}!`, 'success');
@@ -1418,7 +1425,7 @@
             gameState.drawnNumbers = data.drawnNumbers || [];
             gameState.playersCount = data.playersCount || gameState.playersCount;
             
-            // Display numbers with animation
+            // Display numbers with 3-second delay between each
             displayNumbersWithAnimation(gameState.drawnNumbers);
             
             // Update stats
@@ -1442,13 +1449,7 @@
                     elements.selectedCount2.textContent = data.yourNumbers?.length || 0;
                     elements.winResult.style.display = 'block';
                     
-                    // Scroll to results
-                    elements.winResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    
                     showNotification(`🎉 YOU WON ${data.winnings.toLocaleString()} ETB! 🎉`, 'success');
-                    
-                    // Add to history
-                    addToHistory(data);
                     
                     // Celebration vibration
                     vibrate([100, 50, 100, 50, 100]);
@@ -1458,11 +1459,11 @@
                         tg.HapticFeedback.notificationOccurred('success');
                     }
                     
-                }, (gameState.drawnNumbers.length * 300) + 500);
+                }, (gameState.drawnNumbers.length * 3000) + 1000);
             } else {
                 setTimeout(() => {
                     showNotification('BETTER LUCK NEXT ROUND!', 'warning');
-                }, (gameState.drawnNumbers.length * 300) + 500);
+                }, (gameState.drawnNumbers.length * 3000) + 1000);
             }
         }
         
@@ -1505,6 +1506,7 @@
             gameState.hasPlacedBet = data.hasPlacedBet || false;
             gameState.selectedNumbers = data.selectedNumbers || [];
             gameState.betAmount = data.currentBet || gameState.betAmount;
+            gameState.gamePaused = data.gamePaused || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -1520,9 +1522,11 @@
             if (gameState.hasPlacedBet) {
                 elements.playBtn.disabled = true;
                 elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
-            } else if (gameState.roundActive) {
+            } else if (gameState.roundActive && !gameState.gamePaused) {
                 elements.playBtn.disabled = false;
                 elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            } else {
+                elements.playBtn.disabled = true;
             }
             
             // Update bet amount display
@@ -1538,17 +1542,40 @@
                     }
                 });
             }
+            
+            // Show/hide game paused overlay
+            if (gameState.gamePaused) {
+                elements.gameEndedOverlay.classList.add('active');
+                elements.noPlayersWarning.style.display = 'block';
+            } else {
+                elements.gameEndedOverlay.classList.remove('active');
+                elements.noPlayersWarning.style.display = 'none';
+            }
+        }
+        
+        function handleGamePaused(data) {
+            gameState.gamePaused = true;
+            elements.gameEndedOverlay.classList.add('active');
+            elements.noPlayersWarning.style.display = 'block';
+            showNotification('Game paused - waiting for players...', 'warning');
+        }
+        
+        function handleGameResumed(data) {
+            gameState.gamePaused = false;
+            elements.gameEndedOverlay.classList.remove('active');
+            elements.noPlayersWarning.style.display = 'none';
+            showNotification('Game resumed!', 'success');
         }
         
         // Game Functions
         function toggleNumberSelection(number) {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet || gameState.gamePaused) return;
             
             const index = gameState.selectedNumbers.indexOf(number);
             const element = document.querySelector(`.keno-number[data-number="${number}"]`);
             
             if (index === -1) {
-                if (gameState.selectedNumbers.length < 10) {
+                if (gameState.selectedNumbers.length < gameState.maxSelections) {
                     gameState.selectedNumbers.push(number);
                     element.classList.add('selected');
                     
@@ -1563,7 +1590,7 @@
                     
                     vibrate(30);
                 } else {
-                    showNotification('Maximum 10 numbers allowed', 'warning');
+                    showNotification(`Maximum ${gameState.maxSelections} numbers allowed`, 'warning');
                 }
             } else {
                 gameState.selectedNumbers.splice(index, 1);
@@ -1592,7 +1619,7 @@
         }
         
         function clearSelection() {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet || gameState.gamePaused) {
                 showNotification('Cannot clear selection now', 'warning');
                 return;
             }
@@ -1608,7 +1635,7 @@
         }
         
         function requestQuickPick() {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet || gameState.gamePaused) {
                 showNotification('Cannot quick pick now', 'error');
                 return;
             }
@@ -1624,8 +1651,8 @@
         }
         
         function placeBet() {
-            if (!gameState.roundActive || !gameState.isConnected) {
-                showNotification('Round not active', 'error');
+            if (!gameState.roundActive || !gameState.isConnected || gameState.gamePaused) {
+                showNotification('Game not active', 'error');
                 return;
             }
             
@@ -1650,8 +1677,9 @@
             }
             
             // Validate bet amount
-            if (gameState.betAmount < 1 || gameState.betAmount > 1000) {
-                showNotification('Bet amount must be between 1 and 1000 ETB', 'error');
+            const validBets = [5, 10, 20, 50, 100];
+            if (!validBets.includes(gameState.betAmount)) {
+                showNotification('Bet amount must be 5, 10, 20, 50, or 100 ETB', 'error');
                 return;
             }
             
@@ -1672,7 +1700,7 @@
                 el.classList.remove('drawn', 'matched');
             });
             
-            // Animate numbers one by one
+            // Animate numbers one by one with 3-second delay
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
                     // Highlight in grid
@@ -1696,10 +1724,10 @@
                     
                     elements.drawnNumbers.appendChild(numEl);
                     
-                    // Play sound effect
-                    playSound('pop');
+                    // Scroll to show new number
+                    elements.drawnNumbers.scrollTop = elements.drawnNumbers.scrollHeight;
                     
-                }, index * 300);
+                }, index * 3000); // 3 seconds between numbers
             });
         }
         
@@ -1709,8 +1737,8 @@
             });
             
             elements.drawnNumbers.innerHTML = `
-                <div style="color: var(--text-secondary); text-align: center; padding: 30px; font-weight: 600; font-size: 14px;">
-                    <i class="fas fa-hourglass-half" style="margin-right: 8px;"></i>
+                <div style="color: var(--text-secondary); text-align: center; padding: 20px; font-weight: 600; font-size: 12px;">
+                    <i class="fas fa-hourglass-half" style="margin-right: 6px;"></i>
                     Waiting for next draw...
                 </div>
             `;
@@ -1721,7 +1749,7 @@
             if (gameState.waitingPeriod) return;
             
             gameState.waitingPeriod = true;
-            gameState.waitingTime = duration || 10;
+            gameState.waitingTime = duration || 30;
             
             elements.waitingOverlay.classList.add('active');
             elements.waitTimer.textContent = gameState.waitingTime;
@@ -1774,69 +1802,7 @@
         function updateBalanceDisplay(balance) {
             gameState.balance = balance;
             elements.balance.textContent = balance.toLocaleString() + ' ETB';
-        }
-        
-        function addToHistory(data) {
-            const historyItem = document.createElement('div');
-            historyItem.className = `history-item ${data.winnings > 0 ? 'win' : 'loss'}`;
-            
-            const numbersText = data.yourNumbers ? data.yourNumbers.slice(0, 5).join(', ') + (data.yourNumbers.length > 5 ? '...' : '') : '';
-            
-            historyItem.innerHTML = `
-                <div>
-                    <div class="history-round">#${data.round}</div>
-                    <div class="history-numbers">${numbersText}</div>
-                </div>
-                <div class="history-result ${data.winnings > 0 ? 'win' : 'loss'}">
-                    ${data.winnings > 0 ? `+${data.winnings.toLocaleString()} ETB` : '-' + (data.bet || 0) + ' ETB'}
-                </div>
-            `;
-            
-            elements.historyList.insertBefore(historyItem, elements.historyList.firstChild);
-            
-            // Limit to 10 items
-            if (elements.historyList.children.length > 10) {
-                elements.historyList.removeChild(elements.historyList.lastChild);
-            }
-            
-            // Remove placeholder if exists
-            const placeholder = elements.historyList.querySelector('div[style*="color: var(--text-secondary)"]');
-            if (placeholder) {
-                placeholder.remove();
-            }
-        }
-        
-        function updateHistoryList(history) {
-            elements.historyList.innerHTML = '';
-            
-            if (history.length === 0) {
-                elements.historyList.innerHTML = `
-                    <div style="color: var(--text-secondary); text-align: center; padding: 30px; font-weight: 600; font-size: 13px;">
-                        <i class="fas fa-history" style="margin-right: 8px;"></i>
-                        No games played yet
-                    </div>
-                `;
-                return;
-            }
-            
-            history.forEach(item => {
-                const historyItem = document.createElement('div');
-                historyItem.className = `history-item ${item.winners > 0 ? 'win' : 'loss'}`;
-                
-                const numbersText = item.drawnNumbers ? item.drawnNumbers.slice(0, 5).join(', ') + (item.drawnNumbers.length > 5 ? '...' : '') : '';
-                
-                historyItem.innerHTML = `
-                    <div>
-                        <div class="history-round">#${item.round}</div>
-                        <div class="history-numbers">${numbersText}</div>
-                    </div>
-                    <div class="history-result ${item.winners > 0 ? 'win' : 'loss'}">
-                        ${item.winners > 0 ? `${item.winners} winners` : 'No winners'}
-                    </div>
-                `;
-                
-                elements.historyList.appendChild(historyItem);
-            });
+            elements.totalWinnings.textContent = gameState.totalWinnings.toLocaleString() + ' ETB';
         }
         
         // Helper Functions
@@ -1858,31 +1824,6 @@
                 } else {
                     tg.HapticFeedback.impactOccurred('light');
                 }
-            }
-        }
-        
-        function playSound(type) {
-            try {
-                if (type === 'pop') {
-                    // Create a simple pop sound using Web Audio API
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    oscillator.frequency.value = 800;
-                    oscillator.type = 'sine';
-                    
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 0.1);
-                }
-            } catch (e) {
-                // Audio not supported
             }
         }
         
