@@ -1,5 +1,4 @@
-// server.js - BINGO ELITE - TELEGRAM MINI APP - MAIN SERVER FILE
-// NOW WITH KENO INTEGRATION
+// server.js - BINGO ELITE & KENO ULTRA - TELEGRAM MINI APP - MAIN SERVER FILE
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -39,9 +38,8 @@ const userSchema = new mongoose.Schema({
   totalWagered: { type: Number, default: 0 },
   totalWins: { type: Number, default: 0 },
   totalBingos: { type: Number, default: 0 },
-  totalKenoWagered: { type: Number, default: 0 },
   totalKenoWins: { type: Number, default: 0 },
-  totalKenoGames: { type: Number, default: 0 },
+  totalKenoWagered: { type: Number, default: 0 },
   joinedAt: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
   isOnline: { type: Boolean, default: false },
@@ -50,7 +48,7 @@ const userSchema = new mongoose.Schema({
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' },
   phoneNumber: { type: String },
-  preferredGame: { type: String, default: 'bingo' } // 'bingo' or 'keno'
+  lastGamePlayed: { type: String, default: null }
 });
 
 const roomSchema = new mongoose.Schema({
@@ -77,8 +75,7 @@ const roomSchema = new mongoose.Schema({
   }],
   lastBoxUpdate: { type: Date, default: Date.now },
   countdownStartTime: { type: Date, default: null },
-  countdownStartedWith: { type: Number, default: 0 },
-  gameType: { type: String, default: 'bingo' } // 'bingo' or 'keno'
+  countdownStartedWith: { type: Number, default: 0 }
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -95,7 +92,7 @@ const transactionSchema = new mongoose.Schema({
   approvedBy: { type: String },
   approvedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
-  gameType: { type: String, default: 'bingo' } // 'bingo' or 'keno'
+  game: { type: String, default: null }
 });
 
 const statsSchema = new mongoose.Schema({
@@ -261,14 +258,12 @@ gameLogic.initialize(io, {
   updateTelebirrNumber // Pass the function
 });
 
-// Initialize Keno game logic
-kenoLogic.initializeKeno(io, { 
-  User, 
-  Room, 
-  Transaction, 
+// ========== INITIALIZE KENO LOGIC ==========
+kenoLogic.initialize(io, {
+  User,
+  Transaction,
   Stats,
-  Setting,
-  getTelebirrNumber
+  Setting
 });
 
 // Load initial Telebirr number into game logic
@@ -277,11 +272,14 @@ kenoLogic.initializeKeno(io, {
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
 })();
 
+// Start Keno server
+kenoLogic.startKenoServer();
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`🔌 New connection: ${socket.id}`);
   
-  // Admin authentication
+  // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', async (password) => {
     if (password === gameLogic.CONFIG.ADMIN_PASSWORD) {
       socket.admin = true;
@@ -345,76 +343,87 @@ io.on('connection', (socket) => {
     }
   });
   
-  // KENO ADMIN FUNCTIONS
-  socket.on('admin:forceStartKeno', (stake) => {
-    if (socket.admin && kenoLogic.adminForceStartKenoRound) {
-      const result = kenoLogic.adminForceStartKenoRound(stake);
-      if (result.success) {
-        socket.emit('admin:success', result.message);
-      } else {
-        socket.emit('admin:error', result.message);
-      }
-    }
+  // ========== KENO GAME HANDLERS ==========
+  // Handle Keno authentication
+  socket.on('keno:auth', (data) => {
+    kenoLogic.handleKenoSocketConnection(socket, data);
   });
   
-  socket.on('admin:forceDrawKeno', (stake) => {
-    if (socket.admin && kenoLogic.adminForceDrawKenoNumber) {
-      const result = kenoLogic.adminForceDrawKenoNumber(stake);
-      if (result.success) {
-        socket.emit('admin:success', result.message);
-      } else {
-        socket.emit('admin:error', result.message);
-      }
-    }
+  // Handle Keno join room
+  socket.on('keno:join', () => {
+    socket.join('keno');
+    console.log(`🎰 Player joined Keno room: ${socket.id}`);
   });
   
-  socket.on('admin:forceEndKeno', (stake) => {
-    if (socket.admin && kenoLogic.adminForceEndKenoRound) {
-      const result = kenoLogic.adminForceEndKenoRound(stake);
-      if (result.success) {
-        socket.emit('admin:success', result.message);
-      } else {
-        socket.emit('admin:error', result.message);
-      }
-    }
+  // Forward other Keno events to kenoLogic
+  socket.on('keno:placeBet', (data) => {
+    // The handler is already set up in handleKenoSocketConnection
   });
   
-  // Get Keno stats (admin only)
+  socket.on('keno:quickPick', (data) => {
+    // The handler is already set up in handleKenoSocketConnection
+  });
+  
+  socket.on('keno:getState', () => {
+    // The handler is already set up in handleKenoSocketConnection
+  });
+  
+  socket.on('keno:getBalance', () => {
+    // The handler is already set up in handleKenoSocketConnection
+  });
+  
+  socket.on('keno:clearSelection', () => {
+    // The handler is already set up in handleKenoSocketConnection
+  });
+  
+  // ========== ADMIN KENO HANDLERS ==========
+  // Admin: Get Keno stats
   socket.on('admin:getKenoStats', () => {
-    if (!socket.admin) {
-      socket.emit('admin:error', 'Unauthorized');
-      return;
-    }
-    
-    try {
-      const kenoRooms = kenoLogic.getKenoRoums ? kenoLogic.getKenoRooms() : new Map();
-      const kenoBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets() : new Map();
-      const kenoHistory = kenoLogic.getKenoGameHistory ? kenoLogic.getKenoGameHistory() : [];
-      
-      const stats = {
-        totalRooms: kenoRooms.size,
-        totalBets: kenoBets.size,
-        totalGames: kenoHistory.length,
-        activeRooms: Array.from(kenoRooms.values()).filter(room => room.players.size > 0).length,
-        totalPlayers: Array.from(kenoRooms.values()).reduce((sum, room) => sum + room.players.size, 0),
-        recentHistory: kenoHistory.slice(0, 10),
-        timestamp: new Date().toISOString()
-      };
-      
+    if (socket.admin) {
+      const stats = kenoLogic.getKenoDetailedStats ? kenoLogic.getKenoDetailedStats() : { error: 'Keno stats not available' };
       socket.emit('admin:kenoStats', stats);
-    } catch (error) {
-      console.error('Error getting Keno stats:', error);
-      socket.emit('admin:error', 'Error getting Keno stats');
     }
   });
   
-  // Reset house earnings (admin only) - now includes Keno earnings
+  // Admin: Force start Keno round
+  socket.on('admin:forceStartKeno', () => {
+    if (socket.admin) {
+      const result = kenoLogic.forceStartKenoRound ? kenoLogic.forceStartKenoRound() : false;
+      socket.emit('admin:kenoForceStart', { success: result });
+      console.log(`🎰 Admin forced Keno round start: ${result ? 'Success' : 'Failed'}`);
+    }
+  });
+  
+  // Admin: Reset Keno earnings
+  socket.on('admin:resetKenoEarnings', async () => {
+    if (socket.admin) {
+      try {
+        const result = kenoLogic.resetKenoEarnings ? await kenoLogic.resetKenoEarnings() : { success: false, error: 'Function not available' };
+        socket.emit('admin:kenoEarningsReset', result);
+        console.log(`🎰 Admin reset Keno earnings: ${result.success ? 'Success' : 'Failed'}`);
+      } catch (error) {
+        socket.emit('admin:error', error.message);
+        console.error('Error resetting Keno earnings:', error);
+      }
+    }
+  });
+  
+  // Admin: Get Keno player list
+  socket.on('admin:getKenoPlayers', () => {
+    if (socket.admin) {
+      const players = kenoLogic.getKenoPlayerList ? kenoLogic.getKenoPlayerList() : [];
+      socket.emit('admin:kenoPlayers', players);
+    }
+  });
+  
+  // ========== EXISTING BINGO ADMIN HANDLERS ==========
+  // Reset house earnings (admin only)
   socket.on('admin:resetHouseEarnings', async () => {
     if (socket.admin) {
       try {
-        // Get current total from all transactions (Bingo + Keno)
+        // Get current total from all transactions
         const houseEarningsTransactions = await Transaction.find({ 
-          type: { $in: ['HOUSE_EARNINGS', 'KENO_HOUSE_EARNINGS'] } 
+          type: 'HOUSE_EARNINGS' 
         });
         const previousAmount = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
         
@@ -425,7 +434,7 @@ io.on('connection', (socket) => {
           userName: 'System',
           amount: -previousAmount,
           admin: true,
-          description: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB (Bingo + Keno)`
+          description: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
         });
         await resetTransaction.save();
         
@@ -435,7 +444,7 @@ io.on('connection', (socket) => {
           message: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
         });
         
-        console.log(`🔄 House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB (includes Keno)`);
+        console.log(`🔄 House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
       } catch (error) {
         console.error('Error resetting house earnings:', error);
         socket.emit('admin:houseEarningsResetError', error.message);
@@ -516,18 +525,26 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Disconnect handler
+  // ========== DISCONNECT HANDLER ==========
   socket.on('disconnect', () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
-    if (socket.admin) {
-      console.log(`🔑 Admin disconnected: ${socket.id}`);
+    
+    // Handle Keno disconnect
+    if (kenoLogic.handleKenoDisconnect) {
+      kenoLogic.handleKenoDisconnect(socket);
     }
+    
     // Handle player disconnect in game logic
     if (gameLogic.handleDisconnect) {
       gameLogic.handleDisconnect(socket);
     }
+    
+    if (socket.admin) {
+      console.log(`🔑 Admin disconnected: ${socket.id}`);
+    }
   });
   
+  // ========== BINGO GAME HANDLERS ==========
   // Forward game events to game logic
   socket.on('join', (data) => {
     if (gameLogic.handleJoin) {
@@ -592,21 +609,19 @@ io.on('connection', (socket) => {
 // ========== EXPRESS ROUTES ==========
 app.get('/', async (req, res) => {
   const connectedSockets = gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
+  const kenoPlayers = kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
   const socketToUser = gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
   const adminSockets = gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
   const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
   const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
   const telebirrNumber = await getTelebirrNumber();
-  
-  // Get Keno stats
-  const kenoRooms = kenoLogic.getKenoRooms ? kenoLogic.getKenoRooms().size : 0;
-  const kenoBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets().size : 0;
+  const kenoStats = kenoLogic.getKenoGameStats ? kenoLogic.getKenoGameStats() : null;
   
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Bingo Elite & Keno - Telegram Mini App</title>
+      <title>Bingo Elite & Keno Ultra - Telegram Mini App</title>
       <style>
         body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
         .container { max-width: 800px; margin: 0 auto; }
@@ -618,60 +633,48 @@ app.get('/', async (req, res) => {
         .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
         .btn-admin { background: #ef4444; }
         .btn-admin:hover { background: #dc2626; }
-        .btn-game { background: #10b981; }
-        .btn-game:hover { background: #059669; }
+        .btn-bingo { background: #10b981; }
+        .btn-bingo:hover { background: #059669; }
         .btn-keno { background: #8b5cf6; }
         .btn-keno:hover { background: #7c3aed; }
         .telebirr-info { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
         .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
         .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .games-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 30px 0; }
-        .game-card { background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; text-align: center; border: 1px solid rgba(255,255,255,0.1); transition: all 0.3s; }
-        .game-card:hover { border-color: #3b82f6; transform: translateY(-5px); }
-        .game-icon { font-size: 3rem; margin-bottom: 15px; }
-        .game-title { font-size: 1.5rem; margin-bottom: 10px; color: #f8fafc; }
-        .game-desc { color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; }
+        .keno-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .games-status { display: flex; gap: 20px; margin: 20px 0; justify-content: center; }
+        .game-status-card { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; flex: 1; }
       </style>
     </head>
     <body>
       <div class="container">
-        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 BINGO ELITE & KENO</h1>
-        <p style="color: #94a3b8; font-size: 1.2rem;">Multi-game platform - Ready for Telegram</p>
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 BINGO ELITE & 🎰 KENO ULTRA</h1>
+        <p style="color: #94a3b8; font-size: 1.2rem;">Real-time multiplayer games - Ready for Telegram</p>
+        
+        <div class="games-status">
+          <div class="game-status-card">
+            <h3 style="color: #10b981;">🎮 BINGO ELITE</h3>
+            <div class="stat-value">${connectedSockets}</div>
+            <div class="stat-label">Active Players</div>
+            <p style="color: #94a3b8; font-size: 0.9rem;">Four Corners Bonus: ${gameLogic.CONFIG ? gameLogic.CONFIG.FOUR_CORNERS_BONUS : 50} ETB</p>
+          </div>
+          <div class="game-status-card">
+            <h3 style="color: #8b5cf6;">🎰 KENO ULTRA</h3>
+            <div class="stat-value">${kenoPlayers}</div>
+            <div class="stat-label">Active Players</div>
+            <p style="color: #94a3b8; font-size: 0.9rem;">Round: ${kenoStats ? kenoStats.roundNumber : '1'}</p>
+          </div>
+        </div>
         
         <div class="status">
           <h2 style="color: #10b981;">🚀 Server Status: RUNNING</h2>
-          
-          <div class="games-grid">
-            <div class="game-card">
-              <div class="game-icon">🎱</div>
-              <div class="game-title">BINGO ELITE</div>
-              <div class="game-desc">Real-time multiplayer bingo with big wins</div>
-              <a href="/telegram" class="btn btn-game">Play Bingo</a>
-            </div>
-            <div class="game-card">
-              <div class="game-icon">🎰</div>
-              <div class="game-title">KENO PREMIUM</div>
-              <div class="game-desc">Fast number selection with instant wins</div>
-              <a href="/keno" class="btn btn-keno">Play Keno</a>
-            </div>
-          </div>
-          
           <div class="stats-grid">
             <div class="stat">
-              <div class="stat-label">Connected Players</div>
-              <div class="stat-value" id="playerCount">${connectedSockets}</div>
+              <div class="stat-label">Total Connected</div>
+              <div class="stat-value" id="playerCount">${connectedSockets + kenoPlayers}</div>
             </div>
             <div class="stat">
               <div class="stat-label">Database Status</div>
               <div class="stat-value" style="color: #10b981;">✅ Online</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Bingo Rooms</div>
-              <div class="stat-value">4</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Keno Rooms</div>
-              <div class="stat-value">${kenoRooms}</div>
             </div>
           </div>
           
@@ -681,36 +684,71 @@ app.get('/', async (req, res) => {
             <p style="color: #94a3b8; font-size: 0.9rem;">Persisted in database - Will survive server restarts</p>
           </div>
           
-          <div class="fix-highlight">
-            <h3 style="color: #10b981;">✅ MULTI-GAME PLATFORM</h3>
+          <div class="keno-highlight">
+            <h3 style="color: #8b5cf6;">🎰 KENO ULTRA INTEGRATED</h3>
             <p style="color: #94a3b8;">
-              <strong>Now featuring:</strong><br>
-              1. ✅ BINGO ELITE - Real-time multiplayer bingo<br>
-              2. ✅ KENO PREMIUM - Fast number selection game<br>
-              3. ✅ SHARED BALANCE - Same wallet for both games<br>
-              4. ✅ UNIFIED ADMIN PANEL - Manage both games<br>
-              5. ✅ REAL-TIME UPDATES - Live game status<br>
-              6. ✅ TELEGRAM INTEGRATION - Both games work on Telegram<br>
-              7. ✅ DOUBLE PRIZE PROTECTION - For both games<br>
+              <strong>Features:</strong><br>
+              1. ✅ Shared balance with Bingo<br>
+              2. ✅ 30-second rounds<br>
+              3. ✅ Select 1-10 numbers (1-80)<br>
+              4. ✅ Draws 20 numbers each round<br>
+              5. ✅ Comprehensive payout table<br>
+              6. ✅ Real-time WebSocket updates<br>
+              7. ✅ Same user authentication<br>
+              8. ✅ Shared wallet system
+            </p>
+            <p style="color: #fbbf24;">
+              <strong>Keno Status:</strong> ${kenoStats && kenoStats.isRoundActive ? 'Round Active' : 'Waiting'}<br>
+              <strong>Countdown:</strong> ${kenoStats ? kenoStats.countdown : '30'}s<br>
+              <strong>Online Players:</strong> ${kenoStats ? kenoStats.onlinePlayers : '0'}
+            </p>
+          </div>
+          
+          <div class="fix-highlight">
+            <h3 style="color: #10b981;">✅ DOUBLE PRIZE BUG FIXED</h3>
+            <p style="color: #94a3b8;">
+              <strong>Multiple layers of protection:</strong><br>
+              1. ✅ Room winner tracking (memory cache)<br>
+              2. ✅ Processing claims lock per user per room<br>
+              3. ✅ Atomic room status updates<br>
+              4. ✅ Database transaction checks<br>
+              5. ✅ Room lock for concurrent claims<br>
+              6. ✅ Auto-cleanup of stale locks<br>
+              7. ✅ Enhanced error handling<br>
+            </p>
+            <p style="color: #fbbf24;">
+              <strong>Processing Claims:</strong> ${processingClaims}<br>
+              <strong>Recent Room Winners:</strong> ${roomWinners}
             </p>
           </div>
           
           <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">🎯 Four Corners Bonus: ${gameLogic.CONFIG ? gameLogic.CONFIG.FOUR_CORNERS_BONUS : 50} ETB!</p>
-          <p style="color: #8b5cf6; font-weight: bold;">🎰 Keno Payouts up to 1000x!</p>
           <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
-          <p style="color: #10b981;">✅ Telegram Mini App Ready for both games</p>
+          <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
           <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
-          <p style="color: #10b981; margin-top: 10px;">💰 Unified Wallet System: ✅ ACTIVE</p>
-          <p style="color: #10b981;">🔒 DOUBLE PRIZE BUG FIXED for both games</p>
-          <p style="color: #10b981; margin-top: 10px;">✅✅✅ All games use the same user balance</p>
+          <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ ACTIVE (Shared between Bingo & Keno)</p>
+          <p style="color: #10b981;">🔒 NEW: Room lock when game is playing</p>
+          <p style="color: #10b981;">⏰ NEW: 7-minute game timeout auto-clear</p>
+          <p style="color: #10b981;">⏱️ NEW: Timer on box selection interface</p>
+          <p style="color: #10b981; margin-top: 10px;">✅ FIXED: Game timer and ball drawing issues resolved</p>
+          <p style="color: #10b981;">🎱 Balls pop every 3 seconds: ✅ WORKING</p>
+          <p style="color: #10b981;">⏱️ 30-second countdown: ✅ WORKING</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">✅✅✅ FIXED: Claim Bingo now properly checks numbers!</p>
+          <p style="color: #10b981; font-weight: bold;">✅✅ All players return to lobby after game ends</p>
+          <p style="color: #10b981; font-weight: bold; margin-top: 10px;">🔒 NEW: DOUBLE PRIZE BUG FIXED (ATOMIC UPDATES)</p>
+          <p style="color: #10b981;">✅ Room winner tracking prevents double claims</p>
+          <p style="color: #10b981;">✅ Processing locks for per-user per-room claims</p>
+          <p style="color: #10b981;">✅ Atomic room status updates ensures only one winner</p>
+          <p style="color: #10b981;">✅ Multiple database checks for recent wins</p>
+          <p style="color: #10b981;">⏱️ Timer sync between discovery and waiting rooms</p>
         </div>
         
         <div style="margin-top: 40px;">
           <h3>Access Points:</h3>
           <div>
             <a href="/admin" class="btn btn-admin" target="_blank">🔒 Admin Panel</a>
-            <a href="/game" class="btn btn-game" target="_blank">🎮 Bingo Client</a>
-            <a href="/keno" class="btn btn-keno" target="_blank">🎰 Keno Client</a>
+            <a href="/game" class="btn btn-bingo" target="_blank">🎮 Bingo Game</a>
+            <a href="/keno" class="btn btn-keno" target="_blank">🎰 Keno Game</a>
           </div>
           <div style="margin-top: 20px;">
             <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -725,47 +763,55 @@ app.get('/', async (req, res) => {
           <div style="margin-top: 20px;">
             <a href="/test-connections" class="btn" style="background: #f59e0b;" target="_blank">🔌 Test Connections</a>
             <a href="/force-start/10" class="btn" style="background: #10b981;" target="_blank">🚀 Force Start Room 10</a>
+            <a href="/admin/keno-stats" class="btn" style="background: #8b5cf6;" target="_blank">📈 Keno Stats</a>
           </div>
         </div>
         
         <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
-          <h4>Multi-Game Platform Information</h4>
+          <h4>Telegram Mini App Information</h4>
           <p style="color: #94a3b8; font-size: 0.9rem;">
             Version: 3.0.0 (WITH KENO INTEGRATION) | Database: MongoDB Atlas<br>
-            Socket.IO: ✅ Connected Sockets: ${connectedSockets}<br>
+            Socket.IO: ✅ Connected Sockets: ${connectedSockets} (Bingo) + ${kenoPlayers} (Keno)<br>
             SocketToUser: ${socketToUser} | Admin Sockets: ${adminSockets}<br>
             Processing Claims: ${processingClaims} active | Room Winners: ${roomWinners}<br>
-            Keno Bets: ${kenoBets} active | Keno Rooms: ${kenoRooms}<br>
-            Telegram Integration: ✅ Ready for both games<br>
-            Game Timer: ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMER : 3}s between balls (Bingo)<br>
-            Keno Draw Interval: ${kenoLogic.KENO_CONFIG ? kenoLogic.KENO_CONFIG.AUTO_DRAW_INTERVAL : 1000}ms (Keno)<br>
+            Telegram Integration: ✅ Ready<br>
+            Games:<br>
+            🎮 <strong>Bingo Elite:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMER : 3}s between balls, ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} min timeout<br>
+            🎰 <strong>Keno Ultra:</strong> ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_GAME_TIMER : 30}s rounds, ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_DRAW_COUNT : 20} numbers drawn<br>
             Bot Username: @ethio_games1_bot<br>
-            Real-time Box Updates: ✅ ACTIVE (Bingo)<br>
-            Real-time Number Draws: ✅ ACTIVE (Keno)<br>
-            Wallet System: ✅ ACTIVE (Deposit/Withdraw) - Shared balance<br>
+            Real-time Box Updates: ✅ ACTIVE<br>
+            Wallet System: ✅ ACTIVE (Deposit/Withdraw) - SHARED BETWEEN GAMES<br>
             <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
             Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
-            Room Lock: ✅ IMPLEMENTED for both games<br>
+            Room Lock: ✅ IMPLEMENTED (games lock when playing)<br>
             Auto-Clear: ✅ ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMEOUT_MINUTES : 7} minute timeout<br>
-            <strong>✅✅✅ DOUBLE GAME PLATFORM:</strong><br>
-            • BINGO: 10/20/50/100 ETB rooms, Four Corners Bonus<br>
-            • KENO: 1/5/10/25/50/100 ETB bets, up to 1000x payouts<br>
-            • SHARED BALANCE: Same wallet works for both games<br>
-            • UNIFIED TRANSACTIONS: All in one Transaction model<br>
-            • SAME USER MODEL: Single user account for both games<br>
-            • DOUBLE PRIZE PROTECTION: For both games<br>
+            Box Selection Timer: ✅ SYNCED WITH WAITING ROOM<br>
+            <strong>✅✅✅ DOUBLE PRIZE BUG FIXED COMPLETELY:</strong><br>
+            • Room winner tracking in memory<br>
+            • Processing claims lock per user per room<br>
+            • Atomic room status updates<br>
+            • Database transaction checks<br>
+            • Room lock for concurrent claims<br>
+            • Auto-cleanup of stale locks<br>
+            • Enhanced error handling<br>
             ✅ Timer synchronization fixed, ✅ Game timer working<br>
-            ✅ Balls pop every 3s (Bingo), ✅ Numbers draw every 1s (Keno)<br>
-            ✅ 30-second countdown working for both games<br>
+            ✅ Ball popping every 3s, ✅ 30-second countdown working<br>
             ✅ Players properly removed when leaving, ✅ Countdown stuck issue resolved<br>
             ✅ Balls drawn correctly, ✅ BINGO checking working<br>
-            ✅ Keno numbers drawn correctly, ✅ Keno payout calculations working<br>
             ✅✅ COUNTDOWN CONTINUES WHEN PLAYERS LEAVE<br>
             ✅✅ GAME STARTS WITH 1 PLAYER AFTER 30 SECONDS<br>
-            ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS<br>
+            ✅✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS (STRING/NUMBER FIX)<br>
             ✅✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS<br>
             ✅✅✅✅ ATOMIC ROOM UPDATES PREVENT DOUBLE WINNERS<br>
-            ✅✅✅ SHARED BALANCE SYSTEM: Play both games with one wallet!
+            🎰 <strong>NEW: KENO ULTRA INTEGRATED</strong><br>
+            ✅ Shared user balance with Bingo<br>
+            ✅ Real-time Keno rounds every 30 seconds<br>
+            ✅ Select 1-10 numbers from 1-80<br>
+            ✅ Draw 20 random numbers each round<br>
+            ✅ Comprehensive payout table<br>
+            ✅ Same wallet/deposit/withdrawal system<br>
+            ✅ Independent game logic (doesn't affect Bingo)<br>
+            ✅ Players can play both games with same account
           </p>
         </div>
       </div>
@@ -782,7 +828,7 @@ app.get('/', async (req, res) => {
   `);
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH KENO ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - PROFESSIONAL UX ==========
 app.get('/telegram', async (req, res) => {
   const telebirrNumber = await getTelebirrNumber();
   const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
@@ -800,7 +846,6 @@ app.get('/telegram', async (req, res) => {
             :root {
                 --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                --keno-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
                 --accent-color: #fbbf24;
                 --dark-bg: #0f172a;
                 --card-bg: rgba(30, 41, 59, 0.8);
@@ -982,7 +1027,7 @@ app.get('/telegram', async (req, res) => {
             }
             
             .keno-icon {
-                background: var(--keno-gradient);
+                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
                 color: #a78bfa;
             }
             
@@ -1057,14 +1102,14 @@ app.get('/telegram', async (req, res) => {
                 white-space: nowrap;
             }
             
-            .play-btn.keno {
-                background: var(--keno-gradient);
-                box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
-            }
-            
             .play-btn:hover {
                 transform: scale(1.05);
                 box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+            }
+            
+            .play-btn.keno {
+                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
             }
             
             .play-btn.keno:hover {
@@ -1164,6 +1209,11 @@ app.get('/telegram', async (req, res) => {
                 margin-left: 6px;
             }
             
+            .status-badge.keno {
+                background: rgba(139, 92, 246, 0.1);
+                color: #a78bfa;
+            }
+            
             @keyframes float {
                 0%, 100% { transform: translateY(0px); }
                 50% { transform: translateY(-5px); }
@@ -1172,11 +1222,6 @@ app.get('/telegram', async (req, res) => {
             @keyframes slideIn {
                 from { opacity: 0; transform: translateY(10px); }
                 to { opacity: 1; transform: translateY(0); }
-            }
-            
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.7; }
             }
             
             .user-greeting {
@@ -1217,7 +1262,7 @@ app.get('/telegram', async (req, res) => {
                 </div>
                 
                 <h1 class="welcome-text">ETHIO GAMES</h1>
-                <p class="subtitle">Multi-game platform on Telegram</p>
+                <p class="subtitle">Premium gaming experience on Telegram</p>
             </div>
             
             <div class="games-section">
@@ -1257,15 +1302,16 @@ app.get('/telegram', async (req, res) => {
                         </div>
                         <div class="game-content">
                             <h3 class="game-title">
-                                KENO PREMIUM
+                                KENO ULTRA
+                                <span class="status-badge keno">🆕 NEW</span>
                             </h3>
                             <p class="game-description">
                                 Fast number selection with instant wins
                             </p>
                             <div class="game-features">
                                 <span class="feature-tag keno">🎰 Instant Wins</span>
-                                <span class="feature-tag keno">💰 Up to 1000x</span>
-                                <span class="feature-tag keno">⚡ Fast Draws</span>
+                                <span class="feature-tag keno">💰 Same Wallet</span>
+                                <span class="feature-tag keno">⚡ Every 30s</span>
                             </div>
                         </div>
                         <div class="game-action">
@@ -1279,24 +1325,24 @@ app.get('/telegram', async (req, res) => {
             
             <div class="features-highlight">
                 <div class="features-title">
-                    ⭐ PLATFORM FEATURES
+                    ⭐ SHARED FEATURES
                 </div>
                 <div class="features-grid">
                     <div class="feature-item">
                         <span class="feature-icon">✓</span>
-                        <span>Shared Wallet</span>
+                        <span>Shared Wallet Balance</span>
                     </div>
                     <div class="feature-item">
                         <span class="feature-icon">✓</span>
-                        <span>Two Games</span>
+                        <span>Real-time Multiplayer</span>
                     </div>
                     <div class="feature-item">
                         <span class="feature-icon">✓</span>
-                        <span>Real-time</span>
+                        <span>Telegram Login</span>
                     </div>
                     <div class="feature-item">
                         <span class="feature-icon">✓</span>
-                        <span>Telegram Ready</span>
+                        <span>Auto Start</span>
                     </div>
                 </div>
             </div>
@@ -1350,7 +1396,7 @@ app.get('/telegram', async (req, res) => {
             function showHelp() {
                 tg.showPopup({
                     title: 'How to Play',
-                    message: '🎮 BINGO:\\n1. Select room (10-100 ETB)\\n2. Choose ticket\\n3. Wait for countdown\\n4. Mark numbers\\n5. Claim BINGO!\\n\\n🎰 KENO:\\n1. Select bet amount\\n2. Pick 1-10 numbers\\n3. Wait for draw\\n4. Match numbers to win!\\n\\n💰 Both games use the SAME wallet!',
+                    message: '🎮 BINGO ELITE:\\n1. Select room (10-100 ETB)\\n2. Choose available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\n🎰 KENO ULTRA:\\n1. Select 1-10 numbers (1-80)\\n2. Choose bet amount\\n3. Wait for draw (every 30s)\\n4. Win based on matches\\n\\n💰 WALLET: Shared between games!',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -1358,7 +1404,7 @@ app.get('/telegram', async (req, res) => {
             function showWalletInfo() {
                 tg.showPopup({
                     title: 'Wallet Information',
-                    message: '💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot\\n\\n💰 SAME BALANCE for Bingo & Keno!',
+                    message: '💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot\\n\\n📱 Balance is SHARED between Bingo and Keno!',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -1366,7 +1412,7 @@ app.get('/telegram', async (req, res) => {
             function showTerms() {
                 tg.showPopup({
                     title: 'Terms & Conditions',
-                    message: '• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support\\n• Same balance works for both games',
+                    message: '• Must be 18+ to play\\n• Play responsibly\\n• Balance shared between games\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support',
                     buttons: [{ type: 'ok' }]
                 });
             }
@@ -1375,22 +1421,10 @@ app.get('/telegram', async (req, res) => {
             document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
             
             if (tg && tg.MainButton) {
-                tg.MainButton.setText('🎮 PLAY GAMES');
+                tg.MainButton.setText('🎮 PLAY BINGO');
                 tg.MainButton.show();
                 tg.MainButton.onClick(function() {
-                    tg.showPopup({
-                        title: 'Choose Game',
-                        message: 'Select which game to play:',
-                        buttons: [
-                            { id: 'bingo', type: 'default', text: '🎱 Bingo Elite' },
-                            { id: 'keno', type: 'default', text: '🎰 Keno Premium' }
-                        ]
-                    });
-                    
-                    tg.onEvent('popupClosed', function(data) {
-                        if (data.button_id === 'bingo') launchGame('bingo');
-                        if (data.button_id === 'keno') launchGame('keno');
-                    });
+                    launchGame('bingo');
                 });
             }
             
@@ -1402,21 +1436,6 @@ app.get('/telegram', async (req, res) => {
     </body>
     </html>
   `);
-});
-
-// ========== KENO GAME PAGE ==========
-app.get('/keno', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/keno.html'));
-});
-
-// ========== BINGO GAME PAGE ==========
-app.get('/game', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/game.html'));
-});
-
-// ========== ADMIN PANEL ==========
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public/admin.html'));
 });
 
 // API endpoint to get user balance
@@ -1434,9 +1453,12 @@ app.get('/api/user/:userId', async (req, res) => {
       lastSeen: user.lastSeen,
       telegramId: user.telegramId,
       phoneNumber: user.phoneNumber || '',
-      preferredGame: user.preferredGame || 'bingo',
+      totalWagered: user.totalWagered || 0,
+      totalWins: user.totalWins || 0,
       totalBingos: user.totalBingos || 0,
-      totalKenoWins: user.totalKenoWins || 0
+      totalKenoWins: user.totalKenoWins || 0,
+      totalKenoWagered: user.totalKenoWagered || 0,
+      lastGamePlayed: user.lastGamePlayed || null
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1491,63 +1513,6 @@ app.post('/api/add-funds', async (req, res) => {
   }
 });
 
-// API endpoint to get game statistics
-app.get('/api/stats', async (req, res) => {
-  try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ isOnline: true });
-    const totalBingoWins = await Transaction.countDocuments({ type: { $in: ['WIN', 'WIN_FOUR_CORNERS'] } });
-    const totalKenoWins = await Transaction.countDocuments({ type: 'KENO_WIN' });
-    
-    // Calculate total wagered
-    const bingoWagered = await Transaction.aggregate([
-      { $match: { 
-        gameType: 'bingo',
-        type: { $nin: ['NEW_USER', 'ADMIN_ADD', 'HOUSE_EARNINGS', 'KENO_HOUSE_EARNINGS'] },
-        amount: { $lt: 0 }
-      } },
-      { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
-    ]).then(result => result[0]?.total || 0);
-    
-    const kenoWagered = await Transaction.aggregate([
-      { $match: { 
-        gameType: 'keno',
-        type: { $nin: ['NEW_USER', 'ADMIN_ADD', 'HOUSE_EARNINGS', 'KENO_HOUSE_EARNINGS'] },
-        amount: { $lt: 0 }
-      } },
-      { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
-    ]).then(result => result[0]?.total || 0);
-    
-    const totalWagered = bingoWagered + kenoWagered;
-    
-    // Calculate house earnings
-    const houseEarnings = await Transaction.aggregate([
-      { $match: { type: { $in: ['HOUSE_EARNINGS', 'KENO_HOUSE_EARNINGS'] } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]).then(result => result[0]?.total || 0);
-    
-    // Get Keno specific stats
-    const kenoRooms = kenoLogic.getKenoRooms ? kenoLogic.getKenoRooms().size : 0;
-    const kenoActiveBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets().size : 0;
-    
-    res.json({
-      totalUsers,
-      activeUsers,
-      totalWagered,
-      bingoWagered,
-      kenoWagered,
-      houseEarnings,
-      totalBingoWins,
-      totalKenoWins,
-      kenoRooms,
-      kenoActiveBets,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ========== TELEGRAM BOT INTEGRATION ==========
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
@@ -1591,28 +1556,30 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *Welcome to ETHIO GAMES, ${userName}!*\n\n` +
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *Now with TWO GAMES:*\n` +
-                  `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO PREMIUM** - Fast number selection with up to 1000x wins\n\n` +
-                  `💡 *Features:*\n` +
-                  `• 💳 **SHARED WALLET** - Same balance for both games!\n` +
-                  `• 🔒 **DOUBLE PRIZE PROTECTION** - For both games\n` +
-                  `• ⏱️ **Real-time multiplayer** - Play with others\n` +
-                  `• 📱 **Telegram optimized** - Works perfectly in app\n\n` +
-                  `🎱 *Bingo Features:*\n` +
-                  `• 10/20/50/100 ETB rooms\n` +
+                  `• 🎮 **BINGO ELITE** - Multiplayer bingo\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number game\n\n` +
+                  `📱 *Shared Features:*\n` +
+                  `• 💳 **SHARED WALLET** - Same balance for both games\n` +
+                  `• 🔒 **DOUBLE PRIZE BUG FIXED COMPLETELY**\n` +
+                  `• 🏆 **Room winner tracking**\n` +
+                  `• 🔒 **Processing locks**\n` +
+                  `• ⏱️ Timer sync between games\n` +
+                  `• 🔒 Rooms lock when game is playing\n` +
+                  `• ⏰ Auto-clear after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
+                  `• ⏱️ Timer shows on selection screens\n` +
+                  `• 10/20/50/100 ETB rooms (Bingo)\n` +
+                  `• 1-1000 ETB bets (Keno)\n` +
                   `• Four Corners Bonus: 50 ETB\n` +
-                  `• Real-time box tracking\n` +
-                  `• Game starts with 1 player\n\n` +
-                  `🎰 *Keno Features:*\n` +
-                  `• 1/5/10/25/50/100 ETB bets\n` +
-                  `• Pick 1-10 numbers from 1-80\n` +
-                  `• 20 numbers drawn per round\n` +
-                  `• Payouts up to 1000x!\n\n` +
+                  `• Real-time multiplayer\n` +
+                  `• Telegram login\n` +
+                  `• Games start automatically\n` +
+                  `• ✅✅✅ Fixed: Double prize bug eliminated\n` +
+                  `• ✅✅✅ Fixed: Claim Bingo now properly checks numbers\n` +
+                  `• ✅ Fixed: All players return to lobby after game ends\n\n` +
                   `💳 *Deposit Instructions:*\n` +
                   `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Enter receipt number in game wallet\n` +
                   `3. Admin will approve within 24 hours\n\n` +
-                  `🎮 *Play both games with the same balance!*\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown',
             reply_markup: {
@@ -1620,11 +1587,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                 {
                   text: '🎮 Play Bingo Now',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ], [
-                {
-                  text: '🎰 Play Keno Now',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/keno' }
                 }
               ]]
             }
@@ -1641,12 +1603,14 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
-                  `🎮 *Games Played:*\n` +
-                  `• Bingo Wins: ${user?.totalBingos || 0}\n` +
-                  `• Keno Wins: ${user?.totalKenoWins || 0}\n\n` +
+                  `🎮 *Games Available:*\n` +
+                  `• Bingo Elite (Multiplayer)\n` +
+                  `• Keno Ultra (Fast numbers)\n\n` +
                   `💳 *Deposit to:* ${telebirrNumber}\n` +
-                  `🎮 Play both games: @ethio_games1_bot\n` +
-                  `🆔 Your ID: \`${userId}\``,
+                  `🎮 Play: @ethio_games1_bot\n` +
+                  `👑 Admin: Contact for funds\n` +
+                  `🆔 Your ID: \`${userId}\`\n\n` +
+                  `*Balance is SHARED between both games!*`,
             parse_mode: 'Markdown'
           })
         });
@@ -1658,10 +1622,10 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `💳 *ETHIO GAMES Wallet*\n\n` +
-                  `*Shared Balance for BOTH Games!*\n\n` +
+                  `*Shared between Bingo & Keno!*\n\n` +
                   `*How to Deposit:*\n` +
                   `1. Send money to Telebirr: *${telebirrNumber}*\n` +
-                  `2. Open game and go to Wallet (💰 button)\n` +
+                  `2. Open any game and go to Wallet (💰 button)\n` +
                   `3. Enter receipt number and amount\n` +
                   `4. Admin will approve within 24 hours\n\n` +
                   `*How to Withdraw:*\n` +
@@ -1669,20 +1633,13 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `2. Open game Wallet\n` +
                   `3. Select amount and enter phone number\n` +
                   `4. Admin will send money within 24 hours\n\n` +
-                  `🎮 *Play Both Games:*\n` +
-                  `• Bingo: @ethio_games1_bot\n` +
-                  `• Keno: @ethio_games1_bot\n` +
-                  `💰 Same balance works for both!`,
+                  `🎮 *Play Now:* @ethio_games1_bot`,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
                 {
-                  text: '🎱 Play Bingo',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/game' }
-                },
-                {
-                  text: '🎰 Play Keno',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/keno' }
+                  text: '🎮 Open Games',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
                 }
               ]]
             }
@@ -1696,34 +1653,53 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `🎮 *ETHIO GAMES Help*\n\n` +
-                  `*Two Games, One Wallet:*\n` +
-                  `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO PREMIUM** - Fast number selection game\n\n` +
+                  `*Now with TWO GAMES:*\n` +
+                  `1. 🎮 **BINGO ELITE** - Multiplayer bingo\n` +
+                  `2. 🎰 **KENO ULTRA** - Fast number game\n\n` +
+                  `*Shared Features:*\n` +
+                  `• 💳 **SHARED WALLET** - Same balance for both games\n` +
+                  `• 🔒 **DOUBLE PRIZE BUG FIXED COMPLETELY**\n` +
+                  `• 🏆 **Room winner tracking**\n` +
+                  `• 🔒 **Processing locks**\n` +
+                  `• ⏱️ Timer sync between games\n` +
+                  `• 🔒 Rooms lock when game is playing\n` +
+                  `• ⏰ Games auto-clear after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes\n` +
+                  `• ⏱️ Timer shows on selection screens\n\n` +
                   `*Commands:*\n` +
                   `/start - Start the bot\n` +
                   `/play - Play games\n` +
                   `/balance - Check balance\n` +
                   `/wallet - Wallet instructions\n` +
                   `/help - This message\n\n` +
-                  `*How to Play Bingo:*\n` +
-                  `1. Click "Play Bingo"\n` +
+                  `*How to Play BINGO:*\n` +
+                  `1. Click "Play Now"\n` +
                   `2. Select room (10-100 ETB)\n` +
-                  `3. Choose ticket (1-100)\n` +
-                  `4. Game starts after 30 seconds\n` +
-                  `5. Mark numbers as called\n` +
-                  `6. Claim BINGO!\n\n` +
-                  `*How to Play Keno:*\n` +
-                  `1. Click "Play Keno"\n` +
-                  `2. Select bet amount (1-100 ETB)\n` +
-                  `3. Pick 1-10 numbers from 1-80\n` +
-                  `4. Wait for number draw\n` +
-                  `5. Match numbers to win!\n\n` +
-                  `*Shared Features:*\n` +
-                  `• 💳 Same wallet for both games\n` +
-                  `• 🔒 Double prize protection\n` +
-                  `• ⏱️ Real-time multiplayer\n` +
-                  `• 📱 Telegram optimized\n\n` +
-                  `💳 *Wallet:*\n` +
+                  `3. Choose ticket (1-100) - See taken boxes in real-time!\n` +
+                  `4. ⏱️ Timer shows countdown\n` +
+                  `5. Game starts after 30 seconds with 1 player\n` +
+                  `6. Timer continues even if players leave\n` +
+                  `7. 🔒 Room locks when game starts\n` +
+                  `8. Mark numbers as called\n` +
+                  `9. Claim BINGO! - 🔒 Multiple protection layers\n` +
+                  `10. ⏰ Game auto-ends after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes if no winner\n` +
+                  `11. ALL players return to lobby automatically\n\n` +
+                  `*How to Play KENO:*\n` +
+                  `1. Select 1-10 numbers from 1-80\n` +
+                  `2. Choose bet amount (1-1000 ETB)\n` +
+                  `3. Place bet before timer ends\n` +
+                  `4. Wait for 20 numbers to be drawn\n` +
+                  `5. Win based on matches\n` +
+                  `6. New round every 30 seconds\n\n` +
+                  `*Four Corners Bonus:* 50 ETB!\n` +
+                  `*Real-time Box Tracking:* See which boxes are taken instantly!\n` +
+                  `*Auto Start:* Games start when players join\n` +
+                  `*Timer Doesn't Reset:* Game continues even if players leave\n` +
+                  `*Random Cards:* Each game has unique random numbers\n` +
+                  `*🔒 DOUBLE PRIZE FIXED COMPLETELY:* Atomic updates ensure only one winner\n` +
+                  `*✅✅✅ Fixed:* Claim Bingo now properly checks numbers\n` +
+                  `*✅ Fixed:* All players return to lobby after game ends\n` +
+                  `*✅ Fixed:* Game starts with 1 player after 30 seconds\n\n` +
+                  `💳 *Wallet (Shared between games):*\n` +
                   `Deposit to Telebirr: *${telebirrNumber}*\n` +
                   `Min withdrawal: ${minWithdrawal} ETB\n\n` +
                   `_Need help? Contact admin_`,
@@ -1731,70 +1707,36 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           })
         });
       }
-      else if (text === '/keno') {
+      else if (text === '/keno' || text === '/kenogame') {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: `🎰 *KENO PREMIUM*\n\n` +
-                  `*Fast number selection game!*\n\n` +
+            text: `🎰 *KENO ULTRA*\n\n` +
+                  `Fast number selection game with instant wins!\n\n` +
                   `*How to Play:*\n` +
-                  `1. Select bet amount (1-100 ETB)\n` +
-                  `2. Pick 1-10 numbers from 1-80\n` +
-                  `3. Wait for 20 numbers to be drawn\n` +
-                  `4. Match numbers to win!\n\n` +
-                  `*Payouts:*\n` +
-                  `• 0-2 matches: 0x\n` +
-                  `• 3 matches: 0.5x\n` +
-                  `• 4 matches: 1x\n` +
-                  `• 5 matches: 2x\n` +
-                  `• 6 matches: 10x\n` +
-                  `• 7 matches: 50x\n` +
-                  `• 8 matches: 100x\n` +
-                  `• 9 matches: 500x\n` +
-                  `• 10 matches: 1000x!\n\n` +
-                  `*Same balance as Bingo!*\n` +
-                  `Play now:`,
+                  `1. Select 1-10 numbers from 1-80\n` +
+                  `2. Choose bet amount (1-1000 ETB)\n` +
+                  `3. Place bet before timer ends\n` +
+                  `4. 20 numbers are drawn randomly\n` +
+                  `5. Win based on matches\n` +
+                  `6. New round every 30 seconds\n\n` +
+                  `*Features:*\n` +
+                  `• Shared wallet with Bingo\n` +
+                  `• Real-time multiplayer\n` +
+                  `• Fast rounds (30 seconds)\n` +
+                  `• Comprehensive payout table\n` +
+                  `• Telegram login\n` +
+                  `• Same deposit/withdrawal system\n\n` +
+                  `*Balance is SHARED with Bingo Elite!*\n\n` +
+                  `Click below to play:`,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
                 {
                   text: '🎰 Play Keno Now',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/keno' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/bingo') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎱 *BINGO ELITE*\n\n` +
-                  `*Real-time multiplayer bingo!*\n\n` +
-                  `*How to Play:*\n` +
-                  `1. Select room (10-100 ETB)\n` +
-                  `2. Choose ticket number (1-100)\n` +
-                  `3. Wait for game to start\n` +
-                  `4. Mark numbers as called\n` +
-                  `5. Claim BINGO to win!\n\n` +
-                  `*Features:*\n` +
-                  `• Four Corners Bonus: 50 ETB!\n` +
-                  `• Real-time box tracking\n` +
-                  `• Game starts with 1 player\n` +
-                  `• 30-second countdown\n\n` +
-                  `*Same balance as Keno!*\n` +
-                  `Play now:`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎱 Play Bingo Now',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/game' }
                 }
               ]]
             }
@@ -1843,43 +1785,24 @@ app.get('/setup-telegram', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Telegram Bot Setup Complete - Now with Keno!</title>
+        <title>Telegram Bot Setup Complete</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
           .container { max-width: 600px; margin: 0 auto; }
           .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
           .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
           .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-          .btn-keno { background: #8b5cf6; }
-          .btn-keno:hover { background: #7c3aed; }
           .telebirr-highlight { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
           .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
-          .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
-          .games-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 30px 0; }
-          .game-card { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; text-align: center; }
+          .keno-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
         </style>
       </head>
       <body>
         <div class="container">
-          <h1>✅ Telegram Bot Setup Complete - Now with KENO!</h1>
+          <h1>✅ Telegram Bot Setup Complete!</h1>
           <div class="success">✓ Webhook Configured</div>
           <div class="success">✓ Menu Button Set</div>
-          <div class="success">✓ Keno Game Added</div>
-          
-          <div class="games-grid">
-            <div class="game-card">
-              <h3>🎱 BINGO ELITE</h3>
-              <p>Real-time multiplayer bingo</p>
-              <p>Four Corners Bonus: 50 ETB</p>
-              <p>10/20/50/100 ETB rooms</p>
-            </div>
-            <div class="game-card">
-              <h3>🎰 KENO PREMIUM</h3>
-              <p>Fast number selection game</p>
-              <p>Payouts up to 1000x</p>
-              <p>1/5/10/25/50/100 ETB bets</p>
-            </div>
-          </div>
+          <div class="success">✓ TWO GAMES READY</div>
           
           <div class="telebirr-highlight">
             <h3>📱 TELEBIRR PAYMENT NUMBER (DATABASE PERSISTED)</h3>
@@ -1888,45 +1811,60 @@ app.get('/setup-telegram', async (req, res) => {
             <p>Admin can update it in Admin Panel → Settings</p>
           </div>
           
-          <div class="fix-highlight">
-            <h3>✅ MULTI-GAME PLATFORM READY</h3>
-            <p><strong>Key Features:</strong></p>
-            <p>1. ✅ TWO GAMES: Bingo & Keno</p>
-            <p>2. ✅ SHARED BALANCE: Same wallet for both games</p>
-            <p>3. ✅ UNIFIED TRANSACTIONS: All in one system</p>
-            <p>4. ✅ DOUBLE PRIZE PROTECTION: For both games</p>
-            <p>5. ✅ REAL-TIME UPDATES: Live game status</p>
-            <p>6. ✅ TELEGRAM INTEGRATION: Both games work on Telegram</p>
-            <p><strong>Players can switch between games seamlessly!</strong></p>
+          <div class="keno-highlight">
+            <h3>🎰 KENO ULTRA INTEGRATED!</h3>
+            <p><strong>NEW: Two games, one wallet system!</strong></p>
+            <p>✅ Shared balance between Bingo and Keno</p>
+            <p>✅ Keno runs independently alongside Bingo</p>
+            <p>✅ 30-second Keno rounds</p>
+            <p>✅ Select 1-10 numbers from 1-80</p>
+            <p>✅ Draws 20 numbers each round</p>
+            <p>✅ Comprehensive payout table</p>
+            <p>✅ Same user authentication</p>
+            <p>✅ Shared deposit/withdrawal system</p>
+            <p><strong>Players can now enjoy both games with the same account!</strong></p>
           </div>
           
           <div class="info-box">
             <h3>Bot Information:</h3>
             <p><strong>Bot:</strong> @ethio_games1_bot</p>
-            <p><strong>Game URLs:</strong></p>
-            <p>- Bingo: https://bingo-telegram-game.onrender.com/game</p>
-            <p>- Keno: https://bingo-telegram-game.onrender.com/keno</p>
-            <p>- Entry Page: https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Entry Page:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
+            <p><strong>Keno Game:</strong> https://bingo-telegram-game.onrender.com/keno</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> ${gameLogic.CONFIG.ADMIN_PASSWORD}</p>
-            <p><strong>New Features Added:</strong></p>
-            <p>1. 🎰 <strong>KENO GAME:</strong> Complete number selection game with up to 1000x payouts</p>
-            <p>2. 💳 <strong>SHARED WALLET:</strong> Same balance works for both Bingo and Keno</p>
-            <p>3. 🔄 <strong>UNIFIED SYSTEM:</strong> Single user account for both games</p>
-            <p>4. 📊 <strong>COMBINED STATS:</strong> Track both games in admin panel</p>
-            <p>5. 🎮 <strong>TWO GAME INTERFACES:</strong> Separate but connected</p>
-            <p><strong>Telebirr Integration:</strong></p>
+            <p><strong>Features & Fixes:</strong></p>
+            <p>1. 🎰 <strong>KENO ULTRA ADDED</strong> - Fast number game with shared wallet</p>
+            <p>2. 💳 <strong>SHARED WALLET SYSTEM:</strong> One balance for both games</p>
+            <p>3. 🔒 <strong>DOUBLE PRIZE BUG FIXED COMPLETELY:</strong> Atomic updates prevent multiple payouts</p>
+            <p>4. 🏆 <strong>Room winner tracking:</strong> Prevents multiple claims in same room</p>
+            <p>5. 🔒 <strong>Processing locks:</strong> Per-user per-room claim protection</p>
+            <p>6. ⏱️ <strong>Timer Synchronization:</strong> Discovery timer synced with waiting room</p>
+            <p>7. 🔒 <strong>Room Lock:</strong> Rooms lock when game is playing</p>
+            <p>8. ⏰ <strong>${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES}-minute Auto-clear:</strong> Games auto-end after ${gameLogic.CONFIG.GAME_TIMEOUT_MINUTES} minutes</p>
+            <p>9. ⏱️ <strong>Selection Timers:</strong> Countdown shows on selection screens</p>
+            <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
-            <p><strong>Real-time Features:</strong> Box tracking (Bingo), Number draws (Keno)</p>
-            <p><strong>Double Game Platform:</strong> Players can enjoy both games with one account!</p>
+            <p>• <strong>SHARED between Bingo and Keno</strong></p>
+            <p><strong>Real-time Features:</strong> Box tracking, Live updates, WebSocket communication</p>
+            <p><strong>Fixed Issues:</strong> Double prize bug eliminated with atomic updates, Claim Bingo now properly checks numbers, All players return to lobby, Game starts with 1 player</p>
+            <p><strong>✅ 30-second countdown working</strong></p>
+            <p><strong>✅ Balls pop every 3 seconds (Bingo)</strong></p>
+            <p><strong>✅ Countdown continues when players leave</strong></p>
+            <p><strong>✅ Game starts with 1 player after 30 seconds</strong></p>
+            <p><strong>✅✅✅ DOUBLE PRIZE BUG ELIMINATED WITH ATOMIC UPDATES</strong></p>
+            <p><strong>✅✅✅ CLAIM BINGO NOW PROPERLY CHECKS NUMBERS</strong></p>
+            <p><strong>✅✅ ALL PLAYERS RETURN TO LOBBY AFTER GAME ENDS</strong></p>
+            <p><strong>✅✅ ATOMIC ROOM UPDATES PREVENT DOUBLE WINNERS</strong></p>
+            <p><strong>🎰✅ KENO ULTRA INTEGRATED AND WORKING</strong></p>
           </div>
           
           <div>
             <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
-            <a href="/keno" class="btn btn-keno" target="_blank">Test Keno Game</a>
+            <a href="/keno" class="btn" style="background: #8b5cf6;" target="_blank">Test Keno Game</a>
           </div>
           
           <div style="margin-top: 30px; text-align: left;">
@@ -1935,17 +1873,8 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Open @ethio_games1_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
-              <li>Choose between Bingo or Keno</li>
+              <li>Choose between Bingo Elite or Keno Ultra</li>
               <li>Play both games with the same wallet!</li>
-            </ol>
-            
-            <h4>To Update Telebirr Number:</h4>
-            <ol>
-              <li>Open Admin Panel (link above)</li>
-              <li>Login with password: ${gameLogic.CONFIG.ADMIN_PASSWORD}</li>
-              <li>Go to Settings or look for Telebirr number field</li>
-              <li>Update to new number</li>
-              <li>Number is saved to database and persists across restarts</li>
             </ol>
             
             <h4>Wallet Instructions for Players:</h4>
@@ -1954,17 +1883,19 @@ app.get('/setup-telegram', async (req, res) => {
               <li>In either game, click Wallet (💰 button)</li>
               <li>Enter receipt number and amount</li>
               <li>Admin approves in Admin Panel</li>
-              <li>Funds appear in player balance - works for BOTH games!</li>
+              <li>Funds appear in shared balance (usable in both games)</li>
             </ol>
             
-            <h4>Multi-Game Platform Benefits:</h4>
-            <ol>
-              <li><strong>Player Retention:</strong> Players can switch between games when bored</li>
-              <li><strong>Increased Engagement:</strong> Two different game experiences</li>
-              <li><strong>Higher Revenue:</strong> More game options = more play time</li>
-              <li><strong>Competitive Advantage:</strong> Fewer Telegram games offer multiple games</li>
-              <li><strong>Shared Economy:</strong> One wallet simplifies everything</li>
-            </ol>
+            <h4>Admin Panel Features:</h4>
+            <ul>
+              <li>View both Bingo and Keno stats</li>
+              <li>Manage users (add funds, ban, etc.)</li>
+              <li>Approve deposits/withdrawals</li>
+              <li>Update Telebirr number</li>
+              <li>Force start games</li>
+              <li>Reset earnings</li>
+              <li>View Keno player list</li>
+            </ul>
           </div>
         </div>
       </body>
@@ -1979,11 +1910,237 @@ app.get('/setup-telegram', async (req, res) => {
   }
 });
 
+// Serve game files
+app.get('/game', (req, res) => {
+  res.sendFile(path.join(__dirname, 'game.html'));
+});
+
+app.get('/keno', (req, res) => {
+  res.sendFile(path.join(__dirname, 'keno.html'));
+});
+
+app.get('/keno-v1', (req, res) => {
+  res.sendFile(path.join(__dirname, 'keno v1.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Admin Keno stats page
+app.get('/admin/keno-stats', async (req, res) => {
+  try {
+    const kenoStats = kenoLogic.getKenoDetailedStats ? kenoLogic.getKenoDetailedStats() : {};
+    const telebirrNumber = await getTelebirrNumber();
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Keno Stats - Admin Panel</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 1000px; margin: 0 auto; }
+          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+          .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+          .stat-card { background: #1e293b; padding: 20px; border-radius: 12px; border-left: 4px solid #8b5cf6; }
+          .stat-value { font-size: 2rem; font-weight: bold; color: #8b5cf6; margin: 10px 0; }
+          .stat-label { color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+          .btn { display: inline-block; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 5px; }
+          .btn-keno { background: #8b5cf6; }
+          .btn-danger { background: #ef4444; }
+          .history-table { width: 100%; background: #1e293b; border-radius: 12px; overflow: hidden; margin-top: 20px; }
+          .history-table th { background: #334155; padding: 15px; text-align: left; color: #f8fafc; }
+          .history-table td { padding: 12px 15px; border-bottom: 1px solid #475569; }
+          .positive { color: #10b981; }
+          .negative { color: #ef4444; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎰 Keno Ultra - Admin Stats</h1>
+            <div>
+              <a href="/admin" class="btn">← Back to Admin</a>
+              <a href="/" class="btn">🏠 Home</a>
+            </div>
+          </div>
+          
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Current Round</div>
+              <div class="stat-value">#${kenoStats.roundNumber || '1'}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Active Players</div>
+              <div class="stat-value">${kenoStats.onlinePlayers || '0'}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Players</div>
+              <div class="stat-value">${kenoStats.totalPlayers || '0'}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Earnings</div>
+              <div class="stat-value">${kenoStats.totalEarnings ? kenoStats.totalEarnings.toFixed(2) : '0'} ETB</div>
+            </div>
+          </div>
+          
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <h3>Game Status: ${kenoStats.isRoundActive ? '🟢 Round Active' : '🟡 Waiting'}</h3>
+            <p>Countdown: ${kenoStats.countdown || '30'} seconds</p>
+            <p>Waiting Period: ${kenoStats.waitingPeriod ? 'Active' : 'Inactive'}</p>
+            <p>Connected Sockets: ${kenoStats.connectedSockets || '0'}</p>
+            
+            <div style="margin-top: 20px;">
+              <button onclick="forceStartKeno()" class="btn btn-keno">Force Start Round</button>
+              <button onclick="resetKenoEarnings()" class="btn btn-danger">Reset Earnings</button>
+              <button onclick="refreshStats()" class="btn">Refresh Stats</button>
+            </div>
+          </div>
+          
+          <div style="background: #1e293b; padding: 20px; border-radius: 12px;">
+            <h3>Recent Rounds (Last 5)</h3>
+            ${kenoStats.recentHistory && kenoStats.recentHistory.length > 0 ? `
+              <div class="history-table">
+                <table style="width: 100%;">
+                  <thead>
+                    <tr>
+                      <th>Round</th>
+                      <th>Players</th>
+                      <th>Total Bets</th>
+                      <th>Winners</th>
+                      <th>Payout</th>
+                      <th>Commission</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${kenoStats.recentHistory.map(round => `
+                      <tr>
+                        <td>#${round.round}</td>
+                        <td>${round.players}</td>
+                        <td>${round.totalBetAmount ? round.totalBetAmount.toFixed(2) : '0'} ETB</td>
+                        <td>${round.winners}</td>
+                        <td class="${round.totalPayout > 0 ? 'positive' : ''}">${round.totalPayout ? round.totalPayout.toFixed(2) : '0'} ETB</td>
+                        <td class="positive">${round.commission ? round.commission.toFixed(2) : '0'} ETB</td>
+                        <td>${new Date(round.timestamp).toLocaleTimeString()}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : '<p style="color: #94a3b8; text-align: center; padding: 20px;">No recent rounds</p>'}
+          </div>
+          
+          <div style="margin-top: 30px; background: #1e293b; padding: 20px; border-radius: 12px;">
+            <h3>Keno Configuration</h3>
+            <pre style="background: #0f172a; padding: 15px; border-radius: 8px; overflow-x: auto;">
+Game Timer: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_GAME_TIMER : 30} seconds
+Min Bet: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_MIN_BET : 1} ETB
+Max Bet: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_MAX_BET : 1000} ETB
+Max Selections: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_MAX_SELECTIONS : 10} numbers
+Total Numbers: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_TOTAL_NUMBERS : 80}
+Draw Count: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_DRAW_COUNT : 20}
+Commission: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.COMMISSION_PERCENTAGE : 5}%
+            </pre>
+          </div>
+        </div>
+        
+        <script>
+          function forceStartKeno() {
+            if (confirm('Force start Keno round?')) {
+              fetch('/api/admin/keno/force-start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                  alert(data.message || 'Round force started');
+                  refreshStats();
+                })
+                .catch(error => {
+                  alert('Error: ' + error.message);
+                });
+            }
+          }
+          
+          function resetKenoEarnings() {
+            if (confirm('Reset Keno earnings to zero?')) {
+              fetch('/api/admin/keno/reset-earnings', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                  alert(data.message || 'Earnings reset');
+                  refreshStats();
+                })
+                .catch(error => {
+                  alert('Error: ' + error.message);
+                });
+            }
+          }
+          
+          function refreshStats() {
+            location.reload();
+          }
+          
+          // Auto-refresh every 30 seconds
+          setInterval(refreshStats, 30000);
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.status(500).send(`
+      <h1 style="color: #ef4444;">Error Loading Keno Stats</h1>
+      <p>${error.message}</p>
+      <a href="/admin" class="btn">Back to Admin</a>
+    `);
+  }
+});
+
+// API endpoints for Keno admin
+app.post('/api/admin/keno/force-start', async (req, res) => {
+  try {
+    const { adminPassword } = req.body;
+    
+    if (adminPassword !== gameLogic.CONFIG.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const result = kenoLogic.forceStartKenoRound ? kenoLogic.forceStartKenoRound() : false;
+    
+    res.json({
+      success: result,
+      message: result ? 'Keno round force started' : 'Failed to force start Keno round'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/keno/reset-earnings', async (req, res) => {
+  try {
+    const { adminPassword } = req.body;
+    
+    if (adminPassword !== gameLogic.CONFIG.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const result = kenoLogic.resetKenoEarnings ? await kenoLogic.resetKenoEarnings() : { success: false };
+    
+    res.json({
+      success: result.success,
+      message: result.success ? 'Keno earnings reset to zero' : 'Failed to reset Keno earnings',
+      data: result
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
     const connectedPlayers = gameLogic.getConnectedUsers ? gameLogic.getConnectedUsers().length : 0;
-    const activeGames = await Room.countDocuments({ status: 'playing', gameType: 'bingo' });
+    const kenoPlayers = kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
+    const kenoOnlinePlayers = kenoLogic.getKenoGameStats ? kenoLogic.getKenoGameStats().onlinePlayers : 0;
+    const activeGames = await Room.countDocuments({ status: 'playing' });
     const totalUsers = await User.countDocuments();
     const rooms = await Room.countDocuments();
     const totalTransactions = await Transaction.countDocuments();
@@ -1993,51 +2150,66 @@ app.get('/health', async (req, res) => {
     const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
     const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     
-    // Keno stats
-    const kenoRooms = kenoLogic.getKenoRooms ? kenoLogic.getKenoRooms().size : 0;
-    const kenoBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets().size : 0;
-    const kenoHistory = kenoLogic.getKenoGameHistory ? kenoLogic.getKenoGameHistory().length : 0;
+    const kenoStats = kenoLogic.getKenoGameStats ? kenoLogic.getKenoGameStats() : null;
     
     res.json({
       status: 'ok',
       database: 'connected',
-      connectedPlayers: connectedPlayers,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      
+      // Player statistics
+      totalConnectedPlayers: connectedPlayers + kenoPlayers,
+      bingoPlayers: connectedPlayers,
+      kenoPlayers: kenoPlayers,
+      kenoOnlinePlayers: kenoOnlinePlayers,
+      
+      // Game statistics
       totalUsers: totalUsers,
-      activeGames: {
-        bingo: activeGames,
-        keno: kenoRooms
-      },
+      activeBingoGames: activeGames,
       totalRooms: rooms,
+      
+      // Keno statistics
+      kenoRound: kenoStats ? kenoStats.roundNumber : 0,
+      kenoRoundActive: kenoStats ? kenoStats.isRoundActive : false,
+      kenoCountdown: kenoStats ? kenoStats.countdown : 30,
+      kenoWaitingPeriod: kenoStats ? kenoStats.waitingPeriod : false,
+      kenoTotalEarnings: kenoStats ? kenoStats.totalEarnings : 0,
+      
+      // Transaction statistics
       totalTransactions: totalTransactions,
       pendingDeposits: pendingDeposits,
       pendingWithdrawals: pendingWithdrawals,
+      
+      // System info
       telebirrNumber: telebirrNumber,
       telebirrPersisted: true,
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
       telegramReady: true,
       botUsername: '@ethio_games1_bot',
-      realTimeBoxUpdates: 'active',
-      walletSystem: 'active',
-      multiGamePlatform: true,
-      gamesAvailable: ['bingo', 'keno'],
-      doublePrizeProtection: {
-        enabled: true,
-        processingClaims: processingClaims,
-        roomWinners: roomWinners,
-        layers: [
-          'room_winner_tracking',
-          'processing_locks',
-          'atomic_updates',
-          'database_checks',
-          'auto_cleanup'
-        ]
-      },
-      kenoStats: {
-        rooms: kenoRooms,
-        activeBets: kenoBets,
-        totalGames: kenoHistory,
-        status: 'running'
+      
+      // Game features
+      games: {
+        bingo: {
+          active: true,
+          features: ['realTimeBoxUpdates', 'walletSystem', 'fourCornersBonus'],
+          doublePrizeProtection: {
+            enabled: true,
+            processingClaims: processingClaims,
+            roomWinners: roomWinners
+          }
+        },
+        keno: {
+          active: true,
+          features: ['sharedWallet', 'fastRounds', 'realTimeUpdates'],
+          config: kenoLogic.CONFIG ? {
+            gameTimer: kenoLogic.CONFIG.KENO_GAME_TIMER,
+            minBet: kenoLogic.CONFIG.KENO_MIN_BET,
+            maxBet: kenoLogic.CONFIG.KENO_MAX_BET,
+            maxSelections: kenoLogic.CONFIG.KENO_MAX_SELECTIONS,
+            drawCount: kenoLogic.CONFIG.KENO_DRAW_COUNT,
+            commission: kenoLogic.CONFIG.COMMISSION_PERCENTAGE
+          } : null
+        }
       }
     });
   } catch (error) {
@@ -2054,22 +2226,38 @@ app.get('/debug-connections', (req, res) => {
     const processingClaims = gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
     const roomWinners = gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     
-    // Keno debug
-    const kenoRooms = kenoLogic.getKenoRooms ? kenoLogic.getKenoRooms().size : 0;
-    const kenoBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets().size : 0;
+    const kenoStats = kenoLogic.getKenoGameStats ? kenoLogic.getKenoGameStats() : null;
+    const kenoPlayers = kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
     
     res.json({
-      connectedSockets: connectedSockets,
-      socketToUser: socketToUser,
-      adminSockets: adminSockets,
-      processingClaims: processingClaims,
-      roomWinners: roomWinners,
-      kenoRooms: kenoRooms,
-      kenoBets: kenoBets,
       serverTime: new Date().toISOString(),
+      totalConnections: connectedSockets + kenoPlayers,
+      
+      // Bingo connections
+      bingo: {
+        connectedSockets: connectedSockets,
+        socketToUser: socketToUser,
+        adminSockets: adminSockets,
+        processingClaims: processingClaims,
+        roomWinners: roomWinners
+      },
+      
+      // Keno connections
+      keno: {
+        playersCount: kenoPlayers,
+        onlinePlayers: kenoStats ? kenoStats.onlinePlayers : 0,
+        connectedSockets: kenoStats ? kenoStats.connectedSockets : 0,
+        roundNumber: kenoStats ? kenoStats.roundNumber : 0,
+        isRoundActive: kenoStats ? kenoStats.isRoundActive : false,
+        countdown: kenoStats ? kenoStats.countdown : 30,
+        waitingPeriod: kenoStats ? kenoStats.waitingPeriod : false
+      },
+      
       doublePrizeProtection: {
-        processingClaims: Array.from(gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().entries() : []),
-        roomWinners: Array.from(gameLogic.getRoomWinners ? gameLogic.getRoomWinners().entries() : [])
+        bingo: {
+          processingClaims: Array.from(gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().entries() : []),
+          roomWinners: Array.from(gameLogic.getRoomWinners ? gameLogic.getRoomWinners().entries() : [])
+        }
       }
     });
   } catch (error) {
@@ -2081,10 +2269,14 @@ app.get('/debug-users', async (req, res) => {
   try {
     const users = await User.find().sort({ lastSeen: -1 }).limit(50);
     const onlineUsers = users.filter(u => u.isOnline);
+    const bingoPlayers = users.filter(u => u.currentRoom !== null);
+    const kenoPlayers = users.filter(u => u.lastGamePlayed === 'keno');
     
     res.json({
       totalUsers: users.length,
       onlineUsers: onlineUsers.length,
+      bingoPlayers: bingoPlayers.length,
+      kenoPlayers: kenoPlayers.length,
       users: users.map(u => ({
         userId: u.userId,
         userName: u.userName,
@@ -2094,9 +2286,12 @@ app.get('/debug-users', async (req, res) => {
         box: u.box,
         lastSeen: u.lastSeen,
         telegramId: u.telegramId,
-        preferredGame: u.preferredGame,
+        lastGamePlayed: u.lastGamePlayed,
+        totalWagered: u.totalWagered,
+        totalWins: u.totalWins,
         totalBingos: u.totalBingos,
-        totalKenoWins: u.totalKenoWins
+        totalKenoWins: u.totalKenoWins,
+        totalKenoWagered: u.totalKenoWagered
       }))
     });
   } catch (error) {
@@ -2121,66 +2316,33 @@ app.get('/debug/telebirr', async (req, res) => {
   }
 });
 
-// Debug Keno endpoint
-app.get('/debug/keno', (req, res) => {
-  try {
-    const kenoRooms = kenoLogic.getKenoRooms ? kenoLogic.getKenoRooms() : new Map();
-    const kenoBets = kenoLogic.getKenoBets ? kenoLogic.getKenoBets() : new Map();
-    const kenoHistory = kenoLogic.getKenoGameHistory ? kenoLogic.getKenoGameHistory() : [];
-    
-    res.json({
-      rooms: Array.from(kenoRooms.entries()).map(([stake, room]) => ({
-        stake: stake,
-        players: Array.from(room.players),
-        playersCount: room.players.size,
-        status: room.status,
-        roundNumber: room.roundNumber,
-        countdown: room.countdown,
-        drawnNumbers: room.drawnNumbers,
-        currentDraw: room.currentDraw,
-        totalPrizePool: room.totalPrizePool,
-        houseEarnings: room.houseEarnings,
-        winners: room.winners
-      })),
-      bets: Array.from(kenoBets.entries()).slice(0, 10),
-      recentHistory: kenoHistory.slice(0, 5),
-      totalBets: kenoBets.size,
-      totalRooms: kenoRooms.size,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   const telebirrNumber = await getTelebirrNumber();
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║             🤖 BINGO ELITE & KENO - MULTI-GAME PLATFORM                     ║
+║             🤖 BINGO ELITE + KENO ULTRA - TELEGRAM READY                    ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  URL:          https://bingo-telegram-game.onrender.com                     ║
 ║  Port:         ${PORT}                                                      ║
 ║  Bingo:        /game                                                        ║
 ║  Keno:         /keno                                                        ║
-║  Admin:        /admin (password: ${gameLogic.CONFIG.ADMIN_PASSWORD})                 ║
+║  Admin:        /admin (password: ${gameLogic.CONFIG.ADMIN_PASSWORD})        ║
 ║  Telegram:     /telegram                                                    ║
 ║  Bot Setup:    /setup-telegram                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  🔑 Admin Password: ${gameLogic.CONFIG.ADMIN_PASSWORD}                       ║
 ║  🤖 Telegram Bot: @ethio_games1_bot                                         ║
 ║  📡 WebSocket: ✅ Ready for Telegram connections                            ║
-║  🎮 Two Games: Bingo & Keno                                                 ║
-║  💰 Shared Wallet: ✅ ONE balance for BOTH games                            ║
-║  🎱 Bingo Features: Four Corners Bonus, Real-time box tracking              ║
-║  🎰 Keno Features: Up to 1000x payouts, Fast number draws                   ║
+║  🎮 Four Corners Bonus: ${gameLogic.CONFIG.FOUR_CORNERS_BONUS} ETB           ║
+║  🎰 Keno: ✅ ACTIVE (Shared balance with Bingo)                             ║
+║  📦 Real-time Box Tracking: ✅ ACTIVE                                       ║
+║  💳 Wallet System: ✅ ACTIVE (SHARED BETWEEN GAMES)                        ║
 ║  📱 TELEBIRR: ${telebirrNumber}                                             ║
 ║  💾 TELEBIRR PERSISTENCE: ✅ DATABASE SAVED                                ║
-║  🔄 Will survive server restarts                                            ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  🔒 DOUBLE PRIZE PROTECTION: ✅ FOR BOTH GAMES                             ║
+║  🔒 DOUBLE PRIZE BUG FIXED: ✅ COMPLETELY FIXED                            ║
 ║  ✅ Room winner tracking                                                    ║
 ║  ✅ Processing locks per user per room                                      ║
 ║  ✅ Atomic room status updates                                              ║
@@ -2188,10 +2350,9 @@ server.listen(PORT, async () => {
 ║  ✅ Auto-cleanup of stale locks                                            ║
 ║  ✅ Enhanced error handling                                                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
-✅ Multi-game platform ready with database-persisted Telebirr number
+✅ Server ready with database-persisted Telebirr number
 📱 Telebirr number loaded from database: ${telebirrNumber}
-🎮 TWO GAMES AVAILABLE: Bingo Elite & Keno Premium
-💰 SHARED WALLET: Players use the same balance for both games
-🔒 Double prize protection: ACTIVE for both games
+🎰 Keno Ultra integrated (shares balance with Bingo Elite)
+🎮 Players can now enjoy TWO games with ONE wallet!
   `);
 });
