@@ -2689,7 +2689,7 @@ function setupSocketHandlers() {
             players: [],
             takenBoxes: [],
             status: 'waiting',
-            lastBoxUpdate: new Date()
+            lastBoxUpdate = new Date()
           });
           await roomData.save();
         }
@@ -2905,7 +2905,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== FIXED: player:leaveRoom - Proper cleanup and refund ==========
+    // ========== FIXED: player:leaveRoom - NO REFUND DURING COUNTDOWN ==========
     socket.on('player:leaveRoom', async (data) => {
       try {
         const userId = socketToUser.get(socket.id) || socket.userId;
@@ -2958,19 +2958,21 @@ function setupSocketHandlers() {
         // Get online players after removal
         const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
         
-        // Don't stop countdown when player leaves
+        // 🚨 IMPORTANT: DO NOT stop countdown when player leaves
         await room.save();
         
         // Reset user
         user.currentRoom = null;
         user.box = null;
         
-        // Refund stake if game hasn't started
-        if (room.status !== 'playing') {
+        // 🚨🚨🚨 CRITICAL FIX: ONLY REFUND if room is in 'waiting' status (BEFORE countdown starts)
+        // If room status is 'starting' (countdown phase), NO REFUND!
+        if (room.status === 'waiting') {
+          // Refund only if game hasn't started counting down
           const oldBalance = user.balance;
           user.balance += roomStake;
           
-          console.log(`💰 Refunded ${roomStake} ETB to ${user.userName}, new balance: ${user.balance}`);
+          console.log(`💰 Refunded ${roomStake} ETB to ${user.userName} (room was waiting), new balance: ${user.balance}`);
           
           // Record transaction
           const transaction = new models.Transaction({
@@ -2979,11 +2981,23 @@ function setupSocketHandlers() {
             userName: user.userName,
             amount: roomStake,
             room: roomStake,
-            description: `Left room before game start - stake refunded`
+            description: `Left room before countdown started - stake refunded`
           });
           await transaction.save();
           
           socket.emit('balanceUpdate', user.balance);
+        } else if (room.status === 'starting') {
+          console.log(`⚠️ Player ${user.userName} left during countdown - NO REFUND given`);
+          // Record that player forfeited stake
+          const transaction = new models.Transaction({
+            type: 'STAKE',
+            userId: userId,
+            userName: user.userName,
+            amount: -roomStake,
+            room: roomStake,
+            description: `Left room during countdown - stake forfeited`
+          });
+          await transaction.save();
         }
         
         await user.save();
@@ -2993,8 +3007,10 @@ function setupSocketHandlers() {
         
         // Send success message
         socket.emit('leftRoom', { 
-          message: 'Left room successfully',
-          refunded: room.status !== 'playing'
+          message: room.status === 'starting' 
+            ? 'Left room successfully - No refund (countdown in progress)' 
+            : 'Left room successfully',
+          refunded: room.status === 'waiting'
         });
         
         // Update lobby for remaining players
@@ -3012,7 +3028,7 @@ function setupSocketHandlers() {
           }
         });
         
-        console.log(`✅ User ${user.userName} left room ${roomStake}, ${room.takenBoxes.length} boxes remain, ${onlinePlayers.length} online players`);
+        console.log(`✅ User ${user.userName} left room ${roomStake} during ${room.status} phase, ${room.takenBoxes.length} boxes remain, ${onlinePlayers.length} online players`);
         
         // Update admin panel
         broadcastRoomStatus();
@@ -3025,7 +3041,8 @@ function setupSocketHandlers() {
           remainingPlayers: room.players.length,
           onlinePlayers: onlinePlayers.length,
           remainingBoxes: room.takenBoxes.length,
-          status: room.status
+          status: room.status,
+          refunded: room.status === 'waiting'
         });
         
       } catch (error) {
