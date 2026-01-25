@@ -962,6 +962,45 @@
             color: var(--secondary);
         }
 
+        /* Loading state for buttons */
+        .confirm-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .confirm-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .claim-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .claim-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
         /* Updated confirm button and back button */
         .action-buttons {
             display: flex;
@@ -2066,7 +2105,6 @@
             }
         });
 
-        // ========== UPDATED STATE OBJECT ==========
         let state = {
             stake: 0,
             grid: [],
@@ -2077,7 +2115,7 @@
             balance: 0.00,
             userId: null,
             userName: 'Guest',
-            telebirrNumber: '0962577855',
+            telebirrNumber: '0962577855', // Default value, will be updated from server
             roomStatuses: {},
             connectionAttempts: 0,
             lastActivityTime: Date.now(),
@@ -2093,61 +2131,27 @@
             discoveryTimerInterval: null,
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
-            selectedWithdrawAmount: 0,
-            // NEW: Bingo claim tracking
-            currentClaimId: null,
-            isClaimProcessing: false,
-            lastClaimTime: 0
+            selectedWithdrawAmount: 0
         };
 
-        // ========== NEW: BINGO CLAIM FUNCTIONS ==========
-        function showBingoProcessing(patternName) {
-            const claimBtn = document.getElementById('claimBingoButton');
-            if (!claimBtn) return;
-            
-            // Immediately disable the button with visual feedback
-            claimBtn.disabled = true;
-            claimBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> CHECKING ${patternName}...`;
-            
-            // Add visual feedback
-            showNotification(`🎯 Checking ${patternName} pattern...`, 'info', 2000);
-            
-            state.isClaimProcessing = true;
-            state.lastClaimTime = Date.now();
-            
-            console.log(`🔄 Bingo processing started for pattern: ${patternName}`);
-        }
+        // 🚨 FAST BINGO CLAIMING VARIABLES
+        let isClaiming = false; // Global flag to prevent double-click
+        let lastClaimTime = 0;
+        let currentClaimId = null;
 
-        function resetClaimButton() {
-            const claimBtn = document.getElementById('claimBingoButton');
-            if (!claimBtn) return;
-            
-            // Reset to original state
-            claimBtn.disabled = true;
-            claimBtn.innerHTML = 'CLAIM BINGO!';
-            
-            // Re-enable if bingo is possible
-            if (checkWinningPattern()) {
-                claimBtn.disabled = false;
-            }
-            
-            state.isClaimProcessing = false;
-            state.currentClaimId = null;
-            
-            console.log('🔄 Claim button reset');
-        }
-
-        // ========== UPDATED: Telebirr number functions ==========
+        // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
             const displayElement = document.getElementById('telebirrNumberDisplay');
             if (displayElement) {
                 displayElement.textContent = telebirrNumber;
             }
             
+            // Also update state for reference
             state.telebirrNumber = telebirrNumber;
             console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
         }
 
+        // Function to manually request Telebirr number
         function fetchTelebirrNumber() {
             if (state.isConnected) {
                 console.log('📱 Requesting Telebirr number from server...');
@@ -2164,7 +2168,7 @@
             }
         }
 
-        // ========== CONNECTION STATUS ==========
+        // Update connection status UI
         function updateConnectionStatus(connected, message) {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('connectionStatusText');
@@ -2235,6 +2239,7 @@
                         console.log('✅ Init SUCCESS:', response.message);
                         state.isInitialized = true;
                         
+                        // After successful init, fetch Telebirr number
                         fetchTelebirrNumber();
                     } else {
                         console.log('❌ Init FAILED:', response?.message || 'No response');
@@ -2244,8 +2249,9 @@
             }
         }
 
-        // ========== NOTIFICATION SYSTEM ==========
+        // Show notification
         function showNotification(message, type = 'info', duration = 3000) {
+            // Don't show in-game notifications for marking numbers
             if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) {
                 return;
             }
@@ -2253,6 +2259,7 @@
                 return;
             }
             
+            // Create notification element
             const notification = document.createElement('div');
             notification.className = 'notification';
             notification.style.cssText = `
@@ -2293,12 +2300,14 @@
             }, duration);
         }
 
-        // ========== SCREEN MANAGEMENT ==========
+        // Screen management
         function showScreen(screenId) {
+            // Hide all screens
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
             
+            // Show target screen
             const targetScreen = document.getElementById(screenId);
             if (targetScreen) {
                 targetScreen.classList.add('active');
@@ -2327,22 +2336,27 @@
             hideOverlay('roomLockedOverlay');
         }
 
-        // ========== WALLET FUNCTIONS ==========
+        // Wallet Functions
         function showWallet() {
+            // Update wallet balance display
             document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
             state.selectedWithdrawAmount = 0;
             document.getElementById('customAmount').value = '';
             document.getElementById('withdrawPhoneNumber').value = '';
             
+            // ✅ Always fetch current Telebirr number from server when opening wallet
             if (state.isConnected) {
                 console.log('📱 Opening wallet, fetching Telebirr number...');
                 fetchTelebirrNumber();
             } else {
+                // Use state value if not connected
                 updateTelebirrNumberInUI(state.telebirrNumber);
             }
             
+            // Show wallet overlay
             showOverlay('walletOverlay');
             
+            // Add haptic feedback
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                     tg.HapticFeedback.impactOccurred('light'); 
@@ -2357,6 +2371,7 @@
         function switchWalletTab(tab) {
             state.walletTab = tab;
             
+            // Update tab buttons
             document.querySelectorAll('.wallet-tab').forEach(tabElement => {
                 tabElement.classList.remove('active');
             });
@@ -2377,6 +2392,7 @@
             document.getElementById('selectedWithdrawAmount').textContent = amount + ' ETB';
             document.getElementById('customAmount').value = '';
             
+            // Add haptic feedback
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                     tg.HapticFeedback.impactOccurred('light'); 
@@ -2418,6 +2434,7 @@
                 showNotification(`Deposit request submitted! Send ${depositAmount} ETB to: ${state.telebirrNumber || '0962577855'}`, 'success');
                 hideWallet();
                 
+                // Clear form
                 document.getElementById('receiptNumber').value = '';
                 document.getElementById('depositAmount').value = '';
             } else {
@@ -2455,6 +2472,7 @@
                 showNotification(`Withdrawal request submitted! ${amount} ETB will be sent to ${phoneNumber}`, 'success');
                 hideWallet();
                 
+                // Clear form
                 state.selectedWithdrawAmount = 0;
                 document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
                 document.getElementById('customAmount').value = '';
@@ -2464,7 +2482,7 @@
             }
         }
 
-        // ========== SOCKET EVENT HANDLERS ==========
+        // Handle socket connection
         socket.on('connect', () => {
             console.log('✅ Socket connected:', socket.id);
             state.isConnected = true;
@@ -2481,6 +2499,7 @@
             console.log('👤 Generated User ID:', state.userId);
             console.log('👤 User Name:', state.userName);
             
+            // Update user info in UI
             document.getElementById('userName').textContent = state.userName;
             document.getElementById('userAvatar').textContent = state.userName.charAt(0).toUpperCase();
             
@@ -2493,6 +2512,7 @@
             startActivityMonitoring();
         });
 
+        // Handle socket disconnection
         socket.on('disconnect', (reason) => {
             console.log('❌ Socket disconnected:', reason);
             state.isConnected = false;
@@ -2514,6 +2534,7 @@
             }, delay);
         });
 
+        // Handle connection errors
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error.message);
             updateConnectionStatus(false, 'CONNECTION ERROR');
@@ -2526,6 +2547,7 @@
             }, 3000);
         });
 
+        // Handle user data from server
         socket.on('userData', (data) => {
             console.log('User data received:', data);
             state.userId = data.userId || state.userId;
@@ -2537,107 +2559,46 @@
             saveUserInfo();
         });
 
+        // ✅ Handle Telebirr number received from server
         socket.on('telebirrNumber', (data) => {
+            // Check if data is a string or object
             const number = typeof data === 'string' ? data : (data?.telebirrNumber || data);
-            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number);
+            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number, 'Full data:', data);
             if (number) {
                 state.telebirrNumber = number;
                 updateTelebirrNumberInUI(number);
             }
         });
 
+        // ✅ Handle Telebirr number updates in real-time
         socket.on('telebirrNumberUpdate', (data) => {
             console.log('📱 [telebirrNumberUpdate] Telebirr number updated in real-time:', data);
             if (data && data.telebirrNumber) {
                 state.telebirrNumber = data.telebirrNumber;
                 updateTelebirrNumberInUI(data.telebirrNumber);
                 
+                // Show notification to user if they're viewing the wallet
                 if (document.getElementById('walletOverlay')?.classList.contains('active')) {
                     showNotification('📱 Telebirr number has been updated: ' + data.telebirrNumber, 'info', 3000);
                 }
             }
         });
 
+        // ✅ Handle Telebirr number updates from admin panel
         socket.on('admin:telebirrNumberUpdated', (data) => {
             console.log('📱 [admin:telebirrNumberUpdated] Received admin Telebirr number update:', data);
             if (data && data.telebirrNumber) {
                 state.telebirrNumber = data.telebirrNumber;
                 updateTelebirrNumberInUI(data.telebirrNumber);
                 
+                // Show notification to user if they're viewing the wallet
                 if (document.getElementById('walletOverlay')?.classList.contains('active')) {
                     showNotification('📱 Telebirr number has been updated by admin: ' + data.telebirrNumber, 'info', 3000);
                 }
             }
         });
 
-        // ========== UPDATED: BINGO CLAIM EVENTS ==========
-        socket.on('bingoProcessing', (data) => {
-            console.log('🔄 Bingo processing started:', data.claimId);
-            state.currentClaimId = data.claimId;
-            showBingoProcessing(data.patternName);
-        });
-
-        socket.on('bingoProcessed', (data) => {
-            console.log('✅ Bingo processed:', data);
-            
-            if (data.success) {
-                showNotification(`🎉 BINGO confirmed! Prize: ${data.prize} ETB`, 'success', 3000);
-            } else {
-                showNotification(`❌ Bingo claim failed: ${data.message}`, 'error', 3000);
-                resetClaimButton();
-            }
-        });
-
-        socket.on('enableBingo', () => {
-            if (!state.isClaimProcessing && checkWinningPattern()) {
-                const claimBtn = document.getElementById('claimBingoButton');
-                claimBtn.disabled = false;
-                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 2000);
-            }
-        });
-
-        // ========== UPDATED: CLAIM BINGO FUNCTION ==========
-        function claimBingo() {
-            // Prevent double clicks
-            const now = Date.now();
-            if (state.isClaimProcessing && (now - state.lastClaimTime) < 3000) {
-                showNotification('🔄 Bingo claim already processing...', 'warning', 2000);
-                return;
-            }
-            
-            if (!state.isConnected || document.getElementById('claimBingoButton').disabled) {
-                return;
-            }
-            
-            console.log('🎯 Claiming BINGO!');
-            
-            const markedNumbers = Array.from(state.markedNumbers);
-            
-            // Generate unique claim ID
-            state.currentClaimId = `claim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
-            console.log('📤 Sending BINGO claim with ID:', state.currentClaimId);
-            
-            socket.emit('claimBingo', { 
-                room: state.stake, 
-                grid: state.grid, 
-                marked: markedNumbers 
-            }, (response) => {
-                if (response && response.success) {
-                    console.log('✅ BINGO claim received by server:', response.timestamp);
-                    showBingoProcessing('BINGO');
-                } else {
-                    console.log('❌ BINGO claim rejected:', response?.message);
-                    showNotification(`❌ ${response?.message || 'Claim rejected'}`, 'error', 3000);
-                    resetClaimButton();
-                }
-            });
-            
-            document.getElementById('claimBingoButton').disabled = true;
-            state.lastActivityTime = Date.now();
-        }
-
-        // ========== OTHER GAME FUNCTIONS (keep as is) ==========
+        // Handle room status updates
         socket.on('roomStatus', (roomData) => {
             console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
             
@@ -2711,6 +2672,7 @@
             });
         }
 
+        // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
             const val = state.balance.toFixed(2);
@@ -2720,6 +2682,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // Wallet events
         socket.on('wallet:depositRequestSuccess', (data) => {
             showNotification(data.message, 'success', 5000);
         });
@@ -2774,17 +2737,22 @@
             
             showScreen('discoveryScreen');
             
+            // Reset box counter
             state.lastBoxCount = 0;
             state.previousTakenBoxes = [];
             state.selectedBox = null;
             
+            // Hide timer container initially
             document.getElementById('timerContainer').style.display = 'none';
+            // Hide plate preview initially
             document.getElementById('platePreviewContainer').classList.remove('active');
             
             if(state.isConnected) {
+                // Subscribe to room updates
                 socket.emit('subscribeToRoom', { room: amt });
                 state.roomSubscribed = true;
                 
+                // Request taken boxes
                 console.log(`📤 Requesting taken boxes for room ${amt}...`);
                 socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
                     console.log(`📦 Received taken boxes for room ${amt}:`, takenBoxes);
@@ -2792,11 +2760,13 @@
                     updateBoxCounters(takenBoxes);
                 });
                 
+                // Request countdown status for discovery overlay
                 socket.emit('getRoomCountdown', { room: amt }, (response) => {
                     if (response && response.countdownActive) {
                         console.log(`⏱️ Discovery timer active: ${response.seconds} seconds, ${response.onlinePlayers} online players`);
                         updateDiscoveryTimer(response.seconds, response.onlinePlayers);
                     } else {
+                        // Hide timer if no countdown
                         document.getElementById('timerContainer').style.display = 'none';
                     }
                 });
@@ -2809,6 +2779,7 @@
             const grid = document.getElementById('boxesGrid');
             grid.innerHTML = '';
             
+            // Create boxes 1-100
             for(let i=1; i<=100; i++) {
                 const box = document.createElement('div');
                 const isTaken = taken.includes(i);
@@ -2835,21 +2806,26 @@
         }
         
         function selectBox(boxNumber) {
+            // Deselect all boxes
             document.querySelectorAll('.box-item').forEach(box => {
                 box.classList.remove('selected');
             });
             
+            // Select the clicked box
             const selectedBox = document.querySelector(`.box-item[data-number="${boxNumber}"]`);
             if (selectedBox && !selectedBox.classList.contains('taken')) {
                 selectedBox.classList.add('selected');
                 state.selectedBox = boxNumber;
                 
+                // Show plate preview
                 showPlatePreview(boxNumber);
                 
+                // Enable confirm button
                 const confirmButton = document.getElementById('confirmBoxButton');
                 confirmButton.disabled = false;
                 confirmButton.textContent = `Select Box ${boxNumber}`;
                 
+                // Add haptic feedback
                 try { 
                     if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                         tg.HapticFeedback.impactOccurred('light'); 
@@ -2859,11 +2835,13 @@
         }
         
         function showPlatePreview(seed) {
+            // Generate preview grid
             generateTraditionalBingoCard(seed);
             
             const previewGrid = document.getElementById('previewGrid');
             previewGrid.innerHTML = '';
             
+            // Add header letters
             const letters = ['B', 'I', 'N', 'G', 'O'];
             letters.forEach(letter => {
                 const letterCell = document.createElement('div');
@@ -2872,6 +2850,7 @@
                 previewGrid.appendChild(letterCell);
             });
             
+            // Add cells
             state.grid.forEach((val, index) => {
                 const cell = document.createElement('div');
                 const isFree = val === 'FREE';
@@ -2880,6 +2859,7 @@
                 previewGrid.appendChild(cell);
             });
             
+            // Show preview container
             document.getElementById('platePreviewContainer').classList.add('active');
         }
         
@@ -2900,20 +2880,25 @@
             state.lastBoxCount = takenCount;
         }
 
+        // Update discovery timer
         function updateDiscoveryTimer(seconds, onlinePlayers) {
             const timerContainer = document.getElementById('timerContainer');
             const discoveryTimer = document.getElementById('discoveryTimer');
             const timerSeconds = document.getElementById('timerSeconds');
             
             if (timerContainer && discoveryTimer && timerSeconds) {
+                // Show the timer container
                 timerContainer.style.display = 'block';
                 
+                // Update timer display
                 discoveryTimer.textContent = seconds;
                 timerSeconds.textContent = seconds;
                 state.currentDiscoveryTimer = seconds;
                 
+                // Update player count
                 document.getElementById('onlinePlayers').textContent = onlinePlayers || 1;
                 
+                // Update timer styling
                 if (seconds > 0) {
                     if (seconds <= 5) {
                         discoveryTimer.style.color = '#ef4444';
@@ -2923,6 +2908,7 @@
                         discoveryTimer.style.color = '#f59e0b';
                     }
                 } else {
+                    // Timer reached 0
                     discoveryTimer.style.color = '#ef4444';
                 }
             }
@@ -2955,11 +2941,13 @@
         }
         
         function leaveDiscovery() {
+            // Unsubscribe from room updates
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
             }
             
+            // Clear selected box
             state.selectedBox = null;
             
             showScreen('lobbyScreen');
@@ -3092,47 +3080,56 @@
             state.lastActivityTime = Date.now();
         }
 
-        // ========== UPDATED: CHECK WINNING PATTERN ==========
+        // 🚀 OPTIMIZED BINGO PATTERN CHECKING
         function checkWinningPattern() {
             const grid = state.grid;
             const marked = state.markedNumbers;
             
-            const isM = (idx) => {
-                const cellValue = grid[idx];
-                if (cellValue === 'FREE') {
-                    return marked.has('FREE');
-                }
-                return marked.has(cellValue);
+            // FAST CHECK: Convert marked set to array for faster access
+            const markedArray = Array.from(marked);
+            
+            // Helper function for fast checking
+            const isMarked = (val) => {
+                if (val === 'FREE') return markedArray.includes('FREE');
+                return markedArray.includes(val);
             };
             
-            // Check four corners first (fastest check)
-            const fourCorners = isM(0) && isM(4) && isM(20) && isM(24);
+            // Pre-calculate corner positions
+            const corners = [0, 4, 20, 24];
+            const fourCorners = corners.every(idx => isMarked(grid[idx]));
             if (fourCorners) {
-                console.log('✅ Four corners BINGO!');
+                console.log('✅ Four Corners BINGO!');
                 return true;
             }
             
-            // Check rows
-            for(let i=0; i<5; i++) {
-                const rowBingo = isM(i*5) && isM(i*5+1) && isM(i*5+2) && isM(i*5+3) && isM(i*5+4);
-                if (rowBingo) {
-                    console.log(`✅ Row ${i+1} BINGO!`);
-                    return true;
+            // Check rows and columns in a single pass
+            for (let i = 0; i < 5; i++) {
+                let rowComplete = true;
+                let colComplete = true;
+                
+                for (let j = 0; j < 5; j++) {
+                    // Check row
+                    const rowIdx = i * 5 + j;
+                    if (!isMarked(grid[rowIdx])) {
+                        rowComplete = false;
+                    }
+                    
+                    // Check column
+                    const colIdx = i + j * 5;
+                    if (!isMarked(grid[colIdx])) {
+                        colComplete = false;
+                    }
                 }
-            }
-            
-            // Check columns
-            for(let i=0; i<5; i++) {
-                const colBingo = isM(i) && isM(i+5) && isM(i+10) && isM(i+15) && isM(i+20);
-                if (colBingo) {
-                    console.log(`✅ Column ${i+1} BINGO!`);
+                
+                if (rowComplete || colComplete) {
+                    console.log(rowComplete ? `✅ Row ${i+1} BINGO!` : `✅ Column ${i+1} BINGO!`);
                     return true;
                 }
             }
             
             // Check diagonals
-            const diag1 = isM(0) && isM(6) && isM(12) && isM(18) && isM(24);
-            const diag2 = isM(4) && isM(8) && isM(12) && isM(16) && isM(20);
+            const diag1 = [0, 6, 12, 18, 24].every(idx => isMarked(grid[idx]));
+            const diag2 = [4, 8, 12, 16, 20].every(idx => isMarked(grid[idx]));
             
             if (diag1 || diag2) {
                 console.log('✅ Diagonal BINGO!');
@@ -3141,6 +3138,109 @@
             
             return false;
         }
+
+        // 🚀 FAST BINGO CLAIMING FUNCTION
+        function claimBingo() {
+            const now = Date.now();
+            
+            // 🚨 PREVENT DOUBLE-CLICK (500ms cooldown)
+            if (isClaiming || (now - lastClaimTime < 500)) {
+                console.log('⚠️ Claim prevented: Already claiming or too fast');
+                return;
+            }
+            
+            isClaiming = true;
+            lastClaimTime = now;
+            
+            const button = document.getElementById('claimBingoButton');
+            const originalText = button.textContent;
+            
+            // IMMEDIATE VISUAL FEEDBACK
+            button.disabled = true;
+            button.classList.add('loading');
+            button.textContent = 'PROCESSING...';
+            
+            console.log('🎯 Claiming BINGO (fast)...');
+            
+            if(state.isConnected) {
+                const markedNumbers = Array.from(state.markedNumbers);
+                
+                // Send claim with timeout
+                const claimTimeout = setTimeout(() => {
+                    if (isClaiming) {
+                        console.log('⏰ Claim timeout - releasing lock');
+                        resetClaimButton(button, originalText);
+                    }
+                }, 5000);
+                
+                socket.emit('claimBingo', { 
+                    room: state.stake, 
+                    grid: state.grid, 
+                    marked: markedNumbers 
+                }, (response) => {
+                    clearTimeout(claimTimeout);
+                    
+                    if (response && response.success) {
+                        console.log('✅ BINGO claim accepted by server');
+                        showNotification('🎉 BINGO claim sent! Checking pattern...', 'success', 2000);
+                        
+                        // Store claim ID for tracking
+                        currentClaimId = response.claimId;
+                        
+                        // Keep button disabled until gameOver event
+                        button.textContent = 'CLAIM VERIFIED!';
+                        
+                        // Add haptic feedback
+                        try { 
+                            if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
+                                tg.HapticFeedback.impactOccurred('medium'); 
+                            }
+                        } catch(e){}
+                    } else {
+                        console.log('❌ BINGO claim rejected:', response?.message);
+                        showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
+                        resetClaimButton(button, originalText);
+                    }
+                });
+            } else {
+                showNotification('Not connected to server', 'error');
+                resetClaimButton(button, originalText);
+            }
+            
+            state.lastActivityTime = Date.now();
+        }
+
+        // Reset claim button function
+        function resetClaimButton(button, originalText) {
+            isClaiming = false;
+            button.disabled = false;
+            button.classList.remove('loading');
+            button.textContent = originalText;
+        }
+
+        // Handle claim processing events
+        socket.on('claimProcessing', (data) => {
+            console.log('⚡ Claim processing started:', data.claimId);
+            // Button is already disabled by claimBingo function
+        });
+
+        socket.on('claimResult', (data) => {
+            console.log('📨 Claim result received:', data);
+            
+            const button = document.getElementById('claimBingoButton');
+            const originalText = 'CLAIM BINGO!';
+            
+            if (data.type === 'invalidBingo' || data.type === 'error') {
+                showNotification(`❌ ${data.message}`, 'error', 3000);
+                resetClaimButton(button, originalText);
+            } else if (data.type === 'alreadyWon') {
+                showNotification('🏆 Game already won by someone else!', 'warning', 3000);
+                resetClaimButton(button, originalText);
+            } else if (data.type === 'processing') {
+                showNotification('⏳ Another claim is being processed...', 'info', 2000);
+                // Keep button disabled
+            }
+        });
 
         function initGameBoard() {
             const target = document.getElementById('bingoGrid');
@@ -3213,28 +3313,36 @@
             
             if (!container || !gridContainer || !data) return;
             
+            // Show the container
             container.style.display = 'block';
+            
+            // Clear previous grid
             gridContainer.innerHTML = '';
             
+            // Get grid data
             const grid = data.winnerGrid || [];
             const winningPattern = data.winningPattern || [];
             const markedNumbers = data.markedNumbers || [];
             const calledNumbers = data.calledNumbers || [];
             const patternName = data.winningPatternName || 'Winning Pattern';
             
+            // Count stats
             const totalMarked = markedNumbers.length;
             const totalCalled = calledNumbers.length;
             const isFourCorners = data.isFourCornersWin || false;
             
+            // Create 5x5 grid (25 cells)
             for (let i = 0; i < 25; i++) {
                 const cell = document.createElement('div');
-                const isFree = (i === 12);
+                const isFree = (i === 12); // Center cell is free
                 const isWinningCell = winningPattern.includes(i);
                 const cellValue = grid[i] || '';
                 
+                // Determine cell styling
                 cell.className = 'replica-cell';
                 if (isFree) cell.classList.add('free');
                 
+                // Check if cell is marked (either winning or regular marked)
                 let isMarked = false;
                 if (isFree) {
                     isMarked = markedNumbers.includes('FREE');
@@ -3242,16 +3350,19 @@
                     isMarked = true;
                 }
                 
+                // Apply winning style if part of winning pattern
                 if (isWinningCell) {
                     cell.classList.add('winning');
                 } else if (isMarked) {
                     cell.classList.add('marked');
                 }
                 
+                // Check if it's a corner cell
                 if ([0, 4, 20, 24].includes(i)) {
                     cell.classList.add('corner');
                 }
                 
+                // Set cell content
                 if (isFree) {
                     cell.textContent = 'FREE';
                 } else if (cellValue) {
@@ -3261,10 +3372,12 @@
                 gridContainer.appendChild(cell);
             }
             
+            // Set pattern name
             if (patternNameElement) {
                 patternNameElement.textContent = patternName;
             }
             
+            // Set pattern stats
             if (patternStatsElement) {
                 patternStatsElement.innerHTML = `
                     <div class="pattern-stat">
@@ -3284,6 +3397,7 @@
                 `;
             }
             
+            // Add pattern line visualization (optional)
             addPatternLineVisualization(gridContainer, data);
         }
         
@@ -3293,26 +3407,31 @@
             const patternType = data.winningPatternType;
             const winningPattern = data.winningPattern || [];
             
+            // Clear any existing pattern lines
             const existingLines = gridContainer.querySelectorAll('.pattern-line');
             existingLines.forEach(line => line.remove());
             
+            // Add pattern line based on pattern type
             const line = document.createElement('div');
             line.className = 'pattern-line';
             
             switch (patternType) {
                 case 'row':
+                    // For rows, we need to find which row
                     const rowIndex = Math.floor(winningPattern[0] / 5);
                     line.classList.add('row');
                     line.style.top = `${(rowIndex * 20) + 10}%`;
                     break;
                     
                 case 'column':
+                    // For columns, we need to find which column
                     const colIndex = winningPattern[0] % 5;
                     line.classList.add('column');
                     line.style.left = `${(colIndex * 20) + 10}%`;
                     break;
                     
                 case 'diagonal':
+                    // Check which diagonal
                     const isMainDiagonal = winningPattern.includes(0) && winningPattern.includes(24);
                     line.classList.add(isMainDiagonal ? 'diagonal-main' : 'diagonal-anti');
                     break;
@@ -3322,7 +3441,7 @@
                     break;
                     
                 default:
-                    return;
+                    return; // Don't add line for unknown patterns
             }
             
             gridContainer.appendChild(line);
@@ -3343,6 +3462,11 @@
             
             state.isResettingLobby = true;
             
+            // Reset claiming state
+            isClaiming = false;
+            lastClaimTime = 0;
+            currentClaimId = null;
+            
             state.stake = 0;
             state.grid = [];
             state.calledNumbers.clear();
@@ -3353,26 +3477,33 @@
             state.selectedBox = null;
             state.onlinePlayersCount = 0;
             state.totalPlayersCount = 0;
-            state.currentClaimId = null;
-            state.isClaimProcessing = false;
-            state.lastClaimTime = 0;
             
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
             }
             
+            // Hide all overlays
             hideOverlay('winOverlay');
             hideOverlay('loseOverlay');
             hideOverlay('insufficientOverlay');
             hideOverlay('roomLockedOverlay');
             
+            // Hide plate preview
             document.getElementById('platePreviewContainer').classList.remove('active');
+            
+            // Hide winning patterns
             hideWinningPatterns();
             
+            // Reset UI
             showScreen('lobbyScreen');
             
-            document.getElementById('claimBingoButton').disabled = true;
+            const claimButton = document.getElementById('claimBingoButton');
+            claimButton.disabled = true;
+            claimButton.classList.remove('loading');
+            claimButton.textContent = 'CLAIM BINGO!';
+            claimButton.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
+            
             document.getElementById('ballLetter').textContent = '--';
             document.getElementById('ballNumber').textContent = '--';
             document.getElementById('ballHistory').innerHTML = '';
@@ -3395,7 +3526,7 @@
             console.log('✅ Lobby reset complete');
         }
 
-        // ========== OTHER SOCKET EVENTS ==========
+        // lobbyUpdate event handler
         socket.on('lobbyUpdate', (d) => {
             console.log('👥 Lobby update:', d);
             
@@ -3408,6 +3539,7 @@
                     `✅ <span style="color: #10b981;">${playerCount} online player${playerCount > 1 ? 's' : ''}</span> - Game will start when timer reaches 0` :
                     `Need at least 1 player to start`;
                 
+                // Update discovery overlay if active
                 if (document.getElementById('discoveryScreen').classList.contains('active')) {
                     document.getElementById('onlinePlayers').textContent = playerCount;
                 }
@@ -3416,6 +3548,7 @@
             }
         });
 
+        // gameCountdown event handler
         socket.on('gameCountdown', (d) => {
             console.log('⏱️ Game countdown event:', d);
             
@@ -3440,6 +3573,7 @@
                     showNotification('🎮 Game starting now!', 'success', 2000);
                 }
                 
+                // Also update discovery overlay timer if visible
                 if (document.getElementById('discoveryScreen').classList.contains('active')) {
                     updateDiscoveryTimer(d.timer, d.onlinePlayers);
                 }
@@ -3518,6 +3652,16 @@
             }
         });
 
+        socket.on('enableBingo', () => {
+            console.log('✅ Enable BINGO event received');
+            if (checkWinningPattern()) {
+                document.getElementById('claimBingoButton').disabled = false;
+                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
+            }
+            
+            state.lastActivityTime = Date.now();
+        });
+
         socket.on('joinedRoom', () => {
             console.log('Successfully joined room');
             state.lastActivityTime = Date.now();
@@ -3529,16 +3673,19 @@
             state.lastActivityTime = Date.now();
         });
 
+        // Handle room locked event
         socket.on('roomLocked', (data) => {
             console.log('🔒 Room locked event received:', data);
             
             showNotification(`🔒 ${data.message}`, 'warning', 3000);
             showOverlay('roomLockedOverlay');
             
+            // Automatically return to lobby after 3 seconds
             setTimeout(() => {
                 hideOverlay('roomLockedOverlay');
                 showScreen('lobbyScreen');
                 
+                // Reset state
                 state.stake = 0;
                 state.selectedBox = null;
                 state.roomSubscribed = false;
@@ -3552,6 +3699,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // ========== UPDATED: gameOver event handler with winning pattern display ==========
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
             
@@ -3564,7 +3712,12 @@
                     return;
                 }
                 
-                document.getElementById('claimBingoButton').disabled = true;
+                const button = document.getElementById('claimBingoButton');
+                button.disabled = true;
+                
+                // Reset claiming state
+                isClaiming = false;
+                lastClaimTime = 0;
 
                 if(isWinner) {
                     document.getElementById('winPrizeAmount').textContent = `+${d.prize.toFixed(2)} ETB`;
@@ -3575,6 +3728,7 @@
                         document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
                     }
                     
+                    // Display winning pattern for winner
                     displayWinningPattern('win', d);
                     
                     showOverlay('winOverlay');
@@ -3603,6 +3757,7 @@
                     document.getElementById('winnerName').textContent = d.winnerName || "Another player";
                     document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
                     
+                    // Display winning pattern for losers
                     displayWinningPattern('lose', d);
                     
                     showOverlay('loseOverlay');
@@ -3617,6 +3772,7 @@
             }
         });
 
+        // Handle game timeout event
         socket.on('gameTimeout', (data) => {
             console.log('⏰ Game timeout event received:', data);
             
@@ -3625,6 +3781,11 @@
                 
                 showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'warning', 4000);
                 
+                // Reset claiming state
+                isClaiming = false;
+                lastClaimTime = 0;
+                
+                // Reset to lobby after delay
                 setTimeout(() => {
                     resetToLobby();
                 }, 2000);
@@ -3704,7 +3865,7 @@
             resetToLobby();
         });
 
-        // ========== ACTIVITY MONITORING ==========
+        // Activity monitoring to keep connection alive
         function startActivityMonitoring() {
             setInterval(() => {
                 if (state.isConnected) {
@@ -3730,7 +3891,7 @@
             }, 15000);
         }
 
-        // ========== INITIALIZATION ==========
+        // Auto-reconnect on load
         window.onload = () => {
             state.userName = getUserName();
             document.getElementById('userName').textContent = state.userName;
