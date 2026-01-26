@@ -12,7 +12,8 @@ module.exports = {
         PAYOUT_TABLE: {
             5: {1: 0, 2: 0, 3: 1, 4: 5, 5: 50} // Payout for 5 numbers only
         },
-        COMMISSION_PERCENTAGE: 5 // 5% house commission
+        COMMISSION_PERCENTAGE: 5, // 5% house commission
+        ALLOWED_BETS: [5, 10, 20, 50, 100] // Only these bet amounts allowed
     },
 
     // Initialize Keno logic
@@ -34,7 +35,7 @@ module.exports = {
         this.totalKenoEarnings = 0;
         this.minimumPlayers = 1; // Game stops if no players
         
-        console.log('✅ Keno game logic initialized - 5 numbers only, bets: 5,10,20,50,100');
+        console.log('✅ Keno game logic initialized - 5 numbers only, bets: 5,10,20,50,100 ETB');
         
         // Load existing stats
         this.loadKenoStats();
@@ -87,7 +88,7 @@ module.exports = {
                 const user = await self.User.findOne({ userId: userId });
                 
                 if (!user) {
-                    socket.emit('keno:error', 'User not found');
+                    socket.emit('keno:error', { message: 'User not found' });
                     return;
                 }
                 
@@ -142,7 +143,8 @@ module.exports = {
                         selections: self.CONFIG.KENO_SELECTIONS,
                         totalNumbers: self.CONFIG.KENO_TOTAL_NUMBERS,
                         drawCount: self.CONFIG.KENO_DRAW_COUNT,
-                        gameTimer: self.CONFIG.KENO_GAME_TIMER
+                        gameTimer: self.CONFIG.KENO_GAME_TIMER,
+                        allowedBets: self.CONFIG.ALLOWED_BETS
                     }
                 });
                 
@@ -157,7 +159,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno auth error:', error);
-                socket.emit('keno:error', 'Authentication failed');
+                socket.emit('keno:error', { message: 'Authentication failed' });
             }
         });
         
@@ -167,46 +169,45 @@ module.exports = {
                 const { numbers, betAmount } = data;
                 
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
                 // Check if round is active
                 if (!self.isKenoRoundActive) {
-                    socket.emit('keno:error', 'Round not active. Please wait for next round.');
+                    socket.emit('keno:error', { message: 'Round not active. Please wait for next round.' });
                     return;
                 }
                 
                 // Check if already placed bet in this round
                 if (player.hasPlacedBet) {
-                    socket.emit('keno:error', 'You have already placed a bet this round');
+                    socket.emit('keno:error', { message: 'You have already placed a bet this round' });
                     return;
                 }
                 
                 // Validate bet amount - ONLY 5,10,20,50,100 allowed
                 const bet = parseFloat(betAmount);
-                const allowedBets = [5, 10, 20, 50, 100];
-                if (isNaN(bet) || !allowedBets.includes(bet)) {
-                    socket.emit('keno:error', 'Bet amount must be 5, 10, 20, 50, or 100 ETB');
+                if (isNaN(bet) || !self.CONFIG.ALLOWED_BETS.includes(bet)) {
+                    socket.emit('keno:error', { message: 'Bet amount must be 5, 10, 20, 50, or 100 ETB' });
                     return;
                 }
                 
                 // Validate numbers - MUST be exactly 5 numbers
                 if (!Array.isArray(numbers) || numbers.length !== self.CONFIG.KENO_SELECTIONS) {
-                    socket.emit('keno:error', `You must select exactly ${self.CONFIG.KENO_SELECTIONS} numbers`);
+                    socket.emit('keno:error', { message: `You must select exactly ${self.CONFIG.KENO_SELECTIONS} numbers` });
                     return;
                 }
                 
                 // Check unique numbers
                 const uniqueNumbers = [...new Set(numbers)];
                 if (uniqueNumbers.length !== numbers.length) {
-                    socket.emit('keno:error', 'Duplicate numbers not allowed');
+                    socket.emit('keno:error', { message: 'Duplicate numbers not allowed' });
                     return;
                 }
                 
@@ -214,7 +215,7 @@ module.exports = {
                 for (const num of numbers) {
                     const n = parseInt(num);
                     if (isNaN(n) || n < 1 || n > self.CONFIG.KENO_TOTAL_NUMBERS) {
-                        socket.emit('keno:error', `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}`);
+                        socket.emit('keno:error', { message: `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}` });
                         return;
                     }
                 }
@@ -225,11 +226,12 @@ module.exports = {
                 // Check balance
                 const user = await self.User.findOne({ userId: socket.userId });
                 if (!user || user.balance < bet) {
-                    socket.emit('keno:error', 'Insufficient balance');
+                    socket.emit('keno:error', { message: 'Insufficient balance' });
                     return;
                 }
                 
                 // Deduct bet amount
+                const previousBalance = user.balance;
                 user.balance -= bet;
                 user.totalWagered += bet;
                 await user.save();
@@ -253,7 +255,9 @@ module.exports = {
                     numbers: sortedNumbers,
                     amount: bet,
                     placedAt: new Date(),
-                    userName: player.userName
+                    userName: player.userName,
+                    previousBalance: previousBalance,
+                    newBalance: user.balance
                 };
                 activeGame.totalBets++;
                 activeGame.totalBetAmount += bet;
@@ -264,9 +268,11 @@ module.exports = {
                     userId: socket.userId,
                     userName: player.userName,
                     amount: -bet,
-                    description: `Keno bet: ${bet} ETB on 5 numbers`,
+                    description: `Keno bet: ${bet} ETB on numbers ${sortedNumbers.join(', ')}`,
                     game: 'keno',
-                    status: 'completed'
+                    status: 'completed',
+                    previousBalance: previousBalance,
+                    newBalance: user.balance
                 });
                 await transaction.save();
                 
@@ -285,11 +291,11 @@ module.exports = {
                 // Broadcast updated player count
                 self.broadcastKenoPlayersUpdate();
                 
-                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on 5 numbers`);
+                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on numbers ${sortedNumbers.join(', ')}`);
                 
             } catch (error) {
                 console.error('Keno place bet error:', error);
-                socket.emit('keno:error', 'Failed to place bet');
+                socket.emit('keno:error', { message: 'Failed to place bet' });
             }
         });
         
@@ -297,7 +303,7 @@ module.exports = {
         socket.on('keno:quickPick', (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -319,22 +325,29 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno quick pick error:', error);
-                socket.emit('keno:error', 'Failed to generate quick pick');
+                socket.emit('keno:error', { message: 'Failed to generate quick pick' });
             }
         });
         
         // Get current game state
-        socket.on('keno:getState', () => {
+        socket.on('keno:getState', async () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
+                }
+                
+                // Get latest balance
+                const user = await self.User.findOne({ userId: socket.userId });
+                if (user) {
+                    player.balance = user.balance;
+                    self.kenoPlayers.set(socket.userId, player);
                 }
                 
                 const activeGame = self.getActiveKenoGame();
@@ -354,7 +367,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno get state error:', error);
-                socket.emit('keno:error', 'Failed to get game state');
+                socket.emit('keno:error', { message: 'Failed to get game state' });
             }
         });
         
@@ -362,13 +375,13 @@ module.exports = {
         socket.on('keno:getBalance', async () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const user = await self.User.findOne({ userId: socket.userId });
                 if (!user) {
-                    socket.emit('keno:error', 'User not found');
+                    socket.emit('keno:error', { message: 'User not found' });
                     return;
                 }
                 
@@ -387,7 +400,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno get balance error:', error);
-                socket.emit('keno:error', 'Failed to get balance');
+                socket.emit('keno:error', { message: 'Failed to get balance' });
             }
         });
         
@@ -395,13 +408,13 @@ module.exports = {
         socket.on('keno:clearSelection', () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -416,12 +429,112 @@ module.exports = {
                         message: 'Selection cleared'
                     });
                 } else {
-                    socket.emit('keno:error', 'Cannot clear after placing bet');
+                    socket.emit('keno:error', { message: 'Cannot clear after placing bet' });
                 }
                 
             } catch (error) {
                 console.error('Keno clear selection error:', error);
-                socket.emit('keno:error', 'Failed to clear selection');
+                socket.emit('keno:error', { message: 'Failed to clear selection' });
+            }
+        });
+        
+        // Cancel current bet (only allowed if round still active)
+        socket.on('keno:cancelBet', async () => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', { message: 'Not authenticated' });
+                    return;
+                }
+                
+                const player = self.kenoPlayers.get(socket.userId);
+                if (!player) {
+                    socket.emit('keno:error', { message: 'Player not found' });
+                    return;
+                }
+                
+                // Only allow canceling if bet was placed this round
+                if (!player.hasPlacedBet || !player.currentBet) {
+                    socket.emit('keno:error', { message: 'No bet to cancel' });
+                    return;
+                }
+                
+                // Check if round is still active (within betting period)
+                if (!self.isKenoRoundActive) {
+                    socket.emit('keno:error', { message: 'Cannot cancel bet after betting period ends' });
+                    return;
+                }
+                
+                // Check if countdown is less than 5 seconds (don't allow cancellation in last seconds)
+                if (self.kenoCountdown <= 5) {
+                    socket.emit('keno:error', { message: 'Cannot cancel bet in last 5 seconds' });
+                    return;
+                }
+                
+                // Get the bet amount
+                const betAmount = player.currentBet;
+                
+                // Refund to user
+                const user = await self.User.findOne({ userId: socket.userId });
+                if (user) {
+                    user.balance += betAmount;
+                    user.totalWagered -= betAmount; // Remove from wagered stats
+                    await user.save();
+                    
+                    // Update player state
+                    player.balance = user.balance;
+                    player.hasPlacedBet = false;
+                    player.selectedNumbers = [];
+                    player.currentBet = null;
+                    player.totalWagered -= betAmount;
+                    self.kenoPlayers.set(socket.userId, player);
+                    
+                    // Remove from active game
+                    const activeGame = self.getActiveKenoGame();
+                    if (activeGame && activeGame.bets[socket.userId]) {
+                        delete activeGame.bets[socket.userId];
+                        activeGame.totalBets--;
+                        activeGame.totalBetAmount -= betAmount;
+                        
+                        // Remove from players array if they have no bet
+                        const index = activeGame.players.indexOf(socket.userId);
+                        if (index > -1) {
+                            activeGame.players.splice(index, 1);
+                        }
+                    }
+                    
+                    // Create refund transaction
+                    const transaction = new self.Transaction({
+                        type: 'KENO_REFUND',
+                        userId: socket.userId,
+                        userName: player.userName,
+                        amount: betAmount,
+                        description: `Keno bet refund: ${betAmount} ETB`,
+                        game: 'keno',
+                        status: 'completed',
+                        previousBalance: user.balance - betAmount,
+                        newBalance: user.balance
+                    });
+                    await transaction.save();
+                    
+                    // Update stats (remove the wagered amount)
+                    await self.updateKenoStats(-betAmount, 0, 0);
+                    
+                    socket.emit('keno:betCancelled', {
+                        success: true,
+                        balance: user.balance,
+                        refundAmount: betAmount,
+                        message: `Bet of ${betAmount} ETB cancelled and refunded`
+                    });
+                    
+                    // Broadcast updated player count
+                    self.broadcastKenoPlayersUpdate();
+                    
+                    console.log(`🎰 Bet cancelled: ${player.userName} - ${betAmount} ETB refunded`);
+                }
+                
+            } catch (error) {
+                console.error('Keno cancel bet error:', error);
+                socket.emit('keno:error', { message: 'Failed to cancel bet' });
             }
         });
         
@@ -498,7 +611,8 @@ module.exports = {
             // Broadcast waiting status
             self.io.to('keno').emit('keno:waiting', {
                 message: 'Waiting for players...',
-                playersNeeded: self.minimumPlayers
+                playersNeeded: self.minimumPlayers,
+                countdown: self.kenoCountdown
             });
             return;
         }
@@ -529,20 +643,21 @@ module.exports = {
         
         self.activeKenoGames.set('current', activeGame);
         
-        // Broadcast round start
-        self.io.to('keno').emit('keno:round_start', {
-            round: activeGame.roundNumber,
-            duration: self.CONFIG.KENO_GAME_TIMER,
-            message: `Round ${activeGame.roundNumber} started! Place your bets!`
-        });
-        
-        // Reset all players' bet status
+        // Reset all players' bet status for new round
         for (const [userId, player] of self.kenoPlayers) {
             player.hasPlacedBet = false;
             player.selectedNumbers = [];
             player.currentBet = null;
             self.kenoPlayers.set(userId, player);
         }
+        
+        // Broadcast round start
+        self.io.to('keno').emit('keno:round_start', {
+            round: activeGame.roundNumber,
+            duration: self.CONFIG.KENO_GAME_TIMER,
+            message: `Round ${activeGame.roundNumber} started! Place your bets!`,
+            nextDrawTime: Date.now() + (self.CONFIG.KENO_GAME_TIMER * 1000)
+        });
         
         // Start countdown
         self.startKenoCountdown();
@@ -678,7 +793,7 @@ module.exports = {
         console.log('🎰 Processing Keno results...');
         
         // Calculate winnings for each player
-        for (const [playerId, bet] of Object.entries(activeGame.bets)) {
+        const playerPromises = Object.entries(activeGame.bets).map(async ([playerId, bet]) => {
             try {
                 // Count matches
                 const matches = bet.numbers.filter(num => 
@@ -698,6 +813,7 @@ module.exports = {
                     // Update user balance
                     const user = await self.User.findOne({ userId: playerId });
                     if (user) {
+                        const previousBalance = user.balance;
                         user.balance += winnings;
                         user.totalWins += winnings;
                         await user.save();
@@ -710,7 +826,9 @@ module.exports = {
                             amount: winnings,
                             description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB, matched ${matches} of 5 numbers)`,
                             game: 'keno',
-                            status: 'completed'
+                            status: 'completed',
+                            previousBalance: previousBalance,
+                            newBalance: user.balance
                         });
                         await transaction.save();
                         
@@ -756,6 +874,7 @@ module.exports = {
                     }
                 } else {
                     // Send loss result
+                    const user = await self.User.findOne({ userId: playerId });
                     const playerSocket = self.getKenoSocketByUserId(playerId);
                     if (playerSocket) {
                         playerSocket.emit('keno:round_result', {
@@ -764,7 +883,7 @@ module.exports = {
                             yourNumbers: bet.numbers,
                             matches: matches,
                             winnings: 0,
-                            newBalance: await self.getUserBalance(playerId),
+                            newBalance: user ? user.balance : 0,
                             bet: bet.amount,
                             message: `Matched ${matches} numbers. Better luck next round!`
                         });
@@ -773,6 +892,7 @@ module.exports = {
                     // Update player state
                     const player = self.kenoPlayers.get(playerId);
                     if (player) {
+                        player.balance = user ? user.balance : player.balance;
                         player.hasPlacedBet = false;
                         player.selectedNumbers = [];
                         player.currentBet = null;
@@ -782,7 +902,10 @@ module.exports = {
             } catch (error) {
                 console.error(`Error processing result for player ${playerId}:`, error);
             }
-        }
+        });
+        
+        // Wait for all player results to be processed
+        await Promise.all(playerPromises);
         
         // Calculate house commission
         const totalWagered = activeGame.totalBetAmount;
@@ -831,7 +954,8 @@ module.exports = {
             // Broadcast waiting message
             self.io.to('keno').emit('keno:waiting', {
                 message: 'Waiting for players to start next round...',
-                playersNeeded: self.minimumPlayers
+                playersNeeded: self.minimumPlayers,
+                countdown: self.CONFIG.KENO_GAME_TIMER
             });
         }
     },
@@ -925,6 +1049,11 @@ module.exports = {
             }, 5000);
         } else {
             console.log('🎰 Waiting for players to start first round...');
+            self.io.to('keno').emit('keno:waiting', {
+                message: 'Waiting for players to start first round...',
+                playersNeeded: self.minimumPlayers,
+                countdown: self.CONFIG.KENO_GAME_TIMER
+            });
         }
     },
     
@@ -1029,7 +1158,9 @@ module.exports = {
                 isOnline: player.isOnline,
                 lastSeen: player.lastSeen,
                 totalWagered: player.totalWagered,
-                totalWins: player.totalWins
+                totalWins: player.totalWins,
+                hasPlacedBet: player.hasPlacedBet,
+                currentBet: player.currentBet
             });
         }
         return players;
@@ -1065,5 +1196,62 @@ module.exports = {
                 this.startKenoRound();
             }
         }
+    },
+    
+    // Admin: Force end current round (emergency only)
+    forceEndCurrentRound: async function() {
+        try {
+            const activeGame = this.getActiveKenoGame();
+            
+            if (activeGame && activeGame.status === 'betting') {
+                // End betting and draw numbers
+                if (this.kenoCountdownInterval) {
+                    clearInterval(this.kenoCountdownInterval);
+                }
+                
+                console.log('🛑 Admin forced end of current round');
+                
+                // Draw numbers immediately
+                this.drawKenoNumbers();
+                
+                return { success: true, message: 'Round ended by admin' };
+            } else {
+                return { success: false, message: 'No active betting round to end' };
+            }
+        } catch (error) {
+            console.error('Error forcing end of round:', error);
+            return { success: false, error: error.message };
+        }
+    },
+    
+    // Get current round details
+    getCurrentRoundDetails: function() {
+        const activeGame = this.getActiveKenoGame();
+        const playerDetails = [];
+        
+        for (const [playerId, bet] of Object.entries(activeGame.bets)) {
+            const player = this.kenoPlayers.get(playerId);
+            if (player) {
+                playerDetails.push({
+                    userName: player.userName,
+                    betAmount: bet.amount,
+                    numbers: bet.numbers,
+                    placedAt: bet.placedAt
+                });
+            }
+        }
+        
+        return {
+            roundNumber: activeGame.roundNumber,
+            status: activeGame.status,
+            startTime: activeGame.startTime,
+            totalBets: activeGame.totalBets,
+            totalBetAmount: activeGame.totalBetAmount,
+            players: playerDetails,
+            drawnNumbers: activeGame.drawnNumbers,
+            winners: activeGame.winners,
+            totalPayout: activeGame.totalPayout,
+            commissionCollected: activeGame.commissionCollected
+        };
     }
 };
