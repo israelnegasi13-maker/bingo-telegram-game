@@ -31,11 +31,6 @@
             -webkit-tap-highlight-color: transparent;
         }
         
-        html {
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
-        }
-        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: var(--dark-bg);
@@ -45,9 +40,9 @@
             background-image: 
                 radial-gradient(at 40% 20%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
                 radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+            /* Smooth scrolling */
+            -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
         
         .container {
@@ -57,6 +52,10 @@
             flex-direction: column;
             max-width: 100vw;
             overflow-x: hidden;
+            /* Enable hardware acceleration for smoother scrolling */
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            perspective: 1000;
         }
         
         /* Header - Compact */
@@ -110,28 +109,27 @@
         .user-info {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
         
-        /* Wallet Button in Header */
+        /* Wallet button in header */
         .wallet-btn-header {
-            width: 40px;
-            height: 40px;
-            background: rgba(139, 92, 246, 0.2);
-            border: 1px solid rgba(139, 92, 246, 0.4);
-            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s;
+            font-size: 14px;
             color: var(--keno-purple);
-            font-size: 16px;
+            transition: all 0.3s;
         }
         
-        .wallet-btn-header:hover,
-        .wallet-btn-header:active {
-            background: rgba(139, 92, 246, 0.4);
+        .wallet-btn-header:hover {
+            background: rgba(139, 92, 246, 0.3);
             transform: scale(1.05);
         }
         
@@ -141,13 +139,6 @@
             border-radius: 8px;
             padding: 8px 10px;
             min-width: 90px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .balance-card:hover {
-            background: rgba(139, 92, 246, 0.25);
-            transform: scale(1.02);
         }
         
         .balance-label {
@@ -316,7 +307,7 @@
             justify-content: center;
             gap: 6px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         /* Control Panel - Compact */
@@ -443,7 +434,7 @@
             font-weight: 700;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 11px;
         }
         
@@ -468,7 +459,7 @@
             font-weight: 700;
             font-size: 13px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -531,9 +522,9 @@
             margin-bottom: 12px;
             min-height: 80px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
         
         .drawn-numbers {
@@ -543,8 +534,6 @@
             justify-content: center;
             align-items: center;
             min-height: 60px;
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
         }
         
         .drawn-number {
@@ -623,6 +612,7 @@
             overflow-y: auto;
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
         
         .history-item {
@@ -633,6 +623,7 @@
             justify-content: space-between;
             align-items: center;
             font-size: 11px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .history-item.win {
@@ -683,7 +674,7 @@
             font-size: 12px;
             z-index: 1000;
             opacity: 0;
-            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            transition: all 0.4s;
             text-align: center;
             max-width: 90%;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
@@ -733,81 +724,66 @@
             align-items: center;
             z-index: 3000;
             padding: 16px;
-            backdrop-filter: blur(20px);
         }
         
         .wallet-modal.active {
             display: flex;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
         }
         
         .wallet-content {
             background: var(--card-bg);
-            border-radius: 20px;
-            padding: 24px;
+            border-radius: 16px;
+            padding: 20px;
             max-width: 400px;
             width: 100%;
             border: 2px solid var(--accent-color);
+            backdrop-filter: blur(20px);
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
         
         .wallet-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
         
-        .wallet-title {
+        .wallet-header h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--accent-color);
             display: flex;
             align-items: center;
-            gap: 12px;
-            color: var(--accent-color);
+            gap: 10px;
         }
         
-        .wallet-title i {
-            font-size: 24px;
-        }
-        
-        .wallet-title h3 {
-            font-size: 20px;
-            font-weight: 800;
-        }
-        
-        .wallet-close {
-            width: 40px;
-            height: 40px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
+        .close-wallet {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 28px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            color: var(--text-primary);
-            font-size: 16px;
+            border-radius: 50%;
             transition: all 0.3s;
         }
         
-        .wallet-close:hover {
+        .close-wallet:hover {
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
-            transform: rotate(90deg);
         }
         
-        .wallet-balance {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 16px;
-            padding: 24px;
+        .wallet-balance-card {
+            background: var(--primary-gradient);
+            border-radius: 12px;
+            padding: 20px;
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             border: 2px solid var(--accent-color);
         }
         
@@ -820,201 +796,33 @@
         }
         
         .wallet-balance-amount {
-            font-size: 36px;
+            font-size: 32px;
             font-weight: 900;
             color: white;
-            margin-bottom: 4px;
-        }
-        
-        .wallet-balance-sub {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.7);
-        }
-        
-        .wallet-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-        
-        .wallet-stat {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .wallet-stat-icon {
-            width: 36px;
-            height: 36px;
-            background: rgba(139, 92, 246, 0.2);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             margin-bottom: 12px;
-            color: var(--keno-purple);
-            font-size: 14px;
         }
         
-        .wallet-stat-info {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .wallet-stat-label {
-            font-size: 9px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-        
-        .wallet-stat-value {
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--text-primary);
-        }
-        
-        .wallet-transactions {
+        .wallet-address {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
             background: rgba(0, 0, 0, 0.3);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .transactions-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        
-        .transactions-header h4 {
-            font-size: 14px;
-            color: var(--accent-color);
-            font-weight: 700;
-        }
-        
-        .refresh-btn {
-            width: 32px;
-            height: 32px;
-            background: rgba(139, 92, 246, 0.2);
-            border: 1px solid rgba(139, 92, 246, 0.3);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--keno-purple);
-            font-size: 12px;
-            transition: all 0.3s;
-        }
-        
-        .refresh-btn:hover,
-        .refresh-btn:active {
-            background: rgba(139, 92, 246, 0.4);
-            transform: rotate(180deg);
-        }
-        
-        .transactions-list {
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .no-transactions {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-secondary);
-        }
-        
-        .no-transactions i {
-            font-size: 40px;
-            margin-bottom: 12px;
-            opacity: 0.5;
-        }
-        
-        .no-transactions p {
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        .transaction-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            margin-bottom: 8px;
-            border-left: 3px solid transparent;
-        }
-        
-        .transaction-item.deposit {
-            border-left-color: var(--success);
-        }
-        
-        .transaction-item.withdrawal {
-            border-left-color: var(--warning);
-        }
-        
-        .transaction-item.win {
-            border-left-color: var(--success);
-        }
-        
-        .transaction-item.bet {
-            border-left-color: var(--danger);
-        }
-        
-        .transaction-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        
-        .transaction-type {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-        
-        .transaction-description {
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-        
-        .transaction-amount {
-            font-size: 14px;
-            font-weight: 800;
-        }
-        
-        .transaction-amount.positive {
-            color: var(--success);
-        }
-        
-        .transaction-amount.negative {
-            color: var(--danger);
-        }
-        
-        .transaction-time {
-            font-size: 9px;
-            color: var(--text-secondary);
-            margin-top: 2px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            display: inline-block;
         }
         
         .wallet-actions {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            margin-bottom: 20px;
         }
         
         .wallet-btn {
             flex: 1;
-            padding: 16px;
-            border-radius: 12px;
+            padding: 14px;
             border: none;
-            font-weight: 800;
+            border-radius: 10px;
+            font-weight: 700;
             font-size: 14px;
             cursor: pointer;
             display: flex;
@@ -1029,21 +837,297 @@
             color: white;
         }
         
-        .deposit-btn:hover {
-            background: #0da371;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
-        }
-        
         .withdraw-btn {
-            background: var(--warning);
-            color: #000;
+            background: var(--info);
+            color: white;
         }
         
-        .withdraw-btn:hover {
-            background: #d97706;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+        .refresh-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+        
+        .wallet-transactions {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .transactions-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .transactions-header h3 {
+            font-size: 14px;
+            color: var(--accent-color);
+        }
+        
+        .transactions-list {
+            max-height: 200px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        .no-transactions {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .no-transactions i {
+            font-size: 24px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        
+        .no-transactions p {
+            font-size: 12px;
+        }
+        
+        .transaction-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            border-left: 3px solid;
+        }
+        
+        .transaction-item.deposit {
+            border-left-color: var(--success);
+        }
+        
+        .transaction-item.withdrawal {
+            border-left-color: var(--info);
+        }
+        
+        .transaction-item.win {
+            border-left-color: var(--warning);
+        }
+        
+        .transaction-item.bet {
+            border-left-color: var(--danger);
+        }
+        
+        .transaction-type {
+            font-weight: 700;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-bottom: 4px;
+            display: inline-block;
+        }
+        
+        .transaction-amount {
+            font-weight: 800;
+            font-size: 14px;
+        }
+        
+        .transaction-amount.positive {
+            color: var(--success);
+        }
+        
+        .transaction-amount.negative {
+            color: var(--danger);
+        }
+        
+        .transaction-date {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        
+        /* Deposit/Withdraw Modals */
+        .deposit-modal,
+        .withdraw-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 4000;
+            padding: 16px;
+        }
+        
+        .deposit-modal.active,
+        .withdraw-modal.active {
+            display: flex;
+        }
+        
+        .deposit-content,
+        .withdraw-content {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 400px;
+            width: 100%;
+            border: 2px solid var(--accent-color);
+            backdrop-filter: blur(20px);
+        }
+        
+        .deposit-header,
+        .withdraw-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .deposit-header h2,
+        .withdraw-header h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .deposit-chips,
+        .withdraw-chips {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .deposit-chip,
+        .withdraw-chip {
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .deposit-chip:hover,
+        .withdraw-chip:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--keno-purple);
+        }
+        
+        .deposit-chip.selected,
+        .withdraw-chip.selected {
+            background: var(--secondary-gradient);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        
+        .custom-amount,
+        .withdraw-amount,
+        .withdraw-account {
+            margin-bottom: 20px;
+        }
+        
+        .custom-amount label,
+        .withdraw-amount label,
+        .withdraw-account label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .custom-input,
+        .withdraw-input {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 5px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .custom-input input,
+        .withdraw-input input,
+        .withdraw-account input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 700;
+            padding: 12px 0;
+            outline: none;
+        }
+        
+        .custom-input span,
+        .withdraw-input span {
+            color: var(--accent-color);
+            font-weight: 700;
+            margin-left: 10px;
+        }
+        
+        .withdraw-min {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 5px;
+            text-align: center;
+        }
+        
+        .deposit-info,
+        .withdraw-info {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 12px;
+            margin: 20px 0;
+        }
+        
+        .deposit-note,
+        .withdraw-note {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .deposit-actions,
+        .withdraw-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .deposit-action-btn,
+        .withdraw-action-btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .cancel-btn {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+        
+        .confirm-deposit-btn {
+            background: var(--success);
+            color: white;
+        }
+        
+        .confirm-withdraw-btn {
+            background: var(--info);
+            color: white;
         }
         
         /* Confirmation Modal */
@@ -1059,7 +1143,6 @@
             align-items: center;
             z-index: 2000;
             padding: 16px;
-            transition: opacity 0.3s ease;
         }
         
         .confirmation-modal.active {
@@ -1141,29 +1224,6 @@
             margin: 12px 0;
         }
         
-        /* Enhanced scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-            margin: 2px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            transition: all 0.3s ease;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            transform: scale(1.1);
-        }
-        
         /* Responsive */
         @media (max-width: 360px) {
             .numbers-grid {
@@ -1188,21 +1248,43 @@
                 padding: 8px 4px;
             }
             
-            .wallet-content {
-                padding: 16px;
+            .deposit-chips,
+            .withdraw-chips {
+                grid-template-columns: 1fr;
             }
-            
-            .wallet-stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .wallet-balance-amount {
-                font-size: 28px;
-            }
-            
-            .wallet-actions {
-                flex-direction: column;
-            }
+        }
+        
+        /* Smooth Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--secondary-gradient);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scale(1.05);
+        }
+        
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .hide-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
         }
     </style>
 </head>
@@ -1222,14 +1304,14 @@
                 </div>
                 <div class="logo-text">
                     <h1>KENO ULTRA</h1>
-                    <p>5 NUMBERS • INSTANT WINS</p>
+                    <p>1-5 NUMBERS • INSTANT WINS</p>
                 </div>
             </div>
             <div class="user-info">
-                <div class="wallet-btn-header" id="wallet-btn-header">
+                <div class="wallet-btn-header" id="open-wallet">
                     <i class="fas fa-wallet"></i>
                 </div>
-                <div class="balance-card" id="balance-card">
+                <div class="balance-card">
                     <div class="balance-label">BALANCE</div>
                     <div class="balance-amount" id="balance">0 ETB</div>
                 </div>
@@ -1242,8 +1324,8 @@
             <div class="game-board">
                 <div class="board-header">
                     <div class="board-title">
-                        <h2>SELECT 5 NUMBERS</h2>
-                        <p>Choose exactly 5 numbers from 1-80</p>
+                        <h2>SELECT 1-5 NUMBERS</h2>
+                        <p>Choose 1 to 5 numbers from 1-80</p>
                     </div>
                     <div class="selection-info">
                         SELECTED: <span id="selected-count">0</span>/5
@@ -1305,7 +1387,7 @@
                 <!-- Action Buttons -->
                 <div class="action-buttons">
                     <button class="btn btn-primary" id="play-btn" disabled>
-                        <i class="fas fa-play-circle"></i> SELECT 5 NUMBERS
+                        <i class="fas fa-play-circle"></i> SELECT AT LEAST 1 NUMBER
                     </button>
                     <button class="btn btn-secondary" id="clear-btn">
                         <i class="fas fa-undo"></i> CLEAR
@@ -1334,7 +1416,7 @@
                     <div class="win-title">🎉 YOU WON! 🎉</div>
                     <div class="win-amount"><span id="win-amount">0</span> ETB</div>
                     <div class="match-details">
-                        Matched <span id="match-count">0</span> of 5 numbers
+                        Matched <span id="match-count">0</span> of <span id="total-selected">5</span> numbers
                     </div>
                 </div>
             </div>
@@ -1353,7 +1435,7 @@
         
         <!-- Footer -->
         <footer class="app-footer">
-            <p>KENO ULTRA • SELECT 5 NUMBERS • 5,10,20,50,100 ETB BETS ONLY</p>
+            <p>KENO ULTRA • SELECT 1-5 NUMBERS • 5,10,20,50,100 ETB BETS ONLY</p>
             <p style="margin-top: 4px; font-size: 9px; color: rgba(148, 163, 184, 0.7);">
                 <i class="fas fa-shield-alt" style="margin-right: 4px;"></i>
                 All players see same numbers • 5% commission
@@ -1375,6 +1457,10 @@
                     <span class="detail-value" id="confirm-numbers">1, 2, 3, 4, 5</span>
                 </div>
                 <div class="detail-row">
+                    <span class="detail-label">Numbers Selected:</span>
+                    <span class="detail-value" id="confirm-number-count">5</span>
+                </div>
+                <div class="detail-row">
                     <span class="detail-label">Bet Amount:</span>
                     <span class="detail-value" id="confirm-amount">5 ETB</span>
                 </div>
@@ -1391,57 +1477,28 @@
     <div class="wallet-modal" id="wallet-modal">
         <div class="wallet-content">
             <div class="wallet-header">
-                <div class="wallet-title">
-                    <i class="fas fa-wallet"></i>
-                    <h3>WALLET</h3>
-                </div>
-                <button class="wallet-close" id="wallet-close">
-                    <i class="fas fa-times"></i>
-                </button>
+                <h2><i class="fas fa-wallet"></i> WALLET</h2>
+                <button class="close-wallet" id="close-wallet">&times;</button>
             </div>
             
-            <div class="wallet-balance">
-                <div class="wallet-balance-label">TOTAL BALANCE</div>
+            <div class="wallet-balance-card">
+                <div class="wallet-balance-label">AVAILABLE BALANCE</div>
                 <div class="wallet-balance-amount" id="wallet-balance">0 ETB</div>
-                <div class="wallet-balance-sub">Available to bet</div>
+                <div class="wallet-address">User: <span id="wallet-user">Player</span></div>
             </div>
             
-            <div class="wallet-stats">
-                <div class="wallet-stat">
-                    <div class="wallet-stat-icon">
-                        <i class="fas fa-coins"></i>
-                    </div>
-                    <div class="wallet-stat-info">
-                        <div class="wallet-stat-label">Total Wagered</div>
-                        <div class="wallet-stat-value" id="total-wagered">0 ETB</div>
-                    </div>
-                </div>
-                <div class="wallet-stat">
-                    <div class="wallet-stat-icon">
-                        <i class="fas fa-trophy"></i>
-                    </div>
-                    <div class="wallet-stat-info">
-                        <div class="wallet-stat-label">Total Won</div>
-                        <div class="wallet-stat-value" id="total-wins">0 ETB</div>
-                    </div>
-                </div>
-                <div class="wallet-stat">
-                    <div class="wallet-stat-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <div class="wallet-stat-info">
-                        <div class="wallet-stat-label">Net Profit</div>
-                        <div class="wallet-stat-value" id="net-profit">0 ETB</div>
-                    </div>
-                </div>
+            <div class="wallet-actions">
+                <button class="wallet-btn deposit-btn" id="deposit-btn">
+                    <i class="fas fa-arrow-down"></i> DEPOSIT
+                </button>
+                <button class="wallet-btn withdraw-btn" id="withdraw-btn">
+                    <i class="fas fa-arrow-up"></i> WITHDRAW
+                </button>
             </div>
             
             <div class="wallet-transactions">
                 <div class="transactions-header">
-                    <h4>RECENT TRANSACTIONS</h4>
-                    <button class="refresh-btn" id="refresh-transactions">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
+                    <h3><i class="fas fa-history"></i> RECENT TRANSACTIONS</h3>
                 </div>
                 <div class="transactions-list" id="transactions-list">
                     <div class="no-transactions">
@@ -1451,15 +1508,97 @@
                 </div>
             </div>
             
-            <div class="wallet-actions">
-                <button class="wallet-btn deposit-btn" id="deposit-btn">
-                    <i class="fas fa-plus-circle"></i>
-                    DEPOSIT
+            <div class="wallet-footer">
+                <button class="wallet-btn refresh-btn" id="refresh-transactions">
+                    <i class="fas fa-sync-alt"></i> REFRESH
                 </button>
-                <button class="wallet-btn withdraw-btn" id="withdraw-btn">
-                    <i class="fas fa-minus-circle"></i>
-                    WITHDRAW
-                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deposit Modal -->
+    <div class="deposit-modal" id="deposit-modal">
+        <div class="deposit-content">
+            <div class="deposit-header">
+                <h2><i class="fas fa-arrow-down"></i> DEPOSIT FUNDS</h2>
+                <button class="close-deposit" id="close-deposit">&times;</button>
+            </div>
+            
+            <div class="deposit-amounts">
+                <div class="deposit-amount-label">Select Amount</div>
+                <div class="deposit-chips">
+                    <div class="deposit-chip" data-amount="100">100 ETB</div>
+                    <div class="deposit-chip" data-amount="500">500 ETB</div>
+                    <div class="deposit-chip" data-amount="1000">1000 ETB</div>
+                    <div class="deposit-chip" data-amount="5000">5000 ETB</div>
+                </div>
+                
+                <div class="custom-amount">
+                    <label for="custom-amount">Custom Amount</label>
+                    <div class="custom-input">
+                        <input type="number" id="custom-amount-input" min="100" max="10000" placeholder="Enter amount">
+                        <span>ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="deposit-info">
+                <div class="deposit-note">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Deposits are processed instantly. Contact admin if issues arise.</p>
+                </div>
+            </div>
+            
+            <div class="deposit-actions">
+                <button class="deposit-action-btn cancel-btn" id="cancel-deposit">CANCEL</button>
+                <button class="deposit-action-btn confirm-deposit-btn" id="confirm-deposit">REQUEST DEPOSIT</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdraw Modal -->
+    <div class="withdraw-modal" id="withdraw-modal">
+        <div class="withdraw-content">
+            <div class="withdraw-header">
+                <h2><i class="fas fa-arrow-up"></i> WITHDRAW FUNDS</h2>
+                <button class="close-withdraw" id="close-withdraw">&times;</button>
+            </div>
+            
+            <div class="withdraw-amounts">
+                <div class="withdraw-amount-label">Available: <span id="available-balance">0 ETB</span></div>
+                
+                <div class="withdraw-chips">
+                    <div class="withdraw-chip" data-percent="25">25%</div>
+                    <div class="withdraw-chip" data-percent="50">50%</div>
+                    <div class="withdraw-chip" data-percent="75">75%</div>
+                    <div class="withdraw-chip" data-percent="100">100%</div>
+                </div>
+                
+                <div class="withdraw-amount">
+                    <label for="withdraw-amount">Withdraw Amount</label>
+                    <div class="withdraw-input">
+                        <input type="number" id="withdraw-amount-input" min="100" placeholder="Enter amount">
+                        <span>ETB</span>
+                    </div>
+                    <div class="withdraw-min">Minimum: 100 ETB</div>
+                </div>
+                
+                <div class="withdraw-account">
+                    <label for="account-info">Account Information</label>
+                    <input type="text" id="account-info" placeholder="Telegram username or phone number">
+                </div>
+            </div>
+            
+            <div class="withdraw-info">
+                <div class="withdraw-note">
+                    <i class="fas fa-clock"></i>
+                    <p>Withdrawals processed within 24 hours. 5% processing fee applies.</p>
+                </div>
+            </div>
+            
+            <div class="withdraw-actions">
+                <button class="withdraw-action-btn cancel-btn" id="cancel-withdraw">CANCEL</button>
+                <button class="withdraw-action-btn confirm-withdraw-btn" id="confirm-withdraw">REQUEST WITHDRAWAL</button>
             </div>
         </div>
     </div>
@@ -1488,14 +1627,19 @@
             socket: null,
             isConnected: false,
             hasPlacedBet: false,
+            MIN_SELECTIONS: 1,  // Changed from 5 to 1
             MAX_SELECTIONS: 5,
-            MIN_SELECTIONS: 5, // Fixed: Must select exactly 5 numbers
-            NUMBER_POP_INTERVAL: 3000,
-            walletStats: {
-                totalWagered: 0,
-                totalWins: 0,
-                netProfit: 0
-            }
+            NUMBER_POP_INTERVAL: 3000 // 3 seconds between number pops
+        };
+        
+        // Wallet State
+        let walletState = {
+            transactions: [],
+            depositAmount: 100,
+            withdrawAmount: 0,
+            withdrawPercentage: 25,
+            selectedDepositChip: null,
+            selectedWithdrawChip: null
         };
         
         // DOM Elements
@@ -1516,6 +1660,7 @@
             winResult: document.getElementById('win-result'),
             winAmount: document.getElementById('win-amount'),
             matchCount: document.getElementById('match-count'),
+            totalSelected: document.getElementById('total-selected'),
             historyList: document.getElementById('history-list'),
             connectionStatus: document.getElementById('connection-status'),
             statusText: document.getElementById('status-text'),
@@ -1524,22 +1669,38 @@
             confirmationModal: document.getElementById('confirmation-modal'),
             confirmRound: document.getElementById('confirm-round'),
             confirmNumbers: document.getElementById('confirm-numbers'),
+            confirmNumberCount: document.getElementById('confirm-number-count'),
             confirmAmount: document.getElementById('confirm-amount'),
             confirmTotal: document.getElementById('confirm-total'),
             confirmCancel: document.getElementById('confirm-cancel'),
             confirmOk: document.getElementById('confirm-ok'),
+            
             // Wallet elements
-            walletBtnHeader: document.getElementById('wallet-btn-header'),
             walletModal: document.getElementById('wallet-modal'),
-            walletClose: document.getElementById('wallet-close'),
+            closeWallet: document.getElementById('close-wallet'),
+            openWallet: document.getElementById('open-wallet'),
             walletBalance: document.getElementById('wallet-balance'),
-            totalWagered: document.getElementById('total-wagered'),
-            totalWins: document.getElementById('total-wins'),
-            netProfit: document.getElementById('net-profit'),
-            transactionsList: document.getElementById('transactions-list'),
-            refreshTransactions: document.getElementById('refresh-transactions'),
+            walletUser: document.getElementById('wallet-user'),
             depositBtn: document.getElementById('deposit-btn'),
-            withdrawBtn: document.getElementById('withdraw-btn')
+            withdrawBtn: document.getElementById('withdraw-btn'),
+            refreshTransactions: document.getElementById('refresh-transactions'),
+            transactionsList: document.getElementById('transactions-list'),
+            
+            // Deposit modal elements
+            depositModal: document.getElementById('deposit-modal'),
+            closeDeposit: document.getElementById('close-deposit'),
+            cancelDeposit: document.getElementById('cancel-deposit'),
+            confirmDeposit: document.getElementById('confirm-deposit'),
+            customAmountInput: document.getElementById('custom-amount-input'),
+            
+            // Withdraw modal elements
+            withdrawModal: document.getElementById('withdraw-modal'),
+            closeWithdraw: document.getElementById('close-withdraw'),
+            cancelWithdraw: document.getElementById('cancel-withdraw'),
+            confirmWithdraw: document.getElementById('confirm-withdraw'),
+            availableBalance: document.getElementById('available-balance'),
+            withdrawAmountInput: document.getElementById('withdraw-amount-input'),
+            accountInfo: document.getElementById('account-info')
         };
         
         // Initialize Game
@@ -1578,6 +1739,7 @@
             
             createNumberGrid();
             setupEventListeners();
+            setupWalletEventListeners();
             connectSocketIO();
             
             // Prevent zoom on double tap
@@ -1643,13 +1805,7 @@
                     elements.currentBet.textContent = gameState.betAmount;
                     
                     // Update button text based on selection status
-                    if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
-                        elements.playBtn.disabled = false;
-                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                    } else {
-                        elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                    }
+                    updatePlayButtonState();
                     
                     vibrate(50);
                 });
@@ -1657,14 +1813,14 @@
             
             // Play Button
             elements.playBtn.addEventListener('click', () => {
-                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
+                if (gameState.selectedNumbers.length >= gameState.MIN_SELECTIONS) {
                     showBetConfirmation();
                 }
             });
             
             elements.playBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
+                if (gameState.selectedNumbers.length >= gameState.MIN_SELECTIONS) {
                     showBetConfirmation();
                 }
             }, { passive: false });
@@ -1700,20 +1856,6 @@
                 placeBet();
             });
             
-            // Wallet events
-            elements.walletBtnHeader.addEventListener('click', openWalletModal);
-            elements.walletClose.addEventListener('click', closeWalletModal);
-            elements.refreshTransactions.addEventListener('click', loadTransactions);
-            elements.depositBtn.addEventListener('click', depositFunds);
-            elements.withdrawBtn.addEventListener('click', withdrawFunds);
-            
-            // Close modal when clicking outside
-            elements.walletModal.addEventListener('click', (e) => {
-                if (e.target === elements.walletModal) {
-                    closeWalletModal();
-                }
-            });
-            
             // Handle visibility change
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') {
@@ -1725,6 +1867,126 @@
             });
         }
         
+        // Setup Wallet Event Listeners
+        function setupWalletEventListeners() {
+            // Open wallet
+            elements.openWallet.addEventListener('click', () => {
+                openWallet();
+            });
+            
+            // Close wallet
+            elements.closeWallet.addEventListener('click', () => {
+                elements.walletModal.classList.remove('active');
+            });
+            
+            // Deposit button
+            elements.depositBtn.addEventListener('click', () => {
+                elements.walletModal.classList.remove('active');
+                openDepositModal();
+            });
+            
+            // Withdraw button
+            elements.withdrawBtn.addEventListener('click', () => {
+                elements.walletModal.classList.remove('active');
+                openWithdrawModal();
+            });
+            
+            // Refresh transactions
+            elements.refreshTransactions.addEventListener('click', () => {
+                loadTransactions();
+            });
+            
+            // Deposit modal
+            elements.closeDeposit.addEventListener('click', () => {
+                elements.depositModal.classList.remove('active');
+            });
+            
+            elements.cancelDeposit.addEventListener('click', () => {
+                elements.depositModal.classList.remove('active');
+            });
+            
+            elements.confirmDeposit.addEventListener('click', () => {
+                requestDeposit();
+            });
+            
+            // Deposit chips
+            document.querySelectorAll('.deposit-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    document.querySelectorAll('.deposit-chip').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    walletState.selectedDepositChip = this;
+                    walletState.depositAmount = parseInt(this.dataset.amount);
+                    elements.customAmountInput.value = walletState.depositAmount;
+                });
+            });
+            
+            // Custom amount input
+            elements.customAmountInput.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                if (!isNaN(value) && value >= 100 && value <= 10000) {
+                    walletState.depositAmount = value;
+                    // Deselect all chips if custom amount
+                    document.querySelectorAll('.deposit-chip').forEach(c => c.classList.remove('selected'));
+                    walletState.selectedDepositChip = null;
+                }
+            });
+            
+            // Withdraw modal
+            elements.closeWithdraw.addEventListener('click', () => {
+                elements.withdrawModal.classList.remove('active');
+            });
+            
+            elements.cancelWithdraw.addEventListener('click', () => {
+                elements.withdrawModal.classList.remove('active');
+            });
+            
+            elements.confirmWithdraw.addEventListener('click', () => {
+                requestWithdrawal();
+            });
+            
+            // Withdraw chips
+            document.querySelectorAll('.withdraw-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    document.querySelectorAll('.withdraw-chip').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    walletState.selectedWithdrawChip = this;
+                    walletState.withdrawPercentage = parseInt(this.dataset.percent);
+                    calculateWithdrawAmount();
+                });
+            });
+            
+            // Withdraw amount input
+            elements.withdrawAmountInput.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                if (!isNaN(value) && value >= 100) {
+                    walletState.withdrawAmount = value;
+                    // Deselect all chips if custom amount
+                    document.querySelectorAll('.withdraw-chip').forEach(c => c.classList.remove('selected'));
+                    walletState.selectedWithdrawChip = null;
+                }
+            });
+            
+            // Account info input
+            elements.accountInfo.addEventListener('input', function() {
+                if (this.value.trim() === '') {
+                    elements.confirmWithdraw.disabled = true;
+                } else {
+                    elements.confirmWithdraw.disabled = false;
+                }
+            });
+        }
+        
+        // Update Play Button State
+        function updatePlayButtonState() {
+            if (gameState.selectedNumbers.length >= gameState.MIN_SELECTIONS) {
+                elements.playBtn.disabled = false;
+                elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            } else {
+                elements.playBtn.disabled = true;
+                elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT AT LEAST ${gameState.MIN_SELECTIONS} NUMBER`;
+            }
+        }
+        
         // Show Bet Confirmation
         function showBetConfirmation() {
             if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
@@ -1732,6 +1994,7 @@
             // Update confirmation modal
             elements.confirmRound.textContent = `#${gameState.currentRound}`;
             elements.confirmNumbers.textContent = gameState.selectedNumbers.join(', ');
+            elements.confirmNumberCount.textContent = gameState.selectedNumbers.length;
             elements.confirmAmount.textContent = `${gameState.betAmount} ETB`;
             elements.confirmTotal.textContent = `${gameState.betAmount} ETB`;
             
@@ -1787,13 +2050,10 @@
                 });
                 
                 // Wallet events
-                gameState.socket.on('keno:walletStats', (data) => {
-                    updateWalletStats(data);
-                });
-                
-                gameState.socket.on('keno:transactions', (data) => {
-                    displayTransactions(data.transactions || []);
-                });
+                gameState.socket.on('wallet:transactions', handleWalletTransactions);
+                gameState.socket.on('wallet:depositRequested', handleDepositRequested);
+                gameState.socket.on('wallet:withdrawalRequested', handleWithdrawalRequested);
+                gameState.socket.on('wallet:balanceUpdated', handleBalanceUpdated);
                 
             } catch (error) {
                 console.error('Failed to connect:', error);
@@ -1827,9 +2087,6 @@
             
             vibrate(100);
             showNotification('Connected to Keno server!', 'info');
-            
-            // Load wallet data
-            loadWalletData();
         }
         
         function handleSocketDisconnect(reason) {
@@ -1853,20 +2110,6 @@
             showNotification('Connection error', 'error');
         }
         
-        // Update Connection Status
-        function updateConnectionStatus(connected, message) {
-            if (connected) {
-                elements.connectionStatus.style.background = 'rgba(16, 185, 129, 0.15)';
-                elements.connectionStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-                elements.connectionStatus.style.color = 'var(--success)';
-                elements.statusText.textContent = message;
-            } else {
-                elements.connectionStatus.style.background = 'rgba(239, 68, 68, 0.15)';
-                elements.connectionStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                elements.statusText.textContent = message;
-            }
-        }
-        
         // Game Message Handlers
         function handleWelcome(data) {
             gameState.balance = data.balance || 0;
@@ -1881,17 +2124,16 @@
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             updateCountdown(gameState.countdown);
             
-            // Initialize wallet stats
-            if (data.walletStats) {
-                updateWalletStats(data.walletStats);
-            }
-            
             // Show/hide waiting message based on player count
             if (gameState.playersCount === 0) {
                 elements.waitingMessage.classList.add('active');
             } else {
                 elements.waitingMessage.classList.remove('active');
             }
+            
+            // Update wallet user
+            elements.walletUser.textContent = gameState.userName;
+            elements.walletBalance.textContent = gameState.balance.toLocaleString() + ' ETB';
         }
         
         function handleRoundStart(data) {
@@ -1915,8 +2157,7 @@
             document.querySelector('.chip[data-value="5"]').classList.add('selected');
             
             // Reset play button
-            elements.playBtn.disabled = true;
-            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
+            updatePlayButtonState();
             
             // Clear number selections
             clearSelection();
@@ -1952,6 +2193,7 @@
             gameState.balance = data.newBalance || gameState.balance;
             
             updateBalanceDisplay(gameState.balance);
+            elements.totalSelected.textContent = data.yourNumbers ? data.yourNumbers.length : 5;
             
             if (data.winnings > 0) {
                 // Show win result after animation
@@ -2032,13 +2274,7 @@
                 elements.playBtn.disabled = true;
                 elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
             } else if (gameState.roundActive) {
-                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                }
+                updatePlayButtonState();
             }
             
             // Update bet amount display
@@ -2063,6 +2299,29 @@
             }
         }
         
+        // Wallet Handlers
+        function handleWalletTransactions(data) {
+            walletState.transactions = data.transactions || [];
+            updateTransactionsDisplay();
+        }
+        
+        function handleDepositRequested(data) {
+            showNotification('Deposit request submitted! Admin will process it shortly.', 'success');
+            elements.depositModal.classList.remove('active');
+        }
+        
+        function handleWithdrawalRequested(data) {
+            showNotification('Withdrawal request submitted! Will be processed within 24 hours.', 'success');
+            elements.withdrawModal.classList.remove('active');
+        }
+        
+        function handleBalanceUpdated(data) {
+            gameState.balance = data.balance;
+            updateBalanceDisplay(gameState.balance);
+            elements.walletBalance.textContent = gameState.balance.toLocaleString() + ' ETB';
+            elements.availableBalance.textContent = gameState.balance.toLocaleString() + ' ETB';
+        }
+        
         // Game Functions
         function toggleNumberSelection(number) {
             if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
@@ -2078,14 +2337,8 @@
                     // Update selection counter
                     elements.selectedCount.textContent = gameState.selectedNumbers.length;
                     
-                    // Update play button state - MUST HAVE EXACTLY 5
-                    if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
-                        elements.playBtn.disabled = false;
-                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                    } else if (gameState.selectedNumbers.length < gameState.MIN_SELECTIONS) {
-                        elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                    }
+                    // Update play button state
+                    updatePlayButtonState();
                     
                     vibrate(30);
                 } else {
@@ -2097,13 +2350,7 @@
                 elements.selectedCount.textContent = gameState.selectedNumbers.length;
                 
                 // Update play button state
-                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                }
+                updatePlayButtonState();
                 
                 vibrate(30);
             }
@@ -2128,13 +2375,7 @@
             
             // Update play button
             if (gameState.roundActive && !gameState.hasPlacedBet) {
-                if (numbers.length === gameState.MIN_SELECTIONS) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - numbers.length} MORE`;
-                }
+                updatePlayButtonState();
             }
         }
         
@@ -2153,8 +2394,7 @@
             elements.selectedCount.textContent = '0';
             
             // Reset play button
-            elements.playBtn.disabled = true;
-            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
+            updatePlayButtonState();
             
             vibrate(50);
         }
@@ -2190,9 +2430,8 @@
                 return;
             }
             
-            // CRITICAL CHANGE: Must have exactly 5 numbers, not just up to 5
-            if (gameState.selectedNumbers.length !== gameState.MIN_SELECTIONS) {
-                showNotification(`You must select exactly ${gameState.MIN_SELECTIONS} numbers`, 'error');
+            if (gameState.selectedNumbers.length < gameState.MIN_SELECTIONS) {
+                showNotification(`Please select at least ${gameState.MIN_SELECTIONS} number`, 'error');
                 return;
             }
             
@@ -2303,6 +2542,8 @@
         function updateBalanceDisplay(balance) {
             gameState.balance = balance;
             elements.balance.textContent = balance.toLocaleString() + ' ETB';
+            elements.walletBalance.textContent = balance.toLocaleString() + ' ETB';
+            elements.availableBalance.textContent = balance.toLocaleString() + ' ETB';
         }
         
         function addToHistory(data) {
@@ -2336,95 +2577,125 @@
         }
         
         // Wallet Functions
-        function openWalletModal() {
-            elements.walletModal.classList.add('active');
-            loadWalletData();
-            vibrate(30);
-        }
-        
-        function closeWalletModal() {
-            elements.walletModal.classList.remove('active');
-        }
-        
-        function loadWalletData() {
-            if (!gameState.socket || !gameState.socket.connected) return;
-            
-            // Get wallet stats
-            gameState.socket.emit('keno:getWalletStats');
-            
-            // Get transactions
+        function openWallet() {
+            elements.walletBalance.textContent = gameState.balance.toLocaleString() + ' ETB';
+            elements.walletUser.textContent = gameState.userName;
             loadTransactions();
+            elements.walletModal.classList.add('active');
         }
         
-        function loadTransactions() {
-            if (!gameState.socket || !gameState.socket.connected) {
-                showNotification('Not connected to server', 'error');
+        function openDepositModal() {
+            // Reset deposit chips
+            document.querySelectorAll('.deposit-chip').forEach(c => c.classList.remove('selected'));
+            walletState.selectedDepositChip = null;
+            elements.customAmountInput.value = '';
+            
+            // Select default chip
+            const defaultChip = document.querySelector('.deposit-chip[data-amount="100"]');
+            if (defaultChip) {
+                defaultChip.classList.add('selected');
+                walletState.selectedDepositChip = defaultChip;
+                walletState.depositAmount = 100;
+                elements.customAmountInput.value = '100';
+            }
+            
+            elements.depositModal.classList.add('active');
+        }
+        
+        function openWithdrawModal() {
+            // Reset withdraw chips
+            document.querySelectorAll('.withdraw-chip').forEach(c => c.classList.remove('selected'));
+            walletState.selectedWithdrawChip = null;
+            elements.withdrawAmountInput.value = '';
+            elements.accountInfo.value = '';
+            elements.confirmWithdraw.disabled = true;
+            
+            // Select default chip
+            const defaultChip = document.querySelector('.withdraw-chip[data-percent="25"]');
+            if (defaultChip) {
+                defaultChip.classList.add('selected');
+                walletState.selectedWithdrawChip = defaultChip;
+                walletState.withdrawPercentage = 25;
+                calculateWithdrawAmount();
+            }
+            
+            elements.withdrawModal.classList.add('active');
+        }
+        
+        function calculateWithdrawAmount() {
+            if (walletState.selectedWithdrawChip) {
+                const percentage = walletState.withdrawPercentage;
+                const amount = Math.floor((gameState.balance * percentage) / 100);
+                walletState.withdrawAmount = amount;
+                elements.withdrawAmountInput.value = amount;
+            }
+        }
+        
+        function requestDeposit() {
+            const amount = walletState.depositAmount;
+            
+            if (isNaN(amount) || amount < 100 || amount > 10000) {
+                showNotification('Please enter a valid amount between 100 and 10,000 ETB', 'error');
                 return;
             }
             
-            // Show loading state
-            elements.transactionsList.innerHTML = `
-                <div class="no-transactions">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Loading transactions...</p>
-                </div>
-            `;
-            
-            // Request transactions from server
-            gameState.socket.emit('keno:getTransactions');
-            
-            // Animate refresh button
-            elements.refreshTransactions.style.transform = 'rotate(180deg)';
-            setTimeout(() => {
-                elements.refreshTransactions.style.transform = 'rotate(0deg)';
-            }, 300);
+            if (gameState.socket && gameState.socket.connected) {
+                gameState.socket.emit('wallet:requestDeposit', {
+                    userId: gameState.playerId,
+                    amount: amount,
+                    userName: gameState.userName
+                });
+            } else {
+                showNotification('Not connected to server', 'error');
+            }
         }
         
-        function depositFunds() {
-            // Use Telegram Mini App payment system
-            tg.openInvoice('YOUR_INVOICE_URL_OR_CODE', function(status) {
-                if (status === 'paid') {
-                    showNotification('Deposit successful!', 'success');
-                    // Refresh balance
-                    if (gameState.socket && gameState.socket.connected) {
-                        gameState.socket.emit('keno:getBalance');
-                        loadWalletData();
-                    }
-                } else if (status === 'failed') {
-                    showNotification('Deposit failed', 'error');
-                } else if (status === 'cancelled') {
-                    showNotification('Deposit cancelled', 'warning');
-                }
-            });
+        function requestWithdrawal() {
+            const amount = walletState.withdrawAmount;
+            const accountInfo = elements.accountInfo.value.trim();
+            
+            if (isNaN(amount) || amount < 100) {
+                showNotification('Minimum withdrawal is 100 ETB', 'error');
+                return;
+            }
+            
+            if (amount > gameState.balance) {
+                showNotification('Insufficient balance', 'error');
+                return;
+            }
+            
+            if (accountInfo === '') {
+                showNotification('Please enter account information', 'error');
+                return;
+            }
+            
+            if (gameState.socket && gameState.socket.connected) {
+                gameState.socket.emit('wallet:requestWithdrawal', {
+                    userId: gameState.playerId,
+                    amount: amount,
+                    accountInfo: accountInfo,
+                    userName: gameState.userName
+                });
+            } else {
+                showNotification('Not connected to server', 'error');
+            }
         }
         
-        function withdrawFunds() {
-            // Show withdrawal form or redirect
-            tg.showAlert('Withdrawal requests are processed manually. Please contact admin via Telegram with your username and withdrawal amount.', 'Withdrawal Info');
+        function loadTransactions() {
+            if (gameState.socket && gameState.socket.connected) {
+                gameState.socket.emit('wallet:getTransactions', {
+                    userId: gameState.playerId
+                });
+            } else {
+                showNotification('Not connected to server', 'error');
+            }
         }
         
-        function updateWalletStats(stats) {
-            if (!stats) return;
+        function updateTransactionsDisplay() {
+            const transactionsList = elements.transactionsList;
             
-            elements.walletBalance.textContent = (stats.balance || 0).toLocaleString() + ' ETB';
-            elements.totalWagered.textContent = (stats.totalWagered || 0).toLocaleString() + ' ETB';
-            elements.totalWins.textContent = (stats.totalWins || 0).toLocaleString() + ' ETB';
-            
-            const profit = (stats.totalWins || 0) - (stats.totalWagered || 0);
-            elements.netProfit.textContent = profit.toLocaleString() + ' ETB';
-            elements.netProfit.style.color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
-            
-            // Update game state
-            gameState.walletStats = {
-                totalWagered: stats.totalWagered || 0,
-                totalWins: stats.totalWins || 0,
-                netProfit: profit
-            };
-        }
-        
-        function displayTransactions(transactions) {
-            if (!transactions || transactions.length === 0) {
-                elements.transactionsList.innerHTML = `
+            if (walletState.transactions.length === 0) {
+                transactionsList.innerHTML = `
                     <div class="no-transactions">
                         <i class="fas fa-receipt"></i>
                         <p>No transactions yet</p>
@@ -2433,28 +2704,44 @@
                 return;
             }
             
-            elements.transactionsList.innerHTML = '';
+            transactionsList.innerHTML = '';
             
-            transactions.forEach(transaction => {
-                const item = document.createElement('div');
-                item.className = `transaction-item ${transaction.type ? transaction.type.toLowerCase().replace('_', '') : ''}`;
+            walletState.transactions.slice(0, 10).forEach(transaction => {
+                const transactionItem = document.createElement('div');
+                transactionItem.className = `transaction-item ${transaction.type.toLowerCase()}`;
                 
-                const amountClass = transaction.amount > 0 ? 'positive' : 'negative';
-                const amountSign = transaction.amount > 0 ? '+' : '';
-                const time = transaction.createdAt ? new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
+                const typeColors = {
+                    'DEPOSIT': 'var(--success)',
+                    'WITHDRAWAL': 'var(--info)',
+                    'WIN': 'var(--warning)',
+                    'BET': 'var(--danger)'
+                };
                 
-                item.innerHTML = `
-                    <div class="transaction-info">
-                        <div class="transaction-type">${transaction.type ? transaction.type.replace('_', ' ') : 'Transaction'}</div>
-                        <div class="transaction-description">${transaction.description || ''}</div>
-                        <div class="transaction-time">${time}</div>
+                const typeText = {
+                    'DEPOSIT': 'Deposit',
+                    'WITHDRAWAL': 'Withdrawal',
+                    'WIN': 'Win',
+                    'BET': 'Bet'
+                };
+                
+                const amountClass = transaction.amount >= 0 ? 'positive' : 'negative';
+                const amountSign = transaction.amount >= 0 ? '+' : '';
+                const date = new Date(transaction.timestamp).toLocaleDateString();
+                
+                transactionItem.innerHTML = `
+                    <div>
+                        <div class="transaction-type" style="background: ${typeColors[transaction.type]}20; color: ${typeColors[transaction.type]}">
+                            ${typeText[transaction.type]}
+                        </div>
+                        <div style="font-size: 11px;">${transaction.description || ''}</div>
+                        <div class="transaction-date">${date}</div>
                     </div>
                     <div class="transaction-amount ${amountClass}">
-                        ${amountSign}${Math.abs(transaction.amount).toLocaleString()} ETB
+                        ${amountSign}${transaction.amount.toLocaleString()} ETB
                     </div>
                 `;
                 
-                elements.transactionsList.appendChild(item);
+                transactionsList.appendChild(transactionItem);
             });
         }
         
@@ -2502,6 +2789,21 @@
                 }
             } catch (e) {
                 // Audio not supported
+            }
+        }
+        
+        // Update Connection Status
+        function updateConnectionStatus(connected, message) {
+            if (connected) {
+                elements.connectionStatus.style.background = 'rgba(16, 185, 129, 0.15)';
+                elements.connectionStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                elements.connectionStatus.style.color = 'var(--success)';
+                elements.statusText.textContent = message;
+            } else {
+                elements.connectionStatus.style.background = 'rgba(239, 68, 68, 0.15)';
+                elements.connectionStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                elements.connectionStatus.style.color = 'var(--danger)';
+                elements.statusText.textContent = message;
             }
         }
         
