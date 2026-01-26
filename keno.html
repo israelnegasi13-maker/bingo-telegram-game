@@ -483,6 +483,127 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
+        /* Payout Table */
+        .payout-table {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+            margin-top: 8px;
+        }
+        
+        .payout-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .payout-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .payout-note {
+            font-size: 9px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .payout-container {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        
+        .payout-table-inner {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            min-width: 500px;
+        }
+        
+        .payout-table-inner thead tr {
+            background: rgba(139, 92, 246, 0.2);
+        }
+        
+        .payout-table-inner th {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+        
+        .payout-table-inner th:first-child {
+            border-top-left-radius: 6px;
+        }
+        
+        .payout-table-inner th:last-child {
+            border-top-right-radius: 6px;
+        }
+        
+        .payout-table-inner th:nth-child(1) {
+            width: 20%;
+        }
+        
+        .payout-table-inner th:nth-child(2) {
+            width: 15%;
+            text-align: center;
+        }
+        
+        .payout-table-inner th:nth-child(3),
+        .payout-table-inner th:nth-child(4),
+        .payout-table-inner th:nth-child(5),
+        .payout-table-inner th:nth-child(6),
+        .payout-table-inner th:nth-child(7) {
+            width: 13%;
+            text-align: right;
+        }
+        
+        .payout-table-inner tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .payout-table-inner tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        .payout-table-inner td {
+            padding: 8px 6px;
+            vertical-align: middle;
+        }
+        
+        .payout-table-inner td:first-child {
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .payout-table-inner td:nth-child(2) {
+            text-align: center;
+            font-weight: 700;
+            color: var(--success);
+        }
+        
+        .payout-table-inner td:nth-child(3),
+        .payout-table-inner td:nth-child(4),
+        .payout-table-inner td:nth-child(5),
+        .payout-table-inner td:nth-child(6),
+        .payout-table-inner td:nth-child(7) {
+            text-align: right;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .payout-row-highlight {
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
         /* Results Panel - Compact */
         .results-panel {
             background: var(--card-bg);
@@ -1252,6 +1373,11 @@
             .withdraw-chips {
                 grid-template-columns: 1fr;
             }
+            
+            .payout-table-inner {
+                min-width: 450px;
+                font-size: 9px;
+            }
         }
         
         /* Smooth Scrollbar */
@@ -1395,20 +1521,85 @@
                 </div>
             </div>
             
+            <!-- Payout Table -->
+            <div class="payout-table">
+                <div class="payout-header">
+                    <div class="payout-title">PAYOUT TABLE (5 NUMBERS)</div>
+                    <div class="payout-note">PER BET</div>
+                </div>
+                <div class="payout-container">
+                    <table class="payout-table-inner">
+                        <thead>
+                            <tr>
+                                <th>HITS</th>
+                                <th>MULTIPLIER</th>
+                                <th>5 ETB</th>
+                                <th>10 ETB</th>
+                                <th>20 ETB</th>
+                                <th>50 ETB</th>
+                                <th>100 ETB</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="payout-row-highlight">
+                                <td>5 HITS</td>
+                                <td>300x</td>
+                                <td>2,500 ETB</td>
+                                <td>5,000 ETB</td>
+                                <td>10,000 ETB</td>
+                                <td>25,000 ETB</td>
+                                <td>50,000 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>4 HITS</td>
+                                <td>50x</td>
+                                <td>250 ETB</td>
+                                <td>500 ETB</td>
+                                <td>1,000 ETB</td>
+                                <td>2,500 ETB</td>
+                                <td>5,000 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>3 HITS</td>
+                                <td>15x</td>
+                                <td>25 ETB</td>
+                                <td>50 ETB</td>
+                                <td>100 ETB</td>
+                                <td>250 ETB</td>
+                                <td>500 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>2 HITS</td>
+                                <td>2x</td>
+                                <td>10 ETB</td>
+                                <td>20 ETB</td>
+                                <td>40 ETB</td>
+                                <td>100 ETB</td>
+                                <td>200 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>1 HIT</td>
+                                <td>1x</td>
+                                <td>5 ETB</td>
+                                <td>10 ETB</td>
+                                <td>20 ETB</td>
+                                <td>50 ETB</td>
+                                <td>100 ETB</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
             <!-- Results Panel -->
             <div class="results-panel" id="results-panel">
                 <div class="results-header">
-                    <div class="results-title">
-                        LATEST DRAW • <span style="color: var(--accent-color); font-size: 11px;">20 NUMBERS DRAWN</span>
-                    </div>
+                    <div class="results-title">LATEST DRAW</div>
                     <div class="round-number">ROUND #<span id="current-round">1</span></div>
                 </div>
                 
                 <div class="drawn-numbers-container">
                     <div class="drawn-numbers" id="drawn-numbers">
-                        <div style="width: 100%; text-align: center; color: var(--text-secondary); font-size: 10px; margin-bottom: 8px; font-weight: 600;">
-                            20 NUMBERS DRAWN EACH ROUND
-                        </div>
                         <div style="color: var(--text-secondary); text-align: center; padding: 20px; font-weight: 600; font-size: 12px;">
                             <i class="fas fa-hourglass-half" style="margin-right: 6px;"></i>
                             Waiting for first draw...
@@ -1626,6 +1817,7 @@
             currentRound: 1,
             countdown: 30,
             drawnNumbers: [],
+            currentDrawnNumbers: [],
             playersCount: 0,
             betsCount: 0,
             roundHistory: [],
@@ -1635,6 +1827,8 @@
             MIN_SELECTIONS: 1,  // Changed from 5 to 1
             MAX_SELECTIONS: 5,
             NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
+            isDrawComplete: false, // New: track if draw is complete
+            hasBetInCurrentRound: false, // New: track if player has bet in current round
             // New payout table based on your requirements
             PAYOUT_TABLE: {
                 1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
@@ -2044,6 +2238,7 @@
                 gameState.socket.on('keno:countdown_update', (data) => updateCountdown(data.countdown));
                 gameState.socket.on('keno:draw_start', handleDrawStart);
                 gameState.socket.on('keno:round_results', handleRoundResults);
+                gameState.socket.on('keno:number_drawn', handleNumberDrawn); // New event for draw simulation
                 gameState.socket.on('keno:round_result', handlePersonalResult);
                 gameState.socket.on('keno:betConfirmed', handleBetConfirmed);
                 gameState.socket.on('keno:quickPickNumbers', handleQuickPickNumbers);
@@ -2061,6 +2256,7 @@
                     showNotification(data.message, 'info');
                     elements.waitingMessage.classList.add('active');
                 });
+                gameState.socket.on('keno:autoSelect', handleAutoSelect);
                 
                 // Wallet events
                 gameState.socket.on('wallet:transactions', handleWalletTransactions);
@@ -2131,6 +2327,9 @@
             gameState.playersCount = data.playersCount || 0;
             gameState.roundHistory = data.roundHistory || [];
             gameState.countdown = data.countdown || 30;
+            gameState.currentDrawnNumbers = data.currentDrawnNumbers || [];
+            gameState.isDrawComplete = data.isDrawComplete || false;
+            gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -2147,6 +2346,18 @@
             // Update wallet user
             elements.walletUser.textContent = gameState.userName;
             elements.walletBalance.textContent = gameState.balance.toLocaleString() + ' ETB';
+            
+            // If there are already drawn numbers and draw is complete, display them
+            if (gameState.currentDrawnNumbers.length > 0 && gameState.isDrawComplete) {
+                displayNumbersImmediately(gameState.currentDrawnNumbers);
+                
+                // If player had a bet in this round, we'll wait for server to send results
+                if (gameState.hasBetInCurrentRound) {
+                    showNotification('Round already completed. Waiting for your results...', 'info');
+                } else {
+                    showNotification('Round already in progress. Watch the results!', 'info');
+                }
+            }
         }
         
         function handleRoundStart(data) {
@@ -2154,7 +2365,10 @@
             gameState.currentRound = data.round || gameState.currentRound;
             gameState.countdown = data.duration || 30;
             gameState.drawnNumbers = [];
+            gameState.currentDrawnNumbers = [];
+            gameState.isDrawComplete = false;
             gameState.hasPlacedBet = false;
+            gameState.hasBetInCurrentRound = false;
             
             updateRoundNumber(gameState.currentRound);
             clearDrawnNumbers();
@@ -2183,13 +2397,49 @@
             showNotification('DRAWING NUMBERS...', 'info');
         }
         
+        function handleNumberDrawn(data) {
+            // Handle individual number drawn (for new players joining during draw)
+            const num = data.number;
+            
+            // Highlight in grid
+            const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
+            if (gridNum) {
+                gridNum.classList.add('drawn');
+                if (gameState.selectedNumbers.includes(num)) {
+                    gridNum.classList.add('matched');
+                    vibrate(50);
+                }
+            }
+            
+            // Add to display
+            const numEl = document.createElement('div');
+            numEl.className = 'drawn-number';
+            numEl.textContent = num;
+            
+            if (gameState.selectedNumbers.includes(num)) {
+                numEl.classList.add('matched');
+            }
+            
+            elements.drawnNumbers.appendChild(numEl);
+            
+            // Play sound effect
+            playSound('pop');
+        }
+        
         function handleRoundResults(data) {
             gameState.roundActive = false;
             gameState.drawnNumbers = data.drawnNumbers || [];
+            gameState.currentDrawnNumbers = gameState.drawnNumbers;
             gameState.playersCount = data.playersCount || gameState.playersCount;
+            gameState.isDrawComplete = data.isDrawComplete || false;
             
-            // Display numbers with 3-second interval
-            displayNumbersWithAnimation(gameState.drawnNumbers);
+            // If draw is already complete, display immediately
+            if (gameState.isDrawComplete) {
+                displayNumbersImmediately(gameState.drawnNumbers);
+            } else {
+                // Otherwise, animate the draw
+                displayNumbersWithAnimation(gameState.drawnNumbers);
+            }
             
             // Update stats
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
@@ -2206,20 +2456,24 @@
             gameState.balance = data.newBalance || gameState.balance;
             
             updateBalanceDisplay(gameState.balance);
-            elements.totalSelected.textContent = data.yourNumbers ? data.yourNumbers.length : 5;
+            elements.totalSelected.textContent = data.selectionCount || data.yourNumbers?.length || 5;
             
             if (data.winnings > 0) {
-                // Show win result IMMEDIATELY (no delay waiting for animation)
-                elements.winAmount.textContent = data.winnings.toLocaleString();
-                elements.matchCount.textContent = data.matches || 0;
-                elements.winResult.style.display = 'block';
-                
-                // Add vibration and notification immediately
-                vibrate([100, 50, 100, 50, 100]);
-                showNotification(`🎉 YOU WON ${data.winnings.toLocaleString()} ETB! 🎉`, 'success');
+                // Show win result after animation if draw is in progress
+                if (!gameState.isDrawComplete) {
+                    setTimeout(() => {
+                        showWinResult(data);
+                    }, (gameState.drawnNumbers.length * gameState.NUMBER_POP_INTERVAL) + 1000);
+                } else {
+                    // If draw is already complete, show immediately
+                    showWinResult(data);
+                }
                 
                 // Add to history
                 addToHistory(data);
+                
+                // Celebration vibration
+                vibrate([100, 50, 100, 50, 100]);
                 
             } else {
                 // Add loss to history
@@ -2227,12 +2481,21 @@
             }
         }
         
+        function showWinResult(data) {
+            elements.winAmount.textContent = data.winnings.toLocaleString();
+            elements.matchCount.textContent = data.matches || 0;
+            elements.winResult.style.display = 'block';
+            
+            showNotification(`🎉 YOU WON ${data.winnings.toLocaleString()} ETB! 🎉`, 'success');
+        }
+        
         function handleBetConfirmed(data) {
             gameState.balance = data.balance || gameState.balance;
             gameState.hasPlacedBet = true;
+            gameState.hasBetInCurrentRound = true;
             updateBalanceDisplay(gameState.balance);
             
-            showNotification(`BET PLACED: ${data.betAmount} ETB`, 'info');
+            showNotification(`BET PLACED: ${data.betAmount} ETB on ${data.selectionCount} numbers`, 'info');
             
             // Disable bet button
             elements.playBtn.disabled = true;
@@ -2242,6 +2505,16 @@
             if (gameState.playersCount > 0) {
                 elements.waitingMessage.classList.remove('active');
             }
+        }
+        
+        function handleAutoSelect(data) {
+            // Auto-select numbers for player
+            clearSelection();
+            data.numbers.forEach(number => {
+                toggleNumberSelection(number);
+            });
+            
+            showNotification(`Auto-selected ${data.selectionCount} numbers for this round!`, 'info');
         }
         
         function handleQuickPickNumbers(data) {
@@ -2268,6 +2541,9 @@
             gameState.hasPlacedBet = data.hasPlacedBet || false;
             gameState.selectedNumbers = data.selectedNumbers || [];
             gameState.betAmount = data.currentBet || gameState.betAmount;
+            gameState.currentDrawnNumbers = data.currentDrawnNumbers || [];
+            gameState.isDrawComplete = data.isDrawComplete || false;
+            gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -2306,6 +2582,11 @@
                 elements.waitingMessage.classList.add('active');
             } else {
                 elements.waitingMessage.classList.remove('active');
+            }
+            
+            // If there are drawn numbers and draw is complete, display them
+            if (gameState.currentDrawnNumbers.length > 0 && gameState.isDrawComplete) {
+                displayNumbersImmediately(gameState.currentDrawnNumbers);
             }
         }
         
@@ -2466,13 +2747,7 @@
                 el.classList.remove('drawn', 'matched');
             });
             
-            // Add the "20 numbers drawn" info
-            const drawInfo = document.createElement('div');
-            drawInfo.style.cssText = 'width: 100%; text-align: center; color: var(--text-secondary); font-size: 10px; margin-bottom: 8px; font-weight: 600;';
-            drawInfo.textContent = `${drawnNumbers.length} NUMBERS DRAWN`;
-            elements.drawnNumbers.appendChild(drawInfo);
-            
-            // Animate numbers one by one
+            // Animate numbers one by one with 3-second interval
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
                     // Highlight in grid
@@ -2481,7 +2756,7 @@
                         gridNum.classList.add('drawn');
                         if (gameState.selectedNumbers.includes(num)) {
                             gridNum.classList.add('matched');
-                            vibrate(30); // Short vibration for matches
+                            vibrate(50);
                         }
                     }
                     
@@ -2496,19 +2771,54 @@
                     
                     elements.drawnNumbers.appendChild(numEl);
                     
+                    // Play sound effect
+                    playSound('pop');
+                    
                 }, index * gameState.NUMBER_POP_INTERVAL);
             });
         }
         
+        function displayNumbersImmediately(drawnNumbers) {
+            elements.drawnNumbers.innerHTML = '';
+            
+            // Clear grid highlights
+            document.querySelectorAll('.keno-number').forEach(el => {
+                el.classList.remove('drawn', 'matched');
+            });
+            
+            // Display all numbers immediately
+            drawnNumbers.forEach(num => {
+                // Highlight in grid
+                const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
+                if (gridNum) {
+                    gridNum.classList.add('drawn');
+                    if (gameState.selectedNumbers.includes(num)) {
+                        gridNum.classList.add('matched');
+                    }
+                }
+                
+                // Add to display
+                const numEl = document.createElement('div');
+                numEl.className = 'drawn-number';
+                numEl.textContent = num;
+                
+                if (gameState.selectedNumbers.includes(num)) {
+                    numEl.classList.add('matched');
+                }
+                
+                elements.drawnNumbers.appendChild(numEl);
+            });
+        }
+        
         function clearDrawnNumbers() {
+            gameState.currentDrawnNumbers = [];
+            gameState.isDrawComplete = false;
+            
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
             });
             
             elements.drawnNumbers.innerHTML = `
-                <div style="width: 100%; text-align: center; color: var(--text-secondary); font-size: 10px; margin-bottom: 8px; font-weight: 600;">
-                    20 NUMBERS DRAWN EACH ROUND
-                </div>
                 <div style="color: var(--text-secondary); text-align: center; padding: 20px; font-weight: 600; font-size: 12px;">
                     <i class="fas fa-hourglass-half" style="margin-right: 6px;"></i>
                     Waiting for next draw...
@@ -2567,11 +2877,12 @@
             historyItem.className = `history-item ${data.winnings > 0 ? 'win' : 'loss'}`;
             
             const numbersText = data.yourNumbers ? data.yourNumbers.slice(0, 3).join(', ') + (data.yourNumbers.length > 3 ? '...' : '') : '';
+            const selectionCount = data.selectionCount || data.yourNumbers?.length || 5;
             
             historyItem.innerHTML = `
                 <div>
                     <div style="font-size: 10px; color: var(--text-secondary); margin-bottom: 2px;">#${data.round}</div>
-                    <div style="font-size: 11px;">${numbersText}</div>
+                    <div style="font-size: 11px;">${selectionCount} numbers: ${numbersText}</div>
                 </div>
                 <div class="history-result ${data.winnings > 0 ? 'win' : 'loss'}">
                     ${data.winnings > 0 ? `+${data.winnings.toLocaleString()}` : '-' + (data.bet || 0)}
