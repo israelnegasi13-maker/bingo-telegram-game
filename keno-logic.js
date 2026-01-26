@@ -9,7 +9,7 @@ module.exports = {
         KENO_MAX_SELECTIONS: 5,  // Maximum numbers to select
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
-        NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
+        NUMBER_POP_INTERVAL: 1000, // CHANGED: 1 second between number pops (was 3000)
         // Updated payout table for 1-5 numbers with new multipliers
         PAYOUT_TABLE: {
             1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
@@ -56,6 +56,7 @@ module.exports = {
         console.log('   2 Numbers: 2 hits = 2x');
         console.log('   1 Number:  1 hit = 1x');
         console.log('💰 Wallet system integrated');
+        console.log('⚡ Faster animation: 1 second between number draws');
         
         // Load existing stats
         this.loadKenoStats();
@@ -64,6 +65,11 @@ module.exports = {
         setInterval(() => {
             this.cleanupOldKenoData();
         }, 3600000); // Every hour
+        
+        // Check game status periodically
+        setInterval(() => {
+            this.checkGameStatus();
+        }, 10000); // Every 10 seconds
     },
 
     // Load Keno stats from database
@@ -116,8 +122,18 @@ module.exports = {
                 const user = await self.User.findOne({ userId: userId });
                 
                 if (!user) {
-                    socket.emit('keno:error', 'User not found');
-                    return;
+                    // Create new user if doesn't exist
+                    user = new self.User({
+                        userId: userId,
+                        userName: userName,
+                        balance: 0,
+                        totalWagered: 0,
+                        totalWins: 0,
+                        isOnline: true,
+                        lastSeen: new Date(),
+                        sessionCount: 1
+                    });
+                    await user.save();
                 }
                 
                 // Store player info
@@ -157,7 +173,7 @@ module.exports = {
                 // Get current game state
                 const activeGame = self.getActiveKenoGame();
                 
-                // Send welcome data
+                // Send welcome data with faster animation setting
                 socket.emit('keno:welcome', {
                     playerId: userId,
                     userName: userName,
@@ -179,11 +195,15 @@ module.exports = {
                         drawCount: self.CONFIG.KENO_DRAW_COUNT,
                         gameTimer: self.CONFIG.KENO_GAME_TIMER,
                         allowPreSelection: self.CONFIG.ALLOW_PRE_SELECTION,
-                        allowedBets: self.CONFIG.ALLOWED_BETS
+                        allowedBets: self.CONFIG.ALLOWED_BETS,
+                        numberPopInterval: self.CONFIG.NUMBER_POP_INTERVAL // Send interval to client
                     }
                 });
                 
                 console.log(`🎰 Keno player authenticated: ${userName} - Balance: ${user.balance} ETB`);
+                
+                // Broadcast updated player count
+                self.broadcastKenoPlayersUpdate();
                 
                 // If no active round and we have players, start a round
                 if (!self.isKenoRoundActive && self.kenoPlayers.size >= self.minimumPlayers) {
@@ -479,7 +499,8 @@ module.exports = {
                     preSelectedNumbers: player.preSelectedNumbers,
                     isReadyForNextRound: player.isReadyForNextRound,
                     selectionCount: player.selectedNumbers.length,
-                    preSelectionCount: player.preSelectedNumbers.length
+                    preSelectionCount: player.preSelectedNumbers.length,
+                    numberPopInterval: self.CONFIG.NUMBER_POP_INTERVAL // Send interval
                 });
                 
             } catch (error) {
@@ -1153,13 +1174,14 @@ module.exports = {
         
         self.activeKenoGames.set('current', activeGame);
         
-        // Broadcast round start
+        // Broadcast round start with faster animation setting
         self.io.to('keno').emit('keno:round_start', {
             round: activeGame.roundNumber,
             duration: self.CONFIG.KENO_GAME_TIMER,
             message: `Round ${activeGame.roundNumber} started! Place your bets!`,
             minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
-            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS
+            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
+            numberPopInterval: self.CONFIG.NUMBER_POP_INTERVAL // Send interval to all clients
         });
         
         // Reset all players' bet status (but keep pre-selected numbers)
@@ -1282,14 +1304,14 @@ module.exports = {
         activeGame.status = 'drawing';
         self.isKenoRoundActive = false;
         
-        // Broadcast draw start
+        // Broadcast draw start with faster animation setting
         self.io.to('keno').emit('keno:draw_start', {
             round: activeGame.roundNumber,
             message: 'Drawing numbers...',
-            popInterval: self.CONFIG.NUMBER_POP_INTERVAL
+            popInterval: self.CONFIG.NUMBER_POP_INTERVAL // 1 second interval
         });
         
-        // Wait 2 seconds for dramatic effect
+        // Wait 1 second for dramatic effect (reduced from 2 seconds)
         setTimeout(async () => {
             // Generate 20 random unique numbers
             const drawnNumbers = [];
@@ -1309,19 +1331,19 @@ module.exports = {
                 drawnNumbers: drawnNumbers,
                 playersCount: activeGame.players.length,
                 totalBets: activeGame.totalBets,
-                popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
+                popInterval: self.CONFIG.NUMBER_POP_INTERVAL, // 1 second between pops
                 message: `Round ${activeGame.roundNumber} results!`
             });
             
             // Mark draw as complete
             activeGame.drawComplete = true;
             
-            // Process results after numbers are shown
+            // Process results after numbers are shown (faster - reduced from +5000 to +2000)
             setTimeout(async () => {
                 await self.processKenoResults(activeGame);
-            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 5000);
+            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 2000);
             
-        }, 2000);
+        }, 1000); // Reduced from 2000 to 1000
     },
     
     // Process Keno results - UPDATED for 1-5 numbers with new payout table
@@ -1408,7 +1430,7 @@ module.exports = {
                             self.kenoPlayers.set(playerId, player);
                         }
                         
-                        // Send personal result
+                        // Send personal result with faster timing info
                         const playerSocket = self.getKenoSocketByUserId(playerId);
                         if (playerSocket) {
                             playerSocket.emit('keno:round_result', {
@@ -1674,7 +1696,8 @@ module.exports = {
             config: {
                 minSelections: this.CONFIG.KENO_MIN_SELECTIONS,
                 maxSelections: this.CONFIG.KENO_MAX_SELECTIONS,
-                allowedBets: this.CONFIG.ALLOWED_BETS
+                allowedBets: this.CONFIG.ALLOWED_BETS,
+                numberPopInterval: this.CONFIG.NUMBER_POP_INTERVAL
             }
         };
     },
