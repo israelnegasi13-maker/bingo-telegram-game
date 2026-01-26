@@ -31,6 +31,11 @@
             -webkit-tap-highlight-color: transparent;
         }
         
+        html {
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             background: var(--dark-bg);
@@ -40,6 +45,9 @@
             background-image: 
                 radial-gradient(at 40% 20%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
                 radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+            scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
         
         .container {
@@ -101,7 +109,30 @@
         /* User Info - Compact */
         .user-info {
             display: flex;
-            gap: 6px;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Wallet Button in Header */
+        .wallet-btn-header {
+            width: 40px;
+            height: 40px;
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--keno-purple);
+            font-size: 16px;
+        }
+        
+        .wallet-btn-header:hover,
+        .wallet-btn-header:active {
+            background: rgba(139, 92, 246, 0.4);
+            transform: scale(1.05);
         }
         
         .balance-card {
@@ -110,6 +141,13 @@
             border-radius: 8px;
             padding: 8px 10px;
             min-width: 90px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .balance-card:hover {
+            background: rgba(139, 92, 246, 0.25);
+            transform: scale(1.02);
         }
         
         .balance-label {
@@ -215,7 +253,7 @@
             font-weight: 700;
             font-size: 12px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             user-select: none;
             border: 1px solid transparent;
             color: var(--text-primary);
@@ -343,6 +381,22 @@
             font-size: 8px;
             color: rgba(255, 255, 255, 0.8);
             text-transform: uppercase;
+        }
+        
+        /* Waiting Message (Simple text, no overlay) */
+        .waiting-message {
+            text-align: center;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: none;
+        }
+        
+        .waiting-message.active {
+            display: block;
         }
         
         /* Bet Controls - Compact */
@@ -477,6 +531,9 @@
             margin-bottom: 12px;
             min-height: 80px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
         
         .drawn-numbers {
@@ -486,6 +543,8 @@
             justify-content: center;
             align-items: center;
             min-height: 60px;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
         
         .drawn-number {
@@ -562,6 +621,8 @@
             gap: 6px;
             max-height: 120px;
             overflow-y: auto;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
         
         .history-item {
@@ -622,7 +683,7 @@
             font-size: 12px;
             z-index: 1000;
             opacity: 0;
-            transition: all 0.4s;
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             text-align: center;
             max-width: 90%;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
@@ -659,44 +720,330 @@
             border-color: var(--warning);
         }
         
-        /* Responsive */
-        @media (max-width: 360px) {
-            .numbers-grid {
-                grid-template-columns: repeat(6, 1fr);
-                gap: 3px;
-            }
-            
-            .keno-number {
-                font-size: 11px;
-            }
-            
-            .timer-display {
-                font-size: 24px;
-            }
-            
-            .chips-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-            
-            .chip {
-                font-size: 10px;
-                padding: 8px 4px;
-            }
+        /* Wallet Modal */
+        .wallet-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            padding: 16px;
+            backdrop-filter: blur(20px);
         }
         
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 4px;
+        .wallet-modal.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
         }
         
-        ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 2px;
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         
-        ::-webkit-scrollbar-thumb {
-            background: var(--secondary-gradient);
-            border-radius: 2px;
+        .wallet-content {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            border: 2px solid var(--accent-color);
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .wallet-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--accent-color);
+        }
+        
+        .wallet-title i {
+            font-size: 24px;
+        }
+        
+        .wallet-title h3 {
+            font-size: 20px;
+            font-weight: 800;
+        }
+        
+        .wallet-close {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        .wallet-close:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            transform: rotate(90deg);
+        }
+        
+        .wallet-balance {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+            border: 2px solid var(--accent-color);
+        }
+        
+        .wallet-balance-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .wallet-balance-amount {
+            font-size: 36px;
+            font-weight: 900;
+            color: white;
+            margin-bottom: 4px;
+        }
+        
+        .wallet-balance-sub {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .wallet-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .wallet-stat {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .wallet-stat-icon {
+            width: 36px;
+            height: 36px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            color: var(--keno-purple);
+            font-size: 14px;
+        }
+        
+        .wallet-stat-info {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .wallet-stat-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        
+        .wallet-stat-value {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+        
+        .wallet-transactions {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .transactions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .transactions-header h4 {
+            font-size: 14px;
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+        
+        .refresh-btn {
+            width: 32px;
+            height: 32px;
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--keno-purple);
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        
+        .refresh-btn:hover,
+        .refresh-btn:active {
+            background: rgba(139, 92, 246, 0.4);
+            transform: rotate(180deg);
+        }
+        
+        .transactions-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .no-transactions {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .no-transactions i {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        
+        .no-transactions p {
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border-left: 3px solid transparent;
+        }
+        
+        .transaction-item.deposit {
+            border-left-color: var(--success);
+        }
+        
+        .transaction-item.withdrawal {
+            border-left-color: var(--warning);
+        }
+        
+        .transaction-item.win {
+            border-left-color: var(--success);
+        }
+        
+        .transaction-item.bet {
+            border-left-color: var(--danger);
+        }
+        
+        .transaction-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .transaction-type {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .transaction-description {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .transaction-amount {
+            font-size: 14px;
+            font-weight: 800;
+        }
+        
+        .transaction-amount.positive {
+            color: var(--success);
+        }
+        
+        .transaction-amount.negative {
+            color: var(--danger);
+        }
+        
+        .transaction-time {
+            font-size: 9px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        
+        .wallet-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .wallet-btn {
+            flex: 1;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .deposit-btn {
+            background: var(--success);
+            color: white;
+        }
+        
+        .deposit-btn:hover {
+            background: #0da371;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+        
+        .withdraw-btn {
+            background: var(--warning);
+            color: #000;
+        }
+        
+        .withdraw-btn:hover {
+            background: #d97706;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
         }
         
         /* Confirmation Modal */
@@ -712,6 +1059,7 @@
             align-items: center;
             z-index: 2000;
             padding: 16px;
+            transition: opacity 0.3s ease;
         }
         
         .confirmation-modal.active {
@@ -793,20 +1141,68 @@
             margin: 12px 0;
         }
         
-        /* Waiting Message - Simple text only */
-        .waiting-message {
-            text-align: center;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 12px;
-            color: var(--text-secondary);
-            display: none;
+        /* Enhanced scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
         }
         
-        .waiting-message.active {
-            display: block;
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            margin: 2px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            transform: scale(1.1);
+        }
+        
+        /* Responsive */
+        @media (max-width: 360px) {
+            .numbers-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 3px;
+            }
+            
+            .keno-number {
+                font-size: 11px;
+            }
+            
+            .timer-display {
+                font-size: 24px;
+            }
+            
+            .chips-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .chip {
+                font-size: 10px;
+                padding: 8px 4px;
+            }
+            
+            .wallet-content {
+                padding: 16px;
+            }
+            
+            .wallet-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .wallet-balance-amount {
+                font-size: 28px;
+            }
+            
+            .wallet-actions {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -830,7 +1226,10 @@
                 </div>
             </div>
             <div class="user-info">
-                <div class="balance-card">
+                <div class="wallet-btn-header" id="wallet-btn-header">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <div class="balance-card" id="balance-card">
                     <div class="balance-label">BALANCE</div>
                     <div class="balance-amount" id="balance">0 ETB</div>
                 </div>
@@ -988,6 +1387,83 @@
         </div>
     </div>
 
+    <!-- Wallet Modal -->
+    <div class="wallet-modal" id="wallet-modal">
+        <div class="wallet-content">
+            <div class="wallet-header">
+                <div class="wallet-title">
+                    <i class="fas fa-wallet"></i>
+                    <h3>WALLET</h3>
+                </div>
+                <button class="wallet-close" id="wallet-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="wallet-balance">
+                <div class="wallet-balance-label">TOTAL BALANCE</div>
+                <div class="wallet-balance-amount" id="wallet-balance">0 ETB</div>
+                <div class="wallet-balance-sub">Available to bet</div>
+            </div>
+            
+            <div class="wallet-stats">
+                <div class="wallet-stat">
+                    <div class="wallet-stat-icon">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div class="wallet-stat-info">
+                        <div class="wallet-stat-label">Total Wagered</div>
+                        <div class="wallet-stat-value" id="total-wagered">0 ETB</div>
+                    </div>
+                </div>
+                <div class="wallet-stat">
+                    <div class="wallet-stat-icon">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div class="wallet-stat-info">
+                        <div class="wallet-stat-label">Total Won</div>
+                        <div class="wallet-stat-value" id="total-wins">0 ETB</div>
+                    </div>
+                </div>
+                <div class="wallet-stat">
+                    <div class="wallet-stat-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="wallet-stat-info">
+                        <div class="wallet-stat-label">Net Profit</div>
+                        <div class="wallet-stat-value" id="net-profit">0 ETB</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="wallet-transactions">
+                <div class="transactions-header">
+                    <h4>RECENT TRANSACTIONS</h4>
+                    <button class="refresh-btn" id="refresh-transactions">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="transactions-list" id="transactions-list">
+                    <div class="no-transactions">
+                        <i class="fas fa-receipt"></i>
+                        <p>No transactions yet</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="wallet-actions">
+                <button class="wallet-btn deposit-btn" id="deposit-btn">
+                    <i class="fas fa-plus-circle"></i>
+                    DEPOSIT
+                </button>
+                <button class="wallet-btn withdraw-btn" id="withdraw-btn">
+                    <i class="fas fa-minus-circle"></i>
+                    WITHDRAW
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Telegram Web App
         const tg = window.Telegram.WebApp;
@@ -1013,7 +1489,13 @@
             isConnected: false,
             hasPlacedBet: false,
             MAX_SELECTIONS: 5,
-            NUMBER_POP_INTERVAL: 3000 // 3 seconds between number pops
+            MIN_SELECTIONS: 5, // Fixed: Must select exactly 5 numbers
+            NUMBER_POP_INTERVAL: 3000,
+            walletStats: {
+                totalWagered: 0,
+                totalWins: 0,
+                netProfit: 0
+            }
         };
         
         // DOM Elements
@@ -1045,7 +1527,19 @@
             confirmAmount: document.getElementById('confirm-amount'),
             confirmTotal: document.getElementById('confirm-total'),
             confirmCancel: document.getElementById('confirm-cancel'),
-            confirmOk: document.getElementById('confirm-ok')
+            confirmOk: document.getElementById('confirm-ok'),
+            // Wallet elements
+            walletBtnHeader: document.getElementById('wallet-btn-header'),
+            walletModal: document.getElementById('wallet-modal'),
+            walletClose: document.getElementById('wallet-close'),
+            walletBalance: document.getElementById('wallet-balance'),
+            totalWagered: document.getElementById('total-wagered'),
+            totalWins: document.getElementById('total-wins'),
+            netProfit: document.getElementById('net-profit'),
+            transactionsList: document.getElementById('transactions-list'),
+            refreshTransactions: document.getElementById('refresh-transactions'),
+            depositBtn: document.getElementById('deposit-btn'),
+            withdrawBtn: document.getElementById('withdraw-btn')
         };
         
         // Initialize Game
@@ -1149,12 +1643,12 @@
                     elements.currentBet.textContent = gameState.betAmount;
                     
                     // Update button text based on selection status
-                    if (gameState.selectedNumbers.length === 5) {
+                    if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                         elements.playBtn.disabled = false;
                         elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
                     } else {
                         elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
                     }
                     
                     vibrate(50);
@@ -1163,14 +1657,14 @@
             
             // Play Button
             elements.playBtn.addEventListener('click', () => {
-                if (gameState.selectedNumbers.length === 5) {
+                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                     showBetConfirmation();
                 }
             });
             
             elements.playBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                if (gameState.selectedNumbers.length === 5) {
+                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                     showBetConfirmation();
                 }
             }, { passive: false });
@@ -1204,6 +1698,20 @@
             elements.confirmOk.addEventListener('click', () => {
                 elements.confirmationModal.classList.remove('active');
                 placeBet();
+            });
+            
+            // Wallet events
+            elements.walletBtnHeader.addEventListener('click', openWalletModal);
+            elements.walletClose.addEventListener('click', closeWalletModal);
+            elements.refreshTransactions.addEventListener('click', loadTransactions);
+            elements.depositBtn.addEventListener('click', depositFunds);
+            elements.withdrawBtn.addEventListener('click', withdrawFunds);
+            
+            // Close modal when clicking outside
+            elements.walletModal.addEventListener('click', (e) => {
+                if (e.target === elements.walletModal) {
+                    closeWalletModal();
+                }
             });
             
             // Handle visibility change
@@ -1278,6 +1786,15 @@
                     elements.waitingMessage.classList.add('active');
                 });
                 
+                // Wallet events
+                gameState.socket.on('keno:walletStats', (data) => {
+                    updateWalletStats(data);
+                });
+                
+                gameState.socket.on('keno:transactions', (data) => {
+                    displayTransactions(data.transactions || []);
+                });
+                
             } catch (error) {
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
@@ -1310,6 +1827,9 @@
             
             vibrate(100);
             showNotification('Connected to Keno server!', 'info');
+            
+            // Load wallet data
+            loadWalletData();
         }
         
         function handleSocketDisconnect(reason) {
@@ -1343,7 +1863,6 @@
             } else {
                 elements.connectionStatus.style.background = 'rgba(239, 68, 68, 0.15)';
                 elements.connectionStatus.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                elements.connectionStatus.style.color = 'var(--danger)';
                 elements.statusText.textContent = message;
             }
         }
@@ -1361,6 +1880,11 @@
             updateRoundNumber(gameState.currentRound);
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             updateCountdown(gameState.countdown);
+            
+            // Initialize wallet stats
+            if (data.walletStats) {
+                updateWalletStats(data.walletStats);
+            }
             
             // Show/hide waiting message based on player count
             if (gameState.playersCount === 0) {
@@ -1508,12 +2032,12 @@
                 elements.playBtn.disabled = true;
                 elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
             } else if (gameState.roundActive) {
-                if (gameState.selectedNumbers.length === 5) {
+                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                     elements.playBtn.disabled = false;
                     elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
                 } else {
                     elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
                 }
             }
             
@@ -1554,13 +2078,13 @@
                     // Update selection counter
                     elements.selectedCount.textContent = gameState.selectedNumbers.length;
                     
-                    // Update play button state
-                    if (gameState.selectedNumbers.length === 5) {
+                    // Update play button state - MUST HAVE EXACTLY 5
+                    if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                         elements.playBtn.disabled = false;
                         elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                    } else {
+                    } else if (gameState.selectedNumbers.length < gameState.MIN_SELECTIONS) {
                         elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
                     }
                     
                     vibrate(30);
@@ -1573,12 +2097,12 @@
                 elements.selectedCount.textContent = gameState.selectedNumbers.length;
                 
                 // Update play button state
-                if (gameState.selectedNumbers.length === 5) {
+                if (gameState.selectedNumbers.length === gameState.MIN_SELECTIONS) {
                     elements.playBtn.disabled = false;
                     elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
                 } else {
                     elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - gameState.selectedNumbers.length} MORE`;
                 }
                 
                 vibrate(30);
@@ -1604,12 +2128,12 @@
             
             // Update play button
             if (gameState.roundActive && !gameState.hasPlacedBet) {
-                if (numbers.length === 5) {
+                if (numbers.length === gameState.MIN_SELECTIONS) {
                     elements.playBtn.disabled = false;
                     elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
                 } else {
                     elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - numbers.length} MORE`;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MIN_SELECTIONS - numbers.length} MORE`;
                 }
             }
         }
@@ -1666,8 +2190,9 @@
                 return;
             }
             
-            if (gameState.selectedNumbers.length !== gameState.MAX_SELECTIONS) {
-                showNotification(`Please select exactly ${gameState.MAX_SELECTIONS} numbers`, 'error');
+            // CRITICAL CHANGE: Must have exactly 5 numbers, not just up to 5
+            if (gameState.selectedNumbers.length !== gameState.MIN_SELECTIONS) {
+                showNotification(`You must select exactly ${gameState.MIN_SELECTIONS} numbers`, 'error');
                 return;
             }
             
@@ -1808,6 +2333,129 @@
             if (placeholder) {
                 placeholder.remove();
             }
+        }
+        
+        // Wallet Functions
+        function openWalletModal() {
+            elements.walletModal.classList.add('active');
+            loadWalletData();
+            vibrate(30);
+        }
+        
+        function closeWalletModal() {
+            elements.walletModal.classList.remove('active');
+        }
+        
+        function loadWalletData() {
+            if (!gameState.socket || !gameState.socket.connected) return;
+            
+            // Get wallet stats
+            gameState.socket.emit('keno:getWalletStats');
+            
+            // Get transactions
+            loadTransactions();
+        }
+        
+        function loadTransactions() {
+            if (!gameState.socket || !gameState.socket.connected) {
+                showNotification('Not connected to server', 'error');
+                return;
+            }
+            
+            // Show loading state
+            elements.transactionsList.innerHTML = `
+                <div class="no-transactions">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading transactions...</p>
+                </div>
+            `;
+            
+            // Request transactions from server
+            gameState.socket.emit('keno:getTransactions');
+            
+            // Animate refresh button
+            elements.refreshTransactions.style.transform = 'rotate(180deg)';
+            setTimeout(() => {
+                elements.refreshTransactions.style.transform = 'rotate(0deg)';
+            }, 300);
+        }
+        
+        function depositFunds() {
+            // Use Telegram Mini App payment system
+            tg.openInvoice('YOUR_INVOICE_URL_OR_CODE', function(status) {
+                if (status === 'paid') {
+                    showNotification('Deposit successful!', 'success');
+                    // Refresh balance
+                    if (gameState.socket && gameState.socket.connected) {
+                        gameState.socket.emit('keno:getBalance');
+                        loadWalletData();
+                    }
+                } else if (status === 'failed') {
+                    showNotification('Deposit failed', 'error');
+                } else if (status === 'cancelled') {
+                    showNotification('Deposit cancelled', 'warning');
+                }
+            });
+        }
+        
+        function withdrawFunds() {
+            // Show withdrawal form or redirect
+            tg.showAlert('Withdrawal requests are processed manually. Please contact admin via Telegram with your username and withdrawal amount.', 'Withdrawal Info');
+        }
+        
+        function updateWalletStats(stats) {
+            if (!stats) return;
+            
+            elements.walletBalance.textContent = (stats.balance || 0).toLocaleString() + ' ETB';
+            elements.totalWagered.textContent = (stats.totalWagered || 0).toLocaleString() + ' ETB';
+            elements.totalWins.textContent = (stats.totalWins || 0).toLocaleString() + ' ETB';
+            
+            const profit = (stats.totalWins || 0) - (stats.totalWagered || 0);
+            elements.netProfit.textContent = profit.toLocaleString() + ' ETB';
+            elements.netProfit.style.color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
+            
+            // Update game state
+            gameState.walletStats = {
+                totalWagered: stats.totalWagered || 0,
+                totalWins: stats.totalWins || 0,
+                netProfit: profit
+            };
+        }
+        
+        function displayTransactions(transactions) {
+            if (!transactions || transactions.length === 0) {
+                elements.transactionsList.innerHTML = `
+                    <div class="no-transactions">
+                        <i class="fas fa-receipt"></i>
+                        <p>No transactions yet</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            elements.transactionsList.innerHTML = '';
+            
+            transactions.forEach(transaction => {
+                const item = document.createElement('div');
+                item.className = `transaction-item ${transaction.type ? transaction.type.toLowerCase().replace('_', '') : ''}`;
+                
+                const amountClass = transaction.amount > 0 ? 'positive' : 'negative';
+                const amountSign = transaction.amount > 0 ? '+' : '';
+                const time = transaction.createdAt ? new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
+                
+                item.innerHTML = `
+                    <div class="transaction-info">
+                        <div class="transaction-type">${transaction.type ? transaction.type.replace('_', ' ') : 'Transaction'}</div>
+                        <div class="transaction-description">${transaction.description || ''}</div>
+                        <div class="transaction-time">${time}</div>
+                    </div>
+                    <div class="transaction-amount ${amountClass}">
+                        ${amountSign}${Math.abs(transaction.amount).toLocaleString()} ETB
+                    </div>
+                `;
+                
+                elements.transactionsList.appendChild(item);
+            });
         }
         
         // Helper Functions
