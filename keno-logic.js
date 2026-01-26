@@ -213,7 +213,8 @@ module.exports = {
                                 playersCount: activeGame.players.length,
                                 totalBets: activeGame.totalBets,
                                 isDrawComplete: true,
-                                message: `Round ${currentRoundNumber} results!`
+                                message: `Round ${currentRoundNumber} results!`,
+                                totalDrawn: currentDrawnNumbers.length
                             });
                             
                             // If player had a bet in this round, send their result
@@ -312,6 +313,19 @@ module.exports = {
                     return;
                 }
                 
+                // Calculate potential winnings for feedback
+                const selectionCount = sortedNumbers.length;
+                let potentialWinnings = 0;
+                
+                // Calculate maximum potential win (if all numbers match)
+                if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
+                    const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
+                    const maxPayout = self.CONFIG.PAYOUT_TABLE[selectionCount][maxMatches];
+                    if (maxPayout !== undefined && maxPayout > 0) {
+                        potentialWinnings = bet * maxPayout;
+                    }
+                }
+                
                 // Deduct bet amount
                 user.balance -= bet;
                 user.totalWagered += bet;
@@ -340,7 +354,8 @@ module.exports = {
                     amount: bet,
                     selectionCount: sortedNumbers.length, // Store how many numbers selected
                     placedAt: new Date(),
-                    userName: player.userName
+                    userName: player.userName,
+                    potentialWinnings: potentialWinnings
                 };
                 activeGame.totalBets++;
                 activeGame.totalBetAmount += bet;
@@ -357,7 +372,8 @@ module.exports = {
                     details: {
                         numbers: sortedNumbers,
                         round: activeGame.roundNumber,
-                        selectionCount: sortedNumbers.length
+                        selectionCount: sortedNumbers.length,
+                        potentialWinnings: potentialWinnings
                     }
                 });
                 await transaction.save();
@@ -365,20 +381,22 @@ module.exports = {
                 // Update stats
                 await self.updateKenoStats(bet, 0, 0, 0, 1);
                 
-                // Emit confirmation
+                // Emit confirmation with potential winnings
                 socket.emit('keno:betConfirmed', {
                     success: true,
                     balance: user.balance,
                     betAmount: bet,
                     numbers: sortedNumbers,
                     selectionCount: sortedNumbers.length,
-                    message: `Bet placed: ${bet} ETB on ${sortedNumbers.length} numbers`
+                    potentialWinnings: potentialWinnings,
+                    message: `Bet placed: ${bet} ETB on ${sortedNumbers.length} numbers`,
+                    payoutTable: self.CONFIG.PAYOUT_TABLE[selectionCount]
                 });
                 
                 // Broadcast updated player count
                 self.broadcastKenoPlayersUpdate();
                 
-                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on ${sortedNumbers.length} numbers`);
+                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on ${sortedNumbers.length} numbers, Potential win: ${potentialWinnings} ETB`);
                 
             } catch (error) {
                 console.error('Keno place bet error:', error);
@@ -511,6 +529,19 @@ module.exports = {
                 
                 const activeGame = self.getActiveKenoGame();
                 
+                // Calculate potential winnings
+                let potentialWinnings = 0;
+                if (player.selectedNumbers.length > 0 && player.currentBet) {
+                    const selectionCount = player.selectedNumbers.length;
+                    if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
+                        const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
+                        const maxPayout = self.CONFIG.PAYOUT_TABLE[selectionCount][maxMatches];
+                        if (maxPayout !== undefined && maxPayout > 0) {
+                            potentialWinnings = player.currentBet * maxPayout;
+                        }
+                    }
+                }
+                
                 socket.emit('keno:state', {
                     success: true,
                     balance: player.balance,
@@ -527,7 +558,9 @@ module.exports = {
                     selectionCount: player.selectedNumbers.length,
                     preSelectionCount: player.preSelectedNumbers.length,
                     currentDrawnNumbers: activeGame.drawnNumbers || [],
-                    isDrawComplete: activeGame.drawComplete || false
+                    isDrawComplete: activeGame.drawComplete || false,
+                    potentialWinnings: potentialWinnings,
+                    payoutTable: self.CONFIG.PAYOUT_TABLE[player.selectedNumbers.length] || {}
                 });
                 
             } catch (error) {
@@ -633,6 +666,60 @@ module.exports = {
             } catch (error) {
                 console.error('Keno clear pre-selection error:', error);
                 socket.emit('keno:error', 'Failed to clear pre-selection');
+            }
+        });
+        
+        // Get potential winnings for current selection
+        socket.on('keno:getPotentialWinnings', (data) => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const { numbers, betAmount, selectionCount } = data;
+                const bet = parseFloat(betAmount) || gameState.betAmount;
+                const count = selectionCount || (numbers ? numbers.length : 0);
+                
+                if (count < 1 || count > 5) {
+                    socket.emit('keno:potentialWinnings', {
+                        success: false,
+                        message: 'Invalid selection count'
+                    });
+                    return;
+                }
+                
+                const payoutTable = self.CONFIG.PAYOUT_TABLE[count] || {};
+                const potentialWinnings = {};
+                
+                // Calculate winnings for each possible match count
+                for (let matches = 0; matches <= Math.min(count, self.CONFIG.KENO_DRAW_COUNT); matches++) {
+                    const payoutMultiplier = payoutTable[matches] || 0;
+                    potentialWinnings[matches] = {
+                        multiplier: payoutMultiplier,
+                        amount: bet * payoutMultiplier,
+                        matches: matches,
+                        totalSelected: count
+                    };
+                }
+                
+                // Also send maximum possible win
+                const maxMatches = Math.min(count, self.CONFIG.KENO_DRAW_COUNT);
+                const maxPayout = payoutTable[maxMatches] || 0;
+                
+                socket.emit('keno:potentialWinnings', {
+                    success: true,
+                    betAmount: bet,
+                    selectionCount: count,
+                    payoutTable: payoutTable,
+                    potentialWinnings: potentialWinnings,
+                    maxPossibleWin: bet * maxPayout,
+                    message: `Potential winnings for ${count} numbers with ${bet} ETB bet`
+                });
+                
+            } catch (error) {
+                console.error('Get potential winnings error:', error);
+                socket.emit('keno:error', 'Failed to calculate potential winnings');
             }
         });
         
@@ -1198,7 +1285,8 @@ module.exports = {
             duration: self.CONFIG.KENO_GAME_TIMER,
             message: `Round ${activeGame.roundNumber} started! Place your bets!`,
             minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
-            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS
+            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
+            drawCount: self.CONFIG.KENO_DRAW_COUNT
         });
         
         // Reset all players' bet status (but keep pre-selected numbers)
@@ -1331,7 +1419,7 @@ module.exports = {
         }, 1000);
     },
     
-    // Draw Keno numbers
+    // Draw Keno numbers - UPDATED with ball counter
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
@@ -1347,7 +1435,8 @@ module.exports = {
         self.io.to('keno').emit('keno:draw_start', {
             round: activeGame.roundNumber,
             message: 'Drawing numbers...',
-            popInterval: self.CONFIG.NUMBER_POP_INTERVAL
+            popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
+            totalBalls: self.CONFIG.KENO_DRAW_COUNT
         });
         
         // Wait 2 seconds for dramatic effect
@@ -1364,28 +1453,46 @@ module.exports = {
             drawnNumbers.sort((a, b) => a - b);
             activeGame.drawnNumbers = drawnNumbers;
             
-            // Broadcast drawn numbers with animation
-            self.io.to('keno').emit('keno:round_results', {
-                round: activeGame.roundNumber,
-                drawnNumbers: drawnNumbers,
-                playersCount: activeGame.players.length,
-                totalBets: activeGame.totalBets,
-                popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
-                message: `Round ${activeGame.roundNumber} results!`
-            });
+            // Draw numbers one by one with 3-second interval
+            for (let i = 0; i < drawnNumbers.length; i++) {
+                setTimeout(() => {
+                    self.io.to('keno').emit('keno:number_drawn', {
+                        number: drawnNumbers[i],
+                        index: i,
+                        total: drawnNumbers.length,
+                        drawnCount: i + 1, // Current ball number (1/20, 2/20, etc.)
+                        round: activeGame.roundNumber
+                    });
+                }, i * self.CONFIG.NUMBER_POP_INTERVAL);
+            }
             
-            // Mark draw as complete
-            activeGame.drawComplete = true;
-            
-            // Process results after numbers are shown
-            setTimeout(async () => {
-                await self.processKenoResults(activeGame);
-            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 5000);
+            // After all numbers are drawn, send complete results
+            setTimeout(() => {
+                self.io.to('keno').emit('keno:round_results', {
+                    round: activeGame.roundNumber,
+                    drawnNumbers: drawnNumbers,
+                    playersCount: activeGame.players.length,
+                    totalBets: activeGame.totalBets,
+                    popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
+                    message: `Round ${activeGame.roundNumber} results!`,
+                    totalDrawn: drawnNumbers.length,
+                    isDrawComplete: true
+                });
+                
+                // Mark draw as complete
+                activeGame.drawComplete = true;
+                
+                // Process results after numbers are shown
+                setTimeout(async () => {
+                    await self.processKenoResults(activeGame);
+                }, 1000);
+                
+            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
             
         }, 2000);
     },
     
-    // Simulate draw for new player (when they join during draw)
+    // Simulate draw for new player (when they join during draw) - UPDATED with ball counter
     simulateDrawForNewPlayer: function(socket, drawnNumbers, roundNumber, activeGame) {
         const self = this;
         
@@ -1393,18 +1500,20 @@ module.exports = {
         socket.emit('keno:draw_start', {
             round: roundNumber,
             message: 'Drawing in progress...',
-            popInterval: self.CONFIG.NUMBER_POP_INTERVAL
+            popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
+            totalBalls: self.CONFIG.KENO_DRAW_COUNT
         });
         
         // Simulate animation for already drawn numbers
         setTimeout(() => {
-            // Send numbers one by one with delay
+            // Send numbers one by one with delay and ball counter
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
                     socket.emit('keno:number_drawn', {
                         number: num,
                         index: index,
                         total: drawnNumbers.length,
+                        drawnCount: index + 1, // Current ball number
                         round: roundNumber
                     });
                 }, index * self.CONFIG.NUMBER_POP_INTERVAL);
@@ -1418,7 +1527,8 @@ module.exports = {
                     playersCount: activeGame.players.length,
                     totalBets: activeGame.totalBets,
                     isDrawComplete: activeGame.drawComplete || false,
-                    message: `Round ${roundNumber} results!`
+                    message: `Round ${roundNumber} results!`,
+                    totalDrawn: drawnNumbers.length
                 });
             }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
         }, 1000);
