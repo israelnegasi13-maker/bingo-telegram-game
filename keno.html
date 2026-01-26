@@ -483,6 +483,127 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
+        /* Payout Table */
+        .payout-table {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(10px);
+            margin-top: 8px;
+        }
+        
+        .payout-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .payout-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .payout-note {
+            font-size: 9px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .payout-container {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+        
+        .payout-table-inner {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            min-width: 500px;
+        }
+        
+        .payout-table-inner thead tr {
+            background: rgba(139, 92, 246, 0.2);
+        }
+        
+        .payout-table-inner th {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+        
+        .payout-table-inner th:first-child {
+            border-top-left-radius: 6px;
+        }
+        
+        .payout-table-inner th:last-child {
+            border-top-right-radius: 6px;
+        }
+        
+        .payout-table-inner th:nth-child(1) {
+            width: 20%;
+        }
+        
+        .payout-table-inner th:nth-child(2) {
+            width: 15%;
+            text-align: center;
+        }
+        
+        .payout-table-inner th:nth-child(3),
+        .payout-table-inner th:nth-child(4),
+        .payout-table-inner th:nth-child(5),
+        .payout-table-inner th:nth-child(6),
+        .payout-table-inner th:nth-child(7) {
+            width: 13%;
+            text-align: right;
+        }
+        
+        .payout-table-inner tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .payout-table-inner tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        .payout-table-inner td {
+            padding: 8px 6px;
+            vertical-align: middle;
+        }
+        
+        .payout-table-inner td:first-child {
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .payout-table-inner td:nth-child(2) {
+            text-align: center;
+            font-weight: 700;
+            color: var(--success);
+        }
+        
+        .payout-table-inner td:nth-child(3),
+        .payout-table-inner td:nth-child(4),
+        .payout-table-inner td:nth-child(5),
+        .payout-table-inner td:nth-child(6),
+        .payout-table-inner td:nth-child(7) {
+            text-align: right;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .payout-row-highlight {
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
         /* Results Panel - Compact */
         .results-panel {
             background: var(--card-bg);
@@ -1252,6 +1373,11 @@
             .withdraw-chips {
                 grid-template-columns: 1fr;
             }
+            
+            .payout-table-inner {
+                min-width: 450px;
+                font-size: 9px;
+            }
         }
         
         /* Smooth Scrollbar */
@@ -1392,6 +1518,76 @@
                     <button class="btn btn-secondary" id="clear-btn">
                         <i class="fas fa-undo"></i> CLEAR
                     </button>
+                </div>
+            </div>
+            
+            <!-- Payout Table -->
+            <div class="payout-table">
+                <div class="payout-header">
+                    <div class="payout-title">PAYOUT TABLE (5 NUMBERS)</div>
+                    <div class="payout-note">PER BET</div>
+                </div>
+                <div class="payout-container">
+                    <table class="payout-table-inner">
+                        <thead>
+                            <tr>
+                                <th>HITS</th>
+                                <th>MULTIPLIER</th>
+                                <th>5 ETB</th>
+                                <th>10 ETB</th>
+                                <th>20 ETB</th>
+                                <th>50 ETB</th>
+                                <th>100 ETB</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="payout-row-highlight">
+                                <td>5 HITS</td>
+                                <td>300x</td>
+                                <td>2,500 ETB</td>
+                                <td>5,000 ETB</td>
+                                <td>10,000 ETB</td>
+                                <td>25,000 ETB</td>
+                                <td>50,000 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>4 HITS</td>
+                                <td>50x</td>
+                                <td>250 ETB</td>
+                                <td>500 ETB</td>
+                                <td>1,000 ETB</td>
+                                <td>2,500 ETB</td>
+                                <td>5,000 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>3 HITS</td>
+                                <td>15x</td>
+                                <td>25 ETB</td>
+                                <td>50 ETB</td>
+                                <td>100 ETB</td>
+                                <td>250 ETB</td>
+                                <td>500 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>2 HITS</td>
+                                <td>2x</td>
+                                <td>10 ETB</td>
+                                <td>20 ETB</td>
+                                <td>40 ETB</td>
+                                <td>100 ETB</td>
+                                <td>200 ETB</td>
+                            </tr>
+                            <tr>
+                                <td>1 HIT</td>
+                                <td>1x</td>
+                                <td>5 ETB</td>
+                                <td>10 ETB</td>
+                                <td>20 ETB</td>
+                                <td>50 ETB</td>
+                                <td>100 ETB</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
             
@@ -1629,7 +1825,15 @@
             hasPlacedBet: false,
             MIN_SELECTIONS: 1,  // Changed from 5 to 1
             MAX_SELECTIONS: 5,
-            NUMBER_POP_INTERVAL: 3000 // 3 seconds between number pops
+            NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
+            // New payout table based on your requirements
+            PAYOUT_TABLE: {
+                1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
+                2: {2: 2, 1: 0, 0: 0},             // Pick 2: Match 2 = 2x
+                3: {3: 15, 2: 0, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x
+                4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
+                5: {5: 300, 4: 50, 3: 15, 2: 2, 1: 1, 0: 0} // Pick 5: Match 5 = 300x, Match 4 = 50x, Match 3 = 15x, Match 2 = 2x, Match 1 = 1x
+            }
         };
         
         // Wallet State
