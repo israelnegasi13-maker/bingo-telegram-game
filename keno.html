@@ -110,6 +110,13 @@
             border-radius: 8px;
             padding: 8px 10px;
             min-width: 90px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .balance-card:hover {
+            background: rgba(139, 92, 246, 0.25);
+            transform: translateY(-1px);
         }
         
         .balance-label {
@@ -167,6 +174,7 @@
             padding: 12px;
             border: 1px solid var(--card-border);
             backdrop-filter: blur(10px);
+            position: relative;
         }
         
         .board-header {
@@ -195,6 +203,19 @@
             font-weight: 700;
             font-size: 11px;
             color: var(--keno-purple);
+            transition: all 0.3s;
+        }
+        
+        .selection-info.ready {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+        
+        .selection-info.waiting {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--warning);
         }
         
         /* Numbers Grid - Compact */
@@ -220,6 +241,11 @@
             border: 1px solid transparent;
             color: var(--text-primary);
             position: relative;
+        }
+        
+        .keno-number:hover:not(.disabled):not(.selected) {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
         }
         
         .keno-number.selected {
@@ -257,6 +283,12 @@
             animation: popNumber 0.5s ease;
         }
         
+        .keno-number.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
         @keyframes popNumber {
             0% { transform: scale(0.5); opacity: 0; }
             70% { transform: scale(1.2); }
@@ -281,6 +313,16 @@
             transition: all 0.3s;
         }
         
+        .quick-pick-btn:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.25);
+            transform: translateY(-1px);
+        }
+        
+        .quick-pick-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         /* Control Panel - Compact */
         .control-panel {
             background: var(--card-bg);
@@ -289,6 +331,14 @@
             border: 1px solid var(--card-border);
             backdrop-filter: blur(10px);
             position: relative;
+        }
+        
+        .control-panel.waiting {
+            border-color: var(--warning);
+        }
+        
+        .control-panel.active {
+            border-color: var(--success);
         }
         
         /* Round Timer - Compact */
@@ -393,11 +443,21 @@
             font-size: 11px;
         }
         
+        .chip:hover:not(.disabled) {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+        
         .chip.selected {
             background: var(--secondary-gradient);
             color: white;
             border-color: var(--accent-color);
             transform: translateY(-1px);
+        }
+        
+        .chip.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         /* Action Buttons - Compact */
@@ -421,6 +481,11 @@
             gap: 8px;
         }
         
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
         .btn-primary {
             background: var(--secondary-gradient);
             color: white;
@@ -430,12 +495,36 @@
         .btn-primary:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none !important;
         }
         
         .btn-secondary {
             background: rgba(255, 255, 255, 0.05);
             color: var(--text-primary);
             border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-secondary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        /* Ready Button */
+        .ready-btn {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .ready-btn:hover:not(:disabled) {
+            background: rgba(16, 185, 129, 0.25);
+        }
+        
+        .ready-btn.active {
+            background: var(--success);
+            color: white;
+            border-color: var(--accent-color);
         }
         
         /* Results Panel - Compact */
@@ -646,6 +735,24 @@
             margin-bottom: 12px;
         }
         
+        /* Round Status Badge */
+        .round-status {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--secondary-gradient);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
         /* Notification */
         .notification {
             position: fixed;
@@ -734,100 +841,6 @@
             background: var(--secondary-gradient);
             border-radius: 2px;
         }
-        
-        /* Confirmation Modal */
-        .confirmation-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.95);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-            padding: 16px;
-        }
-        
-        .confirmation-modal.active {
-            display: flex;
-        }
-        
-        .confirmation-content {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 24px;
-            max-width: 320px;
-            width: 100%;
-            border: 2px solid var(--accent-color);
-            backdrop-filter: blur(20px);
-        }
-        
-        .confirmation-title {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--accent-color);
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        
-        .confirmation-details {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }
-        
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 13px;
-        }
-        
-        .detail-label {
-            color: var(--text-secondary);
-        }
-        
-        .detail-value {
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        .confirmation-buttons {
-            display: flex;
-            gap: 12px;
-        }
-        
-        .confirm-btn {
-            flex: 1;
-            padding: 14px;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 14px;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s;
-        }
-        
-        .confirm-yes {
-            background: var(--success);
-            color: white;
-        }
-        
-        .confirm-no {
-            background: rgba(239, 68, 68, 0.9);
-            color: white;
-        }
-        
-        .confirmation-amount {
-            font-size: 28px;
-            font-weight: 900;
-            color: var(--accent-color);
-            text-align: center;
-            margin: 12px 0;
-        }
     </style>
 </head>
 <body>
@@ -861,12 +874,13 @@
         <div class="game-container">
             <!-- Game Board -->
             <div class="game-board">
+                <div id="round-status-badge" class="round-status" style="display: none;"></div>
                 <div class="board-header">
                     <div class="board-title">
                         <h2>SELECT 5 NUMBERS</h2>
-                        <p>Choose exactly 5 numbers from 1-80</p>
+                        <p id="round-status-text">Choose exactly 5 numbers from 1-80</p>
                     </div>
-                    <div class="selection-info">
+                    <div class="selection-info" id="selection-info">
                         SELECTED: <span id="selected-count">0</span>/5
                     </div>
                 </div>
@@ -928,11 +942,14 @@
                 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <button class="btn btn-primary" id="play-btn" disabled>
-                        <i class="fas fa-play-circle"></i> SELECT 5 NUMBERS
+                    <button class="btn btn-primary" id="play-btn">
+                        <i class="fas fa-play-circle"></i> PLACE BET
                     </button>
                     <button class="btn btn-secondary" id="clear-btn">
                         <i class="fas fa-undo"></i> CLEAR
+                    </button>
+                    <button class="btn btn-secondary ready-btn" id="ready-btn">
+                        <i class="fas fa-check-circle"></i> READY FOR NEXT ROUND
                     </button>
                 </div>
             </div>
@@ -985,32 +1002,6 @@
         </footer>
     </div>
 
-    <!-- Confirmation Modal -->
-    <div class="confirmation-modal" id="confirmation-modal">
-        <div class="confirmation-content">
-            <div class="confirmation-title">CONFIRM BET</div>
-            <div class="confirmation-details">
-                <div class="detail-row">
-                    <span class="detail-label">Round:</span>
-                    <span class="detail-value" id="confirm-round">#1</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Numbers:</span>
-                    <span class="detail-value" id="confirm-numbers">1, 2, 3, 4, 5</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Bet Amount:</span>
-                    <span class="detail-value" id="confirm-amount">5 ETB</span>
-                </div>
-                <div class="confirmation-amount" id="confirm-total">5 ETB</div>
-            </div>
-            <div class="confirmation-buttons">
-                <button class="confirm-btn confirm-no" id="confirm-cancel">CANCEL</button>
-                <button class="confirm-btn confirm-yes" id="confirm-ok">CONFIRM BET</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         // Telegram Web App
         const tg = window.Telegram.WebApp;
@@ -1035,6 +1026,8 @@
             socket: null,
             isConnected: false,
             hasPlacedBet: false,
+            isReadyForNextRound: false,
+            preSelectedNumbers: [],
             MAX_SELECTIONS: 5,
             NUMBER_POP_INTERVAL: 3000 // 3 seconds between number pops
         };
@@ -1063,13 +1056,10 @@
             controlPanel: document.getElementById('control-panel'),
             waitingOverlay: document.getElementById('waiting-overlay'),
             waitTimer: document.getElementById('wait-timer'),
-            confirmationModal: document.getElementById('confirmation-modal'),
-            confirmRound: document.getElementById('confirm-round'),
-            confirmNumbers: document.getElementById('confirm-numbers'),
-            confirmAmount: document.getElementById('confirm-amount'),
-            confirmTotal: document.getElementById('confirm-total'),
-            confirmCancel: document.getElementById('confirm-cancel'),
-            confirmOk: document.getElementById('confirm-ok')
+            roundStatusBadge: document.getElementById('round-status-badge'),
+            roundStatusText: document.getElementById('round-status-text'),
+            selectionInfo: document.getElementById('selection-info'),
+            readyBtn: document.getElementById('ready-btn')
         };
         
         // Initialize Game
@@ -1146,57 +1136,36 @@
         
         // Setup Event Listeners
         function setupEventListeners() {
-            // Bet Chips - ALWAYS allow changing stake BEFORE placing bet
+            // Bet Chips
             document.querySelectorAll('.chip').forEach(chip => {
                 chip.addEventListener('click', function() {
-                    // Allow stake change ANY TIME during betting phase
-                    // (as long as round is active and bet not placed yet)
-                    if (!gameState.isConnected) return;
-                    
-                    // Check if bet already placed
+                    // Can change bet anytime, but only if not placed bet in current round
                     if (gameState.hasPlacedBet) {
-                        showNotification('Cannot change stake after placing bet', 'warning');
+                        showNotification('Cannot change bet after placing', 'warning');
                         return;
                     }
                     
-                    // Check if round is active
-                    if (!gameState.roundActive) {
-                        showNotification('Wait for next round to start', 'warning');
+                    // Check if chip is disabled
+                    if (this.classList.contains('disabled')) {
                         return;
                     }
                     
-                    // Change stake
                     document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
                     this.classList.add('selected');
                     
                     gameState.betAmount = parseInt(this.dataset.value);
                     elements.currentBet.textContent = gameState.betAmount;
                     
-                    // Update button text based on selection status
-                    if (gameState.selectedNumbers.length === 5) {
-                        elements.playBtn.disabled = false;
-                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                    } else {
-                        elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                    }
-                    
                     vibrate(50);
+                    updatePlayButtonState();
                 });
             });
             
             // Play Button
-            elements.playBtn.addEventListener('click', () => {
-                if (gameState.selectedNumbers.length === 5) {
-                    showBetConfirmation();
-                }
-            });
-            
+            elements.playBtn.addEventListener('click', placeBet);
             elements.playBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                if (gameState.selectedNumbers.length === 5) {
-                    showBetConfirmation();
-                }
+                placeBet();
             }, { passive: false });
             
             // Clear Button
@@ -1213,21 +1182,18 @@
                 requestQuickPick();
             }, { passive: false });
             
+            // Ready Button
+            elements.readyBtn.addEventListener('click', toggleReadyForNextRound);
+            elements.readyBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                toggleReadyForNextRound();
+            }, { passive: false });
+            
             // Refresh balance button
             document.querySelector('.balance-card').addEventListener('click', () => {
                 if (gameState.socket && gameState.socket.connected) {
                     gameState.socket.emit('keno:getBalance');
                 }
-            });
-            
-            // Confirmation Modal buttons
-            elements.confirmCancel.addEventListener('click', () => {
-                elements.confirmationModal.classList.remove('active');
-            });
-            
-            elements.confirmOk.addEventListener('click', () => {
-                elements.confirmationModal.classList.remove('active');
-                placeBet();
             });
             
             // Handle visibility change
@@ -1239,20 +1205,6 @@
                     }
                 }
             });
-        }
-        
-        // Show Bet Confirmation
-        function showBetConfirmation() {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
-            
-            // Update confirmation modal
-            elements.confirmRound.textContent = `#${gameState.currentRound}`;
-            elements.confirmNumbers.textContent = gameState.selectedNumbers.join(', ');
-            elements.confirmAmount.textContent = `${gameState.betAmount} ETB`;
-            elements.confirmTotal.textContent = `${gameState.betAmount} ETB`;
-            
-            // Show modal
-            elements.confirmationModal.classList.add('active');
         }
         
         // Socket.IO Connection
@@ -1385,6 +1337,9 @@
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             updateCountdown(gameState.countdown);
             
+            // Update UI based on round state
+            updateRoundStateUI();
+            
             // Show/hide waiting overlay based on player count
             if (gameState.playersCount === 0) {
                 elements.waitingOverlay.classList.add('active');
@@ -1392,6 +1347,9 @@
             } else {
                 elements.waitingOverlay.classList.remove('active');
             }
+            
+            // Update chip states
+            updateChipStates();
         }
         
         function handleRoundStart(data) {
@@ -1405,23 +1363,29 @@
             clearDrawnNumbers();
             elements.winResult.style.display = 'none';
             
-            // Reset stake to default (5 ETB)
-            gameState.betAmount = 5;
-            elements.currentBet.textContent = gameState.betAmount;
+            // Update UI
+            updateRoundStateUI();
             
-            // Reset chip selection
-            document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-            document.querySelector('.chip[data-value="5"]').classList.add('selected');
+            // Enable controls
+            elements.playBtn.disabled = false;
+            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
             
-            // Reset play button
-            elements.playBtn.disabled = true;
-            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
-            
-            // Clear number selections
-            clearSelection();
+            // Clear selection if not ready
+            if (!gameState.isReadyForNextRound || gameState.preSelectedNumbers.length !== 5) {
+                clearSelection();
+            }
             
             // Show notification
-            showNotification(`ROUND ${gameState.currentRound} STARTED! PLACE YOUR BET`, 'info');
+            showNotification(`ROUND ${gameState.currentRound} STARTED!`, 'info');
+            
+            // Auto-apply pre-selected numbers if ready
+            if (gameState.isReadyForNextRound && gameState.preSelectedNumbers.length === 5) {
+                updateSelectedNumbersDisplay(gameState.preSelectedNumbers);
+                showNotification('Your pre-selected numbers applied!', 'success');
+            }
+            
+            // Update chip states
+            updateChipStates();
         }
         
         function handleDrawStart(data) {
@@ -1439,15 +1403,26 @@
             // Update stats
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             
+            // Update UI
+            updateRoundStateUI();
+            
             // Check if no players, show waiting overlay
             if (gameState.playersCount === 0) {
                 elements.waitingOverlay.classList.add('active');
                 elements.waitTimer.textContent = gameState.countdown;
             }
+            
+            // Reset ready state after round ends
+            gameState.isReadyForNextRound = false;
+            elements.readyBtn.classList.remove('active');
+            
+            // Update chip states
+            updateChipStates();
         }
         
         function handlePersonalResult(data) {
             gameState.balance = data.newBalance || gameState.balance;
+            gameState.hasPlacedBet = false; // Reset for next round
             
             updateBalanceDisplay(gameState.balance);
             
@@ -1471,6 +1446,9 @@
                 // Add loss to history
                 addToHistory(data);
             }
+            
+            // Update chip states
+            updateChipStates();
         }
         
         function handleBetConfirmed(data) {
@@ -1483,6 +1461,9 @@
             // Disable bet button
             elements.playBtn.disabled = true;
             elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
+            
+            // Disable chips after bet placed
+            updateChipStates();
             
             // Hide waiting overlay if players > 0
             if (gameState.playersCount > 0) {
@@ -1502,6 +1483,7 @@
             });
             
             showNotification(`QUICK PICK: ${data.numbers.length} NUMBERS`, 'info');
+            updatePlayButtonState();
         }
         
         function updateGameState(data) {
@@ -1525,33 +1507,11 @@
                 updateSelectedNumbersDisplay(gameState.selectedNumbers);
             }
             
-            // Update bet button state
-            if (gameState.hasPlacedBet) {
-                elements.playBtn.disabled = true;
-                elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
-            } else if (gameState.roundActive) {
-                if (gameState.selectedNumbers.length === 5) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                }
-            }
+            // Update UI
+            updateRoundStateUI();
             
-            // Update bet amount display
-            if (data.currentBet) {
-                gameState.betAmount = data.currentBet;
-                elements.currentBet.textContent = gameState.betAmount;
-                
-                // Update chip selection
-                document.querySelectorAll('.chip').forEach(chip => {
-                    chip.classList.remove('selected');
-                    if (parseInt(chip.dataset.value) === gameState.betAmount) {
-                        chip.classList.add('selected');
-                    }
-                });
-            }
+            // Update chip states
+            updateChipStates();
             
             // Show/hide waiting overlay based on player count
             if (gameState.playersCount === 0) {
@@ -1564,8 +1524,7 @@
         
         // Game Functions
         function toggleNumberSelection(number) {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
-            
+            // Allow selection anytime (remove roundActive check)
             const index = gameState.selectedNumbers.indexOf(number);
             const element = document.querySelector(`.keno-number[data-number="${number}"]`);
             
@@ -1577,15 +1536,6 @@
                     // Update selection counter
                     elements.selectedCount.textContent = gameState.selectedNumbers.length;
                     
-                    // Update play button state
-                    if (gameState.selectedNumbers.length === 5) {
-                        elements.playBtn.disabled = false;
-                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                    } else {
-                        elements.playBtn.disabled = true;
-                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                    }
-                    
                     vibrate(30);
                 } else {
                     showNotification(`Maximum ${gameState.MAX_SELECTIONS} numbers allowed`, 'warning');
@@ -1594,18 +1544,11 @@
                 gameState.selectedNumbers.splice(index, 1);
                 element.classList.remove('selected');
                 elements.selectedCount.textContent = gameState.selectedNumbers.length;
-                
-                // Update play button state
-                if (gameState.selectedNumbers.length === 5) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
-                }
-                
                 vibrate(30);
             }
+            
+            // Update play button state
+            updatePlayButtonState();
         }
         
         function updateSelectedNumbersDisplay(numbers) {
@@ -1624,22 +1567,12 @@
             
             gameState.selectedNumbers = numbers;
             elements.selectedCount.textContent = numbers.length;
-            
-            // Update play button
-            if (gameState.roundActive && !gameState.hasPlacedBet) {
-                if (numbers.length === 5) {
-                    elements.playBtn.disabled = false;
-                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
-                } else {
-                    elements.playBtn.disabled = true;
-                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - numbers.length} MORE`;
-                }
-            }
+            updatePlayButtonState();
         }
         
         function clearSelection() {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) {
-                showNotification('Cannot clear selection now', 'warning');
+            if (gameState.hasPlacedBet && gameState.roundActive) {
+                showNotification('Cannot clear after placing bet', 'warning');
                 return;
             }
             
@@ -1650,17 +1583,13 @@
             
             gameState.selectedNumbers = [];
             elements.selectedCount.textContent = '0';
-            
-            // Reset play button
-            elements.playBtn.disabled = true;
-            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
-            
             vibrate(50);
+            updatePlayButtonState();
         }
         
         function requestQuickPick() {
-            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) {
-                showNotification('Cannot quick pick now', 'error');
+            if (gameState.hasPlacedBet && gameState.roundActive) {
+                showNotification('Cannot change numbers after placing bet', 'error');
                 return;
             }
             
@@ -1674,7 +1603,7 @@
         }
         
         function placeBet() {
-            if (!gameState.roundActive || !gameState.isConnected) {
+            if (!gameState.roundActive) {
                 showNotification('Round not active', 'error');
                 return;
             }
@@ -1704,6 +1633,30 @@
                 numbers: gameState.selectedNumbers,
                 betAmount: gameState.betAmount
             });
+        }
+        
+        function toggleReadyForNextRound() {
+            if (gameState.selectedNumbers.length !== gameState.MAX_SELECTIONS) {
+                showNotification(`Select ${gameState.MAX_SELECTIONS} numbers first`, 'warning');
+                return;
+            }
+            
+            gameState.isReadyForNextRound = !gameState.isReadyForNextRound;
+            gameState.preSelectedNumbers = [...gameState.selectedNumbers];
+            
+            if (gameState.isReadyForNextRound) {
+                elements.readyBtn.classList.add('active');
+                elements.readyBtn.innerHTML = '<i class="fas fa-check-circle"></i> READY';
+                elements.selectionInfo.classList.add('ready');
+                showNotification('Numbers saved for next round!', 'success');
+            } else {
+                elements.readyBtn.classList.remove('active');
+                elements.readyBtn.innerHTML = '<i class="fas fa-check-circle"></i> READY FOR NEXT ROUND';
+                elements.selectionInfo.classList.remove('ready');
+                showNotification('Ready status cleared', 'info');
+            }
+            
+            vibrate(50);
         }
         
         // Display Functions
@@ -1806,6 +1759,93 @@
         function updateBalanceDisplay(balance) {
             gameState.balance = balance;
             elements.balance.textContent = balance.toLocaleString() + ' ETB';
+        }
+        
+        function updatePlayButtonState() {
+            const canPlaceBet = gameState.roundActive && 
+                               !gameState.hasPlacedBet && 
+                               gameState.selectedNumbers.length === gameState.MAX_SELECTIONS &&
+                               gameState.isConnected &&
+                               gameState.balance >= gameState.betAmount;
+            
+            elements.playBtn.disabled = !canPlaceBet;
+            
+            if (canPlaceBet) {
+                elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> PLACE BET (${gameState.betAmount} ETB)`;
+            } else if (gameState.hasPlacedBet) {
+                elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
+            } else if (!gameState.roundActive) {
+                elements.playBtn.innerHTML = '<i class="fas fa-clock"></i> WAIT FOR ROUND';
+            } else if (gameState.selectedNumbers.length !== gameState.MAX_SELECTIONS) {
+                elements.playBtn.innerHTML = `<i class="fas fa-exclamation-circle"></i> SELECT ${gameState.MAX_SELECTIONS} NUMBERS`;
+            } else if (gameState.balance < gameState.betAmount) {
+                elements.playBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> INSUFFICIENT BALANCE';
+            } else {
+                elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            }
+        }
+        
+        function updateRoundStateUI() {
+            if (gameState.roundActive) {
+                // Round is active
+                elements.roundStatusBadge.textContent = 'BETTING OPEN';
+                elements.roundStatusBadge.style.display = 'block';
+                elements.roundStatusBadge.style.background = 'var(--secondary-gradient)';
+                elements.roundStatusText.textContent = 'Betting open! Place your bet now!';
+                elements.controlPanel.classList.remove('waiting');
+                elements.controlPanel.classList.add('active');
+                elements.selectionInfo.classList.remove('waiting');
+            } else {
+                // Round is not active
+                elements.roundStatusBadge.textContent = 'WAITING';
+                elements.roundStatusBadge.style.display = 'block';
+                elements.roundStatusBadge.style.background = 'var(--warning)';
+                elements.roundStatusText.textContent = 'Prepare for next round! Select your numbers.';
+                elements.controlPanel.classList.add('waiting');
+                elements.controlPanel.classList.remove('active');
+                elements.selectionInfo.classList.add('waiting');
+            }
+            
+            // Update selection info
+            if (gameState.selectedNumbers.length === gameState.MAX_SELECTIONS) {
+                if (gameState.isReadyForNextRound) {
+                    elements.selectionInfo.innerHTML = `READY: <span style="color: var(--success)">${gameState.selectedNumbers.length}</span>/5`;
+                    elements.selectionInfo.classList.add('ready');
+                } else {
+                    elements.selectionInfo.innerHTML = `SELECTED: <span style="color: var(--accent-color)">${gameState.selectedNumbers.length}</span>/5`;
+                    elements.selectionInfo.classList.remove('ready');
+                }
+            } else {
+                elements.selectionInfo.innerHTML = `SELECTED: <span>${gameState.selectedNumbers.length}</span>/5`;
+                elements.selectionInfo.classList.remove('ready');
+            }
+            
+            updatePlayButtonState();
+        }
+        
+        function updateChipStates() {
+            document.querySelectorAll('.chip').forEach(chip => {
+                if (gameState.hasPlacedBet && gameState.roundActive) {
+                    // Disable chips after bet placed
+                    chip.classList.add('disabled');
+                } else {
+                    chip.classList.remove('disabled');
+                }
+                
+                // Update selected chip
+                if (parseInt(chip.dataset.value) === gameState.betAmount) {
+                    chip.classList.add('selected');
+                } else {
+                    chip.classList.remove('selected');
+                }
+            });
+            
+            // Update quick pick button state
+            if (gameState.hasPlacedBet && gameState.roundActive) {
+                elements.quickPickBtn.disabled = true;
+            } else {
+                elements.quickPickBtn.disabled = false;
+            }
         }
         
         function addToHistory(data) {
