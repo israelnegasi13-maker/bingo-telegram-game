@@ -10,13 +10,13 @@ module.exports = {
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
         NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
-        // Updated payout table for 1-5 numbers with new multipliers
+        // UPDATED PAYOUT TABLE:
         PAYOUT_TABLE: {
-            1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
-            2: {2: 2, 1: 0, 0: 0},             // Pick 2: Match 2 = 2x
-            3: {3: 15, 2: 0, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x
+            1: {1: 3, 0: 0},                    // Pick 1: Match 1 = 3x
+            2: {2: 10, 1: 0, 0: 0},            // Pick 2: Match 2 = 10x
+            3: {3: 15, 2: 1, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x, Match 2 = 1x
             4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
-            5: {5: 300, 4: 50, 3: 15, 2: 2, 1: 1, 0: 0} // Pick 5: Match 5 = 300x, Match 4 = 50x, Match 3 = 15x, Match 2 = 2x, Match 1 = 1x
+            5: {5: 200, 4: 50, 3: 15, 2: 1, 1: 0, 0: 0} // Pick 5: Match 5 = 200x, Match 4 = 50x, Match 3 = 15x, Match 2 = 1x
         },
         COMMISSION_PERCENTAGE: 5, // 5% house commission
         ALLOW_PRE_SELECTION: true,
@@ -49,12 +49,12 @@ module.exports = {
         this.minimumPlayers = 1; // Game stops if no players
         
         console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
-        console.log('🎰 New payout table loaded:');
-        console.log('   5 Numbers: 5 hits = 300x, 4 hits = 50x, 3 hits = 15x, 2 hits = 2x, 1 hit = 1x');
+        console.log('🎰 NEW payout table loaded:');
+        console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 15x, 2 hits = 1x');
         console.log('   4 Numbers: 4 hits = 50x');
-        console.log('   3 Numbers: 3 hits = 15x');
-        console.log('   2 Numbers: 2 hits = 2x');
-        console.log('   1 Number:  1 hit = 1x');
+        console.log('   3 Numbers: 3 hits = 15x, 2 hits = 1x');
+        console.log('   2 Numbers: 2 hits = 10x');
+        console.log('   1 Number:  1 hit = 3x');
         console.log('💰 Wallet system integrated');
         
         // Load existing stats
