@@ -10,13 +10,13 @@ module.exports = {
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
         NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
-        // Updated payout table for 1-5 numbers
+        // Updated payout table for 1-5 numbers with new multipliers
         PAYOUT_TABLE: {
-            1: {1: 2, 0: 0},                    // Pick 1: Match 1 = 2x
-            2: {2: 10, 1: 1, 0: 0},             // Pick 2: Match 2 = 10x, Match 1 = 1x
-            3: {3: 45, 2: 2, 1: 0, 0: 0},       // Pick 3: Match 3 = 45x, Match 2 = 2x
-            4: {4: 100, 3: 10, 2: 2, 1: 0, 0: 0}, // Pick 4: Match 4 = 100x, Match 3 = 10x, Match 2 = 2x
-            5: {5: 500, 4: 20, 3: 3, 2: 1, 1: 0, 0: 0} // Pick 5: Match 5 = 500x, Match 4 = 20x, Match 3 = 3x, Match 2 = 1x
+            1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
+            2: {2: 2, 1: 0, 0: 0},             // Pick 2: Match 2 = 2x
+            3: {3: 15, 2: 0, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x
+            4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
+            5: {5: 300, 4: 50, 3: 15, 2: 2, 1: 1, 0: 0} // Pick 5: Match 5 = 300x, Match 4 = 50x, Match 3 = 15x, Match 2 = 2x, Match 1 = 1x
         },
         COMMISSION_PERCENTAGE: 5, // 5% house commission
         ALLOW_PRE_SELECTION: true,
@@ -49,7 +49,12 @@ module.exports = {
         this.minimumPlayers = 1; // Game stops if no players
         
         console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
-        console.log('🎰 Payout table updated for 1-5 number selections');
+        console.log('🎰 New payout table loaded:');
+        console.log('   5 Numbers: 5 hits = 300x, 4 hits = 50x, 3 hits = 15x, 2 hits = 2x, 1 hit = 1x');
+        console.log('   4 Numbers: 4 hits = 50x');
+        console.log('   3 Numbers: 3 hits = 15x');
+        console.log('   2 Numbers: 2 hits = 2x');
+        console.log('   1 Number:  1 hit = 1x');
         console.log('💰 Wallet system integrated');
         
         // Load existing stats
@@ -1319,7 +1324,7 @@ module.exports = {
         }, 2000);
     },
     
-    // Process Keno results - UPDATED for 1-5 numbers
+    // Process Keno results - UPDATED for 1-5 numbers with new payout table
     processKenoResults: async function(activeGame) {
         const self = this;
         
@@ -1341,6 +1346,7 @@ module.exports = {
                     const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
                     if (payout !== undefined && payout > 0) {
                         winnings = bet.amount * payout;
+                        console.log(`   ${bet.userName}: ${selectionCount} numbers, ${matches} matches, ${payout}x, ${bet.amount} ETB bet = ${winnings} ETB win`);
                     }
                 }
                 
