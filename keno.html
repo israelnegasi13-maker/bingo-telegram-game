@@ -483,8 +483,8 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
-        /* Payout Table */
-        .payout-table {
+        /* Payout Info - Simple */
+        .payout-info {
             background: var(--card-bg);
             border-radius: 12px;
             padding: 12px;
@@ -515,93 +515,31 @@
             font-weight: 600;
         }
         
-        .payout-container {
-            overflow-x: auto;
+        .payout-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             margin-top: 10px;
         }
         
-        .payout-table-inner {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10px;
-            min-width: 500px;
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            font-size: 11px;
         }
         
-        .payout-table-inner thead tr {
-            background: rgba(139, 92, 246, 0.2);
-        }
-        
-        .payout-table-inner th {
-            padding: 8px 6px;
-            text-align: left;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            font-weight: 700;
-            color: var(--text-primary);
-            white-space: nowrap;
-        }
-        
-        .payout-table-inner th:first-child {
-            border-top-left-radius: 6px;
-        }
-        
-        .payout-table-inner th:last-child {
-            border-top-right-radius: 6px;
-        }
-        
-        .payout-table-inner th:nth-child(1) {
-            width: 20%;
-        }
-        
-        .payout-table-inner th:nth-child(2) {
-            width: 15%;
-            text-align: center;
-        }
-        
-        .payout-table-inner th:nth-child(3),
-        .payout-table-inner th:nth-child(4),
-        .payout-table-inner th:nth-child(5),
-        .payout-table-inner th:nth-child(6),
-        .payout-table-inner th:nth-child(7) {
-            width: 13%;
-            text-align: right;
-        }
-        
-        .payout-table-inner tbody tr {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        
-        .payout-table-inner tbody tr:last-child {
-            border-bottom: none;
-        }
-        
-        .payout-table-inner td {
-            padding: 8px 6px;
-            vertical-align: middle;
-        }
-        
-        .payout-table-inner td:first-child {
-            font-weight: 700;
+        .summary-label {
             color: var(--accent-color);
-        }
-        
-        .payout-table-inner td:nth-child(2) {
-            text-align: center;
             font-weight: 700;
-            color: var(--success);
+            min-width: 50px;
         }
         
-        .payout-table-inner td:nth-child(3),
-        .payout-table-inner td:nth-child(4),
-        .payout-table-inner td:nth-child(5),
-        .payout-table-inner td:nth-child(6),
-        .payout-table-inner td:nth-child(7) {
-            text-align: right;
-            font-weight: 700;
-            font-family: 'Courier New', monospace;
-        }
-        
-        .payout-row-highlight {
-            background: rgba(16, 185, 129, 0.1);
+        .summary-value {
+            color: var(--text-primary);
+            font-weight: 600;
         }
         
         /* Results Panel - Compact */
@@ -634,6 +572,19 @@
             padding: 4px 8px;
             border-radius: 12px;
             font-weight: 600;
+        }
+        
+        /* Ball Counter */
+        .ball-counter {
+            text-align: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(139, 92, 246, 0.15);
+            border-radius: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
         }
         
         .drawn-numbers-container {
@@ -1373,11 +1324,6 @@
             .withdraw-chips {
                 grid-template-columns: 1fr;
             }
-            
-            .payout-table-inner {
-                min-width: 450px;
-                font-size: 9px;
-            }
         }
         
         /* Smooth Scrollbar */
@@ -1521,73 +1467,32 @@
                 </div>
             </div>
             
-            <!-- Payout Table -->
-            <div class="payout-table">
+            <!-- Payout Info (Simple) -->
+            <div class="payout-info">
                 <div class="payout-header">
-                    <div class="payout-title">PAYOUT TABLE (5 NUMBERS)</div>
-                    <div class="payout-note">PER BET</div>
+                    <div class="payout-title">PAYOUTS (1-5 NUMBERS)</div>
                 </div>
-                <div class="payout-container">
-                    <table class="payout-table-inner">
-                        <thead>
-                            <tr>
-                                <th>HITS</th>
-                                <th>MULTIPLIER</th>
-                                <th>5 ETB</th>
-                                <th>10 ETB</th>
-                                <th>20 ETB</th>
-                                <th>50 ETB</th>
-                                <th>100 ETB</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="payout-row-highlight">
-                                <td>5 HITS</td>
-                                <td>300x</td>
-                                <td>2,500 ETB</td>
-                                <td>5,000 ETB</td>
-                                <td>10,000 ETB</td>
-                                <td>25,000 ETB</td>
-                                <td>50,000 ETB</td>
-                            </tr>
-                            <tr>
-                                <td>4 HITS</td>
-                                <td>50x</td>
-                                <td>250 ETB</td>
-                                <td>500 ETB</td>
-                                <td>1,000 ETB</td>
-                                <td>2,500 ETB</td>
-                                <td>5,000 ETB</td>
-                            </tr>
-                            <tr>
-                                <td>3 HITS</td>
-                                <td>15x</td>
-                                <td>25 ETB</td>
-                                <td>50 ETB</td>
-                                <td>100 ETB</td>
-                                <td>250 ETB</td>
-                                <td>500 ETB</td>
-                            </tr>
-                            <tr>
-                                <td>2 HITS</td>
-                                <td>2x</td>
-                                <td>10 ETB</td>
-                                <td>20 ETB</td>
-                                <td>40 ETB</td>
-                                <td>100 ETB</td>
-                                <td>200 ETB</td>
-                            </tr>
-                            <tr>
-                                <td>1 HIT</td>
-                                <td>1x</td>
-                                <td>5 ETB</td>
-                                <td>10 ETB</td>
-                                <td>20 ETB</td>
-                                <td>50 ETB</td>
-                                <td>100 ETB</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="payout-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Pick 5:</span>
+                        <span class="summary-value">5 hits = 300x, 4 hits = 50x, 3 hits = 15x, 2 hits = 2x, 1 hit = 1x</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Pick 4:</span>
+                        <span class="summary-value">4 hits = 50x</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Pick 3:</span>
+                        <span class="summary-value">3 hits = 15x</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Pick 2:</span>
+                        <span class="summary-value">2 hits = 2x</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Pick 1:</span>
+                        <span class="summary-value">1 hit = 1x</span>
+                    </div>
                 </div>
             </div>
             
@@ -1596,6 +1501,11 @@
                 <div class="results-header">
                     <div class="results-title">LATEST DRAW</div>
                     <div class="round-number">ROUND #<span id="current-round">1</span></div>
+                </div>
+                
+                <!-- Ball Counter -->
+                <div class="ball-counter" id="ball-counter">
+                    <span id="drawn-count">0</span>/<span id="total-drawn">20</span> BALLS
                 </div>
                 
                 <div class="drawn-numbers-container">
@@ -1825,7 +1735,7 @@
             hasPlacedBet: false,
             MIN_SELECTIONS: 1,  // Changed from 5 to 1
             MAX_SELECTIONS: 5,
-            NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
+            NUMBER_POP_INTERVAL: 1000, // CHANGED: 1 second between number pops (was 3000)
             // New payout table based on your requirements
             PAYOUT_TABLE: {
                 1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
@@ -1878,6 +1788,11 @@
             confirmTotal: document.getElementById('confirm-total'),
             confirmCancel: document.getElementById('confirm-cancel'),
             confirmOk: document.getElementById('confirm-ok'),
+            
+            // NEW: Ball counter elements
+            ballCounter: document.getElementById('ball-counter'),
+            drawnCount: document.getElementById('drawn-count'),
+            totalDrawn: document.getElementById('total-drawn'),
             
             // Wallet elements
             walletModal: document.getElementById('wallet-modal'),
@@ -2379,7 +2294,7 @@
             gameState.drawnNumbers = data.drawnNumbers || [];
             gameState.playersCount = data.playersCount || gameState.playersCount;
             
-            // Display numbers with 3-second interval
+            // Display numbers with 1-second interval (faster)
             displayNumbersWithAnimation(gameState.drawnNumbers);
             
             // Update stats
@@ -2400,7 +2315,7 @@
             elements.totalSelected.textContent = data.yourNumbers ? data.yourNumbers.length : 5;
             
             if (data.winnings > 0) {
-                // Show win result after animation
+                // Show win result after half the numbers are drawn (much faster)
                 setTimeout(() => {
                     elements.winAmount.textContent = data.winnings.toLocaleString();
                     elements.matchCount.textContent = data.matches || 0;
@@ -2414,7 +2329,7 @@
                     // Celebration vibration
                     vibrate([100, 50, 100, 50, 100]);
                     
-                }, (gameState.drawnNumbers.length * gameState.NUMBER_POP_INTERVAL) + 1000);
+                }, Math.floor(gameState.drawnNumbers.length / 2) * gameState.NUMBER_POP_INTERVAL);
             } else {
                 // Add loss to history
                 addToHistory(data);
@@ -2654,15 +2569,20 @@
         // Display Functions
         function displayNumbersWithAnimation(drawnNumbers) {
             elements.drawnNumbers.innerHTML = '';
+            elements.drawnCount.textContent = '0';
+            elements.totalDrawn.textContent = drawnNumbers.length;
             
             // Clear grid highlights
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
             });
             
-            // Animate numbers one by one with 3-second interval
+            // Animate numbers one by one with 1-second interval (faster)
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
+                    // Update ball counter
+                    elements.drawnCount.textContent = index + 1;
+                    
                     // Highlight in grid
                     const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
                     if (gridNum) {
@@ -2702,6 +2622,11 @@
                     Waiting for next draw...
                 </div>
             `;
+            
+            // Reset ball counter
+            elements.drawnCount.textContent = '0';
+            elements.totalDrawn.textContent = '20';
+            
             elements.winResult.style.display = 'none';
         }
         
