@@ -483,8 +483,29 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
-        /* Payout Info - Simple */
-        .payout-info {
+        /* Draw Counter */
+        .draw-counter {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 600;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .draw-counter span {
+            color: var(--accent-color);
+            font-weight: 800;
+            font-size: 14px;
+        }
+        
+        /* Payout Table - Dynamic */
+        .payout-table {
             background: var(--card-bg);
             border-radius: 12px;
             padding: 12px;
@@ -515,31 +536,106 @@
             font-weight: 600;
         }
         
-        .payout-summary {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
+        .payout-container {
+            overflow-x: auto;
             margin-top: 10px;
         }
         
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 8px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 6px;
-            font-size: 11px;
+        .payout-table-inner {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            min-width: 500px;
         }
         
-        .summary-label {
-            color: var(--accent-color);
+        .payout-table-inner thead tr {
+            background: rgba(139, 92, 246, 0.2);
+        }
+        
+        .payout-table-inner th {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             font-weight: 700;
-            min-width: 50px;
+            color: var(--text-primary);
+            white-space: nowrap;
         }
         
-        .summary-value {
-            color: var(--text-primary);
-            font-weight: 600;
+        .payout-table-inner th:first-child {
+            border-top-left-radius: 6px;
+        }
+        
+        .payout-table-inner th:last-child {
+            border-top-right-radius: 6px;
+        }
+        
+        .payout-table-inner th:nth-child(1) {
+            width: 15%;
+        }
+        
+        .payout-table-inner th:nth-child(2) {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .payout-table-inner th:nth-child(3) {
+            width: 10%;
+            text-align: center;
+        }
+        
+        .payout-table-inner th:nth-child(4),
+        .payout-table-inner th:nth-child(5),
+        .payout-table-inner th:nth-child(6),
+        .payout-table-inner th:nth-child(7),
+        .payout-table-inner th:nth-child(8) {
+            width: 11%;
+            text-align: right;
+        }
+        
+        .payout-table-inner tbody tr {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .payout-table-inner tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        .payout-table-inner td {
+            padding: 8px 6px;
+            vertical-align: middle;
+        }
+        
+        .payout-table-inner td:first-child {
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .payout-table-inner td:nth-child(2),
+        .payout-table-inner td:nth-child(3) {
+            text-align: center;
+            font-weight: 700;
+        }
+        
+        .payout-table-inner td:nth-child(2) {
+            color: var(--keno-purple);
+        }
+        
+        .payout-table-inner td:nth-child(3) {
+            color: var(--success);
+        }
+        
+        .payout-table-inner td:nth-child(4),
+        .payout-table-inner td:nth-child(5),
+        .payout-table-inner td:nth-child(6),
+        .payout-table-inner td:nth-child(7),
+        .payout-table-inner td:nth-child(8) {
+            text-align: right;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .payout-row-highlight {
+            background: rgba(16, 185, 129, 0.1);
         }
         
         /* Results Panel - Compact */
@@ -572,19 +668,6 @@
             padding: 4px 8px;
             border-radius: 12px;
             font-weight: 600;
-        }
-        
-        /* Ball Counter */
-        .ball-counter {
-            text-align: center;
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--accent-color);
-            margin-bottom: 12px;
-            padding: 8px;
-            background: rgba(139, 92, 246, 0.15);
-            border-radius: 8px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
         }
         
         .drawn-numbers-container {
@@ -1324,6 +1407,11 @@
             .withdraw-chips {
                 grid-template-columns: 1fr;
             }
+            
+            .payout-table-inner {
+                min-width: 450px;
+                font-size: 9px;
+            }
         }
         
         /* Smooth Scrollbar */
@@ -1467,45 +1555,43 @@
                 </div>
             </div>
             
-            <!-- Payout Info (Simple) -->
-            <div class="payout-info">
+            <!-- Payout Table - DYNAMIC -->
+            <div class="payout-table">
                 <div class="payout-header">
-                    <div class="payout-title">PAYOUTS (1-5 NUMBERS)</div>
+                    <div class="payout-title">PAYOUT TABLE</div>
+                    <div class="payout-note">PER SELECTION COUNT</div>
                 </div>
-                <div class="payout-summary">
-                    <div class="summary-item">
-                        <span class="summary-label">Pick 5:</span>
-                        <span class="summary-value">5 hits = 300x, 4 hits = 50x, 3 hits = 15x, 2 hits = 2x, 1 hit = 1x</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Pick 4:</span>
-                        <span class="summary-value">4 hits = 50x</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Pick 3:</span>
-                        <span class="summary-value">3 hits = 15x</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Pick 2:</span>
-                        <span class="summary-value">2 hits = 2x</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Pick 1:</span>
-                        <span class="summary-value">1 hit = 1x</span>
-                    </div>
+                <div class="payout-container">
+                    <table class="payout-table-inner" id="dynamic-payout-table">
+                        <thead>
+                            <tr>
+                                <th>Select</th>
+                                <th>Hits</th>
+                                <th>Multiplier</th>
+                                <th>5 ETB</th>
+                                <th>10 ETB</th>
+                                <th>20 ETB</th>
+                                <th>50 ETB</th>
+                                <th>100 ETB</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payout-table-body">
+                            <!-- Dynamic rows will be inserted here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
             
-            <!-- Results Panel -->
+            <!-- Results Panel - Compact -->
             <div class="results-panel" id="results-panel">
                 <div class="results-header">
                     <div class="results-title">LATEST DRAW</div>
                     <div class="round-number">ROUND #<span id="current-round">1</span></div>
                 </div>
                 
-                <!-- Ball Counter -->
-                <div class="ball-counter" id="ball-counter">
-                    <span id="drawn-count">0</span>/<span id="total-drawn">20</span> BALLS
+                <!-- DRAW COUNTER ADDED HERE -->
+                <div class="draw-counter" id="draw-counter" style="display: none;">
+                    BALLS DRAWN: <span id="drawn-count">0</span>/<span id="total-draws">20</span>
                 </div>
                 
                 <div class="drawn-numbers-container">
@@ -1735,14 +1821,16 @@
             hasPlacedBet: false,
             MIN_SELECTIONS: 1,  // Changed from 5 to 1
             MAX_SELECTIONS: 5,
-            NUMBER_POP_INTERVAL: 1000, // CHANGED: 1 second between number pops (was 3000)
-            // New payout table based on your requirements
+            NUMBER_POP_INTERVAL: 500, // CHANGED FROM 3000ms to 500ms for faster display
+            TOTAL_DRAWS: 20,
+            
+            // Enhanced payout table with all selection counts
             PAYOUT_TABLE: {
-                1: {1: 1, 0: 0},                    // Pick 1: Match 1 = 1x
-                2: {2: 2, 1: 0, 0: 0},             // Pick 2: Match 2 = 2x
-                3: {3: 15, 2: 0, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x
-                4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
-                5: {5: 300, 4: 50, 3: 15, 2: 2, 1: 1, 0: 0} // Pick 5: Match 5 = 300x, Match 4 = 50x, Match 3 = 15x, Match 2 = 2x, Match 1 = 1x
+                1: {1: 1, 0: 0},
+                2: {2: 2, 1: 0, 0: 0},
+                3: {3: 15, 2: 0, 1: 0, 0: 0},
+                4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0},
+                5: {5: 300, 4: 50, 3: 15, 2: 2, 1: 1, 0: 0}
             }
         };
         
@@ -1789,10 +1877,12 @@
             confirmCancel: document.getElementById('confirm-cancel'),
             confirmOk: document.getElementById('confirm-ok'),
             
-            // NEW: Ball counter elements
-            ballCounter: document.getElementById('ball-counter'),
+            // NEW ELEMENTS for dynamic features
+            drawCounter: document.getElementById('draw-counter'),
             drawnCount: document.getElementById('drawn-count'),
-            totalDrawn: document.getElementById('total-drawn'),
+            totalDraws: document.getElementById('total-draws'),
+            payoutTableBody: document.getElementById('payout-table-body'),
+            dynamicPayoutTable: document.getElementById('dynamic-payout-table'),
             
             // Wallet elements
             walletModal: document.getElementById('wallet-modal'),
@@ -1859,6 +1949,7 @@
             createNumberGrid();
             setupEventListeners();
             setupWalletEventListeners();
+            generateDynamicPayoutTable();
             connectSocketIO();
             
             // Prevent zoom on double tap
@@ -1892,6 +1983,48 @@
                 }, { passive: false });
                 
                 elements.kenoGrid.appendChild(numElement);
+            }
+        }
+        
+        // Generate Dynamic Payout Table
+        function generateDynamicPayoutTable() {
+            const tableBody = elements.payoutTableBody;
+            tableBody.innerHTML = '';
+            
+            const betAmounts = [5, 10, 20, 50, 100];
+            
+            // Generate rows for each selection count (5, 4, 3, 2, 1)
+            for (let selectionCount = 5; selectionCount >= 1; selectionCount--) {
+                const payouts = gameState.PAYOUT_TABLE[selectionCount];
+                
+                // Only show rows that have non-zero multipliers
+                for (let hits = selectionCount; hits >= 0; hits--) {
+                    const multiplier = payouts[hits];
+                    if (multiplier === undefined || multiplier === 0) continue;
+                    
+                    const row = document.createElement('tr');
+                    
+                    // Highlight the 5-number selection row
+                    if (selectionCount === 5) {
+                        row.classList.add('payout-row-highlight');
+                    }
+                    
+                    // Calculate payouts for each bet amount
+                    const payoutsByBet = betAmounts.map(bet => bet * multiplier);
+                    
+                    row.innerHTML = `
+                        <td>${selectionCount} NUMBERS</td>
+                        <td>${hits} HIT${hits !== 1 ? 'S' : ''}</td>
+                        <td>${multiplier}x</td>
+                        <td>${payoutsByBet[0].toLocaleString()} ETB</td>
+                        <td>${payoutsByBet[1].toLocaleString()} ETB</td>
+                        <td>${payoutsByBet[2].toLocaleString()} ETB</td>
+                        <td>${payoutsByBet[3].toLocaleString()} ETB</td>
+                        <td>${payoutsByBet[4].toLocaleString()} ETB</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                }
             }
         }
         
@@ -2067,7 +2200,6 @@
             document.querySelectorAll('.withdraw-chip').forEach(chip => {
                 chip.addEventListener('click', function() {
                     document.querySelectorAll('.withdraw-chip').forEach(c => c.classList.remove('selected'));
-                    this.classList.add('selected');
                     walletState.selectedWithdrawChip = this;
                     walletState.withdrawPercentage = parseInt(this.dataset.percent);
                     calculateWithdrawAmount();
@@ -2294,7 +2426,7 @@
             gameState.drawnNumbers = data.drawnNumbers || [];
             gameState.playersCount = data.playersCount || gameState.playersCount;
             
-            // Display numbers with 1-second interval (faster)
+            // Display numbers with 500ms interval
             displayNumbersWithAnimation(gameState.drawnNumbers);
             
             // Update stats
@@ -2312,10 +2444,13 @@
             gameState.balance = data.newBalance || gameState.balance;
             
             updateBalanceDisplay(gameState.balance);
-            elements.totalSelected.textContent = data.yourNumbers ? data.yourNumbers.length : 5;
+            elements.totalSelected.textContent = data.selectionCount || data.yourNumbers?.length || 5;
             
             if (data.winnings > 0) {
-                // Show win result after half the numbers are drawn (much faster)
+                // Calculate when last number animation completes
+                const lastDrawTime = (gameState.drawnNumbers.length * gameState.NUMBER_POP_INTERVAL);
+                
+                // Show win result after a short delay (500ms instead of waiting for all animations + 1 second)
                 setTimeout(() => {
                     elements.winAmount.textContent = data.winnings.toLocaleString();
                     elements.matchCount.textContent = data.matches || 0;
@@ -2329,7 +2464,8 @@
                     // Celebration vibration
                     vibrate([100, 50, 100, 50, 100]);
                     
-                }, Math.floor(gameState.drawnNumbers.length / 2) * gameState.NUMBER_POP_INTERVAL);
+                }, Math.min(lastDrawTime, 1000)); // Max 1 second delay
+                
             } else {
                 // Add loss to history
                 addToHistory(data);
@@ -2566,21 +2702,21 @@
             });
         }
         
-        // Display Functions
+        // Display Functions - UPDATED with draw counter
         function displayNumbersWithAnimation(drawnNumbers) {
             elements.drawnNumbers.innerHTML = '';
-            elements.drawnCount.textContent = '0';
-            elements.totalDrawn.textContent = drawnNumbers.length;
+            elements.drawCounter.style.display = 'block';
+            elements.totalDraws.textContent = gameState.TOTAL_DRAWS;
             
             // Clear grid highlights
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
             });
             
-            // Animate numbers one by one with 1-second interval (faster)
+            // Animate numbers with faster interval (500ms)
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
-                    // Update ball counter
+                    // Update draw counter
                     elements.drawnCount.textContent = index + 1;
                     
                     // Highlight in grid
@@ -2589,7 +2725,7 @@
                         gridNum.classList.add('drawn');
                         if (gameState.selectedNumbers.includes(num)) {
                             gridNum.classList.add('matched');
-                            vibrate(50);
+                            vibrate(30); // Shorter vibration
                         }
                     }
                     
@@ -2623,10 +2759,9 @@
                 </div>
             `;
             
-            // Reset ball counter
+            // Reset draw counter
+            elements.drawCounter.style.display = 'none';
             elements.drawnCount.textContent = '0';
-            elements.totalDrawn.textContent = '20';
-            
             elements.winResult.style.display = 'none';
         }
         
@@ -2680,10 +2815,11 @@
             historyItem.className = `history-item ${data.winnings > 0 ? 'win' : 'loss'}`;
             
             const numbersText = data.yourNumbers ? data.yourNumbers.slice(0, 3).join(', ') + (data.yourNumbers.length > 3 ? '...' : '') : '';
+            const selectionCount = data.selectionCount || data.yourNumbers?.length || 5;
             
             historyItem.innerHTML = `
                 <div>
-                    <div style="font-size: 10px; color: var(--text-secondary); margin-bottom: 2px;">#${data.round}</div>
+                    <div style="font-size: 10px; color: var(--text-secondary); margin-bottom: 2px;">#${data.round} (${selectionCount} nums)</div>
                     <div style="font-size: 11px;">${numbersText}</div>
                 </div>
                 <div class="history-result ${data.winnings > 0 ? 'win' : 'loss'}">
