@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>KENO ULTRA - Telegram Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -20,6 +21,7 @@
             --warning: #f59e0b;
             --danger: #ef4444;
             --info: #3b82f6;
+            --keno-purple: #8b5cf6;
         }
         
         * {
@@ -71,7 +73,7 @@
         .logo-icon {
             width: 36px;
             height: 36px;
-            background: var(--primary-gradient);
+            background: var(--secondary-gradient);
             border-radius: 10px;
             display: flex;
             align-items: center;
@@ -82,7 +84,7 @@
         .logo-text h1 {
             font-size: 16px;
             font-weight: 800;
-            background: var(--primary-gradient);
+            background: var(--secondary-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -103,8 +105,8 @@
         }
         
         .balance-card {
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
             border-radius: 8px;
             padding: 8px 10px;
             min-width: 90px;
@@ -186,13 +188,13 @@
         }
         
         .selection-info {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
             border-radius: 6px;
             padding: 6px 8px;
             font-weight: 700;
             font-size: 11px;
-            color: var(--danger);
+            color: var(--keno-purple);
         }
         
         /* Numbers Grid - Compact */
@@ -265,10 +267,10 @@
         .quick-pick-btn {
             width: 100%;
             padding: 10px;
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
             border-radius: 8px;
-            color: var(--info);
+            color: var(--keno-purple);
             font-weight: 700;
             font-size: 11px;
             display: flex;
@@ -682,9 +684,9 @@
         }
         
         .notification.info {
-            background: rgba(59, 130, 246, 0.9);
+            background: rgba(139, 92, 246, 0.9);
             color: white;
-            border-color: var(--info);
+            border-color: var(--keno-purple);
         }
         
         .notification.warning {
@@ -729,7 +731,7 @@
         }
         
         ::-webkit-scrollbar-thumb {
-            background: var(--primary-gradient);
+            background: var(--secondary-gradient);
             border-radius: 2px;
         }
     </style>
@@ -750,7 +752,7 @@
                 </div>
                 <div class="logo-text">
                     <h1>KENO ULTRA</h1>
-                    <p>MOBILE KENO</p>
+                    <p>5 NUMBERS • INSTANT WINS</p>
                 </div>
             </div>
             <div class="user-info">
@@ -780,7 +782,7 @@
                 </div>
                 
                 <button class="quick-pick-btn" id="quick-pick">
-                    <i class="fas fa-random"></i> QUICK PICK
+                    <i class="fas fa-random"></i> QUICK PICK (5 NUMBERS)
                 </button>
             </div>
             
@@ -790,7 +792,7 @@
                     <div class="waiting-text">NEXT ROUND IN</div>
                     <div class="waiting-timer" id="wait-timer">30</div>
                     <div style="color: var(--text-secondary); margin-top: 12px; font-weight: 600; font-size: 12px;">
-                        Select your numbers and place bet
+                        Select your 5 numbers and place bet
                     </div>
                 </div>
                 
@@ -881,10 +883,10 @@
         
         <!-- Footer -->
         <footer class="app-footer">
-            <p>KENO ULTRA • UNIVERSAL KENO</p>
+            <p>KENO ULTRA • SELECT 5 NUMBERS • 5,10,20,50,100 ETB BETS ONLY</p>
             <p style="margin-top: 4px; font-size: 9px; color: rgba(148, 163, 184, 0.7);">
                 <i class="fas fa-shield-alt" style="margin-right: 4px;"></i>
-                All players see same numbers
+                All players see same numbers • 5% commission
             </p>
         </footer>
     </div>
@@ -894,9 +896,7 @@
         const tg = window.Telegram.WebApp;
         
         // Game Configuration
-        const WS_URL = window.location.protocol === 'https:' 
-            ? 'wss://' + window.location.host
-            : 'ws://' + window.location.host + ':3000';
+        const SOCKET_URL = window.location.origin;
         
         // Game State
         let gameState = {
@@ -912,10 +912,10 @@
             playersCount: 0,
             betsCount: 0,
             roundHistory: [],
-            ws: null,
+            socket: null,
             isConnected: false,
             hasPlacedBet: false,
-            MAX_SELECTIONS: 5, // Changed from 10 to 5
+            MAX_SELECTIONS: 5,
             NUMBER_POP_INTERVAL: 3000 // 3 seconds between number pops
         };
         
@@ -950,7 +950,7 @@
             // Initialize Telegram Web App
             tg.ready();
             tg.expand();
-            tg.setHeaderColor('#3b82f6');
+            tg.setHeaderColor('#8b5cf6');
             tg.setBackgroundColor('#0f172a');
             
             // Get user data from Telegram
@@ -981,7 +981,7 @@
             
             createNumberGrid();
             setupEventListeners();
-            connectWebSocket();
+            connectSocketIO();
             
             // Prevent zoom on double tap
             document.addEventListener('touchstart', (e) => {
@@ -1057,10 +1057,8 @@
             
             // Refresh balance button
             document.querySelector('.balance-card').addEventListener('click', () => {
-                if (gameState.ws && gameState.ws.readyState === WebSocket.OPEN) {
-                    gameState.ws.send(JSON.stringify({
-                        type: 'keno:getBalance'
-                    }));
+                if (gameState.socket && gameState.socket.connected) {
+                    gameState.socket.emit('keno:getBalance');
                 }
             });
             
@@ -1068,147 +1066,110 @@
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') {
                     // Reconnect if disconnected
-                    if (!gameState.isConnected || !gameState.ws || gameState.ws.readyState !== WebSocket.OPEN) {
-                        connectWebSocket();
+                    if (!gameState.isConnected || !gameState.socket || !gameState.socket.connected) {
+                        connectSocketIO();
                     }
                 }
             });
         }
         
-        // WebSocket Connection
-        function connectWebSocket() {
+        // Socket.IO Connection
+        function connectSocketIO() {
             try {
-                // Close existing connection if any
-                if (gameState.ws) {
-                    gameState.ws.close();
+                // Disconnect existing socket if any
+                if (gameState.socket) {
+                    gameState.socket.disconnect();
                 }
                 
                 updateConnectionStatus(false, 'CONNECTING...');
                 
-                gameState.ws = new WebSocket(WS_URL);
+                // Connect with Socket.IO
+                gameState.socket = io(SOCKET_URL, {
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 1000
+                });
                 
-                gameState.ws.onopen = handleWebSocketOpen;
-                gameState.ws.onmessage = handleWebSocketMessage;
-                gameState.ws.onclose = handleWebSocketClose;
-                gameState.ws.onerror = handleWebSocketError;
+                // Setup event handlers
+                gameState.socket.on('connect', handleSocketConnect);
+                gameState.socket.on('disconnect', handleSocketDisconnect);
+                gameState.socket.on('connect_error', handleSocketError);
+                
+                // Keno game events
+                gameState.socket.on('keno:welcome', handleWelcome);
+                gameState.socket.on('keno:round_start', handleRoundStart);
+                gameState.socket.on('keno:countdown_update', (data) => updateCountdown(data.countdown));
+                gameState.socket.on('keno:draw_start', handleDrawStart);
+                gameState.socket.on('keno:round_results', handleRoundResults);
+                gameState.socket.on('keno:round_result', handlePersonalResult);
+                gameState.socket.on('keno:betConfirmed', handleBetConfirmed);
+                gameState.socket.on('keno:quickPickNumbers', handleQuickPickNumbers);
+                gameState.socket.on('keno:players_update', (data) => updatePlayersCount(data.count, data.totalBets));
+                gameState.socket.on('keno:state', updateGameState);
+                gameState.socket.on('keno:balance', (data) => updateBalanceDisplay(data.balance));
+                gameState.socket.on('keno:warning', (data) => showNotification(data.message, 'warning'));
+                gameState.socket.on('keno:error', (data) => showNotification(data.message || 'An error occurred', 'error'));
+                gameState.socket.on('keno:waiting', (data) => {
+                    elements.waitingOverlay.classList.add('active');
+                    elements.waitTimer.textContent = data.countdown || 30;
+                });
+                gameState.socket.on('keno:game_paused', (data) => {
+                    showNotification(data.message, 'info');
+                    elements.waitingOverlay.classList.add('active');
+                });
                 
             } catch (error) {
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
                 showNotification('Connection failed. Retrying...', 'error');
-                setTimeout(connectWebSocket, 5000);
+                setTimeout(connectSocketIO, 5000);
             }
         }
         
-        // WebSocket Event Handlers
-        function handleWebSocketOpen() {
-            console.log('✅ Connected to Keno server');
+        // Socket.IO Event Handlers
+        function handleSocketConnect() {
+            console.log('✅ Connected to Keno server via Socket.IO');
             gameState.isConnected = true;
             updateConnectionStatus(true, 'CONNECTED');
             
             // Authenticate with server
-            gameState.ws.send(JSON.stringify({
-                type: 'keno:auth',
+            gameState.socket.emit('keno:auth', {
                 userId: gameState.playerId,
                 userName: gameState.userName
-            }));
+            });
             
             // Join Keno room
-            gameState.ws.send(JSON.stringify({
-                type: 'keno:join'
-            }));
+            gameState.socket.emit('keno:join');
             
             // Start heartbeat
             setInterval(() => {
-                if (gameState.ws && gameState.ws.readyState === WebSocket.OPEN) {
-                    gameState.ws.send(JSON.stringify({ type: 'ping' }));
+                if (gameState.socket && gameState.socket.connected) {
+                    gameState.socket.emit('ping');
                 }
             }, 25000);
             
             vibrate(100);
-            showNotification('Connected to Keno server!', 'success');
+            showNotification('Connected to Keno server!', 'info');
         }
         
-        function handleWebSocketMessage(event) {
-            try {
-                const data = JSON.parse(event.data);
-                
-                switch (data.type) {
-                    case 'keno:welcome':
-                        handleWelcome(data);
-                        break;
-                        
-                    case 'keno:round_start':
-                        handleRoundStart(data);
-                        break;
-                        
-                    case 'keno:countdown_update':
-                        updateCountdown(data.countdown);
-                        break;
-                        
-                    case 'keno:draw_start':
-                        handleDrawStart(data);
-                        break;
-                        
-                    case 'keno:round_results':
-                        handleRoundResults(data);
-                        break;
-                        
-                    case 'keno:round_result':
-                        handlePersonalResult(data);
-                        break;
-                        
-                    case 'keno:betConfirmed':
-                        handleBetConfirmed(data);
-                        break;
-                        
-                    case 'keno:quickPickNumbers':
-                        handleQuickPickNumbers(data);
-                        break;
-                        
-                    case 'keno:players_update':
-                        updatePlayersCount(data.count, data.totalBets);
-                        break;
-                        
-                    case 'keno:state':
-                        updateGameState(data);
-                        break;
-                        
-                    case 'keno:balance':
-                        updateBalanceDisplay(data.balance);
-                        break;
-                        
-                    case 'keno:warning':
-                        showNotification(data.message, 'warning');
-                        break;
-                        
-                    case 'keno:error':
-                        showNotification(data.message || 'An error occurred', 'error');
-                        break;
-                }
-                
-            } catch (error) {
-                console.error('Error processing message:', error);
-            }
-        }
-        
-        function handleWebSocketClose() {
-            console.log('❌ Disconnected from server');
+        function handleSocketDisconnect(reason) {
+            console.log('❌ Disconnected from server:', reason);
             gameState.isConnected = false;
             updateConnectionStatus(false, 'DISCONNECTED');
             
             // Try to reconnect after 3 seconds
             setTimeout(() => {
                 if (!gameState.isConnected) {
-                    connectWebSocket();
+                    connectSocketIO();
                 }
             }, 3000);
             
             showNotification('Disconnected. Reconnecting...', 'warning');
         }
         
-        function handleWebSocketError(error) {
-            console.error('WebSocket error:', error);
+        function handleSocketError(error) {
+            console.error('Socket.IO error:', error);
             updateConnectionStatus(false, 'CONNECTION ERROR');
             showNotification('Connection error', 'error');
         }
@@ -1239,7 +1200,7 @@
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
-            updatePlayersCount(gameState.playersCount, 0);
+            updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             updateCountdown(gameState.countdown);
             
             // Show/hide waiting overlay based on player count
@@ -1316,6 +1277,9 @@
                     vibrate([100, 50, 100, 50, 100]);
                     
                 }, (gameState.drawnNumbers.length * gameState.NUMBER_POP_INTERVAL) + 1000);
+            } else {
+                // Add loss to history
+                addToHistory(data);
             }
         }
         
@@ -1470,11 +1434,10 @@
                 return;
             }
             
-            if (gameState.ws && gameState.ws.readyState === WebSocket.OPEN) {
-                gameState.ws.send(JSON.stringify({
-                    type: 'keno:quickPick',
+            if (gameState.socket && gameState.socket.connected) {
+                gameState.socket.emit('keno:quickPick', {
                     count: gameState.MAX_SELECTIONS
-                }));
+                });
             } else {
                 showNotification('Not connected to server', 'error');
             }
@@ -1491,7 +1454,7 @@
                 return;
             }
             
-            if (!gameState.ws || gameState.ws.readyState !== WebSocket.OPEN) {
+            if (!gameState.socket || !gameState.socket.connected) {
                 showNotification('Not connected to server', 'error');
                 return;
             }
@@ -1507,11 +1470,10 @@
             }
             
             // Send bet to server
-            gameState.ws.send(JSON.stringify({
-                type: 'keno:placeBet',
+            gameState.socket.emit('keno:placeBet', {
                 numbers: gameState.selectedNumbers,
                 betAmount: gameState.betAmount
-            }));
+            });
         }
         
         // Display Functions
@@ -1722,7 +1684,7 @@
         setInterval(() => {
             if (!gameState.isConnected) {
                 console.log('Attempting to reconnect...');
-                connectWebSocket();
+                connectSocketIO();
             }
         }, 10000);
     </script>
