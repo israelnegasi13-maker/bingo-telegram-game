@@ -98,6 +98,20 @@ module.exports = {
                 socket.userName = userName;
                 socket.kenoPlayer = true;
                 
+                // Calculate wallet stats
+                const transactions = await self.Transaction.find({ userId: userId });
+                
+                let totalWagered = 0;
+                let totalWins = 0;
+                
+                transactions.forEach(tx => {
+                    if (tx.type === 'KENO_BET' || tx.type === 'BINGO_BET') {
+                        totalWagered += Math.abs(tx.amount);
+                    } else if (tx.type === 'KENO_WIN' || tx.type === 'BINGO_WIN') {
+                        totalWins += tx.amount;
+                    }
+                });
+                
                 // Add to keno players
                 self.kenoPlayers.set(userId, {
                     socketId: socket.id,
@@ -107,12 +121,12 @@ module.exports = {
                     currentBet: null,
                     selectedNumbers: [],
                     hasPlacedBet: false,
-                    totalWagered: user.totalWagered || 0,
-                    totalWins: user.totalWins || 0,
+                    totalWagered: totalWagered,
+                    totalWins: totalWins,
                     isOnline: true,
                     lastSeen: new Date(),
-                    preSelectedNumbers: [], // NEW: Store pre-selected numbers
-                    isReadyForNextRound: false // NEW: Track if player is ready
+                    preSelectedNumbers: [],
+                    isReadyForNextRound: false
                 });
                 
                 // Update user online status
@@ -127,7 +141,7 @@ module.exports = {
                 // Get current game state
                 const activeGame = self.getActiveKenoGame();
                 
-                // Send welcome data
+                // Send welcome data WITH WALLET STATS
                 socket.emit('keno:welcome', {
                     playerId: userId,
                     userName: userName,
@@ -140,6 +154,11 @@ module.exports = {
                     payoutTable: self.CONFIG.PAYOUT_TABLE,
                     playersCount: activeGame ? activeGame.players.length : 0,
                     totalBets: activeGame ? activeGame.totalBets : 0,
+                    walletStats: {
+                        balance: user.balance,
+                        totalWagered: totalWagered,
+                        totalWins: totalWins
+                    },
                     config: {
                         minBet: self.CONFIG.KENO_MIN_BET,
                         maxBet: self.CONFIG.KENO_MAX_BET,
@@ -166,7 +185,7 @@ module.exports = {
             }
         });
         
-        // Place bet in Keno
+        // Place bet in Keno - FIXED: MUST SELECT EXACTLY 5 NUMBERS
         socket.on('keno:placeBet', async (data) => {
             try {
                 const { numbers, betAmount } = data;
@@ -202,7 +221,7 @@ module.exports = {
                     return;
                 }
                 
-                // Validate numbers - MUST be exactly 5 numbers
+                // FIXED: Validate numbers - MUST be exactly 5 numbers
                 if (!Array.isArray(numbers) || numbers.length !== self.CONFIG.KENO_SELECTIONS) {
                     socket.emit('keno:error', `You must select exactly ${self.CONFIG.KENO_SELECTIONS} numbers`);
                     return;
@@ -270,7 +289,7 @@ module.exports = {
                     userId: socket.userId,
                     userName: player.userName,
                     amount: -bet,
-                    description: `Keno bet: ${bet} ETB on 5 numbers`,
+                    description: `Keno bet: ${bet} ETB on ${sortedNumbers.length} numbers`,
                     game: 'keno',
                     status: 'completed'
                 });
@@ -291,7 +310,7 @@ module.exports = {
                 // Broadcast updated player count
                 self.broadcastKenoPlayersUpdate();
                 
-                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on 5 numbers`);
+                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on ${sortedNumbers.length} numbers`);
                 
             } catch (error) {
                 console.error('Keno place bet error:', error);
@@ -299,7 +318,248 @@ module.exports = {
             }
         });
         
-        // NEW: Pre-select numbers for next round
+        // NEW: Get wallet stats
+        socket.on('keno:getWalletStats', async () => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const user = await self.User.findOne({ userId: socket.userId });
+                if (!user) {
+                    socket.emit('keno:error', 'User not found');
+                    return;
+                }
+                
+                // Get transaction summary
+                const transactions = await self.Transaction.find({ 
+                    userId: socket.userId 
+                }).sort({ createdAt: -1 }).limit(100);
+                
+                let totalWagered = 0;
+                let totalWins = 0;
+                let kenoWagered = 0;
+                let kenoWins = 0;
+                
+                transactions.forEach(tx => {
+                    if (tx.type === 'KENO_BET') {
+                        totalWagered += Math.abs(tx.amount);
+                        kenoWagered += Math.abs(tx.amount);
+                    } else if (tx.type === 'KENO_WIN') {
+                        totalWins += tx.amount;
+                        kenoWins += tx.amount;
+                    } else if (tx.type === 'BINGO_BET') {
+                        totalWagered += Math.abs(tx.amount);
+                    } else if (tx.type === 'BINGO_WIN') {
+                        totalWins += tx.amount;
+                    } else if (tx.type === 'DEPOSIT') {
+                        totalWins += tx.amount;
+                    } else if (tx.type === 'WITHDRAWAL') {
+                        totalWagered += Math.abs(tx.amount);
+                    }
+                });
+                
+                // Update player state
+                const player = self.kenoPlayers.get(socket.userId);
+                if (player) {
+                    player.totalWagered = totalWagered;
+                    player.totalWins = totalWins;
+                    self.kenoPlayers.set(socket.userId, player);
+                }
+                
+                socket.emit('keno:walletStats', {
+                    success: true,
+                    balance: user.balance,
+                    totalWagered: totalWagered,
+                    totalWins: totalWins,
+                    kenoWagered: kenoWagered,
+                    kenoWins: kenoWins,
+                    totalGames: user.totalGames || 0,
+                    winRate: totalWagered > 0 ? ((totalWins / totalWagered) * 100).toFixed(2) : 0
+                });
+                
+            } catch (error) {
+                console.error('Error getting wallet stats:', error);
+                socket.emit('keno:error', 'Failed to get wallet stats');
+            }
+        });
+        
+        // NEW: Get user transactions
+        socket.on('keno:getTransactions', async () => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const transactions = await self.Transaction.find({ 
+                    userId: socket.userId 
+                }).sort({ createdAt: -1 }).limit(20);
+                
+                // Format transactions for frontend
+                const formattedTransactions = transactions.map(tx => ({
+                    type: tx.type,
+                    amount: tx.amount,
+                    description: tx.description,
+                    game: tx.game,
+                    status: tx.status,
+                    createdAt: tx.createdAt,
+                    id: tx._id
+                }));
+                
+                socket.emit('keno:transactions', {
+                    success: true,
+                    transactions: formattedTransactions,
+                    total: transactions.length
+                });
+                
+            } catch (error) {
+                console.error('Error getting transactions:', error);
+                socket.emit('keno:error', 'Failed to get transactions');
+            }
+        });
+        
+        // NEW: Deposit funds
+        socket.on('keno:deposit', async (data) => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const { amount, paymentMethod, transactionId } = data;
+                
+                if (!amount || amount <= 0) {
+                    socket.emit('keno:error', 'Invalid deposit amount');
+                    return;
+                }
+                
+                const user = await self.User.findOne({ userId: socket.userId });
+                if (!user) {
+                    socket.emit('keno:error', 'User not found');
+                    return;
+                }
+                
+                // Update user balance
+                user.balance += parseFloat(amount);
+                await user.save();
+                
+                // Create deposit transaction
+                const transaction = new self.Transaction({
+                    type: 'DEPOSIT',
+                    userId: socket.userId,
+                    userName: user.userName,
+                    amount: parseFloat(amount),
+                    description: `Deposit via ${paymentMethod || 'Telegram'} - Ref: ${transactionId || 'N/A'}`,
+                    game: 'system',
+                    status: 'completed',
+                    metadata: {
+                        paymentMethod: paymentMethod,
+                        transactionId: transactionId,
+                        timestamp: new Date()
+                    }
+                });
+                await transaction.save();
+                
+                // Update player state
+                const player = self.kenoPlayers.get(socket.userId);
+                if (player) {
+                    player.balance = user.balance;
+                    self.kenoPlayers.set(socket.userId, player);
+                }
+                
+                socket.emit('keno:depositSuccess', {
+                    success: true,
+                    balance: user.balance,
+                    amount: amount,
+                    message: `Deposit successful! ${amount} ETB added to your balance.`
+                });
+                
+                console.log(`💰 Deposit: ${user.userName} deposited ${amount} ETB`);
+                
+            } catch (error) {
+                console.error('Deposit error:', error);
+                socket.emit('keno:error', 'Deposit failed');
+            }
+        });
+        
+        // NEW: Withdraw funds
+        socket.on('keno:withdraw', async (data) => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const { amount, walletAddress } = data;
+                
+                if (!amount || amount <= 0) {
+                    socket.emit('keno:error', 'Invalid withdrawal amount');
+                    return;
+                }
+                
+                if (!walletAddress) {
+                    socket.emit('keno:error', 'Wallet address required');
+                    return;
+                }
+                
+                const user = await self.User.findOne({ userId: socket.userId });
+                if (!user) {
+                    socket.emit('keno:error', 'User not found');
+                    return;
+                }
+                
+                // Check balance
+                if (user.balance < amount) {
+                    socket.emit('keno:error', 'Insufficient balance for withdrawal');
+                    return;
+                }
+                
+                // Deduct from balance
+                user.balance -= parseFloat(amount);
+                await user.save();
+                
+                // Create withdrawal transaction
+                const transaction = new self.Transaction({
+                    type: 'WITHDRAWAL',
+                    userId: socket.userId,
+                    userName: user.userName,
+                    amount: -parseFloat(amount),
+                    description: `Withdrawal request to ${walletAddress}`,
+                    game: 'system',
+                    status: 'pending', // Will be processed manually by admin
+                    metadata: {
+                        walletAddress: walletAddress,
+                        requestDate: new Date(),
+                        processed: false
+                    }
+                });
+                await transaction.save();
+                
+                // Update player state
+                const player = self.kenoPlayers.get(socket.userId);
+                if (player) {
+                    player.balance = user.balance;
+                    self.kenoPlayers.set(socket.userId, player);
+                }
+                
+                socket.emit('keno:withdrawSuccess', {
+                    success: true,
+                    balance: user.balance,
+                    amount: amount,
+                    message: `Withdrawal request submitted. ${amount} ETB will be sent to ${walletAddress} after manual approval.`
+                });
+                
+                console.log(`💰 Withdrawal request: ${user.userName} requested ${amount} ETB to ${walletAddress}`);
+                
+            } catch (error) {
+                console.error('Withdrawal error:', error);
+                socket.emit('keno:error', 'Withdrawal failed');
+            }
+        });
+        
+        // Pre-select numbers for next round
         socket.on('keno:preselect', async (data) => {
             try {
                 const { numbers } = data;
@@ -417,8 +677,8 @@ module.exports = {
                     hasPlacedBet: player.hasPlacedBet,
                     selectedNumbers: player.selectedNumbers,
                     currentBet: player.currentBet,
-                    preSelectedNumbers: player.preSelectedNumbers, // NEW: Include pre-selected numbers
-                    isReadyForNextRound: player.isReadyForNextRound // NEW: Include ready status
+                    preSelectedNumbers: player.preSelectedNumbers,
+                    isReadyForNextRound: player.isReadyForNextRound
                 });
                 
             } catch (error) {
@@ -494,7 +754,7 @@ module.exports = {
             }
         });
         
-        // NEW: Clear pre-selection
+        // Clear pre-selection
         socket.on('keno:clearPreselection', () => {
             try {
                 if (!socket.userId) {
@@ -527,6 +787,11 @@ module.exports = {
         socket.on('keno:join', () => {
             socket.join('keno');
             console.log(`🎰 Player joined Keno room: ${socket.id}`);
+        });
+        
+        // Ping/Pong for connection testing
+        socket.on('ping', () => {
+            socket.emit('pong', { time: Date.now() });
         });
         
         // Handle disconnection
@@ -822,6 +1087,7 @@ module.exports = {
                     if (user) {
                         user.balance += winnings;
                         user.totalWins += winnings;
+                        user.totalGames = (user.totalGames || 0) + 1;
                         await user.save();
                         
                         // Create win transaction
@@ -853,6 +1119,7 @@ module.exports = {
                         if (player) {
                             player.balance = user.balance;
                             player.totalWins += winnings;
+                            player.totalWagered += bet.amount;
                             player.hasPlacedBet = false;
                             player.currentBet = null;
                             // Keep selected numbers if player wants to use them again
@@ -899,6 +1166,7 @@ module.exports = {
                     // Update player state
                     const player = self.kenoPlayers.get(playerId);
                     if (player) {
+                        player.totalWagered += bet.amount;
                         player.hasPlacedBet = false;
                         player.currentBet = null;
                         // Keep selected numbers if player wants to use them again
@@ -1206,7 +1474,7 @@ module.exports = {
         }
     },
     
-    // NEW: Get player's ready status
+    // Get player's ready status
     getPlayerReadyStatus: function(userId) {
         const player = this.kenoPlayers.get(userId);
         if (player) {
@@ -1219,7 +1487,7 @@ module.exports = {
         return null;
     },
     
-    // NEW: Force player ready status (admin)
+    // Force player ready status (admin)
     forcePlayerReady: function(userId, numbers) {
         const player = this.kenoPlayers.get(userId);
         if (player) {
@@ -1241,7 +1509,7 @@ module.exports = {
         return { success: false, message: 'Player not found' };
     },
     
-    // NEW: Toggle pre-selection feature
+    // Toggle pre-selection feature
     togglePreSelectionFeature: function(enabled) {
         this.CONFIG.ALLOW_PRE_SELECTION = enabled;
         
@@ -1255,5 +1523,87 @@ module.exports = {
         });
         
         return { success: true, enabled: enabled };
+    },
+    
+    // Admin: Process withdrawal
+    processWithdrawal: async function(transactionId, status, adminNotes) {
+        try {
+            const transaction = await this.Transaction.findById(transactionId);
+            if (!transaction) {
+                return { success: false, message: 'Transaction not found' };
+            }
+            
+            if (transaction.type !== 'WITHDRAWAL') {
+                return { success: false, message: 'Not a withdrawal transaction' };
+            }
+            
+            if (transaction.status !== 'pending') {
+                return { success: false, message: 'Transaction already processed' };
+            }
+            
+            // Update transaction status
+            transaction.status = status;
+            transaction.metadata.processed = true;
+            transaction.metadata.processedAt = new Date();
+            transaction.metadata.adminNotes = adminNotes;
+            await transaction.save();
+            
+            // If approved, update user balance (already deducted when requested)
+            // If rejected, refund the amount
+            if (status === 'rejected') {
+                const user = await this.User.findOne({ userId: transaction.userId });
+                if (user) {
+                    user.balance += Math.abs(transaction.amount);
+                    await user.save();
+                    
+                    // Update player state if online
+                    const player = this.kenoPlayers.get(transaction.userId);
+                    if (player) {
+                        player.balance = user.balance;
+                        this.kenoPlayers.set(transaction.userId, player);
+                    }
+                }
+            }
+            
+            // Notify user if online
+            const playerSocket = this.getKenoSocketByUserId(transaction.userId);
+            if (playerSocket) {
+                playerSocket.emit('keno:withdrawalProcessed', {
+                    transactionId: transactionId,
+                    status: status,
+                    amount: Math.abs(transaction.amount),
+                    message: `Your withdrawal request has been ${status}. ${adminNotes ? 'Note: ' + adminNotes : ''}`
+                });
+            }
+            
+            return { 
+                success: true, 
+                message: `Withdrawal ${status}`,
+                transaction: transaction 
+            };
+            
+        } catch (error) {
+            console.error('Error processing withdrawal:', error);
+            return { success: false, message: error.message };
+        }
+    },
+    
+    // Admin: Get pending withdrawals
+    getPendingWithdrawals: async function() {
+        try {
+            const withdrawals = await this.Transaction.find({
+                type: 'WITHDRAWAL',
+                status: 'pending'
+            }).sort({ createdAt: -1 });
+            
+            return {
+                success: true,
+                withdrawals: withdrawals,
+                count: withdrawals.length
+            };
+        } catch (error) {
+            console.error('Error getting pending withdrawals:', error);
+            return { success: false, message: error.message };
+        }
     }
 };
