@@ -734,6 +734,100 @@
             background: var(--secondary-gradient);
             border-radius: 2px;
         }
+        
+        /* Confirmation Modal */
+        .confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            padding: 16px;
+        }
+        
+        .confirmation-modal.active {
+            display: flex;
+        }
+        
+        .confirmation-content {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 320px;
+            width: 100%;
+            border: 2px solid var(--accent-color);
+            backdrop-filter: blur(20px);
+        }
+        
+        .confirmation-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--accent-color);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .confirmation-details {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .detail-label {
+            color: var(--text-secondary);
+        }
+        
+        .detail-value {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .confirmation-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .confirm-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+        }
+        
+        .confirm-yes {
+            background: var(--success);
+            color: white;
+        }
+        
+        .confirm-no {
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+        }
+        
+        .confirmation-amount {
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--accent-color);
+            text-align: center;
+            margin: 12px 0;
+        }
     </style>
 </head>
 <body>
@@ -834,8 +928,8 @@
                 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <button class="btn btn-primary" id="play-btn">
-                        <i class="fas fa-play-circle"></i> PLACE BET
+                    <button class="btn btn-primary" id="play-btn" disabled>
+                        <i class="fas fa-play-circle"></i> SELECT 5 NUMBERS
                     </button>
                     <button class="btn btn-secondary" id="clear-btn">
                         <i class="fas fa-undo"></i> CLEAR
@@ -891,6 +985,32 @@
         </footer>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div class="confirmation-modal" id="confirmation-modal">
+        <div class="confirmation-content">
+            <div class="confirmation-title">CONFIRM BET</div>
+            <div class="confirmation-details">
+                <div class="detail-row">
+                    <span class="detail-label">Round:</span>
+                    <span class="detail-value" id="confirm-round">#1</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Numbers:</span>
+                    <span class="detail-value" id="confirm-numbers">1, 2, 3, 4, 5</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Bet Amount:</span>
+                    <span class="detail-value" id="confirm-amount">5 ETB</span>
+                </div>
+                <div class="confirmation-amount" id="confirm-total">5 ETB</div>
+            </div>
+            <div class="confirmation-buttons">
+                <button class="confirm-btn confirm-no" id="confirm-cancel">CANCEL</button>
+                <button class="confirm-btn confirm-yes" id="confirm-ok">CONFIRM BET</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Telegram Web App
         const tg = window.Telegram.WebApp;
@@ -942,7 +1062,14 @@
             statusText: document.getElementById('status-text'),
             controlPanel: document.getElementById('control-panel'),
             waitingOverlay: document.getElementById('waiting-overlay'),
-            waitTimer: document.getElementById('wait-timer')
+            waitTimer: document.getElementById('wait-timer'),
+            confirmationModal: document.getElementById('confirmation-modal'),
+            confirmRound: document.getElementById('confirm-round'),
+            confirmNumbers: document.getElementById('confirm-numbers'),
+            confirmAmount: document.getElementById('confirm-amount'),
+            confirmTotal: document.getElementById('confirm-total'),
+            confirmCancel: document.getElementById('confirm-cancel'),
+            confirmOk: document.getElementById('confirm-ok')
         };
         
         // Initialize Game
@@ -1019,26 +1146,57 @@
         
         // Setup Event Listeners
         function setupEventListeners() {
-            // Bet Chips
+            // Bet Chips - ALWAYS allow changing stake BEFORE placing bet
             document.querySelectorAll('.chip').forEach(chip => {
                 chip.addEventListener('click', function() {
-                    if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+                    // Allow stake change ANY TIME during betting phase
+                    // (as long as round is active and bet not placed yet)
+                    if (!gameState.isConnected) return;
                     
+                    // Check if bet already placed
+                    if (gameState.hasPlacedBet) {
+                        showNotification('Cannot change stake after placing bet', 'warning');
+                        return;
+                    }
+                    
+                    // Check if round is active
+                    if (!gameState.roundActive) {
+                        showNotification('Wait for next round to start', 'warning');
+                        return;
+                    }
+                    
+                    // Change stake
                     document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
                     this.classList.add('selected');
                     
                     gameState.betAmount = parseInt(this.dataset.value);
                     elements.currentBet.textContent = gameState.betAmount;
                     
+                    // Update button text based on selection status
+                    if (gameState.selectedNumbers.length === 5) {
+                        elements.playBtn.disabled = false;
+                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                    } else {
+                        elements.playBtn.disabled = true;
+                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                    }
+                    
                     vibrate(50);
                 });
             });
             
             // Play Button
-            elements.playBtn.addEventListener('click', placeBet);
+            elements.playBtn.addEventListener('click', () => {
+                if (gameState.selectedNumbers.length === 5) {
+                    showBetConfirmation();
+                }
+            });
+            
             elements.playBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                placeBet();
+                if (gameState.selectedNumbers.length === 5) {
+                    showBetConfirmation();
+                }
             }, { passive: false });
             
             // Clear Button
@@ -1062,6 +1220,16 @@
                 }
             });
             
+            // Confirmation Modal buttons
+            elements.confirmCancel.addEventListener('click', () => {
+                elements.confirmationModal.classList.remove('active');
+            });
+            
+            elements.confirmOk.addEventListener('click', () => {
+                elements.confirmationModal.classList.remove('active');
+                placeBet();
+            });
+            
             // Handle visibility change
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'visible') {
@@ -1071,6 +1239,20 @@
                     }
                 }
             });
+        }
+        
+        // Show Bet Confirmation
+        function showBetConfirmation() {
+            if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
+            
+            // Update confirmation modal
+            elements.confirmRound.textContent = `#${gameState.currentRound}`;
+            elements.confirmNumbers.textContent = gameState.selectedNumbers.join(', ');
+            elements.confirmAmount.textContent = `${gameState.betAmount} ETB`;
+            elements.confirmTotal.textContent = `${gameState.betAmount} ETB`;
+            
+            // Show modal
+            elements.confirmationModal.classList.add('active');
         }
         
         // Socket.IO Connection
@@ -1223,15 +1405,23 @@
             clearDrawnNumbers();
             elements.winResult.style.display = 'none';
             
-            // Enable controls
-            elements.playBtn.disabled = false;
-            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+            // Reset stake to default (5 ETB)
+            gameState.betAmount = 5;
+            elements.currentBet.textContent = gameState.betAmount;
             
-            // Clear selection
+            // Reset chip selection
+            document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+            document.querySelector('.chip[data-value="5"]').classList.add('selected');
+            
+            // Reset play button
+            elements.playBtn.disabled = true;
+            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
+            
+            // Clear number selections
             clearSelection();
             
             // Show notification
-            showNotification(`ROUND ${gameState.currentRound} STARTED!`, 'info');
+            showNotification(`ROUND ${gameState.currentRound} STARTED! PLACE YOUR BET`, 'info');
         }
         
         function handleDrawStart(data) {
@@ -1340,8 +1530,13 @@
                 elements.playBtn.disabled = true;
                 elements.playBtn.innerHTML = '<i class="fas fa-check-circle"></i> BET PLACED';
             } else if (gameState.roundActive) {
-                elements.playBtn.disabled = false;
-                elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                if (gameState.selectedNumbers.length === 5) {
+                    elements.playBtn.disabled = false;
+                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                } else {
+                    elements.playBtn.disabled = true;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                }
             }
             
             // Update bet amount display
@@ -1382,6 +1577,15 @@
                     // Update selection counter
                     elements.selectedCount.textContent = gameState.selectedNumbers.length;
                     
+                    // Update play button state
+                    if (gameState.selectedNumbers.length === 5) {
+                        elements.playBtn.disabled = false;
+                        elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                    } else {
+                        elements.playBtn.disabled = true;
+                        elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                    }
+                    
                     vibrate(30);
                 } else {
                     showNotification(`Maximum ${gameState.MAX_SELECTIONS} numbers allowed`, 'warning');
@@ -1390,6 +1594,16 @@
                 gameState.selectedNumbers.splice(index, 1);
                 element.classList.remove('selected');
                 elements.selectedCount.textContent = gameState.selectedNumbers.length;
+                
+                // Update play button state
+                if (gameState.selectedNumbers.length === 5) {
+                    elements.playBtn.disabled = false;
+                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                } else {
+                    elements.playBtn.disabled = true;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - gameState.selectedNumbers.length} MORE`;
+                }
+                
                 vibrate(30);
             }
         }
@@ -1410,6 +1624,17 @@
             
             gameState.selectedNumbers = numbers;
             elements.selectedCount.textContent = numbers.length;
+            
+            // Update play button
+            if (gameState.roundActive && !gameState.hasPlacedBet) {
+                if (numbers.length === 5) {
+                    elements.playBtn.disabled = false;
+                    elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> PLACE BET';
+                } else {
+                    elements.playBtn.disabled = true;
+                    elements.playBtn.innerHTML = `<i class="fas fa-play-circle"></i> SELECT ${gameState.MAX_SELECTIONS - numbers.length} MORE`;
+                }
+            }
         }
         
         function clearSelection() {
@@ -1425,6 +1650,11 @@
             
             gameState.selectedNumbers = [];
             elements.selectedCount.textContent = '0';
+            
+            // Reset play button
+            elements.playBtn.disabled = true;
+            elements.playBtn.innerHTML = '<i class="fas fa-play-circle"></i> SELECT 5 NUMBERS';
+            
             vibrate(50);
         }
         
