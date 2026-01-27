@@ -1201,7 +1201,7 @@
         const tg = window.Telegram.WebApp;
         
         // Game Configuration
-        const SOCKET_URL = window.location.origin;
+        const SOCKET_URL = ''; // Empty string connects to same host
         
         // Game State - UPDATED PAYOUT TABLE
         let gameState = {
@@ -1226,6 +1226,7 @@
             NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
             isDrawComplete: false,
             hasBetInCurrentRound: false,
+            isDrawing: false, // Track if draw is in progress
             // UPDATED PAYOUT TABLE TO MATCH SERVER
             PAYOUT_TABLE: {
                 1: {1: 3, 0: 0},
@@ -1235,7 +1236,9 @@
                 5: {5: 200, 4: 50, 3: 15, 2: 1, 1: 0, 0: 0}
             },
             currentBall: 0,
-            totalBalls: 20
+            totalBalls: 20,
+            connectionAttempts: 0,
+            maxConnectionAttempts: 10
         };
         
         // DOM Elements
@@ -1329,6 +1332,16 @@
                 e.preventDefault();
                 return false;
             });
+            
+            // Auto-reconnect if connection is lost
+            setInterval(() => {
+                if (!gameState.isConnected && !gameState.socket?.connected) {
+                    if (gameState.connectionAttempts < gameState.maxConnectionAttempts) {
+                        console.log('Attempting to reconnect...');
+                        connectSocketIO();
+                    }
+                }
+            }, 10000);
         }
         
         // Create Number Grid
@@ -1491,63 +1504,108 @@
         // Socket.IO Connection
         function connectSocketIO() {
             try {
+                gameState.connectionAttempts++;
+                
                 // Disconnect existing socket if any
                 if (gameState.socket) {
                     gameState.socket.disconnect();
+                    gameState.socket = null;
                 }
                 
                 updateConnectionStatus(false, 'CONNECTING...');
                 
-                // Connect with Socket.IO
-                gameState.socket = io(SOCKET_URL, {
+                // Connect with Socket.IO - Fixed URL with better options
+                const socketUrl = SOCKET_URL || window.location.origin;
+                console.log(`Connecting to: ${socketUrl}`);
+                
+                gameState.socket = io(socketUrl, {
                     transports: ['websocket', 'polling'],
                     reconnection: true,
-                    reconnectionAttempts: 5,
-                    reconnectionDelay: 1000
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 20000,
+                    forceNew: true,
+                    query: {
+                        playerId: gameState.playerId,
+                        userName: gameState.userName
+                    }
                 });
                 
                 // Setup event handlers
-                gameState.socket.on('connect', handleSocketConnect);
-                gameState.socket.on('disconnect', handleSocketDisconnect);
-                gameState.socket.on('connect_error', handleSocketError);
-                
-                // Keno game events
-                gameState.socket.on('keno:welcome', handleWelcome);
-                gameState.socket.on('keno:round_start', handleRoundStart);
-                gameState.socket.on('keno:countdown_update', (data) => updateCountdown(data.countdown));
-                gameState.socket.on('keno:draw_start', handleDrawStart);
-                gameState.socket.on('keno:round_results', handleRoundResults);
-                gameState.socket.on('keno:number_drawn', handleNumberDrawn);
-                gameState.socket.on('keno:round_result', handlePersonalResult);
-                gameState.socket.on('keno:betConfirmed', handleBetConfirmed);
-                gameState.socket.on('keno:quickPickNumbers', handleQuickPickNumbers);
-                gameState.socket.on('keno:players_update', (data) => updatePlayersCount(data.count, data.totalBets));
-                gameState.socket.on('keno:state', updateGameState);
-                gameState.socket.on('keno:balance', (data) => updateBalanceDisplay(data.balance));
-                gameState.socket.on('keno:warning', (data) => showNotification(data.message, 'warning'));
-                gameState.socket.on('keno:error', (data) => showNotification(data.message || 'An error occurred', 'error'));
-                gameState.socket.on('keno:waiting', (data) => {
-                    showNotification(data.message || 'Waiting for players...', 'info');
-                    elements.waitingMessage.classList.add('active');
-                });
-                gameState.socket.on('keno:game_paused', (data) => {
-                    showNotification(data.message, 'info');
-                    elements.waitingMessage.classList.add('active');
-                });
-                gameState.socket.on('keno:autoSelect', handleAutoSelect);
+                setupSocketHandlers();
                 
             } catch (error) {
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
                 showNotification('Connection failed. Retrying...', 'error');
-                setTimeout(connectSocketIO, 5000);
+                
+                if (gameState.connectionAttempts < gameState.maxConnectionAttempts) {
+                    setTimeout(connectSocketIO, 3000);
+                } else {
+                    showNotification('Max connection attempts reached. Please refresh the page.', 'error');
+                }
             }
+        }
+        
+        // Setup Socket.IO Event Handlers
+        function setupSocketHandlers() {
+            const socket = gameState.socket;
+            
+            // Basic connection events
+            socket.on('connect', handleSocketConnect);
+            socket.on('disconnect', handleSocketDisconnect);
+            socket.on('connect_error', handleSocketError);
+            socket.on('connect_timeout', handleSocketTimeout);
+            socket.on('reconnect_attempt', handleReconnectAttempt);
+            socket.on('reconnect', handleReconnect);
+            socket.on('reconnect_error', handleReconnectError);
+            socket.on('reconnect_failed', handleReconnectFailed);
+            
+            // Keno game events
+            socket.on('keno:welcome', handleWelcome);
+            socket.on('keno:round_start', handleRoundStart);
+            socket.on('keno:countdown_update', (data) => updateCountdown(data.countdown));
+            socket.on('keno:draw_start', handleDrawStart);
+            socket.on('keno:round_results', handleRoundResults);
+            socket.on('keno:number_drawn', handleNumberDrawn);
+            socket.on('keno:round_result', handlePersonalResult);
+            socket.on('keno:betConfirmed', handleBetConfirmed);
+            socket.on('keno:quickPickNumbers', handleQuickPickNumbers);
+            socket.on('keno:players_update', (data) => updatePlayersCount(data.count, data.totalBets));
+            socket.on('keno:state', updateGameState);
+            socket.on('keno:balance', (data) => updateBalanceDisplay(data.balance));
+            socket.on('keno:warning', (data) => showNotification(data.message, 'warning'));
+            socket.on('keno:error', (data) => showNotification(data.message || 'An error occurred', 'error'));
+            socket.on('keno:waiting', (data) => {
+                showNotification(data.message || 'Waiting for players...', 'info');
+                elements.waitingMessage.classList.add('active');
+            });
+            socket.on('keno:game_paused', (data) => {
+                showNotification(data.message, 'info');
+                elements.waitingMessage.classList.add('active');
+            });
+            socket.on('keno:autoSelect', handleAutoSelect);
+            socket.on('keno:countdown_warning', (data) => {
+                // Show countdown warning for last 5 seconds
+                if (data.countdown <= 5) {
+                    showNotification(`${data.countdown}...`, 'warning');
+                    vibrate(100);
+                }
+            });
+            socket.on('keno:featureUpdate', (data) => {
+                showNotification(data.message, 'info');
+            });
+            socket.on('keno:forceReady', (data) => {
+                showNotification(data.message, 'info');
+            });
         }
         
         // Socket.IO Event Handlers
         function handleSocketConnect() {
             console.log('✅ Connected to Keno server via Socket.IO');
             gameState.isConnected = true;
+            gameState.connectionAttempts = 0;
             updateConnectionStatus(true, 'CONNECTED');
             
             // Authenticate with server
@@ -1558,13 +1616,6 @@
             
             // Join Keno room
             gameState.socket.emit('keno:join');
-            
-            // Start heartbeat
-            setInterval(() => {
-                if (gameState.socket && gameState.socket.connected) {
-                    gameState.socket.emit('ping');
-                }
-            }, 25000);
             
             vibrate(100);
             showNotification('Connected to Keno server!', 'info');
@@ -1577,7 +1628,7 @@
             
             // Try to reconnect after 3 seconds
             setTimeout(() => {
-                if (!gameState.isConnected) {
+                if (!gameState.isConnected && gameState.connectionAttempts < gameState.maxConnectionAttempts) {
                     connectSocketIO();
                 }
             }, 3000);
@@ -1588,7 +1639,33 @@
         function handleSocketError(error) {
             console.error('Socket.IO error:', error);
             updateConnectionStatus(false, 'CONNECTION ERROR');
-            showNotification('Connection error', 'error');
+        }
+        
+        function handleSocketTimeout() {
+            console.error('Socket connection timeout');
+            updateConnectionStatus(false, 'CONNECTION TIMEOUT');
+        }
+        
+        function handleReconnectAttempt(attempt) {
+            console.log(`Reconnection attempt ${attempt}`);
+            updateConnectionStatus(false, `RECONNECTING (${attempt}/10)`);
+        }
+        
+        function handleReconnect() {
+            console.log('Reconnected to server');
+            updateConnectionStatus(true, 'RECONNECTED');
+            showNotification('Reconnected to server', 'info');
+        }
+        
+        function handleReconnectError(error) {
+            console.error('Reconnection error:', error);
+            updateConnectionStatus(false, 'RECONNECTION FAILED');
+        }
+        
+        function handleReconnectFailed() {
+            console.error('Failed to reconnect');
+            updateConnectionStatus(false, 'RECONNECTION FAILED');
+            showNotification('Connection lost. Please refresh the page.', 'error');
         }
         
         // Game Message Handlers
@@ -1602,6 +1679,7 @@
             gameState.currentDrawnNumbers = data.currentDrawnNumbers || [];
             gameState.isDrawComplete = data.isDrawComplete || false;
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
+            gameState.isDrawing = data.isDrawing || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -1625,6 +1703,10 @@
                 } else {
                     showNotification('Round already in progress. Watch the results!', 'info');
                 }
+            } else if (gameState.isDrawing) {
+                // If draw is in progress, set the flag
+                gameState.isDrawing = true;
+                elements.ballCounter.classList.add('active');
             }
         }
         
@@ -1637,6 +1719,7 @@
             gameState.isDrawComplete = false;
             gameState.hasPlacedBet = false;
             gameState.hasBetInCurrentRound = false;
+            gameState.isDrawing = false;
             
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
@@ -1666,6 +1749,7 @@
         
         function handleDrawStart(data) {
             showNotification('DRAWING NUMBERS...', 'info');
+            gameState.isDrawing = true;
             
             // Show ball counter
             elements.ballCounter.classList.add('active');
@@ -1714,6 +1798,7 @@
             gameState.currentDrawnNumbers = gameState.drawnNumbers;
             gameState.playersCount = data.playersCount || gameState.playersCount;
             gameState.isDrawComplete = data.isDrawComplete || false;
+            gameState.isDrawing = false;
             
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
@@ -1834,6 +1919,7 @@
             gameState.currentDrawnNumbers = data.currentDrawnNumbers || [];
             gameState.isDrawComplete = data.isDrawComplete || false;
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
+            gameState.isDrawing = data.isDrawing || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -1872,6 +1958,13 @@
                 elements.waitingMessage.classList.add('active');
             } else {
                 elements.waitingMessage.classList.remove('active');
+            }
+            
+            // Update ball counter if drawing
+            if (gameState.isDrawing) {
+                elements.ballCounter.classList.add('active');
+            } else {
+                elements.ballCounter.classList.remove('active');
             }
             
             // If there are drawn numbers and draw is complete, display them
@@ -2088,6 +2181,7 @@
         function clearDrawnNumbers() {
             gameState.currentDrawnNumbers = [];
             gameState.isDrawComplete = false;
+            gameState.isDrawing = false;
             
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
@@ -2100,6 +2194,7 @@
                 </div>
             `;
             elements.winResult.style.display = 'none';
+            elements.ballCounter.classList.remove('active');
         }
         
         // Update Functions
@@ -2262,14 +2357,6 @@
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', initGame);
-        
-        // Auto-reconnect if connection is lost
-        setInterval(() => {
-            if (!gameState.isConnected) {
-                console.log('Attempting to reconnect...');
-                connectSocketIO();
-            }
-        }, 10000);
     </script>
 </body>
 </html>
