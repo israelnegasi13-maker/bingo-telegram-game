@@ -211,29 +211,39 @@ module.exports = {
                 
                 console.log(`🎰 Keno player authenticated: ${userName} - Balance: ${user.balance} ETB`);
                 
-                // If draw is already in progress or complete, send current state to this player only
+                // If draw is already in progress or complete, handle it properly
                 if (currentDrawnNumbers.length > 0) {
                     if (activeGame.drawComplete) {
                         // Draw is complete, show all numbers immediately
-                        setTimeout(() => {
-                            socket.emit('keno:round_results', {
-                                round: currentRoundNumber,
-                                drawnNumbers: currentDrawnNumbers,
-                                playersCount: activeGame.players.length,
-                                totalBets: activeGame.totalBets,
-                                isDrawComplete: true,
-                                message: `Round ${currentRoundNumber} results!`,
-                                totalDrawn: currentDrawnNumbers.length
-                            });
-                            
-                            // If player had a bet in this round, send their result
-                            if (playerHasBetInCurrentRound && activeGame.processedResults) {
+                        socket.emit('keno:round_results', {
+                            round: currentRoundNumber,
+                            drawnNumbers: currentDrawnNumbers,
+                            playersCount: activeGame.players.length,
+                            totalBets: activeGame.totalBets,
+                            isDrawComplete: true,
+                            message: `Round ${currentRoundNumber} results!`,
+                            totalDrawn: currentDrawnNumbers.length
+                        });
+                        
+                        // If player had a bet in this round, send their result
+                        if (playerHasBetInCurrentRound && activeGame.processedResults) {
+                            setTimeout(() => {
                                 self.sendPlayerRoundResult(socket, userId, activeGame);
-                            }
-                        }, 1000);
+                            }, 1000);
+                        }
                     } else if (activeGame.status === 'drawing') {
-                        // Draw is in progress, simulate the draw for this player
-                        self.simulateDrawForNewPlayer(socket, currentDrawnNumbers, currentRoundNumber, activeGame);
+                        // Draw is in progress - send current state and let them watch live
+                        // Don't simulate the draw for new players - they'll receive real-time events
+                        socket.emit('keno:draw_state', {
+                            round: currentRoundNumber,
+                            drawnNumbers: currentDrawnNumbers,
+                            currentBall: currentDrawnNumbers.length,
+                            totalBalls: self.CONFIG.KENO_DRAW_COUNT,
+                            playersCount: activeGame.players.length,
+                            totalBets: activeGame.totalBets,
+                            message: 'Draw in progress. Watching live...',
+                            isNewPlayer: true
+                        });
                     }
                 }
                 
@@ -735,6 +745,31 @@ module.exports = {
             } catch (error) {
                 console.error('Get potential winnings error:', error);
                 socket.emit('keno:error', 'Failed to calculate potential winnings');
+            }
+        });
+        
+        // Draw state event (when player joins during draw)
+        socket.on('keno:getDrawState', () => {
+            try {
+                if (!socket.userId) {
+                    socket.emit('keno:error', 'Not authenticated');
+                    return;
+                }
+                
+                const activeGame = self.getActiveKenoGame();
+                if (activeGame.status === 'drawing' && activeGame.drawnNumbers.length > 0) {
+                    socket.emit('keno:draw_state', {
+                        round: activeGame.roundNumber,
+                        drawnNumbers: activeGame.drawnNumbers,
+                        currentBall: activeGame.drawnNumbers.length,
+                        totalBalls: self.CONFIG.KENO_DRAW_COUNT,
+                        playersCount: activeGame.players.length,
+                        totalBets: activeGame.totalBets,
+                        message: 'Draw in progress. Watching live...'
+                    });
+                }
+            } catch (error) {
+                console.error('Get draw state error:', error);
             }
         });
         
@@ -1583,48 +1618,6 @@ module.exports = {
             }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
             
         }, 2000);
-    },
-    
-    // Simulate draw for new player (when they join during draw) - UPDATED with ball counter
-    simulateDrawForNewPlayer: function(socket, drawnNumbers, roundNumber, activeGame) {
-        const self = this;
-        
-        // Send draw start
-        socket.emit('keno:draw_start', {
-            round: roundNumber,
-            message: 'Drawing in progress...',
-            popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
-            totalBalls: self.CONFIG.KENO_DRAW_COUNT
-        });
-        
-        // Simulate animation for already drawn numbers
-        setTimeout(() => {
-            // Send numbers one by one with delay and ball counter
-            drawnNumbers.forEach((num, index) => {
-                setTimeout(() => {
-                    socket.emit('keno:number_drawn', {
-                        number: num,
-                        index: index,
-                        total: drawnNumbers.length,
-                        drawnCount: index + 1, // Current ball number
-                        round: roundNumber
-                    });
-                }, index * self.CONFIG.NUMBER_POP_INTERVAL);
-            });
-            
-            // After all numbers are shown, send complete results
-            setTimeout(() => {
-                socket.emit('keno:round_results', {
-                    round: roundNumber,
-                    drawnNumbers: drawnNumbers,
-                    playersCount: activeGame.players.length,
-                    totalBets: activeGame.totalBets,
-                    isDrawComplete: activeGame.drawComplete || false,
-                    message: `Round ${roundNumber} results!`,
-                    totalDrawn: drawnNumbers.length
-                });
-            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
-        }, 1000);
     },
     
     // Send player round result
