@@ -233,17 +233,26 @@ module.exports = {
                         }
                     } else if (activeGame.status === 'drawing') {
                         // Draw is in progress - send current state and let them watch live
-                        // Don't simulate the draw for new players - they'll receive real-time events
-                        socket.emit('keno:draw_state', {
+                        // Don't send drawn numbers to new players without bets
+                        const drawState = {
                             round: currentRoundNumber,
-                            drawnNumbers: currentDrawnNumbers,
                             currentBall: currentDrawnNumbers.length,
                             totalBalls: self.CONFIG.KENO_DRAW_COUNT,
                             playersCount: activeGame.players.length,
                             totalBets: activeGame.totalBets,
                             message: 'Draw in progress. Watching live...',
                             isNewPlayer: true
-                        });
+                        };
+                        
+                        // Only send drawn numbers if player has a bet in this round
+                        if (playerHasBetInCurrentRound) {
+                            drawState.drawnNumbers = currentDrawnNumbers;
+                            drawState.hasBet = true;
+                        } else {
+                            drawState.hasBet = false;
+                        }
+                        
+                        socket.emit('keno:draw_state', drawState);
                     }
                 }
                 
@@ -757,16 +766,27 @@ module.exports = {
                 }
                 
                 const activeGame = self.getActiveKenoGame();
+                const playerHasBet = !!activeGame.bets[socket.userId];
+                
                 if (activeGame.status === 'drawing' && activeGame.drawnNumbers.length > 0) {
-                    socket.emit('keno:draw_state', {
+                    // For players requesting draw state, only send limited info if they don't have a bet
+                    const drawState = {
                         round: activeGame.roundNumber,
-                        drawnNumbers: activeGame.drawnNumbers,
                         currentBall: activeGame.drawnNumbers.length,
                         totalBalls: self.CONFIG.KENO_DRAW_COUNT,
                         playersCount: activeGame.players.length,
                         totalBets: activeGame.totalBets,
-                        message: 'Draw in progress. Watching live...'
-                    });
+                        message: 'Draw in progress. Watching live...',
+                        hasBet: playerHasBet
+                    };
+                    
+                    // Only send drawn numbers if player has a bet in this round
+                    if (playerHasBet) {
+                        drawState.drawnNumbers = activeGame.drawnNumbers;
+                        drawState.message = 'Draw in progress. You have a bet in this round.';
+                    }
+                    
+                    socket.emit('keno:draw_state', drawState);
                 }
             } catch (error) {
                 console.error('Get draw state error:', error);
@@ -1334,6 +1354,7 @@ module.exports = {
             players: [],
             bets: {},
             drawnNumbers: [],
+            drawnNumbersOriginalOrder: [], // Store original random order
             winners: [],
             totalBets: 0,
             totalBetAmount: 0,
@@ -1543,7 +1564,7 @@ module.exports = {
         }, 1000);
     },
     
-    // Draw Keno numbers - UPDATED with ball counter
+    // Draw Keno numbers - UPDATED with ball counter and random order drawing
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
@@ -1562,12 +1583,13 @@ module.exports = {
             round: activeGame.roundNumber,
             message: 'Drawing numbers...',
             popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
-            totalBalls: self.CONFIG.KENO_DRAW_COUNT
+            totalBalls: self.CONFIG.KENO_DRAW_COUNT,
+            willBeRandomOrder: true // Inform clients numbers will come in random order
         });
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate 20 random unique numbers
+            // Generate 20 random unique numbers - DO NOT SORT THEM
             const drawnNumbers = [];
             while (drawnNumbers.length < self.CONFIG.KENO_DRAW_COUNT) {
                 const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
@@ -1576,33 +1598,42 @@ module.exports = {
                 }
             }
             
-            drawnNumbers.sort((a, b) => a - b);
+            // Store in original random order
+            activeGame.drawnNumbersOriginalOrder = [...drawnNumbers];
             activeGame.drawnNumbers = drawnNumbers;
             
-            // Draw numbers one by one with 3-second interval
+            console.log(`🎰 Numbers to draw (random order): ${drawnNumbers.join(', ')}`);
+            
+            // Draw numbers one by one in RANDOM ORDER (as they were generated)
             for (let i = 0; i < drawnNumbers.length; i++) {
                 setTimeout(() => {
                     self.io.to('keno').emit('keno:number_drawn', {
-                        number: drawnNumbers[i],
+                        number: drawnNumbers[i], // This is the random number at position i
                         index: i,
                         total: drawnNumbers.length,
                         drawnCount: i + 1, // Current ball number (1/20, 2/20, etc.)
-                        round: activeGame.roundNumber
+                        round: activeGame.roundNumber,
+                        isRandomOrder: true
                     });
                 }, i * self.CONFIG.NUMBER_POP_INTERVAL);
             }
             
-            // After all numbers are drawn, send complete results
+            // After all numbers are drawn, send complete results IN SORTED ORDER for display
             setTimeout(() => {
+                // For the final display, we sort them for better readability
+                const sortedForDisplay = [...drawnNumbers].sort((a, b) => a - b);
+                
                 self.io.to('keno').emit('keno:round_results', {
                     round: activeGame.roundNumber,
-                    drawnNumbers: drawnNumbers,
+                    drawnNumbers: sortedForDisplay, // Send sorted for final display
+                    originalOrder: drawnNumbers, // Keep original random order too
                     playersCount: activeGame.players.length,
                     totalBets: activeGame.totalBets,
                     popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
                     message: `Round ${activeGame.roundNumber} results!`,
                     totalDrawn: drawnNumbers.length,
-                    isDrawComplete: true
+                    isDrawComplete: true,
+                    wasRandomOrder: true
                 });
                 
                 // Mark draw as complete
@@ -1843,6 +1874,7 @@ module.exports = {
             activeGame.bets = {};
             activeGame.players = [];
             activeGame.drawnNumbers = [];
+            activeGame.drawnNumbersOriginalOrder = [];
             activeGame.winners = [];
             activeGame.totalBets = 0;
             activeGame.totalBetAmount = 0;
@@ -1925,6 +1957,7 @@ module.exports = {
                 players: [],
                 bets: {},
                 drawnNumbers: [],
+                drawnNumbersOriginalOrder: [],
                 winners: [],
                 totalBets: 0,
                 totalBetAmount: 0,
@@ -2034,6 +2067,7 @@ module.exports = {
                 totalBetAmount: activeGame.totalBetAmount,
                 status: activeGame.status,
                 drawnNumbers: activeGame.drawnNumbers,
+                drawnNumbersOriginalOrder: activeGame.drawnNumbersOriginalOrder,
                 drawComplete: activeGame.drawComplete,
                 averageSelectionCount: avgSelectionCount.toFixed(2)
             } : null,
