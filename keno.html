@@ -1237,7 +1237,8 @@
             currentBall: 0,
             totalBalls: 20,
             isAutoSelectApplied: false,
-            roundStatus: 'waiting' // 'waiting', 'betting', 'drawing', 'completed'
+            roundStatus: 'waiting', // 'waiting', 'betting', 'drawing', 'completed'
+            joinedDuringDraw: false // Track if player joined during a draw
         };
         
         // DOM Elements
@@ -1545,6 +1546,9 @@
                     }
                 });
                 
+                // NEW: Handle draw state when joining during a draw
+                gameState.socket.on('keno:draw_state', handleDrawState);
+                
             } catch (error) {
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
@@ -1635,6 +1639,7 @@
             gameState.isDrawComplete = data.isDrawComplete || false;
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
+            gameState.joinedDuringDraw = false; // Reset this flag
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -1663,10 +1668,8 @@
                     showNotification('Round already in progress. Watch the results!', 'info');
                 }
             } else if (gameState.currentDrawnNumbers.length > 0 && !gameState.isDrawComplete) {
-                // Draw is in progress
-                elements.ballCounter.classList.add('active');
-                elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
-                elements.totalBalls.textContent = '20';
+                // Draw is in progress - we'll handle this with draw_state event
+                // Don't display numbers here to avoid double display
             }
         }
         
@@ -1681,6 +1684,7 @@
             gameState.hasPlacedBet = false;
             gameState.hasBetInCurrentRound = false;
             gameState.isAutoSelectApplied = false;
+            gameState.joinedDuringDraw = false;
             
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
@@ -1713,12 +1717,34 @@
         function handleDrawStart(data) {
             gameState.roundStatus = 'drawing';
             gameState.roundActive = false;
+            gameState.joinedDuringDraw = false;
             showNotification('DRAWING NUMBERS...', 'info');
             
             // Show ball counter
             elements.ballCounter.classList.add('active');
             elements.currentBall.textContent = '0';
             elements.totalBalls.textContent = '20';
+        }
+        
+        function handleDrawState(data) {
+            // Player joined during a draw
+            console.log('Joined during draw in progress');
+            gameState.joinedDuringDraw = true;
+            gameState.roundStatus = 'drawing';
+            gameState.roundActive = false;
+            
+            // Display numbers that have already been drawn (without animation)
+            displayNumbersImmediately(data.drawnNumbers || []);
+            
+            // Update ball counter
+            elements.ballCounter.classList.add('active');
+            elements.currentBall.textContent = data.currentBall || 0;
+            elements.totalBalls.textContent = data.totalBalls || 20;
+            
+            // Show appropriate message
+            if (!gameState.hasBetInCurrentRound) {
+                showNotification('Joined during draw. Watching current round...', 'info');
+            }
         }
         
         function handleNumberDrawn(data) {
@@ -1731,26 +1757,41 @@
             // Handle individual number drawn
             const num = data.number;
             
+            // Check if this number was already displayed (in case of reconnection)
+            const alreadyDisplayed = gameState.currentDrawnNumbers.includes(num);
+            if (!alreadyDisplayed) {
+                gameState.currentDrawnNumbers.push(num);
+            }
+            
             // Highlight in grid
             const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
             if (gridNum) {
-                gridNum.classList.add('drawn');
-                if (gameState.selectedNumbers.includes(num)) {
-                    gridNum.classList.add('matched');
-                    vibrate(50);
+                // Only add animation if not already drawn
+                if (!gridNum.classList.contains('drawn')) {
+                    gridNum.classList.add('drawn');
+                    if (gameState.selectedNumbers.includes(num)) {
+                        gridNum.classList.add('matched');
+                        vibrate(50);
+                    }
                 }
             }
             
-            // Add to display
-            const numEl = document.createElement('div');
-            numEl.className = 'drawn-number';
-            numEl.textContent = num;
+            // Add to display if not already shown
+            const alreadyInDisplay = Array.from(elements.drawnNumbers.children).some(
+                child => child.textContent == num
+            );
             
-            if (gameState.selectedNumbers.includes(num)) {
-                numEl.classList.add('matched');
+            if (!alreadyInDisplay) {
+                const numEl = document.createElement('div');
+                numEl.className = 'drawn-number';
+                numEl.textContent = num;
+                
+                if (gameState.selectedNumbers.includes(num)) {
+                    numEl.classList.add('matched');
+                }
+                
+                elements.drawnNumbers.appendChild(numEl);
             }
-            
-            elements.drawnNumbers.appendChild(numEl);
             
             // Play sound effect
             playSound('pop');
@@ -1935,10 +1976,12 @@
                 elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
                 elements.totalBalls.textContent = gameState.currentDrawnNumbers.length;
             } else if (gameState.currentDrawnNumbers.length > 0 && !gameState.isDrawComplete) {
-                // Draw in progress
-                elements.ballCounter.classList.add('active');
-                elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
-                elements.totalBalls.textContent = '20';
+                // Draw in progress - only update if we haven't already displayed them
+                if (!gameState.joinedDuringDraw) {
+                    elements.ballCounter.classList.add('active');
+                    elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
+                    elements.totalBalls.textContent = '20';
+                }
             }
         }
         
@@ -2081,11 +2124,17 @@
             elements.currentBall.textContent = '0';
             elements.totalBalls.textContent = '20';
             
+            // Reset current drawn numbers
+            gameState.currentDrawnNumbers = [];
+            
             // Animate numbers one by one with 3-second interval
             drawnNumbers.forEach((num, index) => {
                 setTimeout(() => {
                     // Update ball counter
                     elements.currentBall.textContent = index + 1;
+                    
+                    // Add to current drawn numbers
+                    gameState.currentDrawnNumbers.push(num);
                     
                     // Highlight in grid
                     const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
@@ -2123,6 +2172,9 @@
                 el.classList.remove('drawn', 'matched');
             });
             
+            // Update current drawn numbers
+            gameState.currentDrawnNumbers = [...drawnNumbers];
+            
             // Update ball counter to show all balls drawn
             elements.currentBall.textContent = drawnNumbers.length;
             elements.totalBalls.textContent = drawnNumbers.length;
@@ -2154,6 +2206,7 @@
         function clearDrawnNumbers() {
             gameState.currentDrawnNumbers = [];
             gameState.isDrawComplete = false;
+            gameState.joinedDuringDraw = false;
             
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
