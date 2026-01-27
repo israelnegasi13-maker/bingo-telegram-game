@@ -3,134 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Agent Dashboard - Bingo Elite</title>
     <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --primary: #4361ee;
             --primary-dark: #3a56d4;
             --secondary: #7209b7;
-            --success: #4cc9f0;
-            --warning: #f8961e;
-            --danger: #f72585;
-            --dark: #1a1a2e;
-            --darker: #16213e;
-            --light: #f8f9fa;
-            --gray: #6c757d;
-            --card-bg: rgba(255, 255, 255, 0.05);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --dark: #0f172a;
+            --darker: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --card-bg: rgba(30, 41, 59, 0.9);
             --border: rgba(255, 255, 255, 0.1);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --radius: 12px;
         }
-        
+
+        [data-theme="light"] {
+            --dark: #ffffff;
+            --darker: #f8fafc;
+            --light: #0f172a;
+            --gray: #64748b;
+            --card-bg: rgba(248, 250, 252, 0.9);
+            --border: rgba(0, 0, 0, 0.1);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, var(--dark) 0%, var(--darker) 100%);
+            background: var(--dark);
             color: var(--light);
             min-height: 100vh;
-            padding: 0;
             overflow-x: hidden;
+            font-size: 14px;
+            line-height: 1.5;
+            padding-bottom: env(safe-area-inset-bottom);
         }
-        
-        /* Login Page */
-        .login-container {
+
+        /* Loading Screen */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        /* Login Screen */
+        #loginScreen {
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, var(--dark) 0%, var(--darker) 100%);
         }
-        
-        .login-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 30px;
+
+        .login-container {
             width: 100%;
             max-width: 400px;
             animation: slideUp 0.5s ease;
         }
-        
+
+        .login-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+        }
+
         .login-header {
             text-align: center;
             margin-bottom: 30px;
         }
-        
+
         .login-header h1 {
+            font-size: 28px;
             background: linear-gradient(45deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            font-size: 28px;
+            -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
         }
-        
+
         .login-header p {
             color: var(--gray);
             font-size: 14px;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
+
         .form-group label {
             display: block;
             margin-bottom: 8px;
             color: var(--light);
-            font-size: 14px;
             font-weight: 500;
+            font-size: 14px;
         }
-        
+
         .form-control {
             width: 100%;
             padding: 14px 16px;
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 10px;
             color: var(--light);
             font-size: 16px;
             transition: all 0.3s;
         }
-        
+
         .form-control:focus {
             outline: none;
             border-color: var(--primary);
             background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
         }
-        
+
+        .input-with-icon {
+            position: relative;
+        }
+
+        .input-with-icon i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray);
+        }
+
+        .input-with-icon .form-control {
+            padding-left: 45px;
+        }
+
         .btn {
-            display: block;
-            width: 100%;
-            padding: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 20px;
             background: linear-gradient(45deg, var(--primary), var(--secondary));
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 10px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            width: 100%;
+            text-decoration: none;
         }
-        
+
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(67, 97, 238, 0.3);
         }
-        
+
         .btn:active {
             transform: translateY(0);
         }
-        
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, var(--success), #059669);
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, var(--warning), #d97706);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, var(--danger), #dc2626);
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
         .error-message {
-            background: rgba(247, 37, 133, 0.1);
+            background: rgba(239, 68, 68, 0.1);
             border: 1px solid var(--danger);
             color: var(--danger);
             padding: 12px;
@@ -139,71 +229,219 @@
             font-size: 14px;
             display: none;
         }
-        
-        /* Dashboard */
-        .dashboard-container {
+
+        /* Dashboard Container */
+        #dashboardScreen {
             display: none;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0;
         }
-        
+
         /* Header */
         .dashboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
             border-bottom: 1px solid var(--border);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
-        
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: var(--light);
+            font-size: 20px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .agent-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
         .agent-info h2 {
-            font-size: 24px;
-            margin-bottom: 5px;
+            font-size: 18px;
+            margin-bottom: 2px;
             background: linear-gradient(45deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
+            -webkit-text-fill-color: transparent;
         }
-        
+
         .agent-info p {
             color: var(--gray);
-            font-size: 14px;
+            font-size: 12px;
         }
-        
-        .logout-btn {
-            padding: 10px 20px;
-            background: rgba(247, 37, 133, 0.1);
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            border-radius: 8px;
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .theme-toggle, .notification-btn, .logout-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            color: var(--light);
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            font-weight: 500;
             transition: all 0.3s;
         }
-        
-        .logout-btn:hover {
-            background: rgba(247, 37, 133, 0.2);
+
+        .theme-toggle:hover, .notification-btn:hover, .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
         }
-        
+
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100vh;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            z-index: 1000;
+            transition: left 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .sidebar.active {
+            left: 0;
+        }
+
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .sidebar-header h3 {
+            font-size: 18px;
+            color: var(--light);
+        }
+
+        .close-sidebar {
+            background: none;
+            border: none;
+            color: var(--light);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 10px;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            color: var(--light);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .sidebar-menu a:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-menu a.active {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 20px;
+            animation: fadeIn 0.5s ease;
+        }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
             margin-bottom: 30px;
         }
-        
+
         .stat-card {
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: var(--radius);
             padding: 20px;
             position: relative;
             overflow: hidden;
         }
-        
+
         .stat-card::before {
             content: '';
             position: absolute;
@@ -213,46 +451,113 @@
             height: 4px;
             background: linear-gradient(90deg, var(--primary), var(--secondary));
         }
-        
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(67, 97, 238, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 20px;
+        }
+
         .stat-value {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
-            margin: 10px 0;
+            margin: 5px 0;
             background: linear-gradient(45deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
+            -webkit-text-fill-color: transparent;
         }
-        
+
         .stat-label {
             color: var(--gray);
-            font-size: 14px;
+            font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        
+
         .stat-change {
             font-size: 12px;
             margin-top: 5px;
         }
-        
+
         .stat-change.positive {
             color: var(--success);
         }
-        
+
         .stat-change.negative {
             color: var(--danger);
         }
-        
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .action-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .action-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            margin: 0 auto 15px;
+        }
+
+        .action-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--light);
+        }
+
+        .action-desc {
+            color: var(--gray);
+            font-size: 12px;
+        }
+
         /* Sections */
         .section {
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 30px;
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 20px;
         }
-        
+
         .section-header {
             display: flex;
             justify-content: space-between;
@@ -261,7 +566,7 @@
             padding-bottom: 15px;
             border-bottom: 1px solid var(--border);
         }
-        
+
         .section-title {
             font-size: 18px;
             font-weight: 600;
@@ -269,90 +574,89 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .section-title i {
-            font-size: 20px;
+            color: var(--primary);
         }
-        
-        .action-btn {
-            padding: 8px 16px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .action-btn:hover {
-            background: var(--primary-dark);
-        }
-        
+
         /* Tables */
-        .table-container {
+        .table-responsive {
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
-        
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 600px;
         }
-        
+
         .data-table th {
             text-align: left;
-            padding: 12px 16px;
+            padding: 12px 15px;
             background: rgba(255, 255, 255, 0.05);
             color: var(--gray);
-            font-weight: 500;
+            font-weight: 600;
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            white-space: nowrap;
         }
-        
+
         .data-table td {
-            padding: 16px;
+            padding: 15px;
             border-bottom: 1px solid var(--border);
             font-size: 14px;
         }
-        
+
         .data-table tr:last-child td {
             border-bottom: none;
         }
-        
+
         .badge {
             padding: 4px 8px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
+            display: inline-block;
         }
-        
+
         .badge.success {
-            background: rgba(76, 201, 240, 0.1);
+            background: rgba(16, 185, 129, 0.1);
             color: var(--success);
         }
-        
+
         .badge.warning {
-            background: rgba(248, 150, 30, 0.1);
+            background: rgba(245, 158, 11, 0.1);
             color: var(--warning);
         }
-        
-        /* Referral Link */
-        .referral-link-container {
+
+        .badge.danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        .badge.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--info);
+        }
+
+        /* Referral Link Section */
+        .referral-container {
             background: linear-gradient(135deg, rgba(67, 97, 238, 0.1), rgba(114, 9, 183, 0.1));
             border: 1px solid var(--primary);
-            border-radius: 12px;
+            border-radius: var(--radius);
             padding: 20px;
-            margin-top: 20px;
         }
-        
+
         .referral-code {
-            font-size: 20px;
+            font-size: 24px;
             font-weight: 700;
             margin: 10px 0;
             color: var(--primary);
+            font-family: monospace;
         }
-        
+
         .referral-link {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border);
@@ -361,70 +665,128 @@
             margin: 10px 0;
             word-break: break-all;
             font-size: 14px;
+            font-family: monospace;
         }
-        
-        .copy-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: var(--primary);
-            color: white;
-            border: none;
+
+        .qr-code {
+            max-width: 200px;
+            margin: 20px auto;
+        }
+
+        .qr-code img {
+            width: 100%;
+            height: auto;
             border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
         }
-        
-        .copy-btn:hover {
-            background: var(--primary-dark);
+
+        /* Charts */
+        .chart-container {
+            height: 250px;
+            margin-top: 20px;
         }
-        
-        /* Tabs */
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 0;
-            overflow-x: auto;
-        }
-        
-        .tab-btn {
-            padding: 12px 24px;
-            background: transparent;
-            border: none;
-            color: var(--gray);
-            font-size: 14px;
-            cursor: pointer;
-            position: relative;
-            white-space: nowrap;
-        }
-        
-        .tab-btn.active {
-            color: var(--primary);
-        }
-        
-        .tab-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
+
+        /* Modals */
+        .modal {
+            position: fixed;
+            top: 0;
             left: 0;
             right: 0;
-            height: 3px;
-            background: var(--primary);
-            border-radius: 3px 3px 0 0;
-        }
-        
-        .tab-content {
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 1001;
             display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
-        
-        .tab-content.active {
-            display: block;
+
+        .modal.active {
+            display: flex;
         }
-        
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: var(--light);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        @media (min-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* Notifications */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1002;
+        }
+
+        .notification {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 15px;
+            margin-bottom: 10px;
+            max-width: 300px;
+            animation: slideInRight 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .notification.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .notification.warning {
+            border-left: 4px solid var(--warning);
+        }
+
+        .notification.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .notification.info {
+            border-left: 4px solid var(--info);
+        }
+
         /* Animations */
         @keyframes slideUp {
             from {
@@ -436,7 +798,7 @@
                 transform: translateY(0);
             }
         }
-        
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -445,346 +807,1105 @@
                 opacity: 1;
             }
         }
-        
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .dashboard-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
+                padding: 12px 15px;
             }
-            
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .header-actions .logout-text {
+                display: none;
+            }
+
             .stats-grid {
                 grid-template-columns: 1fr;
             }
-            
-            .section {
-                padding: 16px;
+
+            .quick-actions {
+                grid-template-columns: 1fr 1fr;
             }
-            
+
+            .main-content {
+                padding: 15px;
+            }
+
             .data-table {
                 font-size: 12px;
             }
-            
+
             .data-table th,
             .data-table td {
                 padding: 10px;
             }
         }
-        
-        /* Loading */
-        .loading {
-            display: none;
+
+        @media (max-width: 480px) {
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .login-card {
+                padding: 20px;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+        }
+
+        /* Empty States */
+        .empty-state {
             text-align: center;
-            padding: 40px;
+            padding: 40px 20px;
             color: var(--gray);
         }
-        
-        /* Admin Section */
-        .admin-section {
-            display: none;
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: var(--border);
         }
-        
+
+        /* Withdrawal Status */
+        .withdrawal-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .withdrawal-status.pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .withdrawal-status.approved {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .withdrawal-status.rejected {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            color: var(--gray);
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            white-space: nowrap;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            background: rgba(67, 97, 238, 0.1);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 20%;
+            right: 20%;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Agent Admin Panel */
         .admin-controls {
             display: flex;
             gap: 10px;
+            margin-bottom: 20px;
             flex-wrap: wrap;
-            margin-bottom: 20px;
         }
-        
-        .admin-form {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
+
         .agent-actions {
             display: flex;
-            gap: 10px;
+            gap: 5px;
         }
-        
-        .btn-sm {
-            padding: 6px 12px;
+
+        /* Refresh Button */
+        .refresh-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3);
+            z-index: 100;
+        }
+
+        /* Mobile Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            z-index: 100;
+            display: none;
+        }
+
+        .bottom-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: var(--gray);
+            padding: 8px 0;
             font-size: 12px;
-            border-radius: 6px;
+            transition: all 0.3s;
         }
-        
-        .btn-edit {
-            background: var(--warning);
+
+        .bottom-nav-item.active {
+            color: var(--primary);
         }
-        
-        .btn-delete {
-            background: var(--danger);
+
+        .bottom-nav-item i {
+            font-size: 20px;
+            margin-bottom: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-nav {
+                display: flex;
+            }
+
+            .main-content {
+                padding-bottom: 70px;
+            }
+        }
+
+        /* Commission Breakdown */
+        .commission-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .commission-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .commission-rate {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .commission-label {
+            font-size: 12px;
+            color: var(--gray);
+        }
+
+        /* Date Range Picker */
+        .date-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .date-input {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--light);
+            font-size: 14px;
+        }
+
+        /* Search Box */
+        .search-box {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray);
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--light);
+            font-size: 14px;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 20px;
+        }
+
+        .pagination-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--light);
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .pagination-btn.active {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .pagination-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.12);
         }
     </style>
 </head>
 <body>
-    <!-- Login Page -->
-    <div class="login-container" id="loginPage">
-        <div class="login-card">
-            <div class="login-header">
-                <h1>👑 Agent Dashboard</h1>
-                <p>Bingo Elite - Commission Management</p>
+    <!-- Loading Screen -->
+    <div id="loadingScreen">
+        <div class="loader"></div>
+        <div>Loading Agent Dashboard...</div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" style="display: none;">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <h1>👑 Agent Portal</h1>
+                    <p>Bingo Elite - Commission Management</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" class="form-control" placeholder="Enter username">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" class="form-control" placeholder="Enter password">
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="login()">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                
+                <div class="error-message" id="loginError"></div>
+                
+                <div style="text-align: center; margin-top: 20px; color: var(--gray); font-size: 14px;">
+                    <p>Need an agent account? Contact system administrator.</p>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="username" class="form-control" placeholder="Enter username">
-            </div>
-            
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="password" class="form-control" placeholder="Enter password">
-            </div>
-            
-            <button class="btn" onclick="agentLogin()">Login</button>
-            
-            <div class="error-message" id="loginError"></div>
         </div>
     </div>
-    
-    <!-- Dashboard -->
-    <div class="dashboard-container" id="dashboardPage">
+
+    <!-- Dashboard Screen -->
+    <div id="dashboardScreen">
         <!-- Header -->
         <div class="dashboard-header">
-            <div class="agent-info">
-                <h2 id="agentName">Loading...</h2>
-                <p id="agentUsername">Username: loading...</p>
-            </div>
-            <button class="logout-btn" onclick="logout()">Logout</button>
-        </div>
-        
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Total Earnings</div>
-                <div class="stat-value" id="totalEarnings">0 ETB</div>
-                <div class="stat-change positive" id="todayEarnings">Today: 0 ETB</div>
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="agent-avatar" id="agentAvatar">A</div>
+                <div class="agent-info">
+                    <h2 id="agentName">Loading...</h2>
+                    <p id="agentUsername">@username</p>
+                </div>
             </div>
             
-            <div class="stat-card">
-                <div class="stat-label">Total Referrals</div>
-                <div class="stat-value" id="totalReferrals">0</div>
-                <div class="stat-label" id="activeReferrals">Active: 0</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-label">Bingo Commission</div>
-                <div class="stat-value" id="bingoCommission">40%</div>
-                <div class="stat-label">Per game win</div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-label">Keno Commission</div>
-                <div class="stat-value" id="kenoCommission">10%</div>
-                <div class="stat-label">Per game win</div>
-            </div>
-        </div>
-        
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="tab-btn" onclick="switchTab('referrals')">👥 Referrals</button>
-            <button class="tab-btn" onclick="switchTab('commissions')">💰 Commissions</button>
-            <button class="tab-btn" onclick="switchTab('referralLink')">🔗 Referral Link</button>
-            <button class="tab-btn" onclick="switchTab('report')">📈 Reports</button>
-            <button class="tab-btn admin-section" onclick="switchTab('admin')">👑 Admin</button>
-        </div>
-        
-        <!-- Tab Contents -->
-        <div id="overviewTab" class="tab-content active">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">📊 Performance Overview</h3>
-                    <span id="overviewDate">Today</span>
-                </div>
-                <div id="overviewContent">
-                    <p>Loading overview data...</p>
-                </div>
-            </div>
-        </div>
-        
-        <div id="referralsTab" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">👥 My Referrals</h3>
-                    <button class="action-btn" onclick="refreshReferrals()">Refresh</button>
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="referralsTable">
-                        <thead>
-                            <tr>
-                                <th>User ID</th>
-                                <th>Username</th>
-                                <th>Balance</th>
-                                <th>Wagered</th>
-                                <th>Wins</th>
-                                <th>Joined</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="referralsBody">
-                            <tr><td colspan="7" style="text-align: center;">Loading referrals...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <div id="commissionsTab" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">💰 Commission History</h3>
-                    <button class="action-btn" onclick="refreshCommissions()">Refresh</button>
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="commissionsTable">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>User</th>
-                                <th>Game</th>
-                                <th>Stake</th>
-                                <th>Win Amount</th>
-                                <th>Commission</th>
-                                <th>Rate</th>
-                            </tr>
-                        </thead>
-                        <tbody id="commissionsBody">
-                            <tr><td colspan="7" style="text-align: center;">Loading commissions...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <div id="referralLinkTab" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">🔗 Your Referral Link</h3>
-                    <button class="action-btn" onclick="generateReferralLink()">Generate New</button>
-                </div>
-                <div class="referral-link-container">
-                    <p>Share this link to refer players and earn commissions:</p>
-                    <div class="referral-code" id="referralCodeDisplay">Loading...</div>
-                    <div class="referral-link" id="referralLinkDisplay">Loading...</div>
-                    <button class="copy-btn" onclick="copyReferralLink()">
-                        <span>📋 Copy Link</span>
+            <div class="header-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                
+                <div style="position: relative;">
+                    <button class="notification-btn" onclick="toggleNotifications()" title="Notifications">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
                     </button>
-                    <p style="margin-top: 15px; font-size: 12px; color: var(--gray);">
-                        You earn 40% commission from Bingo wins and 10% from Keno wins of your referrals.
-                    </p>
                 </div>
+                
+                <button class="logout-btn" onclick="logout()" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span class="logout-text">Logout</span>
+                </button>
             </div>
         </div>
-        
-        <div id="reportTab" class="tab-content">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">📈 Commission Report</h3>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>Agent Menu</h3>
+                <button class="close-sidebar" onclick="toggleSidebar()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <ul class="sidebar-menu">
+                <li><a href="#" onclick="switchTab('dashboard')" class="active">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a></li>
+                <li><a href="#" onclick="switchTab('referrals')">
+                    <i class="fas fa-users"></i> My Referrals
+                </a></li>
+                <li><a href="#" onclick="switchTab('commissions')">
+                    <i class="fas fa-money-bill-wave"></i> Commissions
+                </a></li>
+                <li><a href="#" onclick="switchTab('referralLink')">
+                    <i class="fas fa-link"></i> Referral Link
+                </a></li>
+                <li><a href="#" onclick="switchTab('withdrawals')">
+                    <i class="fas fa-wallet"></i> Withdrawals
+                </a></li>
+                <li><a href="#" onclick="switchTab('reports')">
+                    <i class="fas fa-chart-bar"></i> Reports
+                </a></li>
+                <li id="adminMenu" style="display: none;"><a href="#" onclick="switchTab('admin')">
+                    <i class="fas fa-crown"></i> Admin Panel
+                </a></li>
+                <li><a href="#" onclick="switchTab('settings')">
+                    <i class="fas fa-cog"></i> Settings
+                </a></li>
+                <li><a href="#" onclick="showHelp()">
+                    <i class="fas fa-question-circle"></i> Help & Support
+                </a></li>
+            </ul>
+            
+            <div style="margin-top: 30px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Commission Rates</div>
+                <div style="display: flex; justify-content: space-between;">
                     <div>
-                        <input type="date" id="startDate" class="form-control" style="width: 150px; display: inline;">
-                        <span style="margin: 0 10px;">to</span>
-                        <input type="date" id="endDate" class="form-control" style="width: 150px; display: inline;">
-                        <button class="action-btn" onclick="generateReport()">Generate</button>
+                        <div style="font-size: 18px; font-weight: bold; color: var(--primary);" id="commissionBingo">40%</div>
+                        <div style="font-size: 10px; color: var(--gray);">Bingo</div>
                     </div>
-                </div>
-                <div id="reportContent">
-                    <p>Select date range and generate report</p>
+                    <div>
+                        <div style="font-size: 18px; font-weight: bold; color: var(--secondary);" id="commissionKeno">10%</div>
+                        <div style="font-size: 10px; color: var(--gray);">Keno</div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <!-- Admin Tab (for super admins only) -->
-        <div id="adminTab" class="tab-content admin-section">
-            <div class="section">
-                <div class="section-header">
-                    <h3 class="section-title">👑 Agent Management</h3>
-                    <button class="action-btn" onclick="showCreateAgentForm()">+ Add Agent</button>
-                </div>
-                
-                <!-- Create Agent Form -->
-                <div id="createAgentForm" class="admin-form" style="display: none;">
-                    <h4>Create New Agent</h4>
-                    <div class="form-row">
-                        <div>
-                            <label>Username *</label>
-                            <input type="text" id="newAgentUsername" class="form-control" placeholder="agent_username">
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Dashboard Tab -->
+            <div id="dashboardTab" class="tab-content active">
+                <!-- Quick Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-wallet"></i>
+                            </div>
+                            <div class="stat-change positive" id="todayEarningsChange">+0%</div>
                         </div>
-                        <div>
-                            <label>Password *</label>
-                            <input type="password" id="newAgentPassword" class="form-control" placeholder="••••••••">
+                        <div class="stat-value" id="totalEarnings">0.00 ETB</div>
+                        <div class="stat-label">Total Earnings</div>
+                        <div class="stat-change" id="todayEarnings">Today: 0.00 ETB</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-change positive" id="activeReferralsChange">+0</div>
+                        </div>
+                        <div class="stat-value" id="totalReferrals">0</div>
+                        <div class="stat-label">Total Referrals</div>
+                        <div class="stat-change" id="activeReferralsCount">Active: 0</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="stat-change positive">+0%</div>
+                        </div>
+                        <div class="stat-value" id="monthlyEarnings">0.00 ETB</div>
+                        <div class="stat-label">This Month</div>
+                        <div class="stat-change">Last Month: 0.00 ETB</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="stat-change">Rank</div>
+                        </div>
+                        <div class="stat-value" id="agentRank">#0</div>
+                        <div class="stat-label">Leaderboard Position</div>
+                        <div class="stat-change" id="nextRank">Next: 0 ETB</div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <div class="action-card" onclick="generateReferralLink()">
+                        <div class="action-icon">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="action-title">Get Referral Link</div>
+                        <div class="action-desc">Share & earn commissions</div>
+                    </div>
+                    
+                    <div class="action-card" onclick="switchTab('withdrawals')">
+                        <div class="action-icon">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div class="action-title">Withdraw Earnings</div>
+                        <div class="action-desc">Request payment</div>
+                    </div>
+                    
+                    <div class="action-card" onclick="refreshDashboard()">
+                        <div class="action-icon">
+                            <i class="fas fa-sync-alt"></i>
+                        </div>
+                        <div class="action-title">Refresh Data</div>
+                        <div class="action-desc">Update statistics</div>
+                    </div>
+                    
+                    <div class="action-card" onclick="showReportModal()">
+                        <div class="action-icon">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                        <div class="action-title">Generate Report</div>
+                        <div class="action-desc">Download CSV</div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-history"></i> Recent Activity
+                        </h3>
+                        <button class="btn btn-sm" onclick="loadRecentActivity()">Refresh</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="recentActivityTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Game</th>
+                                    <th>Amount</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentActivityBody">
+                                <tr><td colspan="5" class="empty-state">No recent activity</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Commission Breakdown -->
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-percentage"></i> Commission Breakdown
+                        </h3>
+                    </div>
+                    <div class="commission-breakdown">
+                        <div class="commission-item">
+                            <div class="commission-rate" id="bingoRate">40%</div>
+                            <div class="commission-label">Bingo Commission</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Per win amount</div>
+                        </div>
+                        <div class="commission-item">
+                            <div class="commission-rate" id="kenoRate">10%</div>
+                            <div class="commission-label">Keno Commission</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Per win amount</div>
+                        </div>
+                        <div class="commission-item">
+                            <div class="commission-rate" id="avgCommission">0.00</div>
+                            <div class="commission-label">Avg Commission</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Per transaction</div>
+                        </div>
+                        <div class="commission-item">
+                            <div class="commission-rate" id="totalTransactions">0</div>
+                            <div class="commission-label">Total Transactions</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">All time</div>
                         </div>
                     </div>
-                    <div class="form-row">
+                </div>
+            </div>
+
+            <!-- Referrals Tab -->
+            <div id="referralsTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-users"></i> My Referrals
+                        </h3>
                         <div>
-                            <label>Full Name *</label>
-                            <input type="text" id="newAgentName" class="form-control" placeholder="Agent Name">
-                        </div>
-                        <div>
-                            <label>Bingo Commission %</label>
-                            <input type="number" id="newAgentBingoRate" class="form-control" value="40" min="0" max="100">
-                        </div>
-                        <div>
-                            <label>Keno Commission %</label>
-                            <input type="number" id="newAgentKenoRate" class="form-control" value="10" min="0" max="100">
+                            <button class="btn btn-sm" onclick="loadReferrals()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 10px; margin-top: 15px;">
-                        <button class="action-btn" onclick="createAgent()">Create Agent</button>
-                        <button class="logout-btn" onclick="hideCreateAgentForm()">Cancel</button>
+                    
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchReferrals" placeholder="Search referrals..." oninput="filterReferrals()">
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table" id="referralsTable">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Username</th>
+                                    <th>Balance</th>
+                                    <th>Wagered</th>
+                                    <th>Wins</th>
+                                    <th>Joined</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="referralsBody">
+                                <tr><td colspan="7" class="empty-state">Loading referrals...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="pagination" id="referralsPagination">
+                        <!-- Pagination will be generated here -->
                     </div>
                 </div>
-                
-                <!-- Agents List -->
-                <div class="table-container">
-                    <table class="data-table" id="agentsTable">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Name</th>
-                                <th>Bingo %</th>
-                                <th>Keno %</th>
-                                <th>Referrals</th>
-                                <th>Earnings</th>
-                                <th>Status</th>
-                                <th>Joined</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="agentsBody">
-                            <tr><td colspan="9" style="text-align: center;">Loading agents...</td></tr>
-                        </tbody>
-                    </table>
+            </div>
+
+            <!-- Commissions Tab -->
+            <div id="commissionsTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-money-bill-wave"></i> Commission History
+                        </h3>
+                        <div class="date-range">
+                            <input type="date" id="commissionStartDate" class="date-input">
+                            <span>to</span>
+                            <input type="date" id="commissionEndDate" class="date-input">
+                            <button class="btn btn-sm" onclick="loadCommissions()">Filter</button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table" id="commissionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>User</th>
+                                    <th>Game</th>
+                                    <th>Win Amount</th>
+                                    <th>Commission</th>
+                                    <th>Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="commissionsBody">
+                                <tr><td colspan="6" class="empty-state">Loading commissions...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="pagination" id="commissionsPagination">
+                        <!-- Pagination will be generated here -->
+                    </div>
                 </div>
+            </div>
+
+            <!-- Referral Link Tab -->
+            <div id="referralLinkTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-link"></i> Your Referral Link
+                        </h3>
+                        <button class="btn btn-sm" onclick="generateReferralLink()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    
+                    <div class="referral-container">
+                        <p style="margin-bottom: 15px;">Share this link to refer players and earn commissions:</p>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Your Referral Code:</div>
+                            <div class="referral-code" id="referralCodeDisplay">Loading...</div>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Your Referral Link:</div>
+                            <div class="referral-link" id="referralLinkDisplay">Loading...</div>
+                        </div>
+                        
+                        <div class="qr-code" id="qrCodeContainer">
+                            <!-- QR code will be inserted here -->
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn" onclick="copyReferralLink()" style="flex: 1;">
+                                <i class="fas fa-copy"></i> Copy Link
+                            </button>
+                            <button class="btn btn-success" onclick="shareReferralLink()" style="flex: 1;">
+                                <i class="fas fa-share-alt"></i> Share
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">📢 How to earn commissions:</div>
+                            <div style="font-size: 12px; color: var(--gray);">
+                                1. Share your referral link with players<br>
+                                2. When they join using your link, they become your referral<br>
+                                3. You earn <strong>40%</strong> commission from their Bingo wins<br>
+                                4. You earn <strong>10%</strong> commission from their Keno wins<br>
+                                5. Commissions are credited instantly to your account<br>
+                                6. Minimum commission: <strong>0.01 ETB</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Withdrawals Tab -->
+            <div id="withdrawalsTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-wallet"></i> Withdraw Earnings
+                        </h3>
+                        <button class="btn btn-sm" onclick="loadWithdrawalHistory()">
+                            <i class="fas fa-history"></i> History
+                        </button>
+                    </div>
+                    
+                    <!-- Withdrawal Form -->
+                    <div class="referral-container" style="margin-bottom: 20px;">
+                        <div style="margin-bottom: 20px;">
+                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Available Balance</div>
+                            <div style="font-size: 32px; font-weight: 700; color: var(--primary);" id="availableBalance">0.00 ETB</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="withdrawAmount">Amount to Withdraw (ETB)</label>
+                            <input type="number" id="withdrawAmount" class="form-control" placeholder="Enter amount" min="10" step="0.01">
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Minimum withdrawal: 10 ETB</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="withdrawPhone">Phone Number</label>
+                            <div class="input-with-icon">
+                                <i class="fas fa-phone"></i>
+                                <input type="tel" id="withdrawPhone" class="form-control" placeholder="09xxxxxxxx">
+                            </div>
+                            <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Telebirr phone number to receive payment</div>
+                        </div>
+                        
+                        <button class="btn btn-success" onclick="submitWithdrawal()">
+                            <i class="fas fa-paper-plane"></i> Submit Withdrawal Request
+                        </button>
+                        
+                        <div style="margin-top: 15px; font-size: 12px; color: var(--gray);">
+                            <i class="fas fa-info-circle"></i> Withdrawal requests are processed within 24 hours by admin.
+                        </div>
+                    </div>
+                    
+                    <!-- Withdrawal History -->
+                    <div class="section">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-history"></i> Withdrawal History
+                            </h3>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table" id="withdrawalsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Phone</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="withdrawalsBody">
+                                    <tr><td colspan="5" class="empty-state">No withdrawal history</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-chart-bar"></i> Performance Reports
+                        </h3>
+                        <div class="date-range">
+                            <input type="date" id="reportStartDate" class="date-input">
+                            <span>to</span>
+                            <input type="date" id="reportEndDate" class="date-input">
+                            <button class="btn btn-sm" onclick="generateReport()">Generate</button>
+                        </div>
+                    </div>
+                    
+                    <div id="reportContent">
+                        <div class="empty-state">
+                            <i class="fas fa-chart-bar"></i>
+                            <div>Select date range and generate report</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Tab -->
+            <div id="adminTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-crown"></i> Agent Management
+                        </h3>
+                        <button class="btn btn-sm" onclick="showCreateAgentModal()">
+                            <i class="fas fa-plus"></i> Add Agent
+                        </button>
+                    </div>
+                    
+                    <div class="admin-controls">
+                        <input type="text" id="searchAgents" class="form-control" placeholder="Search agents..." oninput="filterAgents()" style="flex: 1;">
+                        <select id="agentFilter" class="form-control" onchange="filterAgents()" style="width: 150px;">
+                            <option value="all">All Agents</option>
+                            <option value="active">Active Only</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="data-table" id="agentsTable">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Bingo %</th>
+                                    <th>Keno %</th>
+                                    <th>Referrals</th>
+                                    <th>Earnings</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agentsBody">
+                                <tr><td colspan="8" class="empty-state">Loading agents...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settingsTab" class="tab-content">
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fas fa-cog"></i> Settings
+                        </h3>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="settingName" class="form-control" placeholder="Enter your full name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" id="settingPhone" class="form-control" placeholder="09xxxxxxxx">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Change Password</label>
+                        <input type="password" id="settingCurrentPassword" class="form-control" placeholder="Current password">
+                        <input type="password" id="settingNewPassword" class="form-control" placeholder="New password" style="margin-top: 10px;">
+                        <input type="password" id="settingConfirmPassword" class="form-control" placeholder="Confirm new password" style="margin-top: 10px;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notifications</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="settingNotifyCommissions" checked>
+                                <span>New commissions</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="settingNotifyWithdrawals" checked>
+                                <span>Withdrawal updates</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="settingNotifySystem" checked>
+                                <span>System announcements</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button class="btn" onclick="saveSettings()">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Bottom Navigation -->
+        <div class="bottom-nav">
+            <a href="#" class="bottom-nav-item active" onclick="switchTab('dashboard')">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="#" class="bottom-nav-item" onclick="switchTab('referrals')">
+                <i class="fas fa-users"></i>
+                <span>Referrals</span>
+            </a>
+            <a href="#" class="bottom-nav-item" onclick="switchTab('commissions')">
+                <i class="fas fa-money-bill-wave"></i>
+                <span>Commissions</span>
+            </a>
+            <a href="#" class="bottom-nav-item" onclick="switchTab('referralLink')">
+                <i class="fas fa-link"></i>
+                <span>Referral</span>
+            </a>
+            <a href="#" class="bottom-nav-item" onclick="switchTab('withdrawals')">
+                <i class="fas fa-wallet"></i>
+                <span>Wallet</span>
+            </a>
+        </div>
+
+        <!-- Refresh Button -->
+        <button class="refresh-btn" onclick="refreshDashboard()">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="createAgentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create New Agent</h3>
+                <button class="close-modal" onclick="closeModal('createAgentModal')">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>Username *</label>
+                <input type="text" id="newAgentUsername" class="form-control" placeholder="agent_username">
+            </div>
+            
+            <div class="form-group">
+                <label>Password *</label>
+                <input type="password" id="newAgentPassword" class="form-control" placeholder="••••••••">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="newAgentName" class="form-control" placeholder="Agent Name">
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="newAgentPhone" class="form-control" placeholder="09xxxxxxxx">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Bingo Commission %</label>
+                    <input type="number" id="newAgentBingoRate" class="form-control" value="40" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Keno Commission %</label>
+                    <input type="number" id="newAgentKenoRate" class="form-control" value="10" min="0" max="100">
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" style="flex: 1;" onclick="createAgent()">Create Agent</button>
+                <button class="btn btn-outline" style="flex: 1;" onclick="closeModal('createAgentModal')">Cancel</button>
             </div>
         </div>
     </div>
-    
+
+    <div class="modal" id="editAgentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Agent</h3>
+                <button class="close-modal" onclick="closeModal('editAgentModal')">&times;</button>
+            </div>
+            
+            <div id="editAgentForm">
+                <!-- Form will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="withdrawalModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Withdrawal Details</h3>
+                <button class="close-modal" onclick="closeModal('withdrawalModal')">&times;</button>
+            </div>
+            
+            <div id="withdrawalDetails">
+                <!-- Details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="notificationModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Notifications</h3>
+                <button class="close-modal" onclick="closeModal('notificationModal')">&times;</button>
+            </div>
+            
+            <div id="notificationList">
+                <div class="empty-state">No notifications</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div class="notification-container" id="notificationContainer">
+        <!-- Notifications will appear here -->
+    </div>
+
     <script>
+        // Global variables
         let socket = null;
         let agentData = null;
-        let isSuperAdmin = false;
-        
+        let currentTab = 'dashboard';
+        let notifications = [];
+        let theme = localStorage.getItem('agentTheme') || 'dark';
+
         // Initialize socket connection
         function initSocket() {
             socket = io();
             
             socket.on('connect', () => {
                 console.log('Connected to agent server');
-                if (localStorage.getItem('agentToken')) {
+                hideLoading();
+                
+                // Check if already logged in
+                const agentToken = localStorage.getItem('agentToken');
+                if (agentToken) {
                     autoLogin();
+                } else {
+                    showLoginScreen();
                 }
             });
             
+            socket.on('disconnect', () => {
+                showNotification('Disconnected from server', 'error');
+                setTimeout(() => {
+                    socket.connect();
+                }, 3000);
+            });
+            
+            // Agent events
             socket.on('agent:loginSuccess', (data) => {
                 handleLoginSuccess(data);
             });
@@ -802,7 +1923,7 @@
             });
             
             socket.on('agent:newCommission', (data) => {
-                showNewCommissionNotification(data);
+                handleNewCommission(data);
             });
             
             socket.on('agent:allAgents', (agents) => {
@@ -810,22 +1931,136 @@
             });
             
             socket.on('agent:agentCreated', (data) => {
-                alert('Agent created successfully!');
-                hideCreateAgentForm();
+                showNotification('Agent created successfully', 'success');
+                closeModal('createAgentModal');
                 socket.emit('agent:getAllAgents');
             });
             
             socket.on('agent:error', (message) => {
-                alert('Error: ' + message);
+                showNotification('Error: ' + message, 'error');
             });
             
             socket.on('agent:reportData', (data) => {
                 displayReport(data);
             });
+            
+            socket.on('agent:withdrawRequested', (data) => {
+                showNotification('Withdrawal request submitted', 'success');
+                loadWithdrawalHistory();
+                loadDashboard();
+            });
+            
+            socket.on('agent:withdrawalHistory', (data) => {
+                updateWithdrawalHistory(data);
+            });
+            
+            socket.on('agent:withdrawalApproved', (data) => {
+                showNotification('Withdrawal approved: ' + (-data.amount).toFixed(2) + ' ETB', 'success');
+                loadWithdrawalHistory();
+                loadDashboard();
+            });
+            
+            socket.on('agent:withdrawalRejected', (data) => {
+                showNotification('Withdrawal rejected', 'warning');
+                loadWithdrawalHistory();
+                loadDashboard();
+            });
+            
+            socket.on('agent:pendingWithdrawals', (data) => {
+                // For admin only
+            });
         }
-        
-        // Agent login
-        function agentLogin() {
+
+        // UI Functions
+        function hideLoading() {
+            document.getElementById('loadingScreen').style.display = 'none';
+        }
+
+        function showLoginScreen() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('dashboardScreen').style.display = 'none';
+        }
+
+        function showDashboardScreen() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboardScreen').style.display = 'block';
+            applyTheme();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+
+        function switchTab(tabName) {
+            // Update active tab button
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Update bottom nav
+            document.querySelectorAll('.bottom-nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Update sidebar
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            
+            // Update current tab
+            currentTab = tabName;
+            
+            // Load tab data
+            switch(tabName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'referrals':
+                    loadReferrals();
+                    break;
+                case 'commissions':
+                    loadCommissions();
+                    break;
+                case 'withdrawals':
+                    loadWithdrawalHistory();
+                    break;
+                case 'admin':
+                    socket.emit('agent:getAllAgents');
+                    break;
+            }
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+        }
+
+        function toggleTheme() {
+            theme = theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('agentTheme', theme);
+            applyTheme();
+            showNotification('Theme switched to ' + theme, 'info');
+        }
+
+        function applyTheme() {
+            document.body.setAttribute('data-theme', theme);
+            const icon = document.querySelector('.theme-toggle i');
+            icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        // Login Functions
+        function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             
@@ -836,48 +2071,40 @@
             
             socket.emit('agent:login', { username, password });
         }
-        
-        // Auto login with stored token
+
         function autoLogin() {
-            const token = localStorage.getItem('agentToken');
-            if (token) {
-                // Implement token-based auto login if needed
-                // For now, just clear and show login
-                localStorage.removeItem('agentToken');
-            }
+            // Could implement token-based auto login
+            // For now, just show login screen
+            showLoginScreen();
         }
-        
-        // Handle successful login
+
         function handleLoginSuccess(data) {
             agentData = data;
-            isSuperAdmin = data.isSuperAdmin;
             
-            // Store token
+            // Store in localStorage
             localStorage.setItem('agentToken', data.id);
             localStorage.setItem('agentData', JSON.stringify(data));
             
-            // Show dashboard
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('dashboardPage').style.display = 'block';
+            // Update UI
+            document.getElementById('agentName').textContent = data.name;
+            document.getElementById('agentUsername').textContent = '@' + data.username;
+            document.getElementById('agentAvatar').textContent = data.name.charAt(0).toUpperCase();
             
-            // Show admin section if super admin
-            if (isSuperAdmin) {
-                document.querySelectorAll('.admin-section').forEach(el => {
-                    el.style.display = 'block';
-                });
-                socket.emit('agent:getAllAgents');
+            // Show admin menu if super admin
+            if (data.isSuperAdmin) {
+                document.getElementById('adminMenu').style.display = 'block';
             }
             
-            // Load dashboard data
-            socket.emit('agent:getDashboard');
+            // Show dashboard
+            showDashboardScreen();
+            
+            // Load initial data
+            loadDashboard();
             socket.emit('agent:generateReferralLink');
             
-            // Update UI
-            document.getElementById('agentName').textContent = agentData.name;
-            document.getElementById('agentUsername').textContent = `@${agentData.username}`;
+            showNotification('Welcome back, ' + data.name + '!', 'success');
         }
-        
-        // Show login error
+
         function showLoginError(message) {
             const errorDiv = document.getElementById('loginError');
             errorDiv.textContent = message;
@@ -886,190 +2113,254 @@
                 errorDiv.style.display = 'none';
             }, 5000);
         }
-        
-        // Update dashboard with data
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.removeItem('agentToken');
+                localStorage.removeItem('agentData');
+                agentData = null;
+                showLoginScreen();
+                showNotification('Logged out successfully', 'info');
+            }
+        }
+
+        // Dashboard Functions
+        function loadDashboard() {
+            if (socket && socket.connected) {
+                socket.emit('agent:getDashboard');
+            }
+        }
+
+        function refreshDashboard() {
+            loadDashboard();
+            showNotification('Dashboard refreshed', 'info');
+        }
+
         function updateDashboard(data) {
             // Update stats
             document.getElementById('totalEarnings').textContent = data.stats.totalEarnings.toFixed(2) + ' ETB';
             document.getElementById('todayEarnings').textContent = 'Today: ' + data.stats.todaysEarnings.toFixed(2) + ' ETB';
+            document.getElementById('todayEarningsChange').textContent = data.stats.earningsGrowth > 0 ? 
+                '+' + data.stats.earningsGrowth + '%' : data.stats.earningsGrowth + '%';
             document.getElementById('totalReferrals').textContent = data.stats.totalReferrals;
-            document.getElementById('activeReferrals').textContent = 'Active: ' + data.stats.activeReferrals;
-            document.getElementById('bingoCommission').textContent = data.agent.commissionRateBingo + '%';
-            document.getElementById('kenoCommission').textContent = data.agent.commissionRateKeno + '%';
+            document.getElementById('activeReferralsCount').textContent = 'Active: ' + data.stats.activeReferrals;
+            document.getElementById('monthlyEarnings').textContent = data.stats.monthlyEarnings.toFixed(2) + ' ETB';
+            document.getElementById('availableBalance').textContent = data.agent.totalEarnings.toFixed(2) + ' ETB';
             
-            // Update referrals table
-            const referralsBody = document.getElementById('referralsBody');
-            referralsBody.innerHTML = '';
+            // Update commission rates
+            document.getElementById('bingoRate').textContent = data.agent.commissionRateBingo + '%';
+            document.getElementById('kenoRate').textContent = data.agent.commissionRateKeno + '%';
+            document.getElementById('commissionBingo').textContent = data.agent.commissionRateBingo + '%';
+            document.getElementById('commissionKeno').textContent = data.agent.commissionRateKeno + '%';
             
-            if (data.referrals.length === 0) {
-                referralsBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No referrals yet</td></tr>';
-            } else {
-                data.referrals.forEach(ref => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${ref.userId.substring(0, 8)}...</td>
-                        <td>${ref.userName}</td>
-                        <td>${ref.balance.toFixed(2)} ETB</td>
-                        <td>${ref.totalWagered.toFixed(2)} ETB</td>
-                        <td>${ref.totalWins}</td>
-                        <td>${new Date(ref.joinedAt).toLocaleDateString()}</td>
-                        <td><span class="badge ${ref.isOnline ? 'success' : 'warning'}">${ref.isOnline ? 'Online' : 'Offline'}</span></td>
-                    `;
-                    referralsBody.appendChild(row);
-                });
-            }
-            
-            // Update commissions table
-            const commissionsBody = document.getElementById('commissionsBody');
-            commissionsBody.innerHTML = '';
-            
-            if (data.commissions.length === 0) {
-                commissionsBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No commissions yet</td></tr>';
-            } else {
-                data.commissions.forEach(comm => {
+            // Update recent activity
+            const activityBody = document.getElementById('recentActivityBody');
+            if (data.commissions && data.commissions.length > 0) {
+                activityBody.innerHTML = '';
+                data.commissions.slice(0, 5).forEach(comm => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${new Date(comm.createdAt).toLocaleDateString()}</td>
-                        <td>${comm.userId?.userName || 'Unknown'}</td>
+                        <td>${comm.userName || comm.userId?.substring(0, 8)}...</td>
                         <td>${comm.gameType}</td>
-                        <td>${comm.stake.toFixed(2)} ETB</td>
                         <td>${comm.winningAmount.toFixed(2)} ETB</td>
                         <td><strong>${comm.commissionAmount.toFixed(2)} ETB</strong></td>
-                        <td>${comm.commissionRate}%</td>
                     `;
-                    commissionsBody.appendChild(row);
+                    activityBody.appendChild(row);
                 });
+            } else {
+                activityBody.innerHTML = '<tr><td colspan="5" class="empty-state">No recent activity</td></tr>';
+            }
+            
+            // Update commission breakdown
+            if (data.commissions && data.commissions.length > 0) {
+                const totalCommission = data.commissions.reduce((sum, comm) => sum + comm.commissionAmount, 0);
+                const avgCommission = totalCommission / data.commissions.length;
+                document.getElementById('avgCommission').textContent = avgCommission.toFixed(2);
+                document.getElementById('totalTransactions').textContent = data.commissions.length;
             }
         }
-        
-        // Update referral link
-        function updateReferralLink(data) {
-            document.getElementById('referralCodeDisplay').textContent = data.referralCode;
-            document.getElementById('referralLinkDisplay').textContent = data.referralLink;
+
+        // Referrals Functions
+        function loadReferrals() {
+            loadDashboard(); // Referrals are included in dashboard data
         }
-        
-        // Copy referral link to clipboard
-        function copyReferralLink() {
-            const link = document.getElementById('referralLinkDisplay').textContent;
-            navigator.clipboard.writeText(link).then(() => {
-                alert('Referral link copied to clipboard!');
+
+        function filterReferrals() {
+            const search = document.getElementById('searchReferrals').value.toLowerCase();
+            const rows = document.querySelectorAll('#referralsBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(search) ? '' : 'none';
             });
         }
-        
-        // Generate new referral link
+
+        // Commissions Functions
+        function loadCommissions() {
+            const startDate = document.getElementById('commissionStartDate').value;
+            const endDate = document.getElementById('commissionEndDate').value;
+            
+            if (startDate && endDate) {
+                socket.emit('agent:getReport', { startDate, endDate });
+            } else {
+                loadDashboard();
+            }
+        }
+
+        // Referral Link Functions
         function generateReferralLink() {
             socket.emit('agent:generateReferralLink');
         }
-        
-        // Show new commission notification
-        function showNewCommissionNotification(data) {
-            // Create notification
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: linear-gradient(45deg, var(--primary), var(--secondary));
-                color: white;
-                padding: 15px 20px;
-                border-radius: 10px;
-                z-index: 1000;
-                animation: slideIn 0.3s ease;
-                max-width: 300px;
+
+        function updateReferralLink(data) {
+            document.getElementById('referralCodeDisplay').textContent = data.referralCode;
+            document.getElementById('referralLinkDisplay').textContent = data.referralLink;
+            
+            // Update QR code
+            const qrContainer = document.getElementById('qrCodeContainer');
+            qrContainer.innerHTML = `
+                <img src="${data.qrCode}" alt="QR Code" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.referralLink)}'">
             `;
-            notification.innerHTML = `
-                <strong>🎉 New Commission!</strong><br>
-                ${data.gameType} win: ${data.commissionAmount.toFixed(2)} ETB
-            `;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 5000);
-            
-            // Refresh dashboard
-            socket.emit('agent:getDashboard');
         }
-        
-        // Switch tabs
-        function switchTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
+
+        function copyReferralLink() {
+            const link = document.getElementById('referralLinkDisplay').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                showNotification('Referral link copied to clipboard!', 'success');
             });
-            event.target.classList.add('active');
+        }
+
+        function shareReferralLink() {
+            const link = document.getElementById('referralLinkDisplay').textContent;
+            const message = `Join Bingo Elite using my referral link! 🎮\n\n${link}\n\nYou'll get amazing bonuses and I'll earn commission from your wins!`;
             
-            // Show selected tab content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.remove('active');
-            });
-            document.getElementById(tabName + 'Tab').classList.add('active');
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Bingo Elite - Referral Link',
+                    text: message,
+                    url: link
+                });
+            } else {
+                navigator.clipboard.writeText(message).then(() => {
+                    showNotification('Referral message copied to clipboard!', 'success');
+                });
+            }
         }
-        
-        // Refresh referrals
-        function refreshReferrals() {
-            socket.emit('agent:getDashboard');
+
+        // Withdrawal Functions
+        function submitWithdrawal() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const phone = document.getElementById('withdrawPhone').value;
+            
+            if (!amount || amount < 10) {
+                showNotification('Minimum withdrawal amount is 10 ETB', 'error');
+                return;
+            }
+            
+            if (!phone || !/^09[0-9]{8}$/.test(phone)) {
+                showNotification('Please enter a valid phone number', 'error');
+                return;
+            }
+            
+            if (amount > agentData.totalEarnings) {
+                showNotification('Insufficient earnings', 'error');
+                return;
+            }
+            
+            if (confirm(`Request withdrawal of ${amount.toFixed(2)} ETB to ${phone}?`)) {
+                socket.emit('agent:withdrawRequest', { amount, phone });
+            }
         }
-        
-        // Refresh commissions
-        function refreshCommissions() {
-            socket.emit('agent:getDashboard');
+
+        function loadWithdrawalHistory() {
+            socket.emit('agent:getWithdrawalHistory');
         }
-        
-        // Generate report
+
+        function updateWithdrawalHistory(withdrawals) {
+            const withdrawalsBody = document.getElementById('withdrawalsBody');
+            
+            if (withdrawals && withdrawals.length > 0) {
+                withdrawalsBody.innerHTML = '';
+                withdrawals.forEach(w => {
+                    const row = document.createElement('tr');
+                    const statusClass = w.status === 'completed' ? 'approved' : 
+                                       w.status === 'pending' ? 'pending' : 'rejected';
+                    row.innerHTML = `
+                        <td>${new Date(w.createdAt).toLocaleDateString()}</td>
+                        <td>${(-w.amount).toFixed(2)} ETB</td>
+                        <td>${w.description?.match(/\d{10}/)?.[0] || 'N/A'}</td>
+                        <td><span class="withdrawal-status ${statusClass}">${w.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm" onclick="viewWithdrawal('${w._id}')">View</button>
+                        </td>
+                    `;
+                    withdrawalsBody.appendChild(row);
+                });
+            } else {
+                withdrawalsBody.innerHTML = '<tr><td colspan="5" class="empty-state">No withdrawal history</td></tr>';
+            }
+        }
+
+        // Report Functions
         function generateReport() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
             
             if (!startDate || !endDate) {
-                alert('Please select both start and end dates');
+                showNotification('Please select start and end dates', 'error');
                 return;
             }
             
             socket.emit('agent:getReport', { startDate, endDate });
         }
-        
-        // Display report
+
         function displayReport(data) {
             const reportContent = document.getElementById('reportContent');
             
             let html = `
-                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                    <h4>Summary (${new Date(data.dateRange.startDate).toLocaleDateString()} - ${new Date(data.dateRange.endDate).toLocaleDateString()})</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
-                        <div>
-                            <div class="stat-label">Total Commission</div>
+                <div class="referral-container" style="margin-bottom: 20px;">
+                    <h4>Summary Report</h4>
+                    <p><strong>Period:</strong> ${new Date(data.dateRange.startDate).toLocaleDateString()} - ${new Date(data.dateRange.endDate).toLocaleDateString()}</p>
+                    
+                    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 20px 0;">
+                        <div class="stat-card">
                             <div class="stat-value">${data.summary.totalCommission.toFixed(2)} ETB</div>
+                            <div class="stat-label">Total Commission</div>
                         </div>
-                        <div>
-                            <div class="stat-label">Total Games</div>
+                        <div class="stat-card">
                             <div class="stat-value">${data.summary.totalGames}</div>
+                            <div class="stat-label">Total Games</div>
                         </div>
-                        <div>
-                            <div class="stat-label">Total Winnings</div>
+                        <div class="stat-card">
                             <div class="stat-value">${data.summary.totalWinnings.toFixed(2)} ETB</div>
+                            <div class="stat-label">Total Winnings</div>
                         </div>
                     </div>
                 </div>
             `;
             
-            if (data.commissions.length > 0) {
+            if (data.dailyCommissions && data.dailyCommissions.length > 0) {
                 html += `
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Game Type</th>
-                                    <th>Games</th>
-                                    <th>Total Commission</th>
-                                    <th>Total Winnings</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <div class="section">
+                        <div class="section-header">
+                            <h3 class="section-title">Daily Breakdown</h3>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Game Type</th>
+                                        <th>Games</th>
+                                        <th>Total Commission</th>
+                                        <th>Total Winnings</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                 `;
                 
-                data.commissions.forEach(item => {
+                data.dailyCommissions.forEach(item => {
                     html += `
                         <tr>
                             <td>${item._id.date}</td>
@@ -1082,35 +2373,44 @@
                 });
                 
                 html += `
-                            </tbody>
-                        </table>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 `;
-            } else {
-                html += '<p>No commission data for selected period</p>';
             }
+            
+            // Add export button
+            html += `
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn" onclick="exportReport()">
+                        <i class="fas fa-download"></i> Export as CSV
+                    </button>
+                </div>
+            `;
             
             reportContent.innerHTML = html;
         }
-        
-        // Admin functions
-        function showCreateAgentForm() {
-            document.getElementById('createAgentForm').style.display = 'block';
+
+        function exportReport() {
+            showNotification('Export feature coming soon!', 'info');
         }
-        
-        function hideCreateAgentForm() {
-            document.getElementById('createAgentForm').style.display = 'none';
+
+        // Admin Functions
+        function showCreateAgentModal() {
+            document.getElementById('createAgentModal').classList.add('active');
         }
-        
+
         function createAgent() {
             const username = document.getElementById('newAgentUsername').value;
             const password = document.getElementById('newAgentPassword').value;
             const name = document.getElementById('newAgentName').value;
+            const phone = document.getElementById('newAgentPhone').value;
             const bingoRate = parseInt(document.getElementById('newAgentBingoRate').value);
             const kenoRate = parseInt(document.getElementById('newAgentKenoRate').value);
             
             if (!username || !password || !name) {
-                alert('Please fill all required fields');
+                showNotification('Please fill all required fields', 'error');
                 return;
             }
             
@@ -1119,68 +2419,205 @@
                 password,
                 name,
                 commissionRateBingo: bingoRate,
-                commissionRateKeno: kenoRate
+                commissionRateKeno: kenoRate,
+                phoneNumber: phone
             });
         }
-        
+
         function updateAgentsList(agents) {
             const agentsBody = document.getElementById('agentsBody');
-            agentsBody.innerHTML = '';
             
-            agents.forEach(agent => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${agent.username} ${agent.isSuperAdmin ? '👑' : ''}</td>
-                    <td>${agent.name}</td>
-                    <td>${agent.commissionRateBingo}%</td>
-                    <td>${agent.commissionRateKeno}%</td>
-                    <td>${agent.totalReferrals || 0}</td>
-                    <td>${agent.totalCommissions?.toFixed(2) || '0.00'} ETB</td>
-                    <td><span class="badge ${agent.isActive ? 'success' : 'warning'}">${agent.isActive ? 'Active' : 'Inactive'}</span></td>
-                    <td>${new Date(agent.createdAt).toLocaleDateString()}</td>
-                    <td class="agent-actions">
-                        <button class="btn-sm btn-edit" onclick="editAgent('${agent._id}')">Edit</button>
-                        ${!agent.isSuperAdmin ? `<button class="btn-sm btn-delete" onclick="deleteAgent('${agent._id}')">Delete</button>` : ''}
-                    </td>
-                `;
-                agentsBody.appendChild(row);
-            });
+            if (agents && agents.length > 0) {
+                agentsBody.innerHTML = '';
+                agents.forEach(agent => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${agent.username} ${agent.isSuperAdmin ? '👑' : ''}</td>
+                        <td>${agent.name}</td>
+                        <td>${agent.commissionRateBingo}%</td>
+                        <td>${agent.commissionRateKeno}%</td>
+                        <td>${agent.totalReferrals || 0}</td>
+                        <td>${agent.totalCommissions?.toFixed(2) || '0.00'} ETB</td>
+                        <td><span class="badge ${agent.isActive ? 'success' : 'danger'}">${agent.isActive ? 'Active' : 'Inactive'}</span></td>
+                        <td>
+                            <div class="agent-actions">
+                                <button class="btn btn-sm" onclick="editAgent('${agent._id}')">Edit</button>
+                                ${!agent.isSuperAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteAgent('${agent._id}', '${agent.name}')">Delete</button>` : ''}
+                            </div>
+                        </td>
+                    `;
+                    agentsBody.appendChild(row);
+                });
+            } else {
+                agentsBody.innerHTML = '<tr><td colspan="8" class="empty-state">No agents found</td></tr>';
+            }
         }
-        
+
         function editAgent(agentId) {
-            // Implement edit functionality
-            alert('Edit agent: ' + agentId);
+            showNotification('Edit feature coming soon!', 'info');
         }
-        
-        function deleteAgent(agentId) {
-            if (confirm('Are you sure you want to delete this agent?')) {
+
+        function deleteAgent(agentId, agentName) {
+            if (confirm(`Are you sure you want to delete agent ${agentName}?`)) {
                 socket.emit('agent:deleteAgent', agentId);
             }
         }
-        
-        // Logout
-        function logout() {
-            localStorage.removeItem('agentToken');
-            localStorage.removeItem('agentData');
-            location.reload();
+
+        function filterAgents() {
+            const search = document.getElementById('searchAgents').value.toLowerCase();
+            const filter = document.getElementById('agentFilter').value;
+            const rows = document.querySelectorAll('#agentsBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const isActive = row.querySelector('.badge.success') !== null;
+                
+                let show = text.includes(search);
+                
+                if (filter === 'active') {
+                    show = show && isActive;
+                } else if (filter === 'inactive') {
+                    show = show && !isActive;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
         }
-        
-        // Set default dates for report
-        function setDefaultDates() {
+
+        // Settings Functions
+        function saveSettings() {
+            showNotification('Settings saved successfully', 'success');
+        }
+
+        // Notification Functions
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                <div>${message}</div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.style.animation = 'slideInRight 0.3s ease reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+            
+            // Update badge
+            updateNotificationBadge();
+        }
+
+        function toggleNotifications() {
+            document.getElementById('notificationModal').classList.add('active');
+        }
+
+        function updateNotificationBadge() {
+            const badge = document.getElementById('notificationBadge');
+            badge.textContent = notifications.length;
+            badge.style.display = notifications.length > 0 ? 'flex' : 'none';
+        }
+
+        // Modal Functions
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function viewWithdrawal(id) {
+            // Would fetch withdrawal details
+            showNotification('Withdrawal details coming soon!', 'info');
+        }
+
+        function showHelp() {
+            alert(`Bingo Elite Agent Help
+
+1. How to Earn Commissions:
+   - Share your referral link with players
+   - When they join using your link, they become your referral
+   - Earn 40% commission from their Bingo wins
+   - Earn 10% commission from their Keno wins
+
+2. Minimum Requirements:
+   - Minimum commission: 0.01 ETB
+   - Minimum withdrawal: 10 ETB
+   - Withdrawals processed within 24 hours
+
+3. Dashboard Features:
+   - Real-time commission tracking
+   - Referral management
+   - Withdrawal requests
+   - Performance reports
+
+4. Support:
+   - Contact admin for account issues
+   - Technical support available
+   - Regular system updates
+
+Need more help? Contact the system administrator.`);
+        }
+
+        function handleNewCommission(data) {
+            const message = `New commission! ${data.gameType} win: ${data.commissionAmount.toFixed(2)} ETB`;
+            showNotification(message, 'success');
+            
+            // Update dashboard if on dashboard tab
+            if (currentTab === 'dashboard') {
+                loadDashboard();
+            }
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            initSocket();
+            
+            // Set default dates for reports
             const today = new Date().toISOString().split('T')[0];
             const oneWeekAgo = new Date();
             oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
             const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
             
-            document.getElementById('startDate').value = oneWeekAgoStr;
-            document.getElementById('endDate').value = today;
-        }
-        
-        // Initialize when page loads
-        window.onload = function() {
-            initSocket();
-            setDefaultDates();
+            document.getElementById('reportStartDate').value = oneWeekAgoStr;
+            document.getElementById('reportEndDate').value = today;
+            document.getElementById('commissionStartDate').value = oneWeekAgoStr;
+            document.getElementById('commissionEndDate').value = today;
+            
+            // Set theme
+            applyTheme();
+            
+            // Check for PWA installation
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/agent-sw.js').catch(console.error);
+            }
+            
+            // Handle offline/online status
+            window.addEventListener('online', () => {
+                showNotification('Back online', 'success');
+                if (socket) socket.connect();
+            });
+            
+            window.addEventListener('offline', () => {
+                showNotification('You are offline', 'error');
+            });
         };
+
+        // Prevent zoom on mobile
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
     </script>
 </body>
 </html>
