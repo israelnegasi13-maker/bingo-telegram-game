@@ -1,4 +1,4 @@
-// agent-logic.js - Complete Agent/Referral System for Bingo Elite
+// agent-logic.js - Complete Agent/Referral System for Bingo Elite + Keno Ultra
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -14,33 +14,35 @@ class AgentSystem {
     };
     this.processingClaims = new Map(); // user-room combo -> timestamp for preventing double claims
     this.roomWinners = new Map(); // room-stake -> winnerId for preventing double winners
-    this.activeAgents = new Set(); // Track active agent sessions
+    this.gameLogic = null; // Will be set from server.js
+    this.kenoLogic = null; // Will be set from server.js
   }
 
   async initialize() {
     console.log('✅ Agent system initializing...');
     
-    try {
-      // Create admin agent if doesn't exist
-      await this.ensureAdminAgent();
-      
-      // Load referral codes into cache
-      await this.loadReferralCache();
-      
-      // Start commission calculation job
-      this.startCommissionCalculationJob();
-      
-      // Start cleanup job for processing claims
-      this.startCleanupJob();
-      
-      // Start agent session cleanup job
-      this.startAgentSessionCleanupJob();
-      
-      console.log('👑 Agent system ready with 40% Bingo and 10% Keno commissions');
-      console.log(`📊 Referral cache loaded: ${this.referralCache.size} codes`);
-    } catch (error) {
-      console.error('❌ Agent system initialization failed:', error);
-    }
+    // Create admin agent if doesn't exist
+    await this.ensureAdminAgent();
+    
+    // Load referral codes into cache
+    await this.loadReferralCache();
+    
+    // Start commission calculation job
+    this.startCommissionCalculationJob();
+    
+    // Start cleanup job for processing claims
+    this.startCleanupJob();
+    
+    console.log('👑 Agent system ready with 40% Bingo and 10% Keno commissions');
+  }
+
+  // Set game logic references from server.js
+  setGameLogic(gameLogic) {
+    this.gameLogic = gameLogic;
+  }
+
+  setKenoLogic(kenoLogic) {
+    this.kenoLogic = kenoLogic;
   }
 
   async ensureAdminAgent() {
@@ -54,29 +56,35 @@ class AgentSystem {
           name: 'System Administrator',
           commissionRateBingo: 40,
           commissionRateKeno: 10,
+          totalEarnings: 0,
+          totalReferrals: 0,
+          activeReferrals: 0,
           isActive: true,
           isSuperAdmin: true,
           referralCode: 'ADMIN001',
           phoneNumber: '0962577855',
-          totalEarnings: 0,
-          totalReferrals: 0,
-          activeReferrals: 0
+          createdAt: new Date(),
+          updatedAt: new Date()
         });
-        console.log('👑 Default admin agent created: admin/admin123');
+        console.log('👑 Default admin agent created');
         
         // Add to cache
         this.referralCache.set('ADMIN001', adminAgent._id.toString());
+        
+        return adminAgent;
       } else {
-        console.log('👑 Admin agent already exists');
+        console.log('✅ Admin agent already exists');
+        return adminExists;
       }
     } catch (error) {
       console.error('Error creating admin agent:', error);
+      return null;
     }
   }
 
   async loadReferralCache() {
     try {
-      const agents = await this.models.Agent.find({ isActive: true }).select('referralCode _id');
+      const agents = await this.models.Agent.find({ isActive: true }).select('referralCode');
       agents.forEach(agent => {
         if (agent.referralCode) {
           this.referralCache.set(agent.referralCode, agent._id.toString());
@@ -93,13 +101,7 @@ class AgentSystem {
     try {
       const { username, password } = data;
       
-      // Validate input
-      if (!username || !password) {
-        socket.emit('agent:loginError', 'Username and password are required');
-        return;
-      }
-
-      const agent = await this.models.Agent.findOne({ username });
+      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
       if (!agent) {
         socket.emit('agent:loginError', 'Invalid username or password');
         return;
@@ -125,16 +127,7 @@ class AgentSystem {
         isSuperAdmin: agent.isSuperAdmin
       };
 
-      // Remove existing socket for this agent (prevent multiple logins)
-      if (this.agentSockets.has(agent._id.toString())) {
-        const oldSocket = this.agentSockets.get(agent._id.toString());
-        oldSocket.emit('agent:sessionTerminated', 'New login detected from another device');
-        oldSocket.disconnect();
-      }
-
-      // Store new socket
       this.agentSockets.set(agent._id.toString(), socket);
-      this.activeAgents.add(agent._id.toString());
 
       // Update last login
       agent.lastLogin = new Date();
@@ -151,19 +144,13 @@ class AgentSystem {
         activeReferrals: agent.activeReferrals,
         isSuperAdmin: agent.isSuperAdmin,
         phoneNumber: agent.phoneNumber || '',
-        referralCode: agent.referralCode || '',
-        lastLogin: agent.lastLogin
+        referralCode: agent.referralCode || ''
       });
 
-      console.log(`👤 Agent logged in: ${agent.username} (${agent.name})`);
-      
-      // Send immediate dashboard data
-      setTimeout(() => {
-        this.handleAgentDashboard(socket);
-      }, 500);
+      console.log(`👤 Agent logged in: ${agent.username}`);
     } catch (error) {
       console.error('Agent login error:', error);
-      socket.emit('agent:loginError', 'Login failed. Please try again.');
+      socket.emit('agent:loginError', 'Login failed');
     }
   }
 
@@ -257,48 +244,15 @@ class AgentSystem {
       });
 
       // Update agent's active referrals
-      if (agent.activeReferrals !== activeReferrals) {
-        agent.activeReferrals = activeReferrals;
-        await agent.save();
-      }
+      agent.activeReferrals = activeReferrals;
+      await agent.save();
 
       // Calculate earnings growth
       const todayTotal = todaysEarnings[0]?.total || 0;
       const yesterdayTotal = yesterdayEarnings[0]?.total || 0;
-      let earningsGrowth = 0;
-      
-      if (yesterdayTotal > 0 && todayTotal > 0) {
-        earningsGrowth = ((todayTotal - yesterdayTotal) / yesterdayTotal * 100);
-      } else if (todayTotal > 0 && yesterdayTotal === 0) {
-        earningsGrowth = 100;
-      } else if (todayTotal === 0 && yesterdayTotal > 0) {
-        earningsGrowth = -100;
-      }
-
-      // Get pending withdrawal requests
-      const pendingWithdrawals = await this.models.AgentTransaction.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            type: 'WITHDRAWAL',
-            status: 'pending'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: { $abs: '$amount' } },
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      // Get recent transactions
-      const recentTransactions = await this.models.AgentTransaction.find({
-        agentId: agent._id
-      })
-      .sort({ createdAt: -1 })
-      .limit(20);
+      const earningsGrowth = yesterdayTotal > 0 
+        ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1)
+        : todayTotal > 0 ? 100 : 0;
 
       socket.emit('agent:dashboardData', {
         agent: {
@@ -313,13 +267,12 @@ class AgentSystem {
           referralCode: agent.referralCode,
           phoneNumber: agent.phoneNumber || '',
           createdAt: agent.createdAt,
-          lastLogin: agent.lastLogin,
-          isSuperAdmin: agent.isSuperAdmin
+          lastLogin: agent.lastLogin
         },
         stats: {
           todaysEarnings: todayTotal,
           yesterdayEarnings: yesterdayTotal,
-          earningsGrowth: parseFloat(earningsGrowth.toFixed(1)),
+          earningsGrowth: earningsGrowth,
           monthlyEarnings: monthlyEarnings[0]?.total || 0,
           totalEarnings: agent.totalEarnings,
           totalReferrals: agent.totalReferrals,
@@ -327,23 +280,9 @@ class AgentSystem {
           pendingCommissions: await this.models.AgentCommission.countDocuments({
             agentId: agent._id,
             status: 'pending'
-          }),
-          pendingWithdrawals: {
-            amount: pendingWithdrawals[0]?.totalAmount || 0,
-            count: pendingWithdrawals[0]?.count || 0
-          }
+          })
         },
-        referrals: referrals.map(ref => ({
-          userId: ref.userId,
-          userName: ref.userName,
-          balance: ref.balance,
-          totalWagered: ref.totalWagered,
-          totalWins: ref.totalWins,
-          totalBingos: ref.totalBingos,
-          joinedAt: ref.joinedAt,
-          lastSeen: ref.lastSeen,
-          isOnline: ref.isOnline
-        })),
+        referrals: referrals,
         commissions: commissions.map(comm => ({
           id: comm._id,
           userId: comm.userId?.userId || 'Unknown',
@@ -355,14 +294,6 @@ class AgentSystem {
           commissionAmount: comm.commissionAmount,
           status: comm.status,
           createdAt: comm.createdAt
-        })),
-        recentTransactions: recentTransactions.map(tx => ({
-          id: tx._id,
-          type: tx.type,
-          amount: tx.amount,
-          description: tx.description,
-          status: tx.status,
-          createdAt: tx.createdAt
         }))
       });
     } catch (error) {
@@ -389,20 +320,13 @@ class AgentSystem {
       if (!agent.referralCode) {
         let newCode;
         let isUnique = false;
-        let attempts = 0;
         
-        while (!isUnique && attempts < 10) {
+        while (!isUnique) {
           newCode = `AGENT${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
           const existing = await this.models.Agent.findOne({ referralCode: newCode });
           if (!existing) {
             isUnique = true;
           }
-          attempts++;
-        }
-        
-        if (!isUnique) {
-          socket.emit('agent:error', 'Failed to generate unique referral code');
-          return;
         }
         
         agent.referralCode = newCode;
@@ -413,14 +337,13 @@ class AgentSystem {
       }
 
       const referralLink = `https://t.me/ethio_games1_bot?start=ref_${agent.referralCode}`;
-      const referralMessage = `🎮 Join Bingo Elite & Keno Ultra using my referral link and I'll earn commission from your wins!\n\n${referralLink}\n\nAgent: ${agent.name}\nCommission: Bingo 40%, Keno 10%`;
+      const referralMessage = `🎮 Join ETHIO GAMES and start winning big!\n\nUse my referral link to join and I'll earn commission from your wins:\n\n${referralLink}\n\n👑 Agent: ${agent.name}\n💰 Commission: 40% from Bingo, 10% from Keno`;
       
       socket.emit('agent:referralLink', {
         referralCode: agent.referralCode,
         referralLink: referralLink,
         referralMessage: referralMessage,
-        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`,
-        telegramLink: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(`Join Bingo Elite & Keno Ultra via my referral link! Agent: ${agent.name}`)}`
+        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`
       });
     } catch (error) {
       console.error('Generate link error:', error);
@@ -432,21 +355,20 @@ class AgentSystem {
   async processReferral(userId, referralCode) {
     try {
       if (!referralCode || !userId) {
-        console.log('⚠️ Missing referral code or userId');
+        console.log(`No referral code or userId provided for user: ${userId}`);
         return null;
       }
+
+      console.log(`Processing referral for user ${userId} with code: ${referralCode}`);
 
       // Check cache first
       let agentId = this.referralCache.get(referralCode);
       
       if (!agentId) {
         // Check database
-        const agent = await this.models.Agent.findOne({ 
-          referralCode: referralCode,
-          isActive: true 
-        });
+        const agent = await this.models.Agent.findOne({ referralCode });
         if (!agent) {
-          console.log(`⚠️ No active agent found for referral code: ${referralCode}`);
+          console.log(`Agent not found for referral code: ${referralCode}`);
           return null;
         }
         
@@ -454,39 +376,29 @@ class AgentSystem {
         this.referralCache.set(referralCode, agentId);
       }
 
-      // Check if user already has an agent
+      // Assign agent to user
       const user = await this.models.User.findOne({ userId });
       if (!user) {
-        console.log(`⚠️ User not found: ${userId}`);
+        console.log(`User not found: ${userId}`);
         return null;
       }
 
+      // Check if user already has an agent
       if (user.agentId) {
-        console.log(`⚠️ User ${userId} already has agent: ${user.agentId}`);
-        return user.agentId.toString();
+        console.log(`User ${userId} already has agent: ${user.agentId}`);
+        return user.agentId;
       }
 
-      // Assign agent to user
       user.agentId = agentId;
+      user.agentReferredAt = new Date();
       await user.save();
 
       // Update agent's referral count
       await this.models.Agent.findByIdAndUpdate(agentId, {
-        $inc: { totalReferrals: 1 },
-        $set: { lastReferralDate: new Date() }
+        $inc: { totalReferrals: 1 }
       });
 
-      // Create referral record
-      const referralRecord = new this.models.AgentTransaction({
-        agentId: agentId,
-        type: 'REFERRAL',
-        amount: 0,
-        description: `New referral: ${userId.substring(0, 8)}...`,
-        status: 'completed'
-      });
-      await referralRecord.save();
-
-      // Update active referrals count if user is online
+      // Update active referrals if user is online
       if (user.isOnline) {
         await this.models.Agent.findByIdAndUpdate(agentId, {
           $inc: { activeReferrals: 1 }
@@ -495,19 +407,17 @@ class AgentSystem {
 
       console.log(`✅ Referral processed: ${userId} -> Agent ${agentId} (${referralCode})`);
       
-      // Notify agent in real-time if online
+      // Send notification to agent if online
       const agentSocket = this.agentSockets.get(agentId);
       if (agentSocket) {
         agentSocket.emit('agent:newReferral', {
           userId: userId,
           userName: user.userName,
-          timestamp: new Date()
+          timestamp: new Date(),
+          referralCode: referralCode
         });
-        
-        // Refresh dashboard
-        this.handleAgentDashboard(agentSocket);
       }
-
+      
       return agentId;
     } catch (error) {
       console.error('Process referral error:', error);
@@ -520,7 +430,7 @@ class AgentSystem {
     try {
       const agent = await this.models.Agent.findById(agentId);
       if (!agent) {
-        console.log(`⚠️ Agent not found: ${agentId}`);
+        console.log(`Agent not found: ${agentId}`);
         return 0;
       }
 
@@ -547,12 +457,16 @@ class AgentSystem {
         commissionAmount = 0.01;
       }
 
-      // Round to 2 decimal places
-      commissionAmount = Math.round(commissionAmount * 100) / 100;
-
-      // Get user info for description
+      // Get user info for the commission record
       const user = await this.models.User.findOne({ userId });
-      const userName = user ? user.userName : userId.substring(0, 8);
+      if (!user) {
+        console.log(`User not found for commission: ${userId}`);
+        return 0;
+      }
+
+      // Update user's agent commission earned
+      user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
+      await user.save();
 
       // Create commission record
       const commission = new this.models.AgentCommission({
@@ -563,13 +477,14 @@ class AgentSystem {
         winningAmount: winningAmount,
         commissionRate: commissionRate,
         commissionAmount: commissionAmount,
-        status: 'completed'
+        status: 'completed',
+        createdAt: new Date()
       });
 
       await commission.save();
 
       // Update agent earnings
-      agent.totalEarnings += commissionAmount;
+      agent.totalEarnings = (agent.totalEarnings || 0) + commissionAmount;
       agent.lastCommissionDate = new Date();
       await agent.save();
 
@@ -578,13 +493,26 @@ class AgentSystem {
         agentId: agent._id,
         type: 'COMMISSION',
         amount: commissionAmount,
-        description: `${gameType} commission from ${userName} (win: ${winningAmount.toFixed(2)} ETB)`,
-        status: 'completed'
+        description: `${gameType} commission from referral ${userId.substring(0, 8)}...`,
+        status: 'completed',
+        createdAt: new Date()
       });
       await agentTransaction.save();
 
-      // Update stats with agent commission
-      await this.updateStatsWithCommission(commissionAmount);
+      // Update game transaction with agent commission
+      const gameTransaction = await this.models.Transaction.findOne({
+        userId: userId,
+        type: gameType === 'BINGO' ? 'BINGO_WIN' : 'KENO_WIN',
+        amount: winningAmount,
+        createdAt: { $gte: new Date(Date.now() - 60000) } // Within last minute
+      }).sort({ createdAt: -1 });
+
+      if (gameTransaction) {
+        gameTransaction.agentId = agent._id;
+        gameTransaction.agentCommission = commissionAmount;
+        gameTransaction.commissionProcessed = true;
+        await gameTransaction.save();
+      }
 
       // Notify agent in real-time if online
       const agentSocket = this.agentSockets.get(agentId.toString());
@@ -592,22 +520,19 @@ class AgentSystem {
         agentSocket.emit('agent:newCommission', {
           commissionId: commission._id,
           userId: userId,
-          userName: userName,
+          userName: user.userName,
           gameType: gameType,
-          stake: stake,
           winningAmount: winningAmount,
-          commissionRate: commissionRate,
           commissionAmount: commissionAmount,
+          commissionRate: commissionRate,
           timestamp: new Date()
         });
-
-        // Refresh dashboard
-        setTimeout(() => {
-          this.handleAgentDashboard(agentSocket);
-        }, 1000);
       }
 
-      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (${winningAmount.toFixed(2)} ETB win)`);
+      // Update daily stats
+      await this.updateDailyAgentStats(agentId, commissionAmount);
+
+      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (User: ${userId})`);
       return commissionAmount;
     } catch (error) {
       console.error('Record commission error:', error);
@@ -615,37 +540,31 @@ class AgentSystem {
     }
   }
 
-  // Update stats with commission
-  async updateStatsWithCommission(commissionAmount) {
+  // Update daily agent stats
+  async updateDailyAgentStats(agentId, commissionAmount) {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
       
       await this.models.Stats.findOneAndUpdate(
         { date: today },
-        { 
-          $inc: { 
-            totalAgentCommissions: commissionAmount 
-          },
-          $setOnInsert: { 
-            date: today,
-            totalWagered: 0,
-            totalEarnings: 0,
-            totalGames: 0,
-            totalUsers: 0,
-            newUsers: 0,
-            totalBingos: 0,
-            totalFourCorners: 0,
-            totalKenoWagered: 0,
-            totalKenoEarnings: 0,
-            totalKenoGames: 0,
-            totalKenoWins: 0,
-            totalAgentReferrals: 0
+        {
+          $inc: {
+            agentCommissions: commissionAmount,
+            agentReferrals: 0 // Only increment when new referrals are added
           }
         },
+        { upsert: true, new: true }
+      );
+
+      // Update active agents count
+      const activeAgents = await this.models.Agent.countDocuments({ isActive: true });
+      await this.models.Stats.findOneAndUpdate(
+        { date: today },
+        { $set: { activeAgents: activeAgents } },
         { upsert: true }
       );
     } catch (error) {
-      console.error('Update stats with commission error:', error);
+      console.error('Update daily agent stats error:', error);
     }
   }
 
@@ -660,36 +579,28 @@ class AgentSystem {
         totalWins: { $gt: 0 }
       });
 
-      let totalProcessed = 0;
-      let totalAmount = 0;
-
       for (const user of usersWithAgents) {
         // Get user's win transactions that haven't been processed for commissions
         const winTransactions = await this.models.Transaction.find({
           userId: user.userId,
           type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
           commissionProcessed: { $ne: true }
-        }).limit(100); // Limit to prevent too many at once
+        });
 
         for (const transaction of winTransactions) {
           // Determine game type from transaction description
           let gameType = '';
-          let stake = 0;
-          
           if (transaction.type === 'BINGO_WIN') {
             gameType = 'BINGO';
-            // For Bingo, stake is typically half of win amount (2x payout)
-            stake = transaction.amount / 2;
           } else if (transaction.type === 'KENO_WIN') {
             gameType = 'KENO';
-            // For Keno, we need to extract stake from description or use default
-            stake = this.extractStakeFromDescription(transaction.description) || 10;
           } else {
             continue;
           }
 
           // Record commission
-          const commissionAmount = await this.recordCommission(
+          const stake = transaction.room ? transaction.room * 2 : 10; // Approximate stake
+          await this.recordCommission(
             user.agentId,
             user.userId,
             gameType,
@@ -697,48 +608,15 @@ class AgentSystem {
             transaction.amount
           );
 
-          if (commissionAmount > 0) {
-            // Mark as processed
-            transaction.commissionProcessed = true;
-            await transaction.save();
-            
-            totalProcessed++;
-            totalAmount += commissionAmount;
-          }
+          // Mark as processed
+          transaction.commissionProcessed = true;
+          await transaction.save();
         }
       }
 
-      if (totalProcessed > 0) {
-        console.log(`✅ Processed ${totalProcessed} pending commissions, total: ${totalAmount.toFixed(2)} ETB`);
-      }
+      console.log('✅ Pending commissions calculation completed');
     } catch (error) {
       console.error('Calculate pending commissions error:', error);
-    }
-  }
-
-  // Extract stake from transaction description
-  extractStakeFromDescription(description) {
-    try {
-      // Look for patterns like "Stake: 10 ETB" or "10 ETB stake"
-      const stakeMatch = description.match(/(\d+(\.\d+)?)\s*ETB/);
-      if (stakeMatch) {
-        return parseFloat(stakeMatch[1]);
-      }
-      
-      // Look for numbers in description
-      const numberMatch = description.match(/\d+(\.\d+)?/);
-      if (numberMatch) {
-        const amount = parseFloat(numberMatch[0]);
-        // Common Keno stakes: 5, 10, 20, 50, 100
-        const validStakes = [5, 10, 20, 50, 100];
-        if (validStakes.includes(amount)) {
-          return amount;
-        }
-      }
-      
-      return 0;
-    } catch (error) {
-      return 0;
     }
   }
 
@@ -797,18 +675,13 @@ class AgentSystem {
             { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
           ]);
 
-          // Check if agent is online
-          const isOnline = this.activeAgents.has(agent._id.toString());
-
           return {
             ...agent.toObject(),
             totalCommissions: totalCommissions[0]?.total || 0,
             totalReferrals: totalReferrals,
             activeReferrals: activeReferrals,
             todaysEarnings: todaysEarnings[0]?.total || 0,
-            pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
-            isOnline: isOnline,
-            lastSeen: isOnline ? new Date() : agent.lastLogin
+            pendingWithdrawals: pendingWithdrawals[0]?.total || 0
           };
         })
       );
@@ -828,7 +701,7 @@ class AgentSystem {
         return;
       }
 
-      const { username, password, name, commissionRateBingo, commissionRateKeno, phoneNumber, isSuperAdmin } = data;
+      const { username, password, name, commissionRateBingo, commissionRateKeno, phoneNumber } = data;
 
       // Validate input
       if (!username || !password || !name) {
@@ -846,22 +719,8 @@ class AgentSystem {
         return;
       }
 
-      // Validate commission rates
-      const bingoRate = parseInt(commissionRateBingo) || 40;
-      const kenoRate = parseInt(commissionRateKeno) || 10;
-      
-      if (bingoRate < 0 || bingoRate > 100) {
-        socket.emit('agent:error', 'Bingo commission rate must be between 0 and 100');
-        return;
-      }
-      
-      if (kenoRate < 0 || kenoRate > 100) {
-        socket.emit('agent:error', 'Keno commission rate must be between 0 and 100');
-        return;
-      }
-
       // Check if agent exists
-      const existingAgent = await this.models.Agent.findOne({ username });
+      const existingAgent = await this.models.Agent.findOne({ username: username.toLowerCase() });
       if (existingAgent) {
         socket.emit('agent:error', 'Username already exists');
         return;
@@ -873,20 +732,13 @@ class AgentSystem {
       // Generate unique referral code
       let referralCode;
       let isUnique = false;
-      let attempts = 0;
       
-      while (!isUnique && attempts < 10) {
+      while (!isUnique) {
         referralCode = `AGENT${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
         const existing = await this.models.Agent.findOne({ referralCode });
         if (!existing) {
           isUnique = true;
         }
-        attempts++;
-      }
-      
-      if (!isUnique) {
-        socket.emit('agent:error', 'Failed to generate unique referral code');
-        return;
       }
 
       // Create agent
@@ -894,15 +746,17 @@ class AgentSystem {
         username: username.toLowerCase(),
         password: hashedPassword,
         name,
-        commissionRateBingo: bingoRate,
-        commissionRateKeno: kenoRate,
+        commissionRateBingo: commissionRateBingo || 40,
+        commissionRateKeno: commissionRateKeno || 10,
+        totalEarnings: 0,
+        totalReferrals: 0,
+        activeReferrals: 0,
         referralCode,
         phoneNumber: phoneNumber || '',
         isActive: true,
-        isSuperAdmin: isSuperAdmin || false,
-        totalEarnings: 0,
-        totalReferrals: 0,
-        activeReferrals: 0
+        isSuperAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
 
       await agent.save();
@@ -919,9 +773,7 @@ class AgentSystem {
           referralCode: agent.referralCode,
           commissionRateBingo: agent.commissionRateBingo,
           commissionRateKeno: agent.commissionRateKeno,
-          isSuperAdmin: agent.isSuperAdmin,
-          phoneNumber: agent.phoneNumber,
-          createdAt: agent.createdAt
+          phoneNumber: agent.phoneNumber
         }
       });
 
@@ -930,8 +782,8 @@ class AgentSystem {
         agentId: agent._id,
         username: agent.username,
         name: agent.name,
-        createdAt: new Date(),
-        createdBy: socket.agentData.username
+        referralCode: agent.referralCode,
+        createdAt: new Date()
       });
 
       console.log(`👤 New agent created: ${agent.username} by ${socket.agentData.username}`);
@@ -956,9 +808,9 @@ class AgentSystem {
         return;
       }
 
-      // Don't allow updating admin's own super admin status to false
-      if (updates.isSuperAdmin === false && agentId.toString() === socket.agentId) {
-        socket.emit('agent:error', 'Cannot remove your own admin status');
+      // Don't allow updating admin's own super admin status
+      if (updates.isSuperAdmin && agentId.toString() === socket.agentId) {
+        socket.emit('agent:error', 'Cannot modify your own admin status');
         return;
       }
 
@@ -971,11 +823,12 @@ class AgentSystem {
 
       // If updating username, check if it's available
       if (updates.username && updates.username !== agent.username) {
-        const existing = await this.models.Agent.findOne({ username: updates.username });
+        const existing = await this.models.Agent.findOne({ username: updates.username.toLowerCase() });
         if (existing && existing._id.toString() !== agentId.toString()) {
           socket.emit('agent:error', 'Username already taken');
           return;
         }
+        updates.username = updates.username.toLowerCase();
       }
 
       // If updating password, hash it
@@ -985,23 +838,6 @@ class AgentSystem {
           return;
         }
         updates.password = await bcrypt.hash(updates.password, 10);
-      }
-
-      // If updating commission rates, validate them
-      if (updates.commissionRateBingo !== undefined) {
-        const rate = parseInt(updates.commissionRateBingo);
-        if (isNaN(rate) || rate < 0 || rate > 100) {
-          socket.emit('agent:error', 'Bingo commission rate must be between 0 and 100');
-          return;
-        }
-      }
-      
-      if (updates.commissionRateKeno !== undefined) {
-        const rate = parseInt(updates.commissionRateKeno);
-        if (isNaN(rate) || rate < 0 || rate > 100) {
-          socket.emit('agent:error', 'Keno commission rate must be between 0 and 100');
-          return;
-        }
       }
 
       // If updating referral code, check if it's available
@@ -1017,6 +853,7 @@ class AgentSystem {
         this.referralCache.set(updates.referralCode, agentId.toString());
       }
 
+      updates.updatedAt = new Date();
       const updatedAgent = await this.models.Agent.findByIdAndUpdate(
         agentId,
         { $set: updates },
@@ -1040,11 +877,6 @@ class AgentSystem {
           message: 'Your profile has been updated by admin',
           updates: updates
         });
-        
-        // Refresh dashboard if agent is viewing it
-        setTimeout(() => {
-          this.handleAgentDashboard(agentSocket);
-        }, 500);
       }
 
       console.log(`👤 Agent updated: ${updatedAgent.username} by ${socket.agentData.username}`);
@@ -1097,24 +929,29 @@ class AgentSystem {
 
       // Mark agent as inactive instead of deleting (soft delete)
       agent.isActive = false;
+      agent.updatedAt = new Date();
       await agent.save();
 
       // Remove agent from online sockets
       this.agentSockets.delete(agentId.toString());
-      this.activeAgents.delete(agentId.toString());
-
-      // Disconnect agent socket if connected
-      const agentSocket = this.agentSockets.get(agentId.toString());
-      if (agentSocket) {
-        agentSocket.emit('agent:sessionTerminated', 'Your agent account has been deactivated');
-        agentSocket.disconnect();
-      }
 
       socket.emit('agent:agentDeleted', {
         message: 'Agent deactivated successfully',
         agentId: agentId,
         agentName: agent.name
       });
+
+      // Remove agent from user records
+      await this.models.User.updateMany(
+        { agentId: agent._id },
+        { 
+          $unset: { 
+            agentId: "",
+            agentReferredAt: "",
+            agentCommissionEarned: "" 
+          } 
+        }
+      );
 
       console.log(`👤 Agent deactivated: ${agent.username} by ${socket.agentData.username}`);
     } catch (error) {
@@ -1152,6 +989,7 @@ class AgentSystem {
       // Hash new password
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       agent.password = hashedPassword;
+      agent.updatedAt = new Date();
       await agent.save();
 
       socket.emit('agent:passwordReset', {
@@ -1176,14 +1014,9 @@ class AgentSystem {
       }
 
       const { startDate, endDate, agentId } = data;
-      
-      // Default to last 30 days if no dates provided
-      const end = endDate ? new Date(endDate) : new Date();
-      const start = startDate ? new Date(startDate) : new Date(end);
-      start.setDate(start.getDate() - 30);
-      
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      start.setHours(0, 0, 0, 0);
 
       let targetAgentId = socket.agentId;
       
@@ -1237,8 +1070,7 @@ class AgentSystem {
             _id: "$userId",
             totalCommission: { $sum: "$commissionAmount" },
             totalGames: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" },
-            averageWinning: { $avg: "$winningAmount" }
+            totalWinnings: { $sum: "$winningAmount" }
           }
         },
         { $sort: { totalCommission: -1 } },
@@ -1254,8 +1086,7 @@ class AgentSystem {
             totalCommission: { $sum: "$commissionAmount" },
             totalGames: { $sum: 1 },
             totalWinnings: { $sum: "$winningAmount" },
-            averageCommission: { $avg: "$commissionAmount" },
-            averageWinning: { $avg: "$winningAmount" }
+            averageCommission: { $avg: "$commissionAmount" }
           }
         }
       ]);
@@ -1270,7 +1101,6 @@ class AgentSystem {
             totalGames: { $sum: 1 },
             totalWinnings: { $sum: "$winningAmount" },
             averageCommission: { $avg: "$commissionAmount" },
-            averageWinning: { $avg: "$winningAmount" },
             minCommission: { $min: "$commissionAmount" },
             maxCommission: { $max: "$commissionAmount" }
           }
@@ -1280,30 +1110,19 @@ class AgentSystem {
       // Get agent info
       const agent = await this.models.Agent.findById(targetAgentId).select('name username referralCode');
 
-      // Format the data for easier consumption
-      const formattedDailyCommissions = dailyCommissions.map(item => ({
-        date: item._id.date,
-        gameType: item._id.gameType,
-        totalCommission: item.totalCommission,
-        totalGames: item.totalGames,
-        totalWinnings: item.totalWinnings,
-        averageCommission: item.averageCommission
-      }));
-
-      const formattedHourlyDistribution = hourlyDistribution.map(item => ({
-        hour: item._id,
-        totalCommission: item.totalCommission,
-        count: item.count
-      }));
-
       socket.emit('agent:reportData', {
         agent: agent ? {
           name: agent.name,
           username: agent.username,
           referralCode: agent.referralCode
         } : null,
-        dailyCommissions: formattedDailyCommissions,
-        hourlyDistribution: formattedHourlyDistribution,
+        period: {
+          startDate: start,
+          endDate: end,
+          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+        },
+        dailyCommissions: dailyCommissions,
+        hourlyDistribution: hourlyDistribution,
         topReferrals: topReferrals,
         gameTypeBreakdown: gameTypeBreakdown,
         summary: summary[0] || { 
@@ -1311,14 +1130,8 @@ class AgentSystem {
           totalGames: 0, 
           totalWinnings: 0,
           averageCommission: 0,
-          averageWinning: 0,
           minCommission: 0,
           maxCommission: 0
-        },
-        dateRange: { 
-          startDate: start, 
-          endDate: end,
-          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
         }
       });
     } catch (error) {
@@ -1379,13 +1192,9 @@ class AgentSystem {
 
       const csvData = csvRows.join('\n');
 
-      // Get agent info for filename
-      const agent = await this.models.Agent.findById(agentId).select('username');
-      const agentUsername = agent ? agent.username : agentId;
-
       socket.emit('agent:exportData', {
         csvData: csvData,
-        filename: `agent_${agentUsername}_${new Date().toISOString().split('T')[0]}.csv`,
+        filename: `agent_${agentId}_${new Date().toISOString().split('T')[0]}.csv`,
         totalRecords: commissions.length
       });
     } catch (error) {
@@ -1403,24 +1212,6 @@ class AgentSystem {
       }
 
       const { amount, phoneNumber } = data;
-      
-      if (!amount || !phoneNumber) {
-        socket.emit('agent:error', 'Amount and phone number are required');
-        return;
-      }
-
-      const amountNum = parseFloat(amount);
-      if (isNaN(amountNum) || amountNum <= 0) {
-        socket.emit('agent:error', 'Invalid amount');
-        return;
-      }
-
-      // Validate phone number format (Ethiopian)
-      if (!/^09[0-9]{8}$/.test(phoneNumber)) {
-        socket.emit('agent:error', 'Invalid phone number format. Must be 09xxxxxxxx (10 digits)');
-        return;
-      }
-
       const agent = await this.models.Agent.findById(socket.agentId);
       
       if (!agent) {
@@ -1428,14 +1219,21 @@ class AgentSystem {
         return;
       }
 
-      if (amountNum > agent.totalEarnings) {
-        socket.emit('agent:error', `Insufficient earnings. Your balance: ${agent.totalEarnings.toFixed(2)} ETB`);
+      // Validate amount
+      const amountNum = parseFloat(amount);
+      if (isNaN(amountNum) || amountNum <= 0) {
+        socket.emit('agent:error', 'Invalid amount');
         return;
       }
 
-      // Minimum withdrawal 10 ETB
-      if (amountNum < 10) {
-        socket.emit('agent:error', 'Minimum withdrawal is 10 ETB');
+      if (amountNum > agent.totalEarnings) {
+        socket.emit('agent:error', 'Insufficient earnings');
+        return;
+      }
+
+      // Validate phone number (Ethiopian format)
+      if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+        socket.emit('agent:error', 'Invalid phone number. Must be Ethiopian format (09xxxxxxxx)');
         return;
       }
 
@@ -1444,29 +1242,26 @@ class AgentSystem {
         agentId: agent._id,
         type: 'WITHDRAWAL',
         amount: -amountNum,
-        description: `Withdrawal request to ${phoneNumber}`,
-        status: 'pending'
+        description: `Agent withdrawal request - Phone: ${phoneNumber}`,
+        status: 'pending',
+        createdAt: new Date()
       });
 
       await transaction.save();
 
       // Update agent earnings (subtract pending withdrawal)
       agent.totalEarnings -= amountNum;
+      agent.updatedAt = new Date();
       await agent.save();
 
       socket.emit('agent:withdrawRequested', {
-        message: 'Withdrawal request submitted successfully',
+        message: 'Withdrawal request submitted',
         transactionId: transaction._id,
         amount: amountNum,
         phoneNumber: phoneNumber,
         status: 'pending',
         timestamp: new Date()
       });
-
-      // Refresh dashboard
-      setTimeout(() => {
-        this.handleAgentDashboard(socket);
-      }, 500);
 
       // Notify admin agents
       this.broadcastToAdmins('agent:newWithdrawalRequest', {
@@ -1516,11 +1311,6 @@ class AgentSystem {
           amount: -transaction.amount,
           timestamp: new Date()
         });
-        
-        // Refresh dashboard
-        setTimeout(() => {
-          this.handleAgentDashboard(agentSocket);
-        }, 500);
       }
 
       socket.emit('agent:withdrawalApprovedAdmin', {
@@ -1559,6 +1349,7 @@ class AgentSystem {
       const agent = await this.models.Agent.findById(transaction.agentId);
       if (agent) {
         agent.totalEarnings += (-transaction.amount);
+        agent.updatedAt = new Date();
         await agent.save();
       }
 
@@ -1574,11 +1365,6 @@ class AgentSystem {
           amount: -transaction.amount,
           timestamp: new Date()
         });
-        
-        // Refresh dashboard
-        setTimeout(() => {
-          this.handleAgentDashboard(agentSocket);
-        }, 500);
       }
 
       socket.emit('agent:withdrawalRejectedAdmin', {
@@ -1609,7 +1395,7 @@ class AgentSystem {
 
       socket.emit('agent:withdrawalHistory', withdrawals.map(w => ({
         id: w._id,
-        amount: w.amount,
+        amount: -w.amount,
         description: w.description,
         status: w.status,
         createdAt: w.createdAt
@@ -1633,19 +1419,12 @@ class AgentSystem {
   handleAgentDisconnect(socket) {
     if (socket.agentId) {
       this.agentSockets.delete(socket.agentId);
-      this.activeAgents.delete(socket.agentId);
       console.log(`👤 Agent disconnected: ${socket.agentData?.username}`);
     }
   }
 
   // Start commission calculation job (runs every 5 minutes)
   startCommissionCalculationJob() {
-    // Run immediately on startup
-    setTimeout(() => {
-      this.calculatePendingCommissions();
-    }, 10000); // 10 seconds after startup
-
-    // Then run every 5 minutes
     setInterval(async () => {
       try {
         await this.calculatePendingCommissions();
@@ -1673,20 +1452,6 @@ class AgentSystem {
         }
       }
     }, 60 * 1000); // 1 minute
-  }
-
-  // Agent session cleanup job
-  startAgentSessionCleanupJob() {
-    setInterval(() => {
-      // Clean up stale agent sessions
-      const now = Date.now();
-      this.agentSockets.forEach((socket, agentId) => {
-        if (socket.disconnected) {
-          this.agentSockets.delete(agentId);
-          this.activeAgents.delete(agentId);
-        }
-      });
-    }, 5 * 60 * 1000); // 5 minutes
   }
 
   // Get agent by referral code (utility method)
@@ -1776,10 +1541,10 @@ class AgentSystem {
 
       socket.emit('agent:pendingWithdrawals', withdrawals.map(w => ({
         id: w._id,
-        agentId: w.agentId?._id,
-        agentName: w.agentId?.name,
-        agentUsername: w.agentId?.username,
-        agentPhone: w.agentId?.phoneNumber,
+        agentId: w.agentId._id,
+        agentName: w.agentId.name,
+        agentUsername: w.agentId.username,
+        agentPhone: w.agentId.phoneNumber,
         amount: -w.amount,
         description: w.description,
         createdAt: w.createdAt
@@ -1795,6 +1560,7 @@ class AgentSystem {
     try {
       const user = await this.models.User.findOne({ userId });
       if (!user || !user.agentId) {
+        console.log(`No agent for user ${userId} or user not found`);
         return 0;
       }
 
@@ -1806,6 +1572,20 @@ class AgentSystem {
         stake,
         winningAmount
       );
+
+      // Update room history with agent commission
+      if (room && room._id) {
+        await this.models.Room.findByIdAndUpdate(room._id, {
+          $push: {
+            gameHistory: {
+              $each: [{
+                agentCommission: commissionAmount
+              }],
+              $position: -1
+            }
+          }
+        });
+      }
 
       return commissionAmount;
     } catch (error) {
@@ -1819,6 +1599,7 @@ class AgentSystem {
     try {
       const user = await this.models.User.findOne({ userId });
       if (!user || !user.agentId) {
+        console.log(`No agent for user ${userId} or user not found`);
         return 0;
       }
 
@@ -1857,6 +1638,7 @@ class AgentSystem {
 
       const oldAgentId = user.agentId;
       user.agentId = agentId;
+      user.agentReferredAt = new Date();
       await user.save();
 
       // Update agent referral counts
@@ -1867,11 +1649,6 @@ class AgentSystem {
       }
 
       if (agentId) {
-        const agent = await this.models.Agent.findById(agentId);
-        if (!agent) {
-          return { success: false, message: 'Agent not found' };
-        }
-
         await this.models.Agent.findByIdAndUpdate(agentId, {
           $inc: { totalReferrals: 1 }
         });
@@ -1882,16 +1659,6 @@ class AgentSystem {
             $inc: { activeReferrals: 1 }
           });
         }
-
-        // Create referral record
-        const referralRecord = new this.models.AgentTransaction({
-          agentId: agentId,
-          type: 'REFERRAL',
-          amount: 0,
-          description: `Manual assignment: ${userId.substring(0, 8)}...`,
-          status: 'completed'
-        });
-        await referralRecord.save();
       }
 
       return { 
@@ -1920,37 +1687,32 @@ class AgentSystem {
         query = { userId: /^tg_/ }; // Users with Telegram IDs
       } else if (pattern === 'all') {
         query = { agentId: { $exists: false } }; // Users without agent
-      } else if (pattern === 'orphaned') {
-        query = { agentId: { $exists: false }, isOnline: true }; // Online users without agent
+      } else if (pattern === 'active') {
+        query = { isOnline: true, agentId: { $exists: false } }; // Active users without agent
       }
 
       const users = await this.models.User.find(query);
       let assignedCount = 0;
-      let skippedCount = 0;
 
       for (const user of users) {
         if (!user.agentId) {
           user.agentId = agentId;
+          user.agentReferredAt = new Date();
           await user.save();
           assignedCount++;
-        } else {
-          skippedCount++;
         }
       }
 
       // Update agent referral count
-      if (assignedCount > 0) {
-        await this.models.Agent.findByIdAndUpdate(agentId, {
-          $inc: { totalReferrals: assignedCount }
-        });
-      }
+      await this.models.Agent.findByIdAndUpdate(agentId, {
+        $inc: { totalReferrals: assignedCount }
+      });
 
       return { 
         success: true, 
-        message: `Assigned ${assignedCount} users to agent ${agent.username} (${skippedCount} skipped)`,
+        message: `Assigned ${assignedCount} users to agent ${agent.username}`,
         agent: agent.username,
-        assignedCount,
-        skippedCount
+        assignedCount
       };
     } catch (error) {
       console.error('Bulk assign users error:', error);
@@ -2002,8 +1764,7 @@ class AgentSystem {
             },
             totalCommission: { $sum: "$commissionAmount" },
             count: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" },
-            averageCommission: { $avg: "$commissionAmount" }
+            totalWinnings: { $sum: "$winningAmount" }
           }
         }
       ]);
@@ -2032,51 +1793,26 @@ class AgentSystem {
         }
       ]);
 
-      // Get withdrawal stats
-      const withdrawalStats = await this.models.AgentTransaction.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            type: 'WITHDRAWAL',
-            createdAt: { $gte: startDate },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalWithdrawn: { $sum: { $abs: "$amount" } },
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      // Format commissions by game type
-      const commissionByGame = {};
-      commissions.forEach(commission => {
-        commissionByGame[commission._id.gameType] = {
-          totalCommission: commission.totalCommission,
-          count: commission.count,
-          totalWinnings: commission.totalWinnings,
-          averageCommission: commission.averageCommission
-        };
-      });
-
       return {
         agent: {
           id: agent._id,
           name: agent.name,
           username: agent.username,
-          referralCode: agent.referralCode,
-          commissionRateBingo: agent.commissionRateBingo,
-          commissionRateKeno: agent.commissionRateKeno
+          referralCode: agent.referralCode
         },
         period: {
           startDate,
           endDate: new Date(),
           type: period
         },
-        commissions: commissionByGame,
+        commissions: commissions.reduce((acc, curr) => {
+          acc[curr._id.gameType] = {
+            totalCommission: curr.totalCommission,
+            count: curr.count,
+            totalWinnings: curr.totalWinnings
+          };
+          return acc;
+        }, {}),
         referrals: referralStats[0] || {
           totalReferrals: 0,
           activeReferrals: 0,
@@ -2084,16 +1820,10 @@ class AgentSystem {
           totalWins: 0,
           totalBingos: 0
         },
-        withdrawals: withdrawalStats[0] || {
-          totalWithdrawn: 0,
-          count: 0
-        },
         summary: {
           totalCommission: commissions.reduce((sum, curr) => sum + curr.totalCommission, 0),
           totalReferrals: referralStats[0]?.totalReferrals || 0,
-          activeReferrals: referralStats[0]?.activeReferrals || 0,
-          totalWithdrawn: withdrawalStats[0]?.totalWithdrawn || 0,
-          netEarnings: (commissions.reduce((sum, curr) => sum + curr.totalCommission, 0) - (withdrawalStats[0]?.totalWithdrawn || 0))
+          activeReferrals: referralStats[0]?.activeReferrals || 0
         }
       };
     } catch (error) {
@@ -2191,15 +1921,15 @@ class AgentSystem {
             agentId: "$_id",
             name: "$agent.name",
             username: "$agent.username",
+            referralCode: "$agent.referralCode",
             totalCommission: 1,
             bingoCommission: 1,
             kenoCommission: 1,
             totalGames: 1,
             bingoGames: 1,
             kenoGames: 1,
-            referralCode: "$agent.referralCode",
-            totalReferrals: "$agent.totalReferrals",
-            activeReferrals: "$agent.activeReferrals"
+            commissionRateBingo: "$agent.commissionRateBingo",
+            commissionRateKeno: "$agent.commissionRateKeno"
           }
         },
         { $sort: { totalCommission: -1 } },
@@ -2227,67 +1957,22 @@ class AgentSystem {
         .sort({ joinedAt: -1 })
         .limit(100);
 
-      // Get commission stats for each referral
-      const referralsWithStats = await Promise.all(
-        directReferrals.map(async (referral) => {
-          const commissionStats = await this.models.AgentCommission.aggregate([
-            {
-              $match: {
-                agentId: agent._id,
-                userId: referral.userId,
-                status: 'completed'
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                totalCommission: { $sum: "$commissionAmount" },
-                totalGames: { $sum: 1 },
-                bingoGames: {
-                  $sum: { $cond: [{ $eq: ["$gameType", "BINGO"] }, 1, 0] }
-                },
-                kenoGames: {
-                  $sum: { $cond: [{ $eq: ["$gameType", "KENO"] }, 1, 0] }
-                }
-              }
-            }
-          ]);
-
-          return {
-            userId: referral.userId,
-            userName: referral.userName,
-            balance: referral.balance,
-            totalWagered: referral.totalWagered,
-            totalWins: referral.totalWins,
-            totalBingos: referral.totalBingos,
-            isOnline: referral.isOnline,
-            joinedAt: referral.joinedAt,
-            lastSeen: referral.lastSeen,
-            commissionStats: commissionStats[0] || {
-              totalCommission: 0,
-              totalGames: 0,
-              bingoGames: 0,
-              kenoGames: 0
-            }
-          };
-        })
-      );
-
+      // For each direct referral, get their sub-referrals (if any)
+      // This is a simplified version - in a real system, you might have multi-level referrals
+      
       return {
         agent: {
           id: agent._id,
           name: agent.name,
           username: agent.username,
           referralCode: agent.referralCode,
-          commissionRateBingo: agent.commissionRateBingo,
-          commissionRateKeno: agent.commissionRateKeno
+          totalEarnings: agent.totalEarnings
         },
-        directReferrals: referralsWithStats,
+        directReferrals: directReferrals,
         stats: {
           totalDirectReferrals: directReferrals.length,
           activeDirectReferrals: directReferrals.filter(r => r.isOnline).length,
-          totalCommission: agent.totalEarnings,
-          avgCommissionPerReferral: directReferrals.length > 0 ? agent.totalEarnings / directReferrals.length : 0
+          totalCommission: agent.totalEarnings
         }
       };
     } catch (error) {
@@ -2309,6 +1994,7 @@ class AgentSystem {
       agent.totalReferrals = 0;
       agent.activeReferrals = 0;
       agent.lastCommissionDate = null;
+      agent.updatedAt = new Date();
       await agent.save();
 
       // Delete all commissions and transactions
@@ -2318,7 +2004,13 @@ class AgentSystem {
       // Remove agent from user records
       await this.models.User.updateMany(
         { agentId: agent._id },
-        { $unset: { agentId: "" } }
+        { 
+          $unset: { 
+            agentId: "",
+            agentReferredAt: "",
+            agentCommissionEarned: ""
+          } 
+        }
       );
 
       return { 
@@ -2333,135 +2025,409 @@ class AgentSystem {
     }
   }
 
-  // Get agent's real-time stats
-  async getAgentRealtimeStats(agentId) {
+  // Get total agent earnings (for display in admin panel)
+  async getTotalAgentEarnings() {
     try {
-      const agent = await this.models.Agent.findById(agentId);
+      const result = await this.models.Agent.aggregate([
+        { $match: { isActive: true } },
+        { $group: { _id: null, total: { $sum: '$totalEarnings' } } }
+      ]);
+      
+      return result[0]?.total || 0;
+    } catch (error) {
+      console.error('Get total agent earnings error:', error);
+      return 0;
+    }
+  }
+
+  // Get agent earnings by date range
+  async getAgentEarningsByDateRange(agentId, startDate, endDate) {
+    try {
+      const result = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            agentId: agentId,
+            status: 'completed',
+            createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) }
+          }
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            totalCommission: { $sum: '$commissionAmount' },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id': 1 } }
+      ]);
+      
+      return result;
+    } catch (error) {
+      console.error('Get agent earnings by date range error:', error);
+      return [];
+    }
+  }
+
+  // Get top performing agents by game type
+  async getTopAgentsByGameType(gameType, limit = 5) {
+    try {
+      const result = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            gameType: gameType,
+            status: 'completed',
+            createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+          }
+        },
+        {
+          $group: {
+            _id: '$agentId',
+            totalCommission: { $sum: '$commissionAmount' },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $lookup: {
+            from: 'agents',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'agent'
+          }
+        },
+        { $unwind: '$agent' },
+        { $match: { 'agent.isActive': true } },
+        {
+          $project: {
+            agentId: '$_id',
+            name: '$agent.name',
+            username: '$agent.username',
+            referralCode: '$agent.referralCode',
+            totalCommission: 1,
+            count: 1
+          }
+        },
+        { $sort: { totalCommission: -1 } },
+        { $limit: limit }
+      ]);
+      
+      return result;
+    } catch (error) {
+      console.error('Get top agents by game type error:', error);
+      return [];
+    }
+  }
+
+  // Get agent's active referrals count
+  async getAgentActiveReferrals(agentId) {
+    try {
+      return await this.models.User.countDocuments({
+        agentId: agentId,
+        isOnline: true
+      });
+    } catch (error) {
+      console.error('Get agent active referrals error:', error);
+      return 0;
+    }
+  }
+
+  // Update agent's active referrals (called when user goes online/offline)
+  async updateAgentActiveReferrals(userId, isOnline) {
+    try {
+      const user = await this.models.User.findOne({ userId });
+      if (!user || !user.agentId) {
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(user.agentId);
       if (!agent) {
+        return;
+      }
+
+      if (isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      } else {
+        agent.activeReferrals = Math.max(0, (agent.activeReferrals || 0) - 1);
+      }
+      
+      agent.updatedAt = new Date();
+      await agent.save();
+    } catch (error) {
+      console.error('Update agent active referrals error:', error);
+    }
+  }
+
+  // Get agent's total referrals with statistics
+  async getAgentReferralsWithStats(agentId) {
+    try {
+      const referrals = await this.models.User.find({ agentId: agentId })
+        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen')
+        .sort({ joinedAt: -1 });
+
+      const stats = await this.models.User.aggregate([
+        { $match: { agentId: agentId } },
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: '$balance' },
+            totalWagered: { $sum: '$totalWagered' },
+            totalWins: { $sum: '$totalWins' },
+            totalBingos: { $sum: '$totalBingos' },
+            activeCount: {
+              $sum: { $cond: [{ $eq: ['$isOnline', true] }, 1, 0] }
+            },
+            totalCount: { $sum: 1 }
+          }
+        }
+      ]);
+
+      return {
+        referrals: referrals,
+        stats: stats[0] || {
+          totalBalance: 0,
+          totalWagered: 0,
+          totalWins: 0,
+          totalBingos: 0,
+          activeCount: 0,
+          totalCount: 0
+        }
+      };
+    } catch (error) {
+      console.error('Get agent referrals with stats error:', error);
+      return { referrals: [], stats: {} };
+    }
+  }
+
+  // Validate agent credentials (for API calls)
+  async validateAgentCredentials(username, password) {
+    try {
+      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
+      if (!agent || !agent.isActive) {
         return null;
       }
 
-      const now = new Date();
-      const todayStart = new Date(now.setHours(0, 0, 0, 0));
-      const hourAgo = new Date(now.getTime() - (60 * 60 * 1000));
-
-      // Today's commissions
-      const todayCommissions = await this.models.AgentCommission.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            createdAt: { $gte: todayStart },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$commissionAmount" },
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      // Last hour commissions
-      const lastHourCommissions = await this.models.AgentCommission.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            createdAt: { $gte: hourAgo },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: "$commissionAmount" },
-            count: { $sum: 1 }
-          }
-        }
-      ]);
-
-      // Active referrals
-      const activeReferrals = await this.models.User.countDocuments({
-        agentId: agent._id,
-        isOnline: true
-      });
-
-      // Recent commissions (last 5)
-      const recentCommissions = await this.models.AgentCommission.find({
-        agentId: agent._id,
-        status: 'completed'
-      })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate('userId', 'userName userId');
+      const isValid = await bcrypt.compare(password, agent.password);
+      if (!isValid) {
+        return null;
+      }
 
       return {
-        agentId: agent._id,
-        totalEarnings: agent.totalEarnings,
-        totalReferrals: agent.totalReferrals,
-        activeReferrals: activeReferrals,
-        todayCommissions: todayCommissions[0]?.total || 0,
-        todayCommissionCount: todayCommissions[0]?.count || 0,
-        lastHourCommissions: lastHourCommissions[0]?.total || 0,
-        lastHourCommissionCount: lastHourCommissions[0]?.count || 0,
-        recentCommissions: recentCommissions.map(comm => ({
-          userId: comm.userId?.userId,
-          userName: comm.userId?.userName,
-          gameType: comm.gameType,
-          commissionAmount: comm.commissionAmount,
-          timestamp: comm.createdAt
-        })),
-        isOnline: this.activeAgents.has(agentId.toString()),
-        lastLogin: agent.lastLogin
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
       };
     } catch (error) {
-      console.error('Get agent realtime stats error:', error);
+      console.error('Validate agent credentials error:', error);
       return null;
     }
   }
 
-  // Handle agent logout
-  async handleAgentLogout(socket) {
+  // Get agent's commission summary
+  async getAgentCommissionSummary(agentId) {
     try {
-      if (socket.agentId) {
-        const agentId = socket.agentId;
-        this.agentSockets.delete(agentId);
-        this.activeAgents.delete(agentId);
-        
-        if (socket.agentData) {
-          console.log(`👤 Agent logged out: ${socket.agentData.username}`);
+      const summary = await this.models.AgentCommission.aggregate([
+        { $match: { agentId: agentId, status: 'completed' } },
+        {
+          $group: {
+            _id: '$gameType',
+            totalCommission: { $sum: '$commissionAmount' },
+            totalWinnings: { $sum: '$winningAmount' },
+            count: { $sum: 1 },
+            avgCommission: { $avg: '$commissionAmount' },
+            minCommission: { $min: '$commissionAmount' },
+            maxCommission: { $max: '$commissionAmount' }
+          }
         }
-        
-        socket.emit('agent:logoutSuccess');
-        socket.disconnect();
-      }
+      ]);
+
+      const totalSummary = await this.models.AgentCommission.aggregate([
+        { $match: { agentId: agentId, status: 'completed' } },
+        {
+          $group: {
+            _id: null,
+            totalCommission: { $sum: '$commissionAmount' },
+            totalWinnings: { $sum: '$winningAmount' },
+            totalGames: { $sum: 1 }
+          }
+        }
+      ]);
+
+      return {
+        byGameType: summary.reduce((acc, curr) => {
+          acc[curr._id] = curr;
+          return acc;
+        }, {}),
+        total: totalSummary[0] || {
+          totalCommission: 0,
+          totalWinnings: 0,
+          totalGames: 0
+        }
+      };
     } catch (error) {
-      console.error('Agent logout error:', error);
+      console.error('Get agent commission summary error:', error);
+      return { byGameType: {}, total: {} };
     }
   }
 
-  // Get agent session count
-  getActiveAgentCount() {
-    return this.activeAgents.size;
+  // Check if agent exists by referral code
+  async checkAgentByReferralCode(referralCode) {
+    try {
+      const agent = await this.models.Agent.findOne({ 
+        referralCode: referralCode,
+        isActive: true 
+      });
+      
+      return agent ? {
+        exists: true,
+        agentId: agent._id,
+        name: agent.name,
+        referralCode: agent.referralCode
+      } : { exists: false };
+    } catch (error) {
+      console.error('Check agent by referral code error:', error);
+      return { exists: false };
+    }
   }
 
-  // Get all active agent sessions
-  getActiveAgentSessions() {
-    const sessions = [];
-    this.agentSockets.forEach((socket, agentId) => {
-      if (socket.agentData) {
-        sessions.push({
-          agentId: agentId,
-          username: socket.agentData.username,
-          name: socket.agentData.name,
-          isSuperAdmin: socket.agentData.isSuperAdmin,
-          connectedAt: socket.connectedAt || new Date(),
-          socketId: socket.id
+  // Get agent's recent activity
+  async getAgentRecentActivity(agentId, limit = 20) {
+    try {
+      const commissions = await this.models.AgentCommission.find({ agentId: agentId })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate('userId', 'userName userId');
+
+      const withdrawals = await this.models.AgentTransaction.find({
+        agentId: agentId,
+        type: 'WITHDRAWAL'
+      })
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+      return {
+        commissions: commissions.map(c => ({
+          type: 'COMMISSION',
+          gameType: c.gameType,
+          amount: c.commissionAmount,
+          description: `${c.gameType} from ${c.userId?.userName || 'Unknown'}`,
+          timestamp: c.createdAt
+        })),
+        withdrawals: withdrawals.map(w => ({
+          type: 'WITHDRAWAL',
+          amount: -w.amount,
+          description: w.description,
+          status: w.status,
+          timestamp: w.createdAt
+        }))
+      };
+    } catch (error) {
+      console.error('Get agent recent activity error:', error);
+      return { commissions: [], withdrawals: [] };
+    }
+  }
+
+  // Export agent's commission data
+  async exportAgentCommissions(agentId, format = 'csv') {
+    try {
+      const commissions = await this.models.AgentCommission.find({ agentId: agentId })
+        .populate('userId', 'userName userId')
+        .sort({ createdAt: -1 });
+
+      if (format === 'csv') {
+        const csvRows = [];
+        csvRows.push(['Date', 'Time', 'User ID', 'Username', 'Game Type', 'Stake', 'Win Amount', 'Commission Rate', 'Commission', 'Status']);
+        
+        commissions.forEach(c => {
+          const date = new Date(c.createdAt);
+          csvRows.push([
+            date.toISOString().split('T')[0],
+            date.toTimeString().split(' ')[0],
+            c.userId?.userId || 'Unknown',
+            c.userId?.userName || 'Unknown',
+            c.gameType,
+            c.stake.toFixed(2),
+            c.winningAmount.toFixed(2),
+            c.commissionRate,
+            c.commissionAmount.toFixed(2),
+            c.status
+          ].join(','));
         });
+
+        return csvRows.join('\n');
+      } else if (format === 'json') {
+        return JSON.stringify(commissions, null, 2);
       }
-    });
-    return sessions;
+
+      return '';
+    } catch (error) {
+      console.error('Export agent commissions error:', error);
+      return '';
+    }
+  }
+
+  // Get agent's performance metrics
+  async getAgentPerformanceMetrics(agentId) {
+    try {
+      const now = new Date();
+      const today = new Date(now.setHours(0, 0, 0, 0));
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const [todayCommissions, weekCommissions, monthCommissions, allCommissions] = await Promise.all([
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: today } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: weekAgo } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: monthAgo } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ])
+      ]);
+
+      const agent = await this.models.Agent.findById(agentId);
+      const activeReferrals = await this.models.User.countDocuments({
+        agentId: agentId,
+        isOnline: true
+      });
+
+      return {
+        today: {
+          commission: todayCommissions[0]?.total || 0,
+          games: todayCommissions[0]?.count || 0
+        },
+        week: {
+          commission: weekCommissions[0]?.total || 0,
+          games: weekCommissions[0]?.count || 0
+        },
+        month: {
+          commission: monthCommissions[0]?.total || 0,
+          games: monthCommissions[0]?.count || 0
+        },
+        allTime: {
+          commission: allCommissions[0]?.total || 0,
+          games: allCommissions[0]?.count || 0
+        },
+        agent: {
+          name: agent?.name || 'Unknown',
+          totalEarnings: agent?.totalEarnings || 0,
+          totalReferrals: agent?.totalReferrals || 0,
+          activeReferrals: activeReferrals,
+          commissionRateBingo: agent?.commissionRateBingo || 40,
+          commissionRateKeno: agent?.commissionRateKeno || 10
+        }
+      };
+    } catch (error) {
+      console.error('Get agent performance metrics error:', error);
+      return null;
+    }
   }
 }
 
