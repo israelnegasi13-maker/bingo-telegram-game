@@ -47,6 +47,7 @@ module.exports = {
         this.kenoCountdownInterval = null;
         this.totalKenoEarnings = 0;
         this.minimumPlayers = 1; // Game stops if no players
+        this.isRoundScheduled = false; // Prevent multiple round scheduling
         
         console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
         console.log('🎰 NEW payout table loaded:');
@@ -231,10 +232,17 @@ module.exports = {
                 // Broadcast updated player count
                 self.broadcastKenoPlayersUpdate();
                 
-                // Start game if not already started and we have minimum players
-                if (!self.isKenoRoundActive && self.getOnlinePlayersCount() >= self.minimumPlayers) {
+                // IMPORTANT FIX: Don't start new rounds when players join during draws
+                // Only start a new round if game is completely idle (no active round, no draws in progress)
+                const gameStatus = activeGame.status || 'waiting';
+                if (!self.isKenoRoundActive && 
+                    gameStatus === 'waiting' && 
+                    !self.isRoundScheduled &&
+                    self.getOnlinePlayersCount() >= self.minimumPlayers) {
+                    
+                    // Schedule round start but don't start immediately
                     setTimeout(() => {
-                        self.startKenoRound();
+                        self.startGameIfReady();
                     }, 2000);
                 }
                 
@@ -1240,6 +1248,9 @@ module.exports = {
     startKenoRound: function() {
         const self = this;
         
+        // Clear any scheduled flag
+        self.isRoundScheduled = false;
+        
         // Check if we have minimum players
         const onlinePlayers = self.getOnlinePlayersCount();
         if (onlinePlayers < self.minimumPlayers) {
@@ -1249,6 +1260,12 @@ module.exports = {
                 message: 'Waiting for players...',
                 playersNeeded: self.minimumPlayers
             });
+            return;
+        }
+        
+        // Check if round is already active
+        if (self.isKenoRoundActive) {
+            console.log('🎰 Round already active, not starting new one');
             return;
         }
         
@@ -1338,15 +1355,30 @@ module.exports = {
     startGameIfReady: function() {
         const self = this;
         
-        // Check if we have players and no active round
-        if (!self.isKenoRoundActive && self.getOnlinePlayersCount() >= self.minimumPlayers) {
+        const activeGame = self.getActiveKenoGame();
+        const gameStatus = activeGame.status || 'waiting';
+        
+        // Only start a new round if:
+        // 1. No round is active
+        // 2. Game status is 'waiting' (not 'betting', 'drawing', or 'completed')
+        // 3. No round is already scheduled
+        // 4. We have minimum players
+        if (!self.isKenoRoundActive && 
+            gameStatus === 'waiting' && 
+            !self.isRoundScheduled &&
+            self.getOnlinePlayersCount() >= self.minimumPlayers) {
+            
+            console.log('🎰 Starting new round from startGameIfReady...');
+            self.isRoundScheduled = true;
             setTimeout(() => {
                 self.startKenoRound();
             }, 3000);
         } else if (self.isKenoRoundActive) {
             console.log('🎰 Game already active, continuing...');
+        } else if (self.isRoundScheduled) {
+            console.log('🎰 Round already scheduled, waiting...');
         } else {
-            console.log('🎰 Waiting for players to start game...');
+            console.log('🎰 Waiting for players to start game... Status:', gameStatus);
         }
     },
     
@@ -1428,6 +1460,7 @@ module.exports = {
         
         console.log('🎰 Drawing Keno numbers...');
         
+        // IMPORTANT: Set game status to drawing
         activeGame.status = 'drawing';
         self.isKenoRoundActive = false;
         
@@ -1748,22 +1781,40 @@ module.exports = {
         // Increment round number
         self.kenoRoundNumber++;
         
-        // Check if we have players for next round
-        const onlinePlayers = self.getOnlinePlayersCount();
-        
-        if (onlinePlayers >= self.minimumPlayers) {
-            // Start next round after 5 seconds
-            setTimeout(() => {
-                self.startKenoRound();
-            }, 5000);
-        } else {
-            console.log('🎰 No players online. Game will wait for players.');
-            // Broadcast waiting message
-            self.io.to('keno').emit('keno:waiting', {
-                message: 'Waiting for players to start next round...',
-                playersNeeded: self.minimumPlayers
-            });
-        }
+        // Reset the current game to waiting state after a delay
+        setTimeout(() => {
+            // IMPORTANT: Set game back to waiting state for next round
+            activeGame.status = 'waiting';
+            activeGame.bets = {};
+            activeGame.players = [];
+            activeGame.drawnNumbers = [];
+            activeGame.winners = [];
+            activeGame.totalBets = 0;
+            activeGame.totalBetAmount = 0;
+            activeGame.totalPayout = 0;
+            activeGame.commissionCollected = 0;
+            activeGame.drawComplete = false;
+            activeGame.processedResults = false;
+            
+            // Check if we have players for next round
+            const onlinePlayers = self.getOnlinePlayersCount();
+            
+            if (onlinePlayers >= self.minimumPlayers) {
+                // Start next round after 5 seconds
+                console.log('🎰 Scheduling next round in 5 seconds...');
+                self.isRoundScheduled = true;
+                setTimeout(() => {
+                    self.startGameIfReady();
+                }, 5000);
+            } else {
+                console.log('🎰 No players online. Game will wait for players.');
+                // Broadcast waiting message
+                self.io.to('keno').emit('keno:waiting', {
+                    message: 'Waiting for players to start next round...',
+                    playersNeeded: self.minimumPlayers
+                });
+            }
+        }, 3000);
     },
     
     // Update Keno stats in database - UPDATED for wallet
@@ -1858,7 +1909,7 @@ module.exports = {
         
         if (onlinePlayers >= self.minimumPlayers) {
             setTimeout(() => {
-                self.startKenoRound();
+                self.startGameIfReady();
             }, 5000);
         } else {
             console.log('🎰 Waiting for players to start first round...');
@@ -2047,8 +2098,8 @@ module.exports = {
         } else if (onlinePlayers >= this.minimumPlayers && !this.isKenoRoundActive) {
             // Check if no active game, start one
             const activeGame = this.getActiveKenoGame();
-            if (activeGame.status === 'waiting' || activeGame.status === 'completed') {
-                this.startKenoRound();
+            if (activeGame.status === 'waiting') {
+                this.startGameIfReady();
             }
         }
     },
