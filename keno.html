@@ -1238,7 +1238,8 @@
             totalBalls: 20,
             isAutoSelectApplied: false,
             roundStatus: 'waiting', // 'waiting', 'betting', 'drawing', 'completed'
-            joinedDuringDraw: false // Track if player joined during a draw
+            joinedDuringDraw: false, // Track if player joined during a draw
+            isRandomOrderDraw: false // Track if draw is in random order
         };
         
         // DOM Elements
@@ -1546,7 +1547,7 @@
                     }
                 });
                 
-                // NEW: Handle draw state when joining during a draw
+                // Handle draw state when joining during a draw
                 gameState.socket.on('keno:draw_state', handleDrawState);
                 
             } catch (error) {
@@ -1640,6 +1641,7 @@
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
             gameState.joinedDuringDraw = false; // Reset this flag
+            gameState.isRandomOrderDraw = data.willBeRandomOrder || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -1685,6 +1687,7 @@
             gameState.hasBetInCurrentRound = false;
             gameState.isAutoSelectApplied = false;
             gameState.joinedDuringDraw = false;
+            gameState.isRandomOrderDraw = data.willBeRandomOrder || false;
             
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
@@ -1718,23 +1721,43 @@
             gameState.roundStatus = 'drawing';
             gameState.roundActive = false;
             gameState.joinedDuringDraw = false;
+            gameState.isRandomOrderDraw = data.willBeRandomOrder || false;
             showNotification('DRAWING NUMBERS...', 'info');
             
             // Show ball counter
             elements.ballCounter.classList.add('active');
             elements.currentBall.textContent = '0';
             elements.totalBalls.textContent = '20';
+            
+            // Clear drawn numbers display for fresh draw
+            elements.drawnNumbers.innerHTML = '';
+            
+            console.log('Draw starting, numbers will be drawn in random order');
         }
         
+        // UPDATED: Handle draw state when joining during a draw
         function handleDrawState(data) {
             // Player joined during a draw
             console.log('Joined during draw in progress');
             gameState.joinedDuringDraw = true;
             gameState.roundStatus = 'drawing';
             gameState.roundActive = false;
+            gameState.isRandomOrderDraw = data.isRandomOrder || false;
             
-            // Display numbers that have already been drawn (without animation)
-            displayNumbersImmediately(data.drawnNumbers || []);
+            // Only display numbers immediately if player has a bet in this round
+            // AND if the server sent drawnNumbers (which it only does for players with bets)
+            if (data.hasBet && data.drawnNumbers && data.drawnNumbers.length > 0) {
+                console.log('Player has bet, displaying drawn numbers so far');
+                displayNumbersImmediately(data.drawnNumbers);
+            } else {
+                // New player without bet - don't show pre-drawn numbers
+                // They'll see them as they come in via keno:number_drawn events
+                console.log('Player without bet - waiting for live draw');
+                elements.drawnNumbers.innerHTML = '';
+                elements.ballCounter.classList.add('active');
+                elements.currentBall.textContent = data.currentBall || 0;
+                elements.totalBalls.textContent = data.totalBalls || 20;
+            }
             
             // Update ball counter
             elements.ballCounter.classList.add('active');
@@ -1743,7 +1766,7 @@
             
             // Show appropriate message
             if (!gameState.hasBetInCurrentRound) {
-                showNotification('Joined during draw. Watching current round...', 'info');
+                showNotification('Joined during draw. Watching current round live...', 'info');
             }
         }
         
@@ -1751,6 +1774,7 @@
             // Update ball counter
             gameState.currentBall = data.drawnCount || 0;
             gameState.totalBalls = data.total || 20;
+            gameState.isRandomOrderDraw = data.isRandomOrder || gameState.isRandomOrderDraw;
             elements.currentBall.textContent = gameState.currentBall;
             elements.totalBalls.textContent = gameState.totalBalls;
             
@@ -1804,17 +1828,13 @@
             gameState.currentDrawnNumbers = gameState.drawnNumbers;
             gameState.playersCount = data.playersCount || gameState.playersCount;
             gameState.isDrawComplete = data.isDrawComplete || false;
+            gameState.isRandomOrderDraw = data.wasRandomOrder || false;
             
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
             
-            // If draw is already complete, display immediately
-            if (gameState.isDrawComplete) {
-                displayNumbersImmediately(gameState.drawnNumbers);
-            } else {
-                // Otherwise, animate the draw
-                displayNumbersWithAnimation(gameState.drawnNumbers);
-            }
+            // Draw is complete, display immediately (sorted for readability)
+            displayNumbersImmediately(gameState.drawnNumbers);
             
             // Update stats
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
@@ -1930,6 +1950,7 @@
             gameState.isDrawComplete = data.isDrawComplete || false;
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
+            gameState.isRandomOrderDraw = data.wasRandomOrder || false;
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -2207,6 +2228,7 @@
             gameState.currentDrawnNumbers = [];
             gameState.isDrawComplete = false;
             gameState.joinedDuringDraw = false;
+            gameState.isRandomOrderDraw = false;
             
             document.querySelectorAll('.keno-number').forEach(el => {
                 el.classList.remove('drawn', 'matched');
