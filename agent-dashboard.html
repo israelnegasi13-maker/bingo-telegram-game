@@ -1668,6 +1668,9 @@
                         <button class="btn btn-sm" onclick="showCreateAgentModal()">
                             <i class="fas fa-plus"></i> Add Agent
                         </button>
+                        <button class="btn btn-sm btn-success" onclick="showManualAssignmentModal()">
+                            <i class="fas fa-user-plus"></i> Assign User
+                        </button>
                     </div>
                     
                     <div class="admin-controls">
@@ -1842,6 +1845,45 @@
         </div>
     </div>
 
+    <div class="modal" id="manualAssignmentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Manual Referral Assignment</h3>
+                <button class="close-modal" onclick="closeModal('manualAssignmentModal')">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>User ID *</label>
+                <input type="text" id="manualUserId" class="form-control" placeholder="tg_123456789">
+                <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Enter the user's Telegram ID (e.g., tg_123456789)</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Agent Referral Code *</label>
+                <input type="text" id="manualAgentCode" class="form-control" placeholder="AGENT123">
+                <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">Enter the agent's referral code (e.g., AGENT123)</div>
+            </div>
+            
+            <div style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px;">
+                <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">⚠️ Important Notes:</div>
+                <div style="font-size: 12px; color: var(--gray);">
+                    1. This will assign the user to the specified agent<br>
+                    2. The agent will earn commissions from this user's future wins<br>
+                    3. User must exist in the system<br>
+                    4. Agent must be active with a valid referral code<br>
+                    5. This action cannot be undone
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" style="flex: 1;" onclick="submitManualAssignment()">
+                    <i class="fas fa-link"></i> Assign User
+                </button>
+                <button class="btn btn-outline" style="flex: 1;" onclick="closeModal('manualAssignmentModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="withdrawalModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1999,6 +2041,19 @@
             socket.on('agent:profileUpdated', (data) => {
                 showNotification('Your profile has been updated by admin', 'info');
                 loadDashboard();
+            });
+            
+            // New event for manual assignment
+            socket.on('agent:manualAssignmentSuccess', (data) => {
+                showNotification('User assigned to agent successfully', 'success');
+                closeModal('manualAssignmentModal');
+            });
+            
+            socket.on('agent:newReferral', (data) => {
+                showNotification(`New referral: ${data.userName || data.userId}`, 'success');
+                if (currentTab === 'dashboard' || currentTab === 'referrals') {
+                    loadDashboard();
+                }
             });
         }
 
@@ -2246,6 +2301,11 @@
                 document.getElementById('avgCommission').textContent = avgCommission.toFixed(2);
                 document.getElementById('totalTransactions').textContent = data.commissions.length;
             }
+            
+            // Update referrals table if on referrals tab
+            if (currentTab === 'referrals' && data.referrals) {
+                updateReferralsList(data.referrals);
+            }
         }
 
         function loadRecentActivity() {
@@ -2255,6 +2315,29 @@
         // Referrals Functions
         function loadReferrals() {
             loadDashboard(); // Referrals are included in dashboard data
+        }
+
+        function updateReferralsList(referrals) {
+            const referralsBody = document.getElementById('referralsBody');
+            
+            if (referrals && referrals.length > 0) {
+                referralsBody.innerHTML = '';
+                referrals.forEach(referral => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${referral.userId?.substring(0, 10)}...</td>
+                        <td>${referral.userName || 'N/A'}</td>
+                        <td>${referral.balance?.toFixed(2) || '0.00'} ETB</td>
+                        <td>${referral.totalWagered?.toFixed(2) || '0.00'} ETB</td>
+                        <td>${referral.totalWins || 0}</td>
+                        <td>${new Date(referral.joinedAt).toLocaleDateString()}</td>
+                        <td><span class="badge ${referral.isOnline ? 'success' : 'danger'}">${referral.isOnline ? 'Online' : 'Offline'}</span></td>
+                    `;
+                    referralsBody.appendChild(row);
+                });
+            } else {
+                referralsBody.innerHTML = '<tr><td colspan="7" class="empty-state">No referrals yet</td></tr>';
+            }
         }
 
         function filterReferrals() {
@@ -2495,6 +2578,22 @@
             });
         }
 
+        function showManualAssignmentModal() {
+            document.getElementById('manualAssignmentModal').classList.add('active');
+        }
+
+        function submitManualAssignment() {
+            const userId = document.getElementById('manualUserId').value;
+            const agentCode = document.getElementById('manualAgentCode').value;
+            
+            if (!userId || !agentCode) {
+                showNotification('Please enter both User ID and Agent Code', 'error');
+                return;
+            }
+            
+            socket.emit('agent:manualAssignment', { userId, referralCode: agentCode });
+        }
+
         function updateAgentsList(agents) {
             const agentsBody = document.getElementById('agentsBody');
             
@@ -2622,10 +2721,11 @@
    - Withdrawal requests
    - Performance reports
 
-4. Support:
-   - Contact admin for account issues
-   - Technical support available
-   - Regular system updates
+4. Admin Features:
+   - Create new agents
+   - Manual user assignment
+   - View all agents
+   - Manage withdrawals
 
 Need more help? Contact the system administrator.`);
         }
