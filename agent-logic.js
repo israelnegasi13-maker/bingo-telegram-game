@@ -481,7 +481,7 @@ class AgentSystem {
   // Manual referral assignment by admin
   async handleManualReferralAssignment(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -511,7 +511,7 @@ class AgentSystem {
             userName: result.userName,
             timestamp: new Date(),
             referralCode: referralCode,
-            assignedBy: socket.agentData.username
+            assignedBy: socket.agentData?.username || 'Admin'
           });
         }
       } else {
@@ -782,7 +782,7 @@ class AgentSystem {
   // Super Admin: Get all agents
   async handleGetAllAgents(socket) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -855,7 +855,7 @@ class AgentSystem {
   // Super Admin: Create new agent
   async handleCreateAgent(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -945,7 +945,7 @@ class AgentSystem {
         createdAt: new Date()
       });
 
-      console.log(`👤 New agent created: ${agent.username} by ${socket.agentData.username}`);
+      console.log(`👤 New agent created: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
     } catch (error) {
       console.error('Create agent error:', error);
       socket.emit('agent:error', 'Failed to create agent');
@@ -955,7 +955,7 @@ class AgentSystem {
   // Super Admin: Update agent
   async handleUpdateAgent(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1038,7 +1038,7 @@ class AgentSystem {
         });
       }
 
-      console.log(`👤 Agent updated: ${updatedAgent.username} by ${socket.agentData.username}`);
+      console.log(`👤 Agent updated: ${updatedAgent.username} by ${socket.agentData?.username || 'Admin'}`);
     } catch (error) {
       console.error('Update agent error:', error);
       socket.emit('agent:error', 'Failed to update agent');
@@ -1048,7 +1048,7 @@ class AgentSystem {
   // Super Admin: Delete agent
   async handleDeleteAgent(socket, agentId) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1112,7 +1112,7 @@ class AgentSystem {
         }
       );
 
-      console.log(`👤 Agent deactivated: ${agent.username} by ${socket.agentData.username}`);
+      console.log(`👤 Agent deactivated: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
     } catch (error) {
       console.error('Delete agent error:', error);
       socket.emit('agent:error', 'Failed to delete agent');
@@ -1122,7 +1122,7 @@ class AgentSystem {
   // Super Admin: Reset agent password
   async handleResetAgentPassword(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1157,7 +1157,7 @@ class AgentSystem {
         agentName: agent.name
       });
 
-      console.log(`🔑 Password reset for agent: ${agent.username} by ${socket.agentData.username}`);
+      console.log(`🔑 Password reset for agent: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
     } catch (error) {
       console.error('Reset password error:', error);
       socket.emit('agent:error', 'Failed to reset password');
@@ -1180,7 +1180,7 @@ class AgentSystem {
       let targetAgentId = socket.agentId;
       
       // If super admin viewing another agent's report
-      if (agentId && socket.agentData?.isSuperAdmin) {
+      if (agentId && (socket.agentData?.isSuperAdmin || socket.admin)) {
         targetAgentId = agentId;
       }
 
@@ -1302,7 +1302,7 @@ class AgentSystem {
   // Export agent data to CSV
   async handleExportAgentData(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1443,7 +1443,7 @@ class AgentSystem {
   // Super Admin: Approve agent withdrawal
   async handleApproveAgentWithdrawal(socket, transactionId) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1488,7 +1488,7 @@ class AgentSystem {
   // Super Admin: Reject agent withdrawal
   async handleRejectAgentWithdrawal(socket, transactionId) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
@@ -1568,7 +1568,7 @@ class AgentSystem {
   // Get all pending agent withdrawals (for admin)
   async handleGetPendingWithdrawals(socket) {
     try {
-      if (!socket.agentData?.isSuperAdmin) {
+      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
         socket.emit('agent:error', 'Unauthorized');
         return;
       }
