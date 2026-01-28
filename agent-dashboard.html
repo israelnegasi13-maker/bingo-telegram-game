@@ -641,7 +641,7 @@
             color: var(--info);
         }
 
-        /* Referral Link Section */
+        /* Manual Referral Section */
         .referral-container {
             background: linear-gradient(135deg, rgba(67, 97, 238, 0.1), rgba(114, 9, 183, 0.1));
             border: 1px solid var(--primary);
@@ -666,17 +666,6 @@
             word-break: break-all;
             font-size: 14px;
             font-family: monospace;
-        }
-
-        .qr-code {
-            max-width: 200px;
-            margin: 20px auto;
-        }
-
-        .qr-code img {
-            width: 100%;
-            height: auto;
-            border-radius: 8px;
         }
 
         /* Charts */
@@ -1112,6 +1101,111 @@
             font-size: 14px;
         }
 
+        /* User Search Results */
+        .user-results {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card-bg);
+        }
+
+        .user-result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .user-result-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .user-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .user-result-info {
+            flex: 1;
+        }
+
+        .user-result-name {
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .user-result-id {
+            font-size: 12px;
+            color: var(--gray);
+            font-family: monospace;
+        }
+
+        .user-result-status {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .user-result-status.unavailable {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        /* Bulk Referral Results */
+        .bulk-results {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 15px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .bulk-result-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        .bulk-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .bulk-result-status {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        .bulk-result-status.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .bulk-result-status.error {
+            background: var(--danger);
+            color: white;
+        }
+
+        .bulk-result-status.warning {
+            background: var(--warning);
+            color: white;
+        }
+
         /* Pagination */
         .pagination {
             display: flex;
@@ -1243,8 +1337,8 @@
                 <li><a href="#" onclick="switchTab('commissions')">
                     <i class="fas fa-money-bill-wave"></i> Commissions
                 </a></li>
-                <li><a href="#" onclick="switchTab('referralLink')">
-                    <i class="fas fa-link"></i> Referral Link
+                <li><a href="#" onclick="switchTab('manualReferral')">
+                    <i class="fas fa-user-plus"></i> Manual Referral
                 </a></li>
                 <li><a href="#" onclick="switchTab('withdrawals')">
                     <i class="fas fa-wallet"></i> Withdrawals
@@ -1337,12 +1431,12 @@
 
                 <!-- Quick Actions -->
                 <div class="quick-actions">
-                    <div class="action-card" onclick="generateReferralLink()">
+                    <div class="action-card" onclick="switchTab('manualReferral')">
                         <div class="action-icon">
-                            <i class="fas fa-link"></i>
+                            <i class="fas fa-user-plus"></i>
                         </div>
-                        <div class="action-title">Get Referral Link</div>
-                        <div class="action-desc">Share & earn commissions</div>
+                        <div class="action-title">Add Referral</div>
+                        <div class="action-desc">Type username to add</div>
                     </div>
                     
                     <div class="action-card" onclick="switchTab('withdrawals')">
@@ -1511,53 +1605,154 @@
                 </div>
             </div>
 
-            <!-- Referral Link Tab -->
-            <div id="referralLinkTab" class="tab-content">
+            <!-- Manual Referral Tab -->
+            <div id="manualReferralTab" class="tab-content">
                 <div class="section">
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-link"></i> Your Referral Link
+                            <i class="fas fa-user-plus"></i> Manual Referral Assignment
                         </h3>
-                        <button class="btn btn-sm" onclick="generateReferralLink()">
-                            <i class="fas fa-sync-alt"></i> Refresh
+                        <button class="btn btn-sm" onclick="loadUserSuggestions()">
+                            <i class="fas fa-lightbulb"></i> Suggestions
                         </button>
                     </div>
                     
-                    <div class="referral-container">
-                        <p style="margin-bottom: 15px;">Share this link to refer players and earn commissions:</p>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Your Referral Code:</div>
-                            <div class="referral-code" id="referralCodeDisplay">Loading...</div>
+                    <!-- Agent Referral Code -->
+                    <div class="referral-container" style="margin-bottom: 20px;">
+                        <h4>👑 Your Agent Code</h4>
+                        <p style="margin-bottom: 15px; font-size: 14px; color: var(--gray);">
+                            Your unique agent referral code for identification:
+                        </p>
+                        <div class="referral-code" id="referralCodeDisplay">Loading...</div>
+                        <div style="font-size: 12px; color: var(--gray); margin-top: 5px;">
+                            System code for admin reference
+                        </div>
+                    </div>
+                    
+                    <!-- Search and Add Single User -->
+                    <div class="section" style="margin-bottom: 20px;">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-search"></i> Search & Add Single User
+                            </h3>
                         </div>
                         
-                        <div style="margin-bottom: 20px;">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 5px;">Your Referral Link:</div>
-                            <div class="referral-link" id="referralLinkDisplay">Loading...</div>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchUserInput" 
+                                   class="form-control" 
+                                   placeholder="Search by Telegram username or User ID..."
+                                   oninput="debounceSearchUsers(this.value)">
                         </div>
                         
-                        <div class="qr-code" id="qrCodeContainer">
-                            <!-- QR code will be inserted here -->
+                        <div id="searchResults" style="display: none; margin-top: 15px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Search Results:</div>
+                            <div id="userResultsList" class="user-results">
+                                <!-- Search results will appear here -->
+                            </div>
                         </div>
                         
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="btn" onclick="copyReferralLink()" style="flex: 1;">
-                                <i class="fas fa-copy"></i> Copy Link
+                        <div style="margin-top: 20px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Or enter manually:</div>
+                            <div class="form-group">
+                                <input type="text" id="manualUserInput" class="form-control" 
+                                       placeholder="Enter Telegram username (e.g., @username) or User ID (e.g., tg_123456789)">
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-success" onclick="addManualReferral()" style="margin-top: 10px;">
+                            <i class="fas fa-user-plus"></i> Add as My Referral
+                        </button>
+                    </div>
+                    
+                    <!-- Bulk User Assignment -->
+                    <div class="section" style="margin-bottom: 20px;">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-users"></i> Bulk Add Multiple Users
+                            </h3>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">
+                                Enter multiple usernames/IDs (one per line):
+                            </div>
+                            <textarea id="bulkUserInput" class="form-control" 
+                                      rows="5" 
+                                      placeholder="Enter each username or User ID on a new line:
+@username1
+tg_123456789
+username2
+@username3"></textarea>
+                            <div style="font-size: 11px; color: var(--gray); margin-top: 5px;">
+                                Supports: Telegram usernames (with or without @) and User IDs
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-warning" onclick="addBulkReferrals()" style="flex: 1;">
+                                <i class="fas fa-users"></i> Add All as Referrals
                             </button>
-                            <button class="btn btn-success" onclick="shareReferralLink()" style="flex: 1;">
-                                <i class="fas fa-share-alt"></i> Share
+                            <button class="btn btn-outline" onclick="clearBulkInput()" style="flex: 0.5;">
+                                <i class="fas fa-trash"></i> Clear
                             </button>
                         </div>
                         
-                        <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.1); border-radius: 8px;">
-                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">📢 How to earn commissions:</div>
-                            <div style="font-size: 12px; color: var(--gray);">
-                                1. Share your referral link with players<br>
-                                2. When they join using your link, they become your referral<br>
-                                3. You earn <strong>40%</strong> commission from their Bingo wins<br>
-                                4. You earn <strong>10%</strong> commission from their Keno wins<br>
-                                5. Commissions are credited instantly to your account<br>
-                                6. Minimum commission: <strong>0.01 ETB</strong>
+                        <div id="bulkResults" style="display: none; margin-top: 15px;">
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Bulk Results:</div>
+                            <div id="bulkResultsList" class="bulk-results">
+                                <!-- Bulk results will appear here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- User Suggestions -->
+                    <div class="section">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <i class="fas fa-lightbulb"></i> User Suggestions
+                            </h3>
+                            <button class="btn btn-sm" onclick="loadUserSuggestions()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <div id="userSuggestions">
+                            <div class="empty-state">
+                                <i class="fas fa-lightbulb"></i>
+                                <div>Click "Refresh" to see user suggestions</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Instructions -->
+                    <div class="referral-container" style="margin-top: 20px;">
+                        <h4>📋 How to Add Referrals Manually</h4>
+                        <div style="font-size: 13px; line-height: 1.6; color: var(--gray);">
+                            <p><strong>Step 1: Find User Information</strong></p>
+                            <ul style="margin-left: 20px; margin-bottom: 15px;">
+                                <li>Ask the user for their <strong>Telegram username</strong> (e.g., @username)</li>
+                                <li>Or ask them to share their <strong>User ID</strong> from the game bot</li>
+                                <li>User must have played at least once in Bingo Elite or Keno Ultra</li>
+                            </ul>
+                            
+                            <p><strong>Step 2: Add User as Referral</strong></p>
+                            <ul style="margin-left: 20px; margin-bottom: 15px;">
+                                <li>Type the username/ID in the search box above</li>
+                                <li>Click "Add as My Referral" to assign them to you</li>
+                                <li>You'll earn commissions from their future wins instantly</li>
+                            </ul>
+                            
+                            <p><strong>Commission Structure:</strong></p>
+                            <ul style="margin-left: 20px;">
+                                <li><strong>Bingo Wins:</strong> 40% commission</li>
+                                <li><strong>Keno Wins:</strong> 10% commission</li>
+                                <li><strong>Minimum Commission:</strong> 0.01 ETB per win</li>
+                                <li><strong>Real-time:</strong> Commissions credited immediately</li>
+                            </ul>
+                            
+                            <div style="margin-top: 15px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                <strong>💡 Pro Tip:</strong> Use the "User Suggestions" section to find active players without agents.
                             </div>
                         </div>
                     </div>
@@ -1769,9 +1964,9 @@
                 <i class="fas fa-money-bill-wave"></i>
                 <span>Commissions</span>
             </a>
-            <a href="#" class="bottom-nav-item" onclick="switchTab('referralLink')">
-                <i class="fas fa-link"></i>
-                <span>Referral</span>
+            <a href="#" class="bottom-nav-item" onclick="switchTab('manualReferral')">
+                <i class="fas fa-user-plus"></i>
+                <span>Add Referral</span>
             </a>
             <a href="#" class="bottom-nav-item" onclick="switchTab('withdrawals')">
                 <i class="fas fa-wallet"></i>
@@ -1922,6 +2117,7 @@
         let currentTab = 'dashboard';
         let notifications = [];
         let theme = localStorage.getItem('agentTheme') || 'dark';
+        let searchTimeout = null;
 
         // Initialize socket connection
         function initSocket() {
@@ -1977,7 +2173,7 @@
             });
             
             socket.on('agent:referralLink', (data) => {
-                updateReferralLink(data);
+                updateReferralCode(data);
             });
             
             socket.on('agent:newCommission', (data) => {
@@ -2043,7 +2239,33 @@
                 loadDashboard();
             });
             
-            // New event for manual assignment
+            // New manual referral events
+            socket.on('agent:manualReferralSuccess', (data) => {
+                showNotification(data.message, 'success');
+                // Clear search results and input
+                document.getElementById('searchResults').style.display = 'none';
+                document.getElementById('searchUserInput').value = '';
+                document.getElementById('manualUserInput').value = '';
+                // Refresh referrals list
+                loadDashboard();
+            });
+            
+            socket.on('agent:bulkManualReferralResult', (data) => {
+                showNotification(`Bulk referral: ${data.summary.success} added, ${data.summary.failed} failed`, 
+                    data.summary.success > 0 ? 'success' : 'warning');
+                displayBulkResults(data);
+                // Refresh referrals list
+                loadDashboard();
+            });
+            
+            socket.on('agent:searchUsersResult', (data) => {
+                displaySearchResults(data);
+            });
+            
+            socket.on('agent:userSuggestions', (data) => {
+                displayUserSuggestions(data);
+            });
+            
             socket.on('agent:manualAssignmentSuccess', (data) => {
                 showNotification('User assigned to agent successfully', 'success');
                 closeModal('manualAssignmentModal');
@@ -2123,6 +2345,9 @@
                     break;
                 case 'commissions':
                     loadCommissions();
+                    break;
+                case 'manualReferral':
+                    loadManualReferralTab();
                     break;
                 case 'withdrawals':
                     loadWithdrawalHistory();
@@ -2362,44 +2587,284 @@
             }
         }
 
-        // Referral Link Functions
-        function generateReferralLink() {
+        // Manual Referral Functions
+        function loadManualReferralTab() {
+            // Generate referral code if not loaded
             socket.emit('agent:generateReferralLink');
+            
+            // Clear search results
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('bulkResults').style.display = 'none';
+            
+            // Load user suggestions
+            loadUserSuggestions();
         }
 
-        function updateReferralLink(data) {
+        function updateReferralCode(data) {
             document.getElementById('referralCodeDisplay').textContent = data.referralCode;
-            document.getElementById('referralLinkDisplay').textContent = data.referralLink;
-            
-            // Update QR code
-            const qrContainer = document.getElementById('qrCodeContainer');
-            qrContainer.innerHTML = `
-                <img src="${data.qrCode}" alt="QR Code" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data.referralLink)}'">
-            `;
         }
 
-        function copyReferralLink() {
-            const link = document.getElementById('referralLinkDisplay').textContent;
-            navigator.clipboard.writeText(link).then(() => {
-                showNotification('Referral link copied to clipboard!', 'success');
+        // Debounced search function
+        function debounceSearchUsers(query) {
+            clearTimeout(searchTimeout);
+            if (query.trim().length < 2) {
+                document.getElementById('searchResults').style.display = 'none';
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                socket.emit('agent:searchUsers', { query: query, limit: 10 });
+            }, 500);
+        }
+
+        function displaySearchResults(data) {
+            const resultsList = document.getElementById('userResultsList');
+            const resultsContainer = document.getElementById('searchResults');
+            
+            if (!data.users || data.users.length === 0) {
+                resultsList.innerHTML = '<div class="empty-state">No users found</div>';
+                resultsContainer.style.display = 'block';
+                return;
+            }
+            
+            resultsList.innerHTML = '';
+            data.users.forEach(user => {
+                const item = document.createElement('div');
+                item.className = 'user-result-item';
+                item.onclick = () => {
+                    document.getElementById('manualUserInput').value = user.userId;
+                    // Auto-add if available
+                    if (user.canAdd) {
+                        setTimeout(() => addManualReferral(user.userId), 300);
+                    }
+                };
+                
+                item.innerHTML = `
+                    <div class="user-result-info">
+                        <div class="user-result-name">${user.userName || 'Unknown'}</div>
+                        <div class="user-result-id">${user.userId}</div>
+                    </div>
+                    <div class="user-result-status ${user.canAdd ? '' : 'unavailable'}">
+                        ${user.canAdd ? 'Available' : 'Has Agent'}
+                    </div>
+                `;
+                resultsList.appendChild(item);
             });
+            
+            resultsContainer.style.display = 'block';
         }
 
-        function shareReferralLink() {
-            const link = document.getElementById('referralLinkDisplay').textContent;
-            const message = `Join Bingo Elite using my referral link! 🎮\n\n${link}\n\nYou'll get amazing bonuses and I'll earn commission from your wins!`;
+        function addManualReferral(prefilledId = null) {
+            let userIdentifier = prefilledId || document.getElementById('manualUserInput').value;
             
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Bingo Elite - Referral Link',
-                    text: message,
-                    url: link
-                });
-            } else {
-                navigator.clipboard.writeText(message).then(() => {
-                    showNotification('Referral message copied to clipboard!', 'success');
+            if (!userIdentifier) {
+                // Try to get from search input
+                userIdentifier = document.getElementById('searchUserInput').value;
+            }
+            
+            if (!userIdentifier || userIdentifier.trim() === '') {
+                showNotification('Please enter a username or User ID', 'error');
+                return;
+            }
+            
+            socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: userIdentifier.trim() });
+        }
+
+        function addBulkReferrals() {
+            const bulkInput = document.getElementById('bulkUserInput').value;
+            if (!bulkInput || bulkInput.trim() === '') {
+                showNotification('Please enter usernames/IDs to add', 'error');
+                return;
+            }
+            
+            // Parse input lines
+            const lines = bulkInput.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            if (lines.length === 0) {
+                showNotification('No valid usernames/IDs found', 'error');
+                return;
+            }
+            
+            if (lines.length > 20) {
+                showNotification('Maximum 20 users at a time. Using first 20.', 'warning');
+                lines.splice(20);
+            }
+            
+            if (confirm(`Add ${lines.length} users as referrals?`)) {
+                socket.emit('agent:bulkManualReferral', { userIdentifiers: lines });
+            }
+        }
+
+        function clearBulkInput() {
+            document.getElementById('bulkUserInput').value = '';
+            document.getElementById('bulkResults').style.display = 'none';
+        }
+
+        function displayBulkResults(data) {
+            const resultsList = document.getElementById('bulkResultsList');
+            const resultsContainer = document.getElementById('bulkResults');
+            
+            resultsList.innerHTML = '';
+            
+            if (data.summary.details && data.summary.details.length > 0) {
+                data.summary.details.forEach(detail => {
+                    const item = document.createElement('div');
+                    item.className = 'bulk-result-item';
+                    
+                    let statusIcon, statusText;
+                    if (detail.status === 'success') {
+                        statusIcon = 'check';
+                        statusText = '✓ Added';
+                    } else if (detail.status === 'already_yours') {
+                        statusIcon = 'info';
+                        statusText = 'Already yours';
+                    } else if (detail.status === 'assigned_to_other') {
+                        statusIcon = 'times';
+                        statusText = 'Has agent';
+                    } else if (detail.status === 'not_found') {
+                        statusIcon = 'question';
+                        statusText = 'Not found';
+                    } else {
+                        statusIcon = 'exclamation';
+                        statusText = 'Error';
+                    }
+                    
+                    item.innerHTML = `
+                        <div class="bulk-result-status ${detail.status === 'success' ? 'success' : 
+                            detail.status === 'already_yours' ? 'warning' : 'error'}">
+                            <i class="fas fa-${statusIcon}"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <strong>${detail.identifier}</strong>
+                            ${detail.userName ? `<div style="font-size: 11px;">${detail.userName}</div>` : ''}
+                        </div>
+                        <div style="font-size: 11px; color: var(--gray);">${statusText}</div>
+                    `;
+                    resultsList.appendChild(item);
                 });
             }
+            
+            // Show summary
+            const summary = document.createElement('div');
+            summary.style.marginTop = '10px';
+            summary.style.padding = '10px';
+            summary.style.background = 'rgba(0,0,0,0.2)';
+            summary.style.borderRadius = '6px';
+            summary.style.fontSize = '12px';
+            summary.innerHTML = `
+                <strong>Summary:</strong> ${data.summary.success} added, 
+                ${data.summary.alreadyAssigned} already assigned, 
+                ${data.summary.notFound} not found,
+                ${data.summary.failed} failed
+            `;
+            resultsList.appendChild(summary);
+            
+            resultsContainer.style.display = 'block';
+        }
+
+        function loadUserSuggestions() {
+            socket.emit('agent:getUserSuggestions');
+        }
+
+        function displayUserSuggestions(data) {
+            const suggestionsContainer = document.getElementById('userSuggestions');
+            
+            if ((!data.potentialUsers || data.potentialUsers.length === 0) && 
+                (!data.recentUsers || data.recentUsers.length === 0)) {
+                suggestionsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-lightbulb"></i>
+                        <div>No user suggestions available</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+            
+            // Show potential users
+            if (data.potentialUsers && data.potentialUsers.length > 0) {
+                html += `
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+                            <i class="fas fa-star"></i> High Activity Players (${data.totalPotential || data.potentialUsers.length} total)
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
+                `;
+                
+                data.potentialUsers.slice(0, 6).forEach(user => {
+                    html += `
+                        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; cursor: pointer;"
+                             onclick="document.getElementById('manualUserInput').value='${user.userId}'; addManualReferral('${user.userId}')">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--danger)'};"></div>
+                                <div style="font-weight: 600; font-size: 13px;">${user.userName || 'Unknown'}</div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--gray); margin-bottom: 5px;">${user.userId}</div>
+                            <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                                <div>${user.totalWins} wins</div>
+                                <div>${user.balance.toFixed(2)} ETB</div>
+                            </div>
+                            <div style="font-size: 10px; color: var(--primary); margin-top: 5px; text-align: center;">
+                                <i class="fas fa-user-plus"></i> Click to add
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            }
+            
+            // Show recent users
+            if (data.recentUsers && data.recentUsers.length > 0) {
+                html += `
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">
+                            <i class="fas fa-clock"></i> Recently Active
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
+                `;
+                
+                data.recentUsers.slice(0, 6).forEach(user => {
+                    const timeAgo = getTimeAgo(user.lastSeen);
+                    html += `
+                        <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; cursor: pointer;"
+                             onclick="document.getElementById('manualUserInput').value='${user.userId}'; addManualReferral('${user.userId}')">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                <div style="width: 6px; height: 6px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--warning)'};"></div>
+                                <div style="font-size: 12px; font-weight: 500;">${user.userName || 'Unknown'}</div>
+                            </div>
+                            <div style="font-size: 10px; color: var(--gray);">${timeAgo}</div>
+                            <div style="font-size: 9px; color: var(--primary); margin-top: 3px; text-align: center;">
+                                <i class="fas fa-plus"></i> Add
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            }
+            
+            html += '</div>';
+            suggestionsContainer.innerHTML = html;
+        }
+
+        function getTimeAgo(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
         }
 
         // Withdrawal Functions
@@ -2704,28 +3169,35 @@
         function showHelp() {
             alert(`Bingo Elite Agent Help
 
-1. How to Earn Commissions:
-   - Share your referral link with players
-   - When they join using your link, they become your referral
-   - Earn 40% commission from their Bingo wins
-   - Earn 10% commission from their Keno wins
+1. How to Add Referrals (MANUAL SYSTEM):
+   - Ask users for their Telegram username (e.g., @username) OR
+   - Ask them to share their User ID from the game bot
+   - Type the username/ID in the "Manual Referral" tab
+   - Click "Add as My Referral"
+   - System validates the user exists and is not already assigned
 
-2. Minimum Requirements:
-   - Minimum commission: 0.01 ETB
+2. Commission Structure:
+   - Bingo Wins: 40% commission
+   - Keno Wins: 10% commission
+   - Minimum commission: 0.01 ETB per win
+   - Real-time: Commissions credited immediately
+
+3. Withdrawal Requirements:
    - Minimum withdrawal: 10 ETB
-   - Withdrawals processed within 24 hours
+   - Phone number: Must be valid Telebirr number (09xxxxxxxx)
+   - Processing: Within 24 hours by admin
 
-3. Dashboard Features:
+4. Dashboard Features:
    - Real-time commission tracking
-   - Referral management
+   - Manual referral management
    - Withdrawal requests
    - Performance reports
 
-4. Admin Features:
-   - Create new agents
-   - Manual user assignment
-   - View all agents
-   - Manage withdrawals
+5. Tips for Success:
+   - Use the "User Suggestions" feature to find active players
+   - Search users before manually typing
+   - Use bulk add for multiple users
+   - Monitor your referrals' activity
 
 Need more help? Contact the system administrator.`);
         }
