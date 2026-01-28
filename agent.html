@@ -1905,6 +1905,11 @@
                 }, 3000);
             });
             
+            socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+                showNotification('Connection error. Please refresh.', 'error');
+            });
+            
             // Agent events
             socket.on('agent:loginSuccess', (data) => {
                 handleLoginSuccess(data);
@@ -1912,6 +1917,17 @@
             
             socket.on('agent:loginError', (message) => {
                 showLoginError(message);
+            });
+            
+            socket.on('agent:tokenVerified', (data) => {
+                handleLoginSuccess(data);
+            });
+            
+            socket.on('agent:tokenInvalid', () => {
+                localStorage.removeItem('agentToken');
+                localStorage.removeItem('agentData');
+                showLoginScreen();
+                showNotification('Session expired. Please login again.', 'warning');
             });
             
             socket.on('agent:dashboardData', (data) => {
@@ -1955,7 +1971,7 @@
             });
             
             socket.on('agent:withdrawalApproved', (data) => {
-                showNotification('Withdrawal approved: ' + (-data.amount).toFixed(2) + ' ETB', 'success');
+                showNotification('Withdrawal approved: ' + data.amount.toFixed(2) + ' ETB', 'success');
                 loadWithdrawalHistory();
                 loadDashboard();
             });
@@ -1968,6 +1984,21 @@
             
             socket.on('agent:pendingWithdrawals', (data) => {
                 // For admin only
+            });
+            
+            socket.on('agent:agentDeleted', (data) => {
+                showNotification('Agent deactivated successfully', 'success');
+                socket.emit('agent:getAllAgents');
+            });
+            
+            socket.on('agent:agentUpdated', (data) => {
+                showNotification('Agent updated successfully', 'success');
+                socket.emit('agent:getAllAgents');
+            });
+            
+            socket.on('agent:profileUpdated', (data) => {
+                showNotification('Your profile has been updated by admin', 'info');
+                loadDashboard();
             });
         }
 
@@ -2003,11 +2034,17 @@
             // Update bottom nav
             document.querySelectorAll('.bottom-nav-item').forEach(item => {
                 item.classList.remove('active');
+                if (item.getAttribute('onclick')?.includes(tabName)) {
+                    item.classList.add('active');
+                }
             });
             
             // Update sidebar
             document.querySelectorAll('.sidebar-menu a').forEach(link => {
                 link.classList.remove('active');
+                if (link.getAttribute('onclick')?.includes(tabName)) {
+                    link.classList.add('active');
+                }
             });
             
             // Hide all tabs
@@ -2036,7 +2073,9 @@
                     loadWithdrawalHistory();
                     break;
                 case 'admin':
-                    socket.emit('agent:getAllAgents');
+                    if (agentData && agentData.isSuperAdmin) {
+                        socket.emit('agent:getAllAgents');
+                    }
                     break;
             }
             
@@ -2073,9 +2112,37 @@
         }
 
         function autoLogin() {
-            // Could implement token-based auto login
-            // For now, just show login screen
-            showLoginScreen();
+            const agentToken = localStorage.getItem('agentToken');
+            const storedAgentData = localStorage.getItem('agentData');
+            
+            if (agentToken && storedAgentData) {
+                try {
+                    const parsedData = JSON.parse(storedAgentData);
+                    
+                    // Update UI immediately for better UX
+                    document.getElementById('agentName').textContent = parsedData.name;
+                    document.getElementById('agentUsername').textContent = '@' + parsedData.username;
+                    document.getElementById('agentAvatar').textContent = parsedData.name.charAt(0).toUpperCase();
+                    
+                    // Show admin menu if super admin
+                    if (parsedData.isSuperAdmin) {
+                        document.getElementById('adminMenu').style.display = 'block';
+                    }
+                    
+                    // Show dashboard
+                    showDashboardScreen();
+                    
+                    // Verify token with server
+                    socket.emit('agent:verifyToken', { token: agentToken });
+                } catch (error) {
+                    console.error('Auto login error:', error);
+                    localStorage.removeItem('agentToken');
+                    localStorage.removeItem('agentData');
+                    showLoginScreen();
+                }
+            } else {
+                showLoginScreen();
+            }
         }
 
         function handleLoginSuccess(data) {
@@ -2181,6 +2248,10 @@
             }
         }
 
+        function loadRecentActivity() {
+            loadDashboard();
+        }
+
         // Referrals Functions
         function loadReferrals() {
             loadDashboard(); // Referrals are included in dashboard data
@@ -2263,13 +2334,13 @@
                 return;
             }
             
-            if (amount > agentData.totalEarnings) {
+            if (agentData && amount > agentData.totalEarnings) {
                 showNotification('Insufficient earnings', 'error');
                 return;
             }
             
             if (confirm(`Request withdrawal of ${amount.toFixed(2)} ETB to ${phone}?`)) {
-                socket.emit('agent:withdrawRequest', { amount, phone });
+                socket.emit('agent:withdrawRequest', { amount, phoneNumber: phone });
             }
         }
 
@@ -2288,11 +2359,11 @@
                                        w.status === 'pending' ? 'pending' : 'rejected';
                     row.innerHTML = `
                         <td>${new Date(w.createdAt).toLocaleDateString()}</td>
-                        <td>${(-w.amount).toFixed(2)} ETB</td>
+                        <td>${w.amount.toFixed(2)} ETB</td>
                         <td>${w.description?.match(/\d{10}/)?.[0] || 'N/A'}</td>
                         <td><span class="withdrawal-status ${statusClass}">${w.status}</span></td>
                         <td>
-                            <button class="btn btn-sm" onclick="viewWithdrawal('${w._id}')">View</button>
+                            <button class="btn btn-sm" onclick="viewWithdrawal('${w.id}')">View</button>
                         </td>
                     `;
                     withdrawalsBody.appendChild(row);
@@ -2321,19 +2392,19 @@
             let html = `
                 <div class="referral-container" style="margin-bottom: 20px;">
                     <h4>Summary Report</h4>
-                    <p><strong>Period:</strong> ${new Date(data.dateRange.startDate).toLocaleDateString()} - ${new Date(data.dateRange.endDate).toLocaleDateString()}</p>
+                    <p><strong>Period:</strong> ${new Date(data.period.startDate).toLocaleDateString()} - ${new Date(data.period.endDate).toLocaleDateString()}</p>
                     
                     <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 20px 0;">
                         <div class="stat-card">
-                            <div class="stat-value">${data.summary.totalCommission.toFixed(2)} ETB</div>
+                            <div class="stat-value">${data.summary.totalCommission?.toFixed(2) || '0.00'} ETB</div>
                             <div class="stat-label">Total Commission</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-value">${data.summary.totalGames}</div>
+                            <div class="stat-value">${data.summary.totalGames || 0}</div>
                             <div class="stat-label">Total Games</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-value">${data.summary.totalWinnings.toFixed(2)} ETB</div>
+                            <div class="stat-value">${data.summary.totalWinnings?.toFixed(2) || '0.00'} ETB</div>
                             <div class="stat-label">Total Winnings</div>
                         </div>
                     </div>
@@ -2441,8 +2512,8 @@
                         <td><span class="badge ${agent.isActive ? 'success' : 'danger'}">${agent.isActive ? 'Active' : 'Inactive'}</span></td>
                         <td>
                             <div class="agent-actions">
-                                <button class="btn btn-sm" onclick="editAgent('${agent._id}')">Edit</button>
-                                ${!agent.isSuperAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteAgent('${agent._id}', '${agent.name}')">Delete</button>` : ''}
+                                <button class="btn btn-sm" onclick="editAgent('${agent._id || agent.id}')">Edit</button>
+                                ${!agent.isSuperAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteAgent('${agent._id || agent.id}', '${agent.name}')">Delete</button>` : ''}
                             </div>
                         </td>
                     `;
@@ -2595,7 +2666,9 @@ Need more help? Contact the system administrator.`);
             // Handle offline/online status
             window.addEventListener('online', () => {
                 showNotification('Back online', 'success');
-                if (socket) socket.connect();
+                if (socket && !socket.connected) {
+                    socket.connect();
+                }
             });
             
             window.addEventListener('offline', () => {
