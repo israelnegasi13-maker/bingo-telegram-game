@@ -613,13 +613,6 @@ io.on('connection', (socket) => {
       agentSystem.handleAgentDashboard(socket);
     }
   });
-
-  // Agent get dashboard data
-  socket.on('agent:getDashboard', () => {
-    if (agentSystem && agentSystem.handleAgentDashboard) {
-      agentSystem.handleAgentDashboard(socket);
-    }
-  });
   
   // Generate referral link
   socket.on('agent:generateReferralLink', () => {
@@ -630,13 +623,6 @@ io.on('connection', (socket) => {
   
   // Get agent report
   socket.on('agent:report', (data) => {
-    if (agentSystem && agentSystem.handleAgentReport) {
-      agentSystem.handleAgentReport(socket, data);
-    }
-  });
-
-  // Get agent report (alternative name)
-  socket.on('agent:getReport', (data) => {
     if (agentSystem && agentSystem.handleAgentReport) {
       agentSystem.handleAgentReport(socket, data);
     }
@@ -655,13 +641,6 @@ io.on('connection', (socket) => {
       agentSystem.handleGetWithdrawalHistory(socket);
     }
   });
-
-  // Get agent withdrawal history (alternative name)
-  socket.on('agent:getWithdrawalHistory', () => {
-    if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
-      agentSystem.handleGetWithdrawalHistory(socket);
-    }
-  });
   
   // ========== SUPER ADMIN AGENT EVENTS ==========
   // Get all agents (super admin only)
@@ -670,23 +649,9 @@ io.on('connection', (socket) => {
       agentSystem.handleGetAllAgents(socket);
     }
   });
-
-  // Get all agents (for agent admin panel)
-  socket.on('agent:getAllAgents', () => {
-    if (socket.admin && agentSystem && agentSystem.handleGetAllAgents) {
-      agentSystem.handleGetAllAgents(socket);
-    }
-  });
   
   // Create new agent (super admin only)
   socket.on('admin:createAgent', (data) => {
-    if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
-      agentSystem.handleCreateAgent(socket, data);
-    }
-  });
-
-  // Create new agent (for agent admin panel)
-  socket.on('agent:createAgent', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
       agentSystem.handleCreateAgent(socket, data);
     }
@@ -701,13 +666,6 @@ io.on('connection', (socket) => {
   
   // Delete agent (super admin only)
   socket.on('admin:deleteAgent', (agentId) => {
-    if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
-      agentSystem.handleDeleteAgent(socket, agentId);
-    }
-  });
-
-  // Delete agent (for agent admin panel)
-  socket.on('agent:deleteAgent', (agentId) => {
     if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
       agentSystem.handleDeleteAgent(socket, agentId);
     }
@@ -779,6 +737,44 @@ io.on('connection', (socket) => {
     if (socket.admin && agentSystem && agentSystem.resetAgentStatistics) {
       const result = await agentSystem.resetAgentStatistics(agentId);
       socket.emit('admin:agentStatsReset', result);
+    }
+  });
+  
+  // ========== BACKWARD COMPATIBILITY FOR OLD ADMIN.HTML ==========
+  // Handle old admin.html events that used 'agent:' prefix instead of 'admin:' prefix
+  socket.on('agent:createAgent', (data) => {
+    console.warn(`DEPRECATED: agent:createAgent event received from socket ${socket.id}. Frontend should use admin:createAgent`);
+    if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
+      agentSystem.handleCreateAgent(socket, data);
+    } else {
+      socket.emit('admin:error', 'Unauthorized or agent system not available');
+    }
+  });
+  
+  socket.on('agent:updateAgent', (data) => {
+    console.warn(`DEPRECATED: agent:updateAgent event received from socket ${socket.id}. Frontend should use admin:updateAgent`);
+    if (socket.admin && agentSystem && agentSystem.handleUpdateAgent) {
+      agentSystem.handleUpdateAgent(socket, data);
+    } else {
+      socket.emit('admin:error', 'Unauthorized or agent system not available');
+    }
+  });
+  
+  socket.on('agent:deleteAgent', (agentId) => {
+    console.warn(`DEPRECATED: agent:deleteAgent event received from socket ${socket.id}. Frontend should use admin:deleteAgent`);
+    if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
+      agentSystem.handleDeleteAgent(socket, agentId);
+    } else {
+      socket.emit('admin:error', 'Unauthorized or agent system not available');
+    }
+  });
+  
+  socket.on('agent:resetAgentPassword', (data) => {
+    console.warn(`DEPRECATED: agent:resetAgentPassword event received from socket ${socket.id}. Frontend should use admin:resetAgentPassword`);
+    if (socket.admin && agentSystem && agentSystem.handleResetAgentPassword) {
+      agentSystem.handleResetAgentPassword(socket, data);
+    } else {
+      socket.emit('admin:error', 'Unauthorized or agent system not available');
     }
   });
   
@@ -1439,92 +1435,19 @@ app.get('/status', (req, res) => {
 
 // ========== AGENT PORTAL PAGE ==========
 app.get('/agent', (req, res) => {
-  // Serve the agent-dashboard.html file
-  res.sendFile(path.join(__dirname, 'agent-dashboard.html'), (err) => {
-    if (err) {
-      console.error('Error serving agent dashboard:', err);
-      // Fallback to a simple HTML page
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Agent Portal - Bingo Elite</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
-            .container { max-width: 800px; margin: 0 auto; }
-            .login-form { background: #1e293b; padding: 30px; border-radius: 15px; margin: 30px auto; max-width: 400px; }
-            input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; }
-            button { background: #f59e0b; color: white; font-weight: bold; cursor: pointer; }
-            .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1 style="font-size: 2.5rem; margin-bottom: 10px;">👑 Agent Portal</h1>
-            <p style="color: #f59e0b; margin-bottom: 30px;">Bingo Elite - Commission Management System</p>
-            
-            <div class="login-form">
-              <h2>Agent Login</h2>
-              <input type="text" id="username" placeholder="Username">
-              <input type="password" id="password" placeholder="Password">
-              <button onclick="login()">Login</button>
-              <div id="loginError" style="color: #ef4444; margin-top: 10px; display: none;"></div>
-            </div>
-            
-            <div style="margin-top: 30px; padding: 20px; background: rgba(245, 158, 11, 0.1); border-radius: 12px;">
-              <h3>Agent System Features:</h3>
-              <p style="text-align: left; color: #94a3b8;">
-                • 40% commission from Bingo wins<br>
-                • 10% commission from Keno wins<br>
-                • Real-time commission tracking<br>
-                • Agent dashboard with statistics<br>
-                • Referral link generation<br>
-                • Withdrawal requests<br>
-                • Admin panel for agent management<br>
-              </p>
-            </div>
-            
-            <div style="margin-top: 30px;">
-              <a href="/" class="btn" style="background: #3b82f6;">← Back to Home</a>
-              <a href="/telegram" class="btn" style="background: #8b5cf6;">🤖 Telegram Entry</a>
-            </div>
-          </div>
-          
-          <script src="/socket.io/socket.io.js"></script>
-          <script>
-            const socket = io();
-            
-            function login() {
-              const username = document.getElementById('username').value;
-              const password = document.getElementById('password').value;
-              
-              socket.emit('agent:login', { username, password });
-            }
-            
-            socket.on('agent:loginSuccess', (data) => {
-              // Redirect to full agent dashboard
-              window.location.href = '/agent-dashboard.html';
-            });
-            
-            socket.on('agent:loginError', (message) => {
-              const errorDiv = document.getElementById('loginError');
-              errorDiv.textContent = message;
-              errorDiv.style.display = 'block';
-            });
-          </script>
-        </body>
-        </html>
-      `);
-    }
-  });
+  if (fs.existsSync(path.join(__dirname, 'agent-portal.html'))) {
+    res.sendFile(path.join(__dirname, 'agent-portal.html'));
+  } else {
+    res.redirect('/');
+  }
 });
 
 // Serve Agent Portal HTML (fallback if file doesn't exist)
-app.get('/agent-dashboard.html', (req, res) => {
+app.get('/agent-portal.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE (AGENT PORTAL REMOVED) ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -1730,6 +1653,16 @@ app.get('/telegram', async (req, res) => {
                   color: #a78bfa;
               }
               
+              .agent-icon {
+                  background: linear-gradient(135deg, #f59e0b, #d97706);
+                  color: #fbbf24;
+              }
+              
+              .coming-soon-icon {
+                  background: linear-gradient(135deg, #64748b, #475569);
+                  color: #94a3b8;
+              }
+              
               .game-content {
                   flex: 1;
               }
@@ -1772,6 +1705,18 @@ app.get('/telegram', async (req, res) => {
                   border-color: rgba(139, 92, 246, 0.2);
               }
               
+              .feature-tag.agent {
+                  background: rgba(245, 158, 11, 0.1);
+                  color: #fbbf24;
+                  border-color: rgba(245, 158, 11, 0.2);
+              }
+              
+              .feature-tag.coming {
+                  background: rgba(100, 116, 139, 0.1);
+                  color: #94a3b8;
+                  border-color: rgba(100, 116, 139, 0.2);
+              }
+              
               .game-action {
                   margin-left: auto;
               }
@@ -1795,6 +1740,11 @@ app.get('/telegram', async (req, res) => {
                   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
               }
               
+              .play-btn.agent {
+                  background: linear-gradient(135deg, #f59e0b, #d97706);
+                  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+              }
+              
               .play-btn:hover {
                   transform: scale(1.05);
                   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
@@ -1802,6 +1752,21 @@ app.get('/telegram', async (req, res) => {
               
               .play-btn.keno:hover {
                   box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+              }
+              
+              .play-btn.agent:hover {
+                  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35);
+              }
+              
+              .play-btn.coming-soon {
+                  background: linear-gradient(135deg, #64748b, #475569);
+                  cursor: not-allowed;
+                  opacity: 0.7;
+              }
+              
+              .play-btn.coming-soon:hover {
+                  transform: none;
+                  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.25);
               }
               
               .features-highlight {
@@ -1891,6 +1856,11 @@ app.get('/telegram', async (req, res) => {
                   color: #a78bfa;
               }
               
+              .status-badge.agent {
+                  background: rgba(245, 158, 11, 0.1);
+                  color: #fbbf24;
+              }
+              
               @keyframes float {
                   0%, 100% { transform: translateY(0px); }
                   50% { transform: translateY(-5px); }
@@ -1915,6 +1885,14 @@ app.get('/telegram', async (req, res) => {
                   display: flex;
                   align-items: center;
                   gap: 4px;
+              }
+              
+              .agent-highlight {
+                  background: rgba(245, 158, 11, 0.1);
+                  padding: 12px;
+                  border-radius: 12px;
+                  margin: 10px 0;
+                  border: 1px solid rgba(245, 158, 11, 0.2);
               }
               
               @media (max-width: 360px) {
@@ -1945,6 +1923,12 @@ app.get('/telegram', async (req, res) => {
                   
                   <h1 class="welcome-text">ETHIO GAMES</h1>
                   <p class="subtitle">Premium gaming experience on Telegram</p>
+                  
+                  <div class="agent-highlight">
+                      <p style="font-size: 0.7rem; color: #fbbf24; margin: 0; text-align: center;">
+                          👑 <strong>NEW:</strong> Become an agent! Earn 40% commission from Bingo, 10% from Keno!
+                      </p>
+                  </div>
               </div>
               
               <div class="games-section">
@@ -2002,6 +1986,31 @@ app.get('/telegram', async (req, res) => {
                               </button>
                           </div>
                       </div>
+                      
+                      <div class="game-card" onclick="launchGame('agent')">
+                          <div class="game-icon agent-icon">
+                              👑
+                          </div>
+                          <div class="game-content">
+                              <h3 class="game-title">
+                                  AGENT PORTAL
+                                  <span class="status-badge agent">EARN</span>
+                              </h3>
+                              <p class="game-description">
+                                  Become an agent and earn commissions
+                              </p>
+                              <div class="game-features">
+                                  <span class="feature-tag agent">💰 40% Commission</span>
+                                  <span class="feature-tag agent">👥 Refer Friends</span>
+                                  <span class="feature-tag agent">💵 Earn Money</span>
+                              </div>
+                          </div>
+                          <div class="game-action">
+                              <button class="play-btn agent" id="agentBtn">
+                                  EARN
+                              </button>
+                          </div>
+                      </div>
                   </div>
               </div>
               
@@ -2020,11 +2029,11 @@ app.get('/telegram', async (req, res) => {
                       </div>
                       <div class="feature-item">
                           <span class="feature-icon">✓</span>
-                          <span>Auto Start Games</span>
+                          <span>Agent System (40%)</span>
                       </div>
                       <div class="feature-item">
                           <span class="feature-icon">✓</span>
-                          <span>Telebirr Payments</span>
+                          <span>Auto Start Games</span>
                       </div>
                   </div>
               </div>
@@ -2073,6 +2082,8 @@ app.get('/telegram', async (req, res) => {
                       window.location.href = '/game';
                   } else if (game === 'keno') {
                       window.location.href = '/keno';
+                  } else if (game === 'agent') {
+                      window.location.href = '/agent';
                   }
               }
               
@@ -2080,11 +2091,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'How to Play',
-                          message: 'BINGO:\\n1. Select room (10-100 ETB)\\n2. Choose an available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!',
+                          message: 'BINGO:\\\\n1. Select room (10-100 ETB)\\\\n2. Choose an available ticket\\\\n3. Wait for countdown\\\\n4. Mark numbers as called\\\\n5. Claim BINGO to win!\\\\n\\\\nKENO:\\\\n1. Select 5 numbers from 1-80\\\\n2. Choose bet amount (5-100 ETB)\\\\n3. 20 numbers drawn per round\\\\n4. Match 3-5 numbers to win!\\\\n\\\\nAGENT:\\\\n1. Earn 40% commission from Bingo\\\\n2. Earn 10% commission from Keno\\\\n3. Refer friends using your link\\\\n4. Earn from their wins automatically',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('How to Play\\n\\nBINGO:\\n1. Select room (10-100 ETB)\\n2. Choose an available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!');
+                      alert('How to Play\\\\n\\\\nBINGO:\\\\n1. Select room (10-100 ETB)\\\\n2. Choose an available ticket\\\\n3. Wait for countdown\\\\n4. Mark numbers as called\\\\n5. Claim BINGO to win!\\\\n\\\\nKENO:\\\\n1. Select 5 numbers from 1-80\\\\n2. Choose bet amount (5-100 ETB)\\\\n3. 20 numbers drawn per round\\\\n4. Match 3-5 numbers to win!\\\\n\\\\nAGENT:\\\\n1. Earn 40% commission from Bingo\\\\n2. Earn 10% commission from Keno\\\\n3. Refer friends using your link\\\\n4. Earn from their wins automatically');
                   }
               }
               
@@ -2092,11 +2103,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Wallet Information',
-                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n🎮 Play: @ethio_games1_bot',
+                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n👑 Agent commissions: Bingo 40%, Keno 10%\\\\n🎮 Play: @ethio_games1_bot',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Wallet Information\\n\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot');
+                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n👑 Agent commissions: Bingo 40%, Keno 10%\\\\n🎮 Play: @ethio_games1_bot');
                   }
               }
               
@@ -2104,16 +2115,17 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Terms & Conditions',
-                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @ethio_games1_bot for support',
+                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Agent commissions paid weekly\\\\n• Admin decisions are final\\\\n• Contact @ethio_games1_bot for support',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Terms & Conditions\\n\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support');
+                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\\\n• Play responsibly\\\\n• Agent commissions paid weekly\\\\n• Admin decisions are final\\\\n• Contact @ethio_games1_bot for support');
                   }
               }
               
               document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
               document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
+              document.getElementById('agentBtn').addEventListener('click', () => launchGame('agent'));
               
               if (tg && tg.MainButton) {
                   tg.MainButton.setText('🎮 PLAY GAMES');
@@ -2125,6 +2137,7 @@ app.get('/telegram', async (req, res) => {
                           buttons: [
                               { id: 'bingo', type: 'default', text: '🎱 Bingo Elite' },
                               { id: 'keno', type: 'default', text: '🎰 Keno Ultra' },
+                              { id: 'agent', type: 'default', text: '👑 Agent Portal' },
                               { type: 'cancel' }
                           ]
                       });
@@ -2134,6 +2147,8 @@ app.get('/telegram', async (req, res) => {
                               launchGame('bingo');
                           } else if (e.buttonId === 'keno') {
                               launchGame('keno');
+                          } else if (e.buttonId === 'agent') {
+                              launchGame('agent');
                           }
                       });
                   });
@@ -2350,7 +2365,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection game\n\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+                  `• 👑 **AGENT SYSTEM** - Earn 40% commission from referrals\n\n` +
                   `💳 *Wallet Instructions:*\n` +
                   `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Enter receipt number in game wallet\n` +
@@ -2366,6 +2382,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                 {
                   text: '🎰 Play Keno',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/keno' }
+                }
+              ], [
+                {
+                  text: '👑 Become Agent',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/agent' }
                 }
               ]]
             }
@@ -2407,6 +2428,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `2. Open game Wallet\n` +
                   `3. Select amount and enter phone number\n` +
                   `4. Admin will send money within 24 hours\n\n` +
+                  `👑 *Agent System:*\n` +
+                  `• Earn 40% commission from Bingo wins\n` +
+                  `• Earn 10% commission from Keno wins\n` +
+                  `• Refer friends using your link\n` +
+                  `• Earn from their wins automatically\n\n` +
                   `🎮 *Play Now:* @ethio_games1_bot`,
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2414,6 +2440,10 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                 {
                   text: '🎮 Open Games',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                },
+                {
+                  text: '👑 Agent Portal',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/agent' }
                 }
               ]]
             }
@@ -2427,7 +2457,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `👑 *ETHIO GAMES Agent System*\n\n` +
-                  `*Agent Portal:* https://bingo-telegram-game.onrender.com/agent\n\n` +
                   `*How it works:*\n` +
                   `1. Become an agent and get referral link\n` +
                   `2. Share link with friends\n` +
@@ -2436,14 +2465,18 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `*Commission Rates:*\n` +
                   `• 🎱 Bingo wins: *40% commission*\n` +
                   `• 🎰 Keno wins: *10% commission*\n\n` +
+                  `*Example:*\n` +
+                  `If your referral wins 1000 ETB in Bingo:\n` +
+                  `You earn: 1000 × 40% = *400 ETB*\n\n` +
                   `*How to become agent:*\n` +
-                  `Contact admin @ethio_games1_bot`,
+                  `Contact admin @ethio_games1_bot\n\n` +
+                  `*Already an agent?* Use the button below:`,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
                 {
                   text: '👑 Open Agent Portal',
-                  url: 'https://bingo-telegram-game.onrender.com/agent'
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/agent' }
                 }
               ]]
             }
@@ -2459,7 +2492,14 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *ETHIO GAMES Help*\n\n` +
                   `*Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection (NEW)\n\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number selection (NEW)\n` +
+                  `• 👑 **AGENT SYSTEM** - Earn commissions (NEW)\n\n` +
+                  `*Agent System:*\n` +
+                  `• 40% commission from Bingo wins\n` +
+                  `• 10% commission from Keno wins\n` +
+                  `• Real-time commission tracking\n` +
+                  `• Weekly withdrawals\n` +
+                  `• Referral link generation\n\n` +
                   `*Commands:*\n` +
                   `/start - Start the bot\n` +
                   `/play - Play games\n` +
@@ -2547,7 +2587,6 @@ app.get('/setup-telegram', async (req, res) => {
           
           <div class="agent-highlight">
             <h3>👑 AGENT SYSTEM - NOW AVAILABLE</h3>
-            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
             <p><strong>Agent Statistics:</strong></p>
             <p>• Total Agents: ${agentStats.totalAgents || 0}</p>
             <p>• Active Agents: ${agentStats.activeAgents || 0}</p>
@@ -2588,6 +2627,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Games Available:</strong></p>
             <p>1. 🎱 <strong>BINGO ELITE:</strong> Real-time multiplayer bingo</p>
             <p>2. 🎰 <strong>KENO ULTRA:</strong> Fast number selection game</p>
+            <p>3. 👑 <strong>AGENT SYSTEM:</strong> Earn commissions from referrals</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
@@ -2613,7 +2653,7 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Open @ethio_games1_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
-              <li>Choose between Bingo or Keno!</li>
+              <li>Choose between Bingo, Keno, or Agent Portal!</li>
             </ol>
             
             <h4>Agent System Instructions:</h4>
