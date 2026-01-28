@@ -66,7 +66,7 @@ class AgentSystem {
           createdAt: new Date(),
           updatedAt: new Date()
         });
-        console.log('👑 Default admin agent created');
+        console.log('👑 Default admin agent created with username: admin, password: admin123');
         
         // Add to cache
         this.referralCache.set('ADMIN001', adminAgent._id.toString());
@@ -147,10 +147,63 @@ class AgentSystem {
         referralCode: agent.referralCode || ''
       });
 
-      console.log(`👤 Agent logged in: ${agent.username}`);
+      console.log(`👤 Agent logged in: ${agent.username} (Super Admin: ${agent.isSuperAdmin})`);
     } catch (error) {
       console.error('Agent login error:', error);
       socket.emit('agent:loginError', 'Login failed');
+    }
+  }
+
+  // Verify agent token for auto login
+  async handleVerifyAgentToken(socket, data) {
+    try {
+      const { token } = data;
+      
+      if (!token) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(token);
+      if (!agent) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      if (!agent.isActive) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      // Store agent info in socket
+      socket.agentId = agent._id.toString();
+      socket.agentData = {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
+      };
+
+      this.agentSockets.set(agent._id.toString(), socket);
+
+      socket.emit('agent:tokenVerified', {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        commissionRateBingo: agent.commissionRateBingo,
+        commissionRateKeno: agent.commissionRateKeno,
+        totalEarnings: agent.totalEarnings,
+        totalReferrals: agent.totalReferrals,
+        activeReferrals: agent.activeReferrals,
+        isSuperAdmin: agent.isSuperAdmin,
+        phoneNumber: agent.phoneNumber || '',
+        referralCode: agent.referralCode || ''
+      });
+
+      console.log(`👤 Agent auto-logged in: ${agent.username} via token`);
+    } catch (error) {
+      console.error('Token verification error:', error);
+      socket.emit('agent:tokenInvalid');
     }
   }
 
@@ -1406,6 +1459,37 @@ class AgentSystem {
     }
   }
 
+  // Get all pending agent withdrawals (for admin)
+  async handleGetPendingWithdrawals(socket) {
+    try {
+      if (!socket.agentData?.isSuperAdmin) {
+        socket.emit('agent:error', 'Unauthorized');
+        return;
+      }
+
+      const withdrawals = await this.models.AgentTransaction.find({
+        type: 'WITHDRAWAL',
+        status: 'pending'
+      })
+      .populate('agentId', 'name username phoneNumber')
+      .sort({ createdAt: -1 });
+
+      socket.emit('agent:pendingWithdrawals', withdrawals.map(w => ({
+        id: w._id,
+        agentId: w.agentId._id,
+        agentName: w.agentId.name,
+        agentUsername: w.agentId.username,
+        agentPhone: w.agentId.phoneNumber,
+        amount: -w.amount,
+        description: w.description,
+        createdAt: w.createdAt
+      })));
+    } catch (error) {
+      console.error('Get pending withdrawals error:', error);
+      socket.emit('agent:error', 'Failed to get pending withdrawals');
+    }
+  }
+
   // Broadcast to all admin agents
   broadcastToAdmins(event, data) {
     this.agentSockets.forEach((socket, agentId) => {
@@ -1521,37 +1605,6 @@ class AgentSystem {
     } catch (error) {
       console.error('Get agent statistics error:', error);
       return null;
-    }
-  }
-
-  // Get all pending agent withdrawals (for admin)
-  async handleGetPendingWithdrawals(socket) {
-    try {
-      if (!socket.agentData?.isSuperAdmin) {
-        socket.emit('agent:error', 'Unauthorized');
-        return;
-      }
-
-      const withdrawals = await this.models.AgentTransaction.find({
-        type: 'WITHDRAWAL',
-        status: 'pending'
-      })
-      .populate('agentId', 'name username phoneNumber')
-      .sort({ createdAt: -1 });
-
-      socket.emit('agent:pendingWithdrawals', withdrawals.map(w => ({
-        id: w._id,
-        agentId: w.agentId._id,
-        agentName: w.agentId.name,
-        agentUsername: w.agentId.username,
-        agentPhone: w.agentId.phoneNumber,
-        amount: -w.amount,
-        description: w.description,
-        createdAt: w.createdAt
-      })));
-    } catch (error) {
-      console.error('Get pending withdrawals error:', error);
-      socket.emit('agent:error', 'Failed to get pending withdrawals');
     }
   }
 
@@ -2428,6 +2481,35 @@ class AgentSystem {
       console.error('Get agent performance metrics error:', error);
       return null;
     }
+  }
+
+  // Cleanup agent system
+  async cleanup() {
+    try {
+      console.log('🧹 Cleaning up agent system...');
+      
+      // Clear caches
+      this.agentSockets.clear();
+      this.referralCache.clear();
+      this.processingClaims.clear();
+      this.roomWinners.clear();
+      
+      console.log('✅ Agent system cleanup completed');
+    } catch (error) {
+      console.error('Agent system cleanup error:', error);
+    }
+  }
+
+  // Get agent system status
+  getSystemStatus() {
+    return {
+      totalAgents: this.agentSockets.size,
+      totalReferralCodes: this.referralCache.size,
+      processingClaims: this.processingClaims.size,
+      roomWinners: this.roomWinners.size,
+      commissionRates: this.commissionRates,
+      isInitialized: true
+    };
   }
 }
 
