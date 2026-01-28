@@ -45,6 +45,11 @@ class AgentSystem {
     this.kenoLogic = kenoLogic;
   }
 
+  // Helper method to check admin access
+  checkAdminAccess(socket) {
+    return socket.admin || (socket.agentData && socket.agentData.isSuperAdmin);
+  }
+
   async ensureAdminAgent() {
     try {
       const adminExists = await this.models.Agent.findOne({ username: 'admin' });
@@ -481,8 +486,8 @@ class AgentSystem {
   // Manual referral assignment by admin
   async handleManualReferralAssignment(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -782,8 +787,8 @@ class AgentSystem {
   // Super Admin: Get all agents
   async handleGetAllAgents(socket) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -852,11 +857,21 @@ class AgentSystem {
     }
   }
 
-  // Super Admin: Create new agent
+  // Super Admin: Create new agent - FIXED VERSION
   async handleCreateAgent(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      console.log('🔧 handleCreateAgent called:', {
+        hasAdminProp: !!socket.admin,
+        agentData: socket.agentData,
+        isSuperAdmin: socket.agentData?.isSuperAdmin,
+        data: data
+      });
+
+      // Check for admin authorization
+      const isAdmin = socket.admin || (socket.agentData && socket.agentData.isSuperAdmin);
+      if (!isAdmin) {
+        console.log('❌ Unauthorized access attempt');
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -879,7 +894,10 @@ class AgentSystem {
       }
 
       // Check if agent exists
-      const existingAgent = await this.models.Agent.findOne({ username: username.toLowerCase() });
+      const existingAgent = await this.models.Agent.findOne({ 
+        username: username.toLowerCase().trim() 
+      });
+      
       if (existingAgent) {
         socket.emit('agent:error', 'Username already exists');
         return;
@@ -891,27 +909,35 @@ class AgentSystem {
       // Generate unique referral code
       let referralCode;
       let isUnique = false;
+      let attempts = 0;
+      const maxAttempts = 10;
       
-      while (!isUnique) {
+      while (!isUnique && attempts < maxAttempts) {
         referralCode = `AGENT${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
         const existing = await this.models.Agent.findOne({ referralCode });
         if (!existing) {
           isUnique = true;
         }
+        attempts++;
+      }
+
+      if (!isUnique) {
+        socket.emit('agent:error', 'Failed to generate unique referral code. Please try again.');
+        return;
       }
 
       // Create agent
       const agent = new this.models.Agent({
-        username: username.toLowerCase(),
+        username: username.toLowerCase().trim(),
         password: hashedPassword,
-        name,
+        name: name.trim(),
         commissionRateBingo: commissionRateBingo || 40,
         commissionRateKeno: commissionRateKeno || 10,
         totalEarnings: 0,
         totalReferrals: 0,
         activeReferrals: 0,
         referralCode,
-        phoneNumber: phoneNumber || '',
+        phoneNumber: phoneNumber ? phoneNumber.trim() : '',
         isActive: true,
         isSuperAdmin: false,
         createdAt: new Date(),
@@ -924,6 +950,7 @@ class AgentSystem {
       this.referralCache.set(referralCode, agent._id.toString());
 
       socket.emit('agent:agentCreated', {
+        success: true,
         message: 'Agent created successfully',
         agent: {
           id: agent._id,
@@ -932,7 +959,8 @@ class AgentSystem {
           referralCode: agent.referralCode,
           commissionRateBingo: agent.commissionRateBingo,
           commissionRateKeno: agent.commissionRateKeno,
-          phoneNumber: agent.phoneNumber
+          phoneNumber: agent.phoneNumber,
+          isActive: agent.isActive
         }
       });
 
@@ -942,21 +970,23 @@ class AgentSystem {
         username: agent.username,
         name: agent.name,
         referralCode: agent.referralCode,
-        createdAt: new Date()
+        createdAt: new Date(),
+        createdBy: socket.agentData?.username || 'Admin'
       });
 
-      console.log(`👤 New agent created: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
+      console.log(`👤 New agent created: ${agent.username} by ${socket.agentData?.username || socket.adminId || 'Admin'}`);
+      
     } catch (error) {
       console.error('Create agent error:', error);
-      socket.emit('agent:error', 'Failed to create agent');
+      socket.emit('agent:error', `Failed to create agent: ${error.message}`);
     }
   }
 
   // Super Admin: Update agent
   async handleUpdateAgent(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1048,8 +1078,8 @@ class AgentSystem {
   // Super Admin: Delete agent
   async handleDeleteAgent(socket, agentId) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1122,8 +1152,8 @@ class AgentSystem {
   // Super Admin: Reset agent password
   async handleResetAgentPassword(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1302,8 +1332,8 @@ class AgentSystem {
   // Export agent data to CSV
   async handleExportAgentData(socket, data) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1443,8 +1473,8 @@ class AgentSystem {
   // Super Admin: Approve agent withdrawal
   async handleApproveAgentWithdrawal(socket, transactionId) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1488,8 +1518,8 @@ class AgentSystem {
   // Super Admin: Reject agent withdrawal
   async handleRejectAgentWithdrawal(socket, transactionId) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
@@ -1568,8 +1598,8 @@ class AgentSystem {
   // Get all pending agent withdrawals (for admin)
   async handleGetPendingWithdrawals(socket) {
     try {
-      if (!socket.agentData?.isSuperAdmin && !socket.admin) {
-        socket.emit('agent:error', 'Unauthorized');
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
         return;
       }
 
