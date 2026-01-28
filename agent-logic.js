@@ -478,6 +478,112 @@ class AgentSystem {
     }
   }
 
+  // Manual referral assignment by admin
+  async handleManualReferralAssignment(socket, data) {
+    try {
+      if (!socket.agentData?.isSuperAdmin) {
+        socket.emit('agent:error', 'Unauthorized');
+        return;
+      }
+
+      const { userId, referralCode } = data;
+      
+      if (!userId || !referralCode) {
+        socket.emit('agent:error', 'User ID and Referral Code are required');
+        return;
+      }
+
+      const result = await this.assignUserToAgent(userId, referralCode);
+      
+      if (result.success) {
+        socket.emit('agent:manualAssignmentSuccess', {
+          message: result.message,
+          userId: result.userId,
+          agentId: result.agentId,
+          agentName: result.agentName
+        });
+        
+        // Notify the agent if online
+        const agentSocket = this.agentSockets.get(result.agentId);
+        if (agentSocket) {
+          agentSocket.emit('agent:newReferral', {
+            userId: userId,
+            userName: result.userName,
+            timestamp: new Date(),
+            referralCode: referralCode,
+            assignedBy: socket.agentData.username
+          });
+        }
+      } else {
+        socket.emit('agent:error', result.message);
+      }
+    } catch (error) {
+      console.error('Manual referral assignment error:', error);
+      socket.emit('agent:error', 'Failed to assign user to agent');
+    }
+  }
+
+  // Assign user to agent (utility method)
+  async assignUserToAgent(userId, referralCode) {
+    try {
+      // Find agent by referral code
+      const agent = await this.models.Agent.findOne({ referralCode });
+      if (!agent) {
+        return { success: false, message: 'Agent not found with this referral code' };
+      }
+
+      if (!agent.isActive) {
+        return { success: false, message: 'Agent is inactive' };
+      }
+
+      // Find user
+      const user = await this.models.User.findOne({ userId });
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
+      // Check if user already has an agent
+      if (user.agentId) {
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        return { 
+          success: false, 
+          message: `User already assigned to agent: ${currentAgent?.name || currentAgent?.username || 'Unknown'}`
+        };
+      }
+
+      // Assign agent to user
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      await user.save();
+
+      // Update agent referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      if (user.isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      }
+      await agent.save();
+
+      // Update cache
+      this.referralCache.set(agent.referralCode, agent._id.toString());
+
+      console.log(`✅ Manual assignment: ${userId} -> Agent ${agent.username} (${referralCode})`);
+      
+      return {
+        success: true,
+        message: 'User assigned to agent successfully',
+        userId: userId,
+        userName: user.userName,
+        agentId: agent._id,
+        agentName: agent.name,
+        agentUsername: agent.username,
+        referralCode: referralCode
+      };
+    } catch (error) {
+      console.error('Assign user to agent error:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
   // Record commission for agent
   async recordCommission(agentId, userId, gameType, stake, winningAmount) {
     try {
@@ -2010,9 +2116,6 @@ class AgentSystem {
         .sort({ joinedAt: -1 })
         .limit(100);
 
-      // For each direct referral, get their sub-referrals (if any)
-      // This is a simplified version - in a real system, you might have multi-level referrals
-      
       return {
         agent: {
           id: agent._id,
