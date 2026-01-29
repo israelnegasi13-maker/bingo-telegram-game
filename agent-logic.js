@@ -234,14 +234,23 @@ class AgentSystem {
         .limit(50)
         .select('userId userName balance totalWagered totalWins totalBingos joinedAt lastSeen isOnline referredBy agentReferredAt');
 
-      // Get referral records for more details
-      const referralRecords = await this.models.Referral.find({ agentId: agent._id })
-        .sort({ createdAt: -1 })
-        .limit(50);
+      // Get referral records for more details - FETCH ALL FOR THESE USERS
+      const referralRecords = await this.models.Referral.find({ 
+        agentId: agent._id,
+        userId: { $in: referrals.map(r => r.userId) }
+      }).sort({ createdAt: -1 });
+
+      // Create a map of userId -> referral record for quick lookup
+      const referralRecordMap = {};
+      referralRecords.forEach(record => {
+        if (!referralRecordMap[record.userId]) {
+          referralRecordMap[record.userId] = record;
+        }
+      });
 
       // Combine user data with referral method
       const enhancedReferrals = referrals.map(user => {
-        const referralRecord = referralRecords.find(r => r.userId === user.userId);
+        const referralRecord = referralRecordMap[user.userId];
         return {
           userId: user.userId,
           userName: user.userName || 'No Name',
@@ -258,11 +267,39 @@ class AgentSystem {
         };
       });
 
-      // Get recent commissions (last 50)
+      // Get recent commissions (last 50) with referral method
       const commissions = await this.models.AgentCommission.find({ agentId: agent._id })
         .sort({ createdAt: -1 })
         .limit(50)
         .populate('userId', 'userName userId');
+
+      // Get referral records for commissions to include referral method
+      const commissionUserIds = commissions.map(c => c.userId?.userId || c.userId);
+      const commissionReferralRecords = await this.models.Referral.find({
+        agentId: agent._id,
+        userId: { $in: commissionUserIds }
+      });
+
+      // Create map for commission referral methods
+      const commissionReferralMap = {};
+      commissionReferralRecords.forEach(record => {
+        commissionReferralMap[record.userId] = record.referralMethod;
+      });
+
+      // Enhance commissions with referral method
+      const enhancedCommissions = commissions.map(comm => ({
+        id: comm._id,
+        userId: comm.userId?.userId || 'Unknown',
+        userName: comm.userId?.userName || 'Unknown',
+        gameType: comm.gameType,
+        stake: comm.stake,
+        winningAmount: comm.winningAmount,
+        commissionRate: comm.commissionRate,
+        commissionAmount: comm.commissionAmount,
+        referralMethod: commissionReferralMap[comm.userId?.userId] || 'unknown',
+        status: comm.status,
+        createdAt: comm.createdAt
+      }));
 
       // Get today's earnings
       const today = new Date();
@@ -338,7 +375,7 @@ class AgentSystem {
         ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1)
         : todayTotal > 0 ? 100 : 0;
 
-      // Get referral methods breakdown
+      // Get referral methods breakdown - FIXED to properly count each method
       const telegramReferrals = await this.models.Referral.countDocuments({
         agentId: agent._id,
         referralMethod: 'telegram_link'
@@ -353,6 +390,27 @@ class AgentSystem {
         agentId: agent._id,
         referralMethod: 'admin_assigned'
       });
+
+      // Also count from User model as fallback
+      const userTelegramReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: 'telegram_link'
+      });
+
+      const userManualReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: { $in: ['manual', 'bulk_manual'] }
+      });
+
+      const userAdminReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: 'admin_assigned'
+      });
+
+      // Use the maximum of both counts to ensure accuracy
+      const finalTelegramReferrals = Math.max(telegramReferrals, userTelegramReferrals);
+      const finalManualReferrals = Math.max(manualReferrals, userManualReferrals);
+      const finalAdminReferrals = Math.max(adminReferrals, userAdminReferrals);
 
       socket.emit('agent:dashboardData', {
         agent: {
@@ -381,24 +439,16 @@ class AgentSystem {
             agentId: agent._id,
             status: 'pending'
           }),
-          telegramReferrals: telegramReferrals,
-          manualReferrals: manualReferrals,
-          adminReferrals: adminReferrals
+          telegramReferrals: finalTelegramReferrals,
+          manualReferrals: finalManualReferrals,
+          adminReferrals: finalAdminReferrals,
+          totalReferralMethods: finalTelegramReferrals + finalManualReferrals + finalAdminReferrals
         },
         referrals: enhancedReferrals,
-        commissions: commissions.map(comm => ({
-          id: comm._id,
-          userId: comm.userId?.userId || 'Unknown',
-          userName: comm.userId?.userName || 'Unknown',
-          gameType: comm.gameType,
-          stake: comm.stake,
-          winningAmount: comm.winningAmount,
-          commissionRate: comm.commissionRate,
-          commissionAmount: comm.commissionAmount,
-          status: comm.status,
-          createdAt: comm.createdAt
-        }))
+        commissions: enhancedCommissions
       });
+
+      console.log(`📊 Dashboard sent to agent ${agent.username}: ${enhancedReferrals.length} referrals, ${enhancedCommissions.length} commissions`);
     } catch (error) {
       console.error('Dashboard error:', error);
       socket.emit('agent:error', 'Failed to load dashboard');
@@ -498,6 +548,28 @@ class AgentSystem {
       if (user.agentId) {
         if (user.agentId.toString() === agent._id.toString()) {
           console.log(`ℹ️ User ${userId} is already referral of agent ${agent.username}`);
+          
+          // Check if referral record exists
+          const existingReferral = await this.models.Referral.findOne({
+            agentId: agent._id,
+            userId: userId
+          });
+          
+          if (!existingReferral) {
+            // Create referral record if missing
+            const referralRecord = new this.models.Referral({
+              agentId: agent._id,
+              userId: user.userId,
+              userName: user.userName,
+              referralMethod: 'telegram_link',
+              referralCode: agent.referralCode,
+              status: 'active',
+              createdAt: user.agentReferredAt || new Date(),
+              updatedAt: new Date()
+            });
+            await referralRecord.save();
+          }
+          
           return {
             success: true,
             already: true,
@@ -627,6 +699,28 @@ class AgentSystem {
       if (user.agentId) {
         if (user.agentId.toString() === agent._id.toString()) {
           socket.emit('agent:error', `"${user.userName || user.userId}" is already your referral.`);
+          
+          // Check if referral record exists
+          const existingReferral = await this.models.Referral.findOne({
+            agentId: agent._id,
+            userId: user.userId
+          });
+          
+          if (!existingReferral) {
+            // Create missing referral record
+            const referralRecord = new this.models.Referral({
+              agentId: agent._id,
+              userId: user.userId,
+              userName: user.userName,
+              referralMethod: 'manual',
+              referralCode: agent.referralCode,
+              status: 'active',
+              createdAt: user.agentReferredAt || new Date(),
+              updatedAt: new Date()
+            });
+            await referralRecord.save();
+          }
+          
           return;
         }
         
@@ -1167,7 +1261,7 @@ class AgentSystem {
     }
   }
 
-  // Record commission for agent
+  // Record commission for agent - UPDATED to include referral method
   async recordCommission(agentId, userId, gameType, stake, winningAmount) {
     try {
       const agent = await this.models.Agent.findById(agentId);
@@ -1206,6 +1300,14 @@ class AgentSystem {
         return 0;
       }
 
+      // Get referral method
+      const referralRecord = await this.models.Referral.findOne({
+        agentId: agent._id,
+        userId: userId
+      }).sort({ createdAt: -1 });
+
+      const referralMethod = referralRecord ? referralRecord.referralMethod : (user.referredBy || 'unknown');
+
       // Update user's agent commission earned
       user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
       await user.save();
@@ -1219,6 +1321,7 @@ class AgentSystem {
         winningAmount: winningAmount,
         commissionRate: commissionRate,
         commissionAmount: commissionAmount,
+        referralMethod: referralMethod,
         status: 'completed',
         createdAt: new Date()
       });
@@ -1235,7 +1338,7 @@ class AgentSystem {
         agentId: agent._id,
         type: 'COMMISSION',
         amount: commissionAmount,
-        description: `${gameType} commission from referral ${userId.substring(0, 8)}...`,
+        description: `${gameType} commission from referral ${userId.substring(0, 8)}... via ${referralMethod}`,
         status: 'completed',
         createdAt: new Date()
       });
@@ -1267,6 +1370,7 @@ class AgentSystem {
           winningAmount: winningAmount,
           commissionAmount: commissionAmount,
           commissionRate: commissionRate,
+          referralMethod: referralMethod,
           timestamp: new Date()
         });
       }
@@ -1274,7 +1378,7 @@ class AgentSystem {
       // Update daily stats
       await this.updateDailyAgentStats(agentId, commissionAmount);
 
-      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (User: ${userId})`);
+      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (User: ${userId}, Method: ${referralMethod})`);
       return commissionAmount;
     } catch (error) {
       console.error('Record commission error:', error);
@@ -1895,7 +1999,8 @@ class AgentSystem {
           $group: {
             _id: {
               date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-              gameType: "$gameType"
+              gameType: "$gameType",
+              referralMethod: "$referralMethod"
             },
             totalCommission: { $sum: "$commissionAmount" },
             totalGames: { $sum: 1 },
@@ -1936,7 +2041,23 @@ class AgentSystem {
         {
           $group: {
             _id: "$referralMethod",
-            count: { $sum: 1 }
+            count: { $sum: 1 },
+            totalCommission: {
+              $sum: {
+                $let: {
+                  vars: {
+                    commissions: {
+                      $filter: {
+                        input: "$commissions",
+                        as: "comm",
+                        cond: { $gte: ["$$comm.createdAt", start] }
+                      }
+                    }
+                  },
+                  in: { $sum: "$$commissions.amount" }
+                }
+              }
+            }
           }
         }
       ]);
@@ -2439,9 +2560,17 @@ class AgentSystem {
         .sort({ createdAt: -1 })
         .limit(100);
 
+      // Create a map for quick lookup
+      const referralRecordMap = {};
+      referralRecords.forEach(record => {
+        if (!referralRecordMap[record.userId]) {
+          referralRecordMap[record.userId] = record;
+        }
+      });
+
       // Combine user data with referral method
       const enhancedReferrals = directReferrals.map(user => {
-        const referralRecord = referralRecords.find(r => r.userId === user.userId);
+        const referralRecord = referralRecordMap[user.userId];
         return {
           userId: user.userId,
           userName: user.userName || 'No Name',
@@ -2634,6 +2763,133 @@ class AgentSystem {
     } catch (error) {
       console.error('Get agent performance metrics error:', error);
       return null;
+    }
+  }
+
+  // Fix missing referral records for existing users
+  async fixMissingReferralRecords(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Get all users assigned to this agent without referral records
+      const users = await this.models.User.find({ 
+        agentId: agent._id 
+      }).select('userId userName referredBy agentReferredAt');
+
+      let fixedCount = 0;
+      let alreadyExistCount = 0;
+
+      for (const user of users) {
+        // Check if referral record already exists
+        const existingReferral = await this.models.Referral.findOne({
+          agentId: agent._id,
+          userId: user.userId
+        });
+
+        if (!existingReferral) {
+          // Create missing referral record
+          const referralRecord = new this.models.Referral({
+            agentId: agent._id,
+            userId: user.userId,
+            userName: user.userName,
+            referralMethod: user.referredBy || 'unknown',
+            referralCode: agent.referralCode,
+            status: 'active',
+            createdAt: user.agentReferredAt || new Date(),
+            updatedAt: new Date()
+          });
+          await referralRecord.save();
+          fixedCount++;
+        } else {
+          alreadyExistCount++;
+        }
+      }
+
+      socket.emit('agent:fixResult', {
+        success: true,
+        message: `Fixed ${fixedCount} missing referral records. ${alreadyExistCount} already existed.`,
+        fixedCount,
+        alreadyExistCount,
+        totalUsers: users.length
+      });
+
+      console.log(`🔧 Fixed ${fixedCount} missing referral records for agent ${agent.username}`);
+    } catch (error) {
+      console.error('Fix missing referral records error:', error);
+      socket.emit('agent:error', 'Failed to fix referral records');
+    }
+  }
+
+  // Migrate old referrals to new system
+  async migrateOldReferrals(socket) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      // Get all users with agentId but without referredBy
+      const usersWithoutMethod = await this.models.User.find({
+        agentId: { $exists: true, $ne: null },
+        $or: [
+          { referredBy: { $exists: false } },
+          { referredBy: null }
+        ]
+      }).limit(100);
+
+      let migratedCount = 0;
+
+      for (const user of usersWithoutMethod) {
+        // Set default referral method
+        user.referredBy = 'legacy';
+        await user.save();
+
+        // Check if referral record exists
+        const existingReferral = await this.models.Referral.findOne({
+          agentId: user.agentId,
+          userId: user.userId
+        });
+
+        if (!existingReferral) {
+          const agent = await this.models.Agent.findById(user.agentId);
+          if (agent) {
+            const referralRecord = new this.models.Referral({
+              agentId: user.agentId,
+              userId: user.userId,
+              userName: user.userName,
+              referralMethod: 'legacy',
+              referralCode: agent.referralCode || 'UNKNOWN',
+              status: 'active',
+              createdAt: user.agentReferredAt || new Date(),
+              updatedAt: new Date()
+            });
+            await referralRecord.save();
+          }
+        }
+
+        migratedCount++;
+      }
+
+      socket.emit('agent:migrationResult', {
+        success: true,
+        message: `Migrated ${migratedCount} old referrals to new system`,
+        migratedCount,
+        totalFound: usersWithoutMethod.length
+      });
+
+      console.log(`🔄 Migrated ${migratedCount} old referrals to new system`);
+    } catch (error) {
+      console.error('Migrate old referrals error:', error);
+      socket.emit('agent:error', 'Migration failed');
     }
   }
 }
