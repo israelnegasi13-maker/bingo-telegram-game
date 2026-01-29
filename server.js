@@ -194,6 +194,7 @@ const userSchema = new mongoose.Schema({
   // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
+  referredBy: { type: String, default: null }, // 'telegram_link', 'manual', 'bulk_manual', 'admin_assigned'
   agentCommissionEarned: { type: Number, default: 0 }
 });
 
@@ -318,6 +319,27 @@ const agentTransactionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Referral Schema (for tracking referral methods)
+const referralSchema = new mongoose.Schema({
+  agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
+  userId: { type: String, required: true },
+  userName: { type: String },
+  referralMethod: { 
+    type: String, 
+    enum: ['telegram_link', 'manual', 'bulk_manual', 'admin_assigned'], 
+    required: true 
+  },
+  referralCode: { type: String },
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Create indexes for faster queries
+referralSchema.index({ agentId: 1, createdAt: -1 });
+referralSchema.index({ userId: 1 }, { unique: true });
+referralSchema.index({ referralCode: 1 });
+
 // Create all models
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
@@ -327,6 +349,7 @@ const Setting = mongoose.model('Setting', settingSchema);
 const Agent = mongoose.model('Agent', agentSchema);
 const AgentCommission = mongoose.model('AgentCommission', agentCommissionSchema);
 const AgentTransaction = mongoose.model('AgentTransaction', agentTransactionSchema);
+const Referral = mongoose.model('Referral', referralSchema);
 
 // ========== TELEBIRR NUMBER DATABASE FUNCTIONS ==========
 async function getTelebirrNumber() {
@@ -502,7 +525,8 @@ const models = {
   Setting,
   Agent,
   AgentCommission,
-  AgentTransaction
+  AgentTransaction,
+  Referral
 };
 
 // Pass database models and Telebirr number functions to game logic
@@ -521,7 +545,8 @@ if (kenoLogic && kenoLogic.initialize) {
     Transaction,
     Stats,
     Agent,
-    AgentCommission
+    AgentCommission,
+    Referral
   });
 }
 
@@ -1200,7 +1225,26 @@ app.get('/', async (req, res) => {
     const kenoPlayers = kenoLogic && kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
     const kenoOnline = kenoLogic && kenoLogic.getOnlinePlayersCount ? kenoLogic.getOnlinePlayersCount() : 0;
     const telebirrNumber = await getTelebirrNumber();
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
+    
+    // Get agent statistics
+    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
+      totalAgents: 0, 
+      activeAgents: 0, 
+      totalCommissions: 0,
+      totalReferrals: 0,
+      todayCommissions: 0,
+      pendingWithdrawals: 0 
+    };
+    
+    // Get referral statistics
+    const totalUsers = await User.countDocuments();
+    const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
+    const usersWithoutAgents = totalUsers - usersWithAgents;
+    
+    // Get referral methods breakdown
+    const telegramReferrals = await Referral.countDocuments({ referralMethod: 'telegram_link' });
+    const manualReferrals = await Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
+    const adminReferrals = await Referral.countDocuments({ referralMethod: 'admin_assigned' });
     
     res.send(`
       <!DOCTYPE html>
@@ -1227,6 +1271,10 @@ app.get('/', async (req, res) => {
           .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
           .game-section { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
           .agent-section { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
+          .referral-stats { background: rgba(245, 158, 11, 0.05); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.2); }
+          .referral-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; }
+          .referral-item { background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; }
+          .referral-method { font-size: 0.8rem; color: #f59e0b; }
         </style>
       </head>
       <body>
@@ -1267,6 +1315,29 @@ app.get('/', async (req, res) => {
               <div class="stat-label">📱 TELEBIRR PAYMENT NUMBER</div>
               <div class="telebirr-number">${telebirrNumber}</div>
               <p style="color: #94a3b8; font-size: 0.9rem;">Persisted in database - Will survive server restarts</p>
+            </div>
+            
+            <div class="referral-stats">
+              <h3 style="color: #f59e0b;">📊 REFERRAL SYSTEM STATISTICS</h3>
+              <div class="referral-grid">
+                <div class="referral-item">
+                  <div class="stat-label">Total Users with Agents</div>
+                  <div class="stat-value" style="font-size: 1.8rem;">${usersWithAgents} / ${totalUsers}</div>
+                </div>
+                <div class="referral-item">
+                  <div class="stat-label">Agent Referrals</div>
+                  <div class="stat-value" style="font-size: 1.8rem;">${agentStats.totalReferrals || 0}</div>
+                </div>
+              </div>
+              
+              <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 10px; margin: 10px 0;">
+                <h4 style="color: #fbbf24; margin-bottom: 10px;">Referral Methods Breakdown</h4>
+                <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                  <div><span class="referral-method">🤖 Telegram Links:</span> ${telegramReferrals}</div>
+                  <div><span class="referral-method">👤 Manual Assignments:</span> ${manualReferrals}</div>
+                  <div><span class="referral-method">🔧 Admin Assignments:</span> ${adminReferrals || 0}</div>
+                </div>
+              </div>
             </div>
             
             <div class="agent-section">
@@ -1345,6 +1416,7 @@ app.get('/', async (req, res) => {
               <a href="/debug-connections" class="btn" style="background: #f59e0b;" target="_blank">🔍 Debug Connections</a>
               <a href="/debug-agents" class="btn" style="background: #f59e0b;" target="_blank">👑 Debug Agents</a>
               <a href="/debug-telebirr" class="btn" style="background: #f59e0b;" target="_blank">📱 Debug Telebirr</a>
+              <a href="/debug/referrals" class="btn" style="background: #f59e0b;" target="_blank">📊 Debug Referrals</a>
             </div>
           </div>
           
@@ -1356,6 +1428,7 @@ app.get('/', async (req, res) => {
               Keno Players: ${kenoOnline} online / ${kenoPlayers} total<br>
               Agents: ${agentStats.activeAgents || 0} active / ${agentStats.totalAgents || 0} total<br>
               Agent Commissions: ${(agentStats.totalCommissions || 0).toFixed(2)} ETB<br>
+              Agent Referrals: ${agentStats.totalReferrals || 0} total referrals<br>
               Telegram Integration: ✅ Ready<br>
               Game Timer: ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMER : 3}s between balls<br>
               Keno Timer: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_GAME_TIMER : 30}s rounds<br>
@@ -1363,6 +1436,7 @@ app.get('/', async (req, res) => {
               Real-time Box Updates: ✅ ACTIVE<br>
               Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
               Agent System: ✅ ACTIVE (40% Bingo, 10% Keno commissions)<br>
+              Referral System: ✅ ACTIVE (${usersWithAgents} users with agents)<br>
               <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
               Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
               <strong>🎯 AGENT SYSTEM FEATURES:</strong><br>
@@ -2260,6 +2334,8 @@ app.get('/api/user/:userId', async (req, res) => {
       telegramId: user.telegramId,
       phoneNumber: user.phoneNumber || '',
       agentId: user.agentId || null,
+      referredBy: user.referredBy || null,
+      agentReferredAt: user.agentReferredAt || null,
       agentCommissionEarned: user.agentCommissionEarned || 0
     });
   } catch (error) {
@@ -2343,6 +2419,36 @@ app.get('/api/agent/:referralCode', async (req, res) => {
   }
 });
 
+// API endpoint to get referral statistics
+app.get('/api/referral-stats', async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
+    const usersWithoutAgents = totalUsers - usersWithAgents;
+    
+    // Get referral methods breakdown
+    const telegramReferrals = await Referral.countDocuments({ referralMethod: 'telegram_link' });
+    const manualReferrals = await Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
+    const adminReferrals = await Referral.countDocuments({ referralMethod: 'admin_assigned' });
+    
+    res.json({
+      success: true,
+      stats: {
+        totalUsers,
+        usersWithAgents,
+        usersWithoutAgents,
+        referralMethods: {
+          telegramLinks: telegramReferrals,
+          manualAssignments: manualReferrals,
+          adminAssignments: adminReferrals || 0
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========== TELEGRAM BOT INTEGRATION ==========
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
 
@@ -2382,8 +2488,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           console.log(`👤 New Telegram user: ${userName} (@${username})`);
           
           // Process referral if present
-          if (referralCode && agentSystem && agentSystem.processReferral) {
-            await agentSystem.processReferral(user.userId, referralCode);
+          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+            await agentSystem.handleTelegramReferral(user.userId, referralCode);
           }
         }
         
@@ -2734,6 +2840,8 @@ app.get('/debug-users', async (req, res) => {
         lastSeen: u.lastSeen,
         telegramId: u.telegramId,
         agentId: u.agentId || null,
+        referredBy: u.referredBy || null,
+        agentReferredAt: u.agentReferredAt || null,
         agentCommissionEarned: u.agentCommissionEarned || 0
       }))
     });
@@ -2782,6 +2890,46 @@ app.get('/debug/telebirr', async (req, res) => {
       databaseSetting: setting,
       currentNumber: telebirrNumber,
       timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug Referrals endpoint
+app.get('/debug/referrals', async (req, res) => {
+  try {
+    const referrals = await Referral.find().sort({ createdAt: -1 }).limit(50);
+    const usersWithAgents = await User.find({ 
+      agentId: { $exists: true, $ne: null } 
+    }).sort({ agentReferredAt: -1 }).limit(50);
+    
+    res.json({
+      totalReferrals: await Referral.countDocuments(),
+      totalUsersWithAgents: await User.countDocuments({ agentId: { $exists: true, $ne: null } }),
+      referralRecords: referrals.map(r => ({
+        id: r._id,
+        agentId: r.agentId,
+        userId: r.userId,
+        userName: r.userName,
+        referralMethod: r.referralMethod,
+        referralCode: r.referralCode,
+        status: r.status,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
+      })),
+      usersWithAgents: usersWithAgents.map(u => ({
+        userId: u.userId,
+        userName: u.userName,
+        agentId: u.agentId,
+        referredBy: u.referredBy,
+        agentReferredAt: u.agentReferredAt,
+        agentCommissionEarned: u.agentCommissionEarned || 0,
+        isOnline: u.isOnline,
+        totalWins: u.totalWins || 0,
+        totalBingos: u.totalBingos || 0,
+        totalWagered: u.totalWagered || 0
+      }))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
