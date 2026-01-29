@@ -1245,7 +1245,7 @@
             right: 20px;
             width: 50px;
             height: 50px;
-            background: linear-gradient(45deg, var(--warning), #d97706);
+            background: linear-gradient(45deg, #f59e0b, #d97706);
             color: white;
             border: none;
             border-radius: 50%;
@@ -1256,7 +1256,6 @@
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
             z-index: 100;
-            display: none;
         }
     </style>
 </head>
@@ -1636,9 +1635,6 @@
                         <button class="btn btn-sm" onclick="loadUserSuggestions()">
                             <i class="fas fa-lightbulb"></i> Suggestions
                         </button>
-                        <button class="btn btn-sm btn-outline" onclick="debugUserSearch()" title="Debug Search">
-                            <i class="fas fa-bug"></i> Debug
-                        </button>
                     </div>
                     
                     <!-- Agent Referral Code -->
@@ -1659,21 +1655,40 @@
                             <h3 class="section-title">
                                 <i class="fas fa-search"></i> Search & Add Single User
                             </h3>
+                            <button class="btn btn-sm" onclick="debugSearch()" title="Debug Search">
+                                <i class="fas fa-bug"></i> Debug
+                            </button>
+                        </div>
+                        
+                        <!-- Tips -->
+                        <div style="margin-bottom: 15px; padding: 12px; background: rgba(67, 97, 238, 0.1); border-radius: 8px;">
+                            <div style="font-size: 13px; color: var(--primary);">
+                                <strong>💡 Tips:</strong> 
+                                <ul style="margin: 8px 0 0 20px;">
+                                    <li>Enter <strong>Telegram ID</strong> (e.g., <code>tg_123456789</code>)</li>
+                                    <li>Enter <strong>Username</strong> (with or without @)</li>
+                                    <li>Enter <strong>Display Name</strong> (shown in game)</li>
+                                    <li>User must have played at least once</li>
+                                </ul>
+                            </div>
                         </div>
                         
                         <div class="search-box">
                             <i class="fas fa-search"></i>
                             <input type="text" id="searchUserInput" 
                                    class="form-control" 
-                                   placeholder="Search by Telegram username, User ID, or name..."
-                                   oninput="debounceSearchUsers(this.value)">
-                            <div style="font-size: 11px; color: var(--gray); margin-top: 5px;">
-                                Try: @username, tg_123456789, 123456789, or display name
-                            </div>
+                                   placeholder="Enter Telegram ID, username, or display name..."
+                                   oninput="debounceSearchUsers(this.value)"
+                                   onkeypress="if(event.key === 'Enter') searchAndAdd()">
                         </div>
                         
                         <div id="searchResults" style="display: none; margin-top: 15px;">
-                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Search Results:</div>
+                            <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Search Results:</span>
+                                <button class="btn btn-sm" onclick="clearSearchResults()" style="padding: 2px 8px; font-size: 11px;">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
                             <div id="userResultsList" class="user-results">
                                 <!-- Search results will appear here -->
                             </div>
@@ -1681,15 +1696,17 @@
                         
                         <div style="margin-top: 20px;">
                             <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">Or enter manually:</div>
-                            <div class="form-group">
-                                <input type="text" id="manualUserInput" class="form-control" 
-                                       placeholder="Enter Telegram username (e.g., @username) or User ID (e.g., tg_123456789)">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="manualUserInput" class="form-control" style="flex: 1;"
+                                       placeholder="Enter any identifier...">
+                                <button class="btn btn-success" onclick="addManualReferral()" style="white-space: nowrap;">
+                                    <i class="fas fa-user-plus"></i> Add
+                                </button>
+                            </div>
+                            <div style="font-size: 11px; color: var(--gray); margin-top: 5px;">
+                                Press Enter or click Add to assign as your referral
                             </div>
                         </div>
-                        
-                        <button class="btn btn-success" onclick="addManualReferral()" style="margin-top: 10px;" id="addReferralBtn">
-                            <i class="fas fa-user-plus"></i> Add as My Referral
-                        </button>
                     </div>
                     
                     <!-- Bulk User Assignment -->
@@ -1702,7 +1719,7 @@
                         
                         <div style="margin-bottom: 15px;">
                             <div style="font-size: 12px; color: var(--gray); margin-bottom: 8px;">
-                                Enter multiple usernames/IDs (one per line):
+                                Enter multiple usernames/IDs (one per line, max 20):
                             </div>
                             <textarea id="bulkUserInput" class="form-control" 
                                       rows="5" 
@@ -1712,12 +1729,12 @@ tg_123456789
 username2
 @username3"></textarea>
                             <div style="font-size: 11px; color: var(--gray); margin-top: 5px;">
-                                Supports: Telegram usernames (with or without @), User IDs (tg_123456789 or 123456789), and display names
+                                Supports: Telegram usernames (with or without @), User IDs, and display names
                             </div>
                         </div>
                         
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-warning" onclick="addBulkReferrals()" style="flex: 1;" id="bulkAddBtn">
+                            <button class="btn btn-warning" onclick="addBulkReferrals()" style="flex: 1;">
                                 <i class="fas fa-users"></i> Add All as Referrals
                             </button>
                             <button class="btn btn-outline" onclick="clearBulkInput()" style="flex: 0.5;">
@@ -1759,8 +1776,7 @@ username2
                             <p><strong>Step 1: Find User Information</strong></p>
                             <ul style="margin-left: 20px; margin-bottom: 15px;">
                                 <li>Ask the user for their <strong>Telegram username</strong> (e.g., @username)</li>
-                                <li>Or ask them to share their <strong>User ID</strong> from the game bot (e.g., tg_123456789)</li>
-                                <li>Or use their <strong>display name</strong> shown in the game</li>
+                                <li>Or ask them to share their <strong>User ID</strong> from the game bot</li>
                                 <li>User must have played at least once in Bingo Elite or Keno Ultra</li>
                             </ul>
                             
@@ -2008,7 +2024,7 @@ username2
         </button>
 
         <!-- Debug Button -->
-        <button class="debug-btn" id="debugBtn" onclick="debugUserSearch()">
+        <button class="debug-btn" onclick="debugDatabase()" title="Debug Database">
             <i class="fas fa-bug"></i>
         </button>
     </div>
@@ -2310,6 +2326,28 @@ username2
                     loadDashboard();
                 }
             });
+            
+            // Debug events
+            socket.on('agent:debugResult', (data) => {
+                console.log('Debug result:', data);
+                if (data.user) {
+                    alert(`✅ User found!\nID: ${data.user.userId}\nName: ${data.user.userName || 'No Name'}\nAgent: ${data.user.agentId || 'None'}`);
+                } else {
+                    alert('❌ User not found');
+                }
+            });
+            
+            socket.on('agent:testResult', (data) => {
+                console.log('Test result:', data);
+                let message = `📊 Database Test Results:\n\n`;
+                message += `Total Users: ${data.totalUsers}\n`;
+                message += `Users Without Agents: ${data.usersWithoutAgents}\n\n`;
+                message += `Sample Users (${data.sampleUsers.length}):\n`;
+                data.sampleUsers.forEach((user, index) => {
+                    message += `${index + 1}. ${user.userId} - ${user.userName || 'No Name'} - Agent: ${user.agentId || 'None'}\n`;
+                });
+                alert(message);
+            });
         }
 
         // UI Functions
@@ -2320,10 +2358,6 @@ username2
         function showLoginScreen() {
             document.getElementById('loginScreen').style.display = 'flex';
             document.getElementById('dashboardScreen').style.display = 'none';
-            // Show debug button in dev mode
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                document.getElementById('debugBtn').style.display = 'flex';
-            }
         }
 
         function showDashboardScreen() {
@@ -2641,20 +2675,7 @@ username2
             document.getElementById('referralCodeDisplay').textContent = data.referralCode;
         }
 
-        // Helper function to format user IDs
-        function formatUserId(userId) {
-            if (!userId) return '';
-            // If it's already a tg_ ID, return as is
-            if (userId.startsWith('tg_')) return userId;
-            // If it's just numbers, add tg_ prefix
-            if (/^\d+$/.test(userId)) return `tg_${userId}`;
-            // Remove @ symbol if present
-            if (userId.startsWith('@')) return userId.substring(1);
-            // Otherwise return as is
-            return userId;
-        }
-
-        // Debounced search function
+        // Enhanced search functions
         function debounceSearchUsers(query) {
             clearTimeout(searchTimeout);
             if (query.trim().length < 1) {
@@ -2663,16 +2684,16 @@ username2
             }
             
             searchTimeout = setTimeout(() => {
-                // Show loading
-                const resultsList = document.getElementById('userResultsList');
-                resultsList.innerHTML = '<div class="empty-state">Searching...</div>';
-                document.getElementById('searchResults').style.display = 'block';
-                
-                socket.emit('agent:searchUsers', { 
-                    query: query, 
-                    limit: 15 
-                });
-            }, 300);
+                socket.emit('agent:searchUsers', { query: query, limit: 10 });
+            }, 500);
+        }
+
+        function searchAndAdd() {
+            const searchInput = document.getElementById('searchUserInput').value;
+            if (searchInput.trim()) {
+                document.getElementById('manualUserInput').value = searchInput;
+                addManualReferral();
+            }
         }
 
         function displaySearchResults(data) {
@@ -2686,42 +2707,95 @@ username2
             }
             
             resultsList.innerHTML = '';
-            data.users.forEach(user => {
-                const item = document.createElement('div');
-                item.className = 'user-result-item';
-                item.onclick = () => {
-                    // Pre-fill the manual input with the user ID
-                    document.getElementById('manualUserInput').value = user.userId;
-                    // Auto-add if available
-                    if (user.canAdd) {
-                        setTimeout(() => addManualReferral(user.userId), 300);
-                    }
-                };
+            
+            // Group by status
+            const availableUsers = data.users.filter(u => u.canAdd);
+            const unavailableUsers = data.users.filter(u => !u.canAdd);
+            
+            if (availableUsers.length > 0) {
+                const header = document.createElement('div');
+                header.style.padding = '10px 15px';
+                header.style.fontSize = '13px';
+                header.style.fontWeight = '600';
+                header.style.color = 'var(--success)';
+                header.style.borderBottom = '1px solid var(--border)';
+                header.innerHTML = '<i class="fas fa-check-circle"></i> Available to Add';
+                resultsList.appendChild(header);
                 
-                // Create display name
-                let displayName = user.userName || 'Unknown';
-                if (user.telegramUsername) {
-                    displayName += ` (@${user.telegramUsername})`;
-                }
+                availableUsers.forEach(user => {
+                    addUserResultItem(user, true);
+                });
+            }
+            
+            if (unavailableUsers.length > 0) {
+                const header = document.createElement('div');
+                header.style.padding = '10px 15px';
+                header.style.fontSize = '13px';
+                header.style.fontWeight = '600';
+                header.style.color = 'var(--danger)';
+                header.style.borderBottom = '1px solid var(--border)';
+                header.innerHTML = '<i class="fas fa-times-circle"></i> Unavailable (Has Agent)';
+                resultsList.appendChild(header);
                 
-                item.innerHTML = `
-                    <div class="user-result-info">
-                        <div class="user-result-name">${displayName}</div>
-                        <div class="user-result-id">${user.userId}</div>
-                        <div style="font-size: 11px; color: var(--gray);">
-                            ${user.searchMatch || ''}
-                            ${user.totalWins ? ` | ${user.totalWins} wins` : ''}
-                            ${user.isOnline ? ' | Online' : ''}
-                        </div>
-                    </div>
-                    <div class="user-result-status ${user.canAdd ? '' : 'unavailable'}">
-                        ${user.canAdd ? 'Available' : user.hasAgent ? 'Has Agent' : 'Unavailable'}
-                    </div>
-                `;
-                resultsList.appendChild(item);
-            });
+                unavailableUsers.forEach(user => {
+                    addUserResultItem(user, false);
+                });
+            }
             
             resultsContainer.style.display = 'block';
+            
+            function addUserResultItem(user, canAdd) {
+                const item = document.createElement('div');
+                item.className = 'user-result-item';
+                item.style.cursor = canAdd ? 'pointer' : 'not-allowed';
+                item.style.opacity = canAdd ? '1' : '0.7';
+                
+                const timeAgo = getTimeAgo(user.lastSeen);
+                const wins = user.totalWins || 0;
+                const wagered = user.totalWagered || 0;
+                const userName = user.userName || 'No Name';
+                
+                item.innerHTML = `
+                    <div class="user-result-info" style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--gray)'};"></div>
+                            <div class="user-result-name">${userName}</div>
+                        </div>
+                        <div class="user-result-id" style="margin-bottom: 3px;">${user.userId}</div>
+                        <div style="display: flex; gap: 15px; font-size: 11px; color: var(--gray);">
+                            <span>${wins} wins</span>
+                            <span>${wagered.toFixed(2)} ETB wagered</span>
+                            <span>${timeAgo}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        ${canAdd ? `
+                            <button class="btn btn-sm" onclick="addManualReferral('${user.userId}'); event.stopPropagation();" 
+                                    style="padding: 4px 12px; font-size: 12px;">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        ` : `
+                            <span class="user-result-status unavailable" style="padding: 4px 8px;">
+                                <i class="fas fa-user-check"></i> Taken
+                            </span>
+                        `}
+                    </div>
+                `;
+                
+                if (canAdd) {
+                    item.onclick = () => {
+                        document.getElementById('manualUserInput').value = user.userId;
+                        addManualReferral(user.userId);
+                    };
+                }
+                
+                resultsList.appendChild(item);
+            }
+        }
+
+        function clearSearchResults() {
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchUserInput').value = '';
         }
 
         function addManualReferral(prefilledId = null) {
@@ -2737,26 +2811,7 @@ username2
                 return;
             }
             
-            // Format the user identifier
-            const formattedIdentifier = formatUserId(userIdentifier.trim());
-            
-            // Show loading state
-            const btn = document.getElementById('addReferralBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-            btn.disabled = true;
-            
-            console.log('Adding manual referral:', formattedIdentifier);
-            
-            socket.emit('agent:manualReferralAssignmentByAgent', { 
-                userIdentifier: formattedIdentifier 
-            });
-            
-            // Reset button after 3 seconds
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 3000);
+            socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: userIdentifier.trim() });
         }
 
         function addBulkReferrals() {
@@ -2769,8 +2824,7 @@ username2
             // Parse input lines
             const lines = bulkInput.split('\n')
                 .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .map(line => formatUserId(line));
+                .filter(line => line.length > 0);
             
             if (lines.length === 0) {
                 showNotification('No valid usernames/IDs found', 'error');
@@ -2783,19 +2837,7 @@ username2
             }
             
             if (confirm(`Add ${lines.length} users as referrals?`)) {
-                // Show loading state
-                const btn = document.getElementById('bulkAddBtn');
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                btn.disabled = true;
-                
                 socket.emit('agent:bulkManualReferral', { userIdentifiers: lines });
-                
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 3000);
             }
         }
 
@@ -2815,37 +2857,33 @@ username2
                     const item = document.createElement('div');
                     item.className = 'bulk-result-item';
                     
-                    let statusIcon, statusText, statusClass;
+                    let statusIcon, statusText;
                     if (detail.status === 'success') {
                         statusIcon = 'check';
                         statusText = '✓ Added';
-                        statusClass = 'success';
                     } else if (detail.status === 'already_yours') {
                         statusIcon = 'info';
                         statusText = 'Already yours';
-                        statusClass = 'warning';
                     } else if (detail.status === 'assigned_to_other') {
                         statusIcon = 'times';
                         statusText = 'Has agent';
-                        statusClass = 'error';
                     } else if (detail.status === 'not_found') {
                         statusIcon = 'question';
                         statusText = 'Not found';
-                        statusClass = 'error';
                     } else {
                         statusIcon = 'exclamation';
                         statusText = 'Error';
-                        statusClass = 'error';
                     }
                     
                     item.innerHTML = `
-                        <div class="bulk-result-status ${statusClass}">
+                        <div class="bulk-result-status ${detail.status === 'success' ? 'success' : 
+                            detail.status === 'already_yours' ? 'warning' : 'error'}">
                             <i class="fas fa-${statusIcon}"></i>
                         </div>
                         <div style="flex: 1;">
                             <strong>${detail.identifier}</strong>
                             ${detail.userName ? `<div style="font-size: 11px;">${detail.userName}</div>` : ''}
-                            ${detail.foundMethod ? `<div style="font-size: 10px; color: var(--gray);">${detail.foundMethod}</div>` : ''}
+                            ${detail.userId ? `<div style="font-size: 10px; color: var(--gray);">${detail.userId}</div>` : ''}
                         </div>
                         <div style="font-size: 11px; color: var(--gray);">${statusText}</div>
                     `;
@@ -2863,7 +2901,6 @@ username2
             summary.innerHTML = `
                 <strong>Summary:</strong> ${data.summary.success} added, 
                 ${data.summary.alreadyAssigned} already assigned, 
-                ${data.summary.alreadyYours} already yours,
                 ${data.summary.notFound} not found,
                 ${data.summary.failed} failed
             `;
@@ -2880,48 +2917,76 @@ username2
             const suggestionsContainer = document.getElementById('userSuggestions');
             
             if ((!data.potentialUsers || data.potentialUsers.length === 0) && 
-                (!data.recentUsers || data.recentUsers.length === 0)) {
+                (!data.recentUsers || data.recentUsers.length === 0) &&
+                (!data.highRollers || data.highRollers.length === 0)) {
                 suggestionsContainer.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-lightbulb"></i>
                         <div>No user suggestions available</div>
-                        <div style="font-size: 12px; margin-top: 10px;">Total potential: ${data.totalPotential || 0}</div>
                     </div>
                 `;
                 return;
             }
             
-            let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+            let html = '<div style="display: flex; flex-direction: column; gap: 20px;">';
             
             // Show potential users
             if (data.potentialUsers && data.potentialUsers.length > 0) {
                 html += `
                     <div>
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">
-                            <i class="fas fa-star"></i> High Activity Players (${data.potentialUsers.length} shown)
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-star" style="color: var(--warning);"></i> High Activity Players (${data.totalPotential || data.potentialUsers.length} total)
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">
                 `;
                 
                 data.potentialUsers.slice(0, 6).forEach(user => {
-                    const displayName = user.telegramUsername ? 
-                        `${user.userName} (@${user.telegramUsername})` : 
-                        user.userName;
-                    
                     html += `
                         <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; cursor: pointer;"
                              onclick="document.getElementById('manualUserInput').value='${user.userId}'; addManualReferral('${user.userId}')">
                             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                 <div style="width: 8px; height: 8px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--danger)'};"></div>
-                                <div style="font-weight: 600; font-size: 13px;">${displayName}</div>
+                                <div style="font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${user.userName || 'Unknown'}</div>
                             </div>
-                            <div style="font-size: 11px; color: var(--gray); margin-bottom: 5px;">${user.userId}</div>
+                            <div style="font-size: 11px; color: var(--gray); margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${user.userId}</div>
                             <div style="display: flex; justify-content: space-between; font-size: 11px;">
                                 <div>${user.totalWins || 0} wins</div>
-                                <div>${user.balance?.toFixed(2) || '0.00'} ETB</div>
+                                <div>${(user.balance || 0).toFixed(2)} ETB</div>
                             </div>
                             <div style="font-size: 10px; color: var(--primary); margin-top: 5px; text-align: center;">
                                 <i class="fas fa-user-plus"></i> Click to add
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            }
+            
+            // Show high rollers
+            if (data.highRollers && data.highRollers.length > 0) {
+                html += `
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-crown" style="color: var(--warning);"></i> High Rollers
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+                `;
+                
+                data.highRollers.slice(0, 4).forEach(user => {
+                    html += `
+                        <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; cursor: pointer;"
+                             onclick="document.getElementById('manualUserInput').value='${user.userId}'; addManualReferral('${user.userId}')">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                <div style="width: 6px; height: 6px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--warning)'};"></div>
+                                <div style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${user.userName || 'Unknown'}</div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--gray); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${user.userId}</div>
+                            <div style="font-size: 10px; color: var(--primary);">
+                                <i class="fas fa-money-bill-wave"></i> ${(user.totalWagered || 0).toFixed(2)} ETB wagered
+                            </div>
+                            <div style="font-size: 9px; color: var(--primary); margin-top: 3px; text-align: center;">
+                                <i class="fas fa-plus"></i> Add as referral
                             </div>
                         </div>
                     `;
@@ -2934,24 +2999,20 @@ username2
             if (data.recentUsers && data.recentUsers.length > 0) {
                 html += `
                     <div>
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">
-                            <i class="fas fa-clock"></i> Recently Active
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-clock" style="color: var(--info);"></i> Recently Active
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;">
                 `;
                 
                 data.recentUsers.slice(0, 6).forEach(user => {
                     const timeAgo = getTimeAgo(user.lastSeen);
-                    const displayName = user.telegramUsername ? 
-                        `${user.userName} (@${user.telegramUsername})` : 
-                        user.userName;
-                    
                     html += `
                         <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; cursor: pointer;"
                              onclick="document.getElementById('manualUserInput').value='${user.userId}'; addManualReferral('${user.userId}')">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
                                 <div style="width: 6px; height: 6px; border-radius: 50%; background: ${user.isOnline ? 'var(--success)' : 'var(--warning)'};"></div>
-                                <div style="font-size: 12px; font-weight: 500;">${displayName}</div>
+                                <div style="font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${user.userName || 'Unknown'}</div>
                             </div>
                             <div style="font-size: 10px; color: var(--gray);">${timeAgo}</div>
                             <div style="font-size: 9px; color: var(--primary); margin-top: 3px; text-align: center;">
@@ -2963,12 +3024,6 @@ username2
                 
                 html += '</div></div>';
             }
-            
-            html += `
-                <div style="text-align: center; margin-top: 10px; font-size: 12px; color: var(--gray);">
-                    Total users without agents: ${data.totalPotential || 0}
-                </div>
-            `;
             
             html += '</div>';
             suggestionsContainer.innerHTML = html;
@@ -2990,38 +3045,16 @@ username2
             return date.toLocaleDateString();
         }
 
-        // Debug function for testing
-        function debugUserSearch() {
-            const debugInput = prompt('Enter username/user ID to debug:');
-            if (!debugInput) return;
-            
-            // Format the input
-            const formattedInput = formatUserId(debugInput);
-            
-            console.log('Debug search for:', formattedInput);
-            
-            // Send to server for debugging
-            socket.emit('agent:searchUsers', { 
-                query: formattedInput, 
-                limit: 5 
-            });
-            
-            socket.once('agent:searchUsersResult', (data) => {
-                console.log('Search results:', data);
-                
-                let message = `Found ${data.users.length} users:\n\n`;
-                data.users.forEach((user, index) => {
-                    message += `${index + 1}. ID: ${user.userId}\n`;
-                    message += `   Name: ${user.userName}\n`;
-                    if (user.telegramUsername) message += `   Telegram: @${user.telegramUsername}\n`;
-                    message += `   Has Agent: ${user.hasAgent ? 'Yes' : 'No'}\n`;
-                    message += `   Can Add: ${user.canAdd ? 'Yes' : 'No'}\n`;
-                    message += `   Match: ${user.searchMatch || 'Unknown'}\n`;
-                    message += '---\n';
-                });
-                
-                alert(message);
-            });
+        // Debug Functions
+        function debugSearch() {
+            const query = prompt("Enter user identifier to debug (username, ID, etc.):");
+            if (query) {
+                socket.emit('agent:debugFindUser', { identifier: query });
+            }
+        }
+
+        function debugDatabase() {
+            socket.emit('agent:testDatabase');
         }
 
         // Withdrawal Functions
@@ -3319,51 +3352,7 @@ username2
         }
 
         function viewWithdrawal(id) {
-            // Would fetch withdrawal details
             showNotification('Withdrawal details coming soon!', 'info');
-        }
-
-        function showHelp() {
-            alert(`Bingo Elite Agent Help
-
-1. How to Add Referrals (MANUAL SYSTEM):
-   - Ask users for their Telegram username (e.g., @username) OR
-   - Ask them to share their User ID from the game bot (e.g., tg_123456789)
-   - Or use their display name shown in the game
-   - Type the username/ID in the "Manual Referral" tab
-   - Click "Add as My Referral"
-   - System validates the user exists and is not already assigned
-
-2. Search Tips:
-   - Use @username for Telegram usernames
-   - Use tg_123456789 for Telegram IDs
-   - Use just numbers (123456789) - system will add tg_ prefix
-   - Use partial names for display name search
-
-3. Commission Structure:
-   - Bingo Wins: 40% commission
-   - Keno Wins: 10% commission
-   - Minimum commission: 0.01 ETB per win
-   - Real-time: Commissions credited immediately
-
-4. Withdrawal Requirements:
-   - Minimum withdrawal: 10 ETB
-   - Phone number: Must be valid Telebirr number (09xxxxxxxx)
-   - Processing: Within 24 hours by admin
-
-5. Dashboard Features:
-   - Real-time commission tracking
-   - Manual referral management
-   - Withdrawal requests
-   - Performance reports
-
-6. Tips for Success:
-   - Use the "User Suggestions" feature to find active players
-   - Search users before manually typing
-   - Use bulk add for multiple users
-   - Monitor your referrals' activity
-
-Need more help? Contact the system administrator.`);
         }
 
         function handleNewCommission(data) {
@@ -3374,6 +3363,46 @@ Need more help? Contact the system administrator.`);
             if (currentTab === 'dashboard') {
                 loadDashboard();
             }
+        }
+
+        function showHelp() {
+            alert(`Bingo Elite Agent Help
+
+1. How to Add Referrals (MANUAL SYSTEM):
+   - Ask users for their Telegram username (e.g., @username) OR
+   - Ask them to share their User ID from the game bot
+   - Type the username/ID in the "Manual Referral" tab
+   - Click "Add as My Referral"
+   - System validates the user exists and is not already assigned
+
+2. Commission Structure:
+   - Bingo Wins: 40% commission
+   - Keno Wins: 10% commission
+   - Minimum commission: 0.01 ETB per win
+   - Real-time: Commissions credited immediately
+
+3. Withdrawal Requirements:
+   - Minimum withdrawal: 10 ETB
+   - Phone number: Must be valid Telebirr number (09xxxxxxxx)
+   - Processing: Within 24 hours by admin
+
+4. Dashboard Features:
+   - Real-time commission tracking
+   - Manual referral management
+   - Withdrawal requests
+   - Performance reports
+
+5. Tips for Success:
+   - Use the "User Suggestions" feature to find active players
+   - Search users before manually typing
+   - Use bulk add for multiple users
+   - Monitor your referrals' activity
+
+6. Debug Tools:
+   - Debug button: Test user search functionality
+   - Database test: Check user database status
+
+Need more help? Contact the system administrator.`);
         }
 
         // Initialize when page loads
