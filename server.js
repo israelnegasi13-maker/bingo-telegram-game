@@ -1432,7 +1432,7 @@ app.get('/', async (req, res) => {
               Telegram Integration: ✅ Ready<br>
               Game Timer: ${gameLogic.CONFIG ? gameLogic.CONFIG.GAME_TIMER : 3}s between balls<br>
               Keno Timer: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_GAME_TIMER : 30}s rounds<br>
-              Bot Username: @ethio_games1_bot<br>
+              Bot Username: @Ethio_elite_games_bot<br>
               Real-time Box Updates: ✅ ACTIVE<br>
               Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
               Agent System: ✅ ACTIVE (40% Bingo, 10% Keno commissions)<br>
@@ -2212,11 +2212,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Wallet Information',
-                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n🎮 Play: @ethio_games1_bot',
+                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n🎮 Play: @Ethio_elite_games_bot',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot');
+                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @Ethio_elite_games_bot');
                   }
               }
               
@@ -2224,11 +2224,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Terms & Conditions',
-                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @ethio_games1_bot for support',
+                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @Ethio_elite_games_bot for support',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support');
+                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @Ethio_elite_games_bot for support');
                   }
               }
               
@@ -2450,7 +2450,7 @@ app.get('/api/referral-stats', async (req, res) => {
 });
 
 // ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8281813355:AAElz32khbZ9cnX23CeJQn7gwkAypHuJ9E4';
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE'; // Set your new bot token here
 
 // Simple Telegram webhook
 app.post('/telegram-webhook', express.json(), async (req, res) => {
@@ -2535,7 +2535,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             chat_id: chatId,
             text: `💰 *Your Balance:* ${balance.toFixed(2)} ETB\n\n` +
                   `💳 *Deposit to:* ${telebirrNumber}\n` +
-                  `🎮 Play: @ethio_games1_bot\n` +
+                  `🎮 Play: @Ethio_elite_games_bot\n` +
                   `👑 Admin: Contact for funds\n` +
                   `🆔 Your ID: \`${userId}\``,
             parse_mode: 'Markdown'
@@ -2559,7 +2559,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `2. Open game Wallet\n` +
                   `3. Select amount and enter phone number\n` +
                   `4. Admin will send money within 24 hours\n\n` +
-                  `🎮 *Play Now:* @ethio_games1_bot`,
+                  `🎮 *Play Now:* @Ethio_elite_games_bot`,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
@@ -2589,7 +2589,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `• 🎱 Bingo wins: *40% commission*\n` +
                   `• 🎰 Keno wins: *10% commission*\n\n` +
                   `*How to become agent:*\n` +
-                  `Contact admin @ethio_games1_bot`,
+                  `Contact admin @Ethio_elite_games_bot`,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
@@ -2730,7 +2730,7 @@ app.get('/setup-telegram', async (req, res) => {
           
           <div class="info-box">
             <h3>Bot Information:</h3>
-            <p><strong>Bot:</strong> @ethio_games1_bot</p>
+            <p><strong>Bot:</strong> @Ethio_elite_games_bot</p>
             <p><strong>Game Entry:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
             <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
             <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
@@ -2753,7 +2753,7 @@ app.get('/setup-telegram', async (req, res) => {
           </div>
           
           <div>
-            <a href="https://t.me/ethio_games1_bot" class="btn" target="_blank">Open Bot in Telegram</a>
+            <a href="https://t.me/Ethio_elite_games_bot" class="btn" target="_blank">Open Bot in Telegram</a>
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
             <a href="/agent" class="btn" style="background: #f59e0b;" target="_blank">Test Agent Portal</a>
             <a href="/keno" class="btn" style="background: #8b5cf6;" target="_blank">Test Keno Game</a>
@@ -2762,7 +2762,7 @@ app.get('/setup-telegram', async (req, res) => {
           <div style="margin-top: 30px; text-align: left;">
             <h4>Next Steps:</h4>
             <ol>
-              <li>Open @ethio_games1_bot in Telegram</li>
+              <li>Open @Ethio_elite_games_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
               <li>Choose between Bingo or Keno!</li>
@@ -2992,6 +2992,7 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Ready:        /ready                                                       ║
 ║  Node:         ${process.version}                                           ║
 ║  Environment:  ${process.env.NODE_ENV || 'development'}                     ║
+║  Bot Username: @Ethio_elite_games_bot                                       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
