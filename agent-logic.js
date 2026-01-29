@@ -1,4 +1,4 @@
-// agent-logic.js - Complete Agent/Referral System for Bingo Elite + Keno Ultra
+// agent-logic.js - Complete Agent/Referral System for Elite Games
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -16,10 +16,12 @@ class AgentSystem {
     this.roomWinners = new Map(); // room-stake -> winnerId for preventing double winners
     this.gameLogic = null; // Will be set from server.js
     this.kenoLogic = null; // Will be set from server.js
+    this.botUsername = '@Ethio_elite_games_bot'; // New bot username
   }
 
   async initialize() {
     console.log('✅ Agent system initializing...');
+    console.log(`🤖 Bot username: ${this.botUsername}`);
     
     // Create admin agent if doesn't exist
     await this.ensureAdminAgent();
@@ -360,7 +362,7 @@ class AgentSystem {
     }
   }
 
-  // Generate referral link
+  // Generate referral link for the new bot
   async handleGenerateReferralLink(socket) {
     try {
       if (!socket.agentId) {
@@ -394,9 +396,13 @@ class AgentSystem {
         this.referralCache.set(newCode, agent._id.toString());
       }
 
+      // Generate Telegram referral link for the new bot
+      const telegramLink = `https://t.me/Ethio_elite_games_bot?start=${agent.referralCode}`;
+
       socket.emit('agent:referralLink', {
         referralCode: agent.referralCode,
-        referralMessage: `My agent referral code: ${agent.referralCode}\nSystem code for admin reference.`
+        telegramLink: telegramLink,
+        referralMessage: `Join Elite Games via my referral link and earn together! ${telegramLink}`
       });
     } catch (error) {
       console.error('Generate link error:', error);
@@ -404,7 +410,123 @@ class AgentSystem {
     }
   }
 
-  // Process manual referral when agent types username/user ID - FIXED VERSION
+  // Handle Telegram bot referral when user clicks start link
+  async handleTelegramReferral(userId, startParam) {
+    try {
+      // Extract referral code from start parameter
+      let referralCode = startParam;
+      
+      // Check if startParam contains the referral code
+      if (startParam && startParam.startsWith('agent')) {
+        referralCode = startParam.toUpperCase();
+      }
+
+      console.log(`🤖 Processing Telegram referral: User ${userId}, Code: ${referralCode}`);
+
+      // Find agent by referral code
+      const agent = await this.getAgentByReferralCode(referralCode);
+      if (!agent) {
+        console.log(`❌ Agent not found for referral code: ${referralCode}`);
+        return {
+          success: false,
+          message: 'Invalid referral code'
+        };
+      }
+
+      if (!agent.isActive) {
+        console.log(`❌ Agent ${agent.username} is inactive`);
+        return {
+          success: false,
+          message: 'Agent account is inactive'
+        };
+      }
+
+      // Find user
+      const user = await this.models.User.findOne({ userId });
+      if (!user) {
+        console.log(`❌ User not found: ${userId}`);
+        return {
+          success: false,
+          message: 'User not found in system'
+        };
+      }
+
+      // Check if user already has an agent
+      if (user.agentId) {
+        if (user.agentId.toString() === agent._id.toString()) {
+          console.log(`ℹ️ User ${userId} is already referral of agent ${agent.username}`);
+          return {
+            success: true,
+            already: true,
+            message: `You are already registered under ${agent.name}`,
+            agent: agent.name
+          };
+        }
+        
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        return {
+          success: false,
+          alreadyHasAgent: true,
+          message: `You are already registered under agent: ${currentAgent?.name || 'Another agent'}`
+        };
+      }
+
+      // Assign user to agent
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      user.referredBy = 'telegram_link';
+      await user.save();
+
+      // Update agent referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      if (user.isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      }
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      // Create referral record
+      const referralRecord = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        referralMethod: 'telegram_link',
+        status: 'active',
+        createdAt: new Date()
+      });
+      await referralRecord.save();
+
+      // Notify agent in real-time
+      this.sendAgentNotification(agent._id, 
+        `✅ New Telegram referral: ${user.userName || user.userId} via your link`, 
+        'success'
+      );
+
+      console.log(`✅ Telegram referral success: ${user.userId} -> Agent ${agent.username} (${referralCode})`);
+
+      return {
+        success: true,
+        message: `Successfully registered under agent ${agent.name}! You will now earn commissions for them.`,
+        agent: {
+          name: agent.name,
+          username: agent.username,
+          referralCode: agent.referralCode
+        },
+        user: {
+          userId: user.userId,
+          userName: user.userName
+        }
+      };
+    } catch (error) {
+      console.error('Telegram referral error:', error);
+      return {
+        success: false,
+        message: 'Failed to process referral'
+      };
+    }
+  }
+
+  // Process manual referral when agent types username/user ID
   async handleManualReferralAssignmentByAgent(socket, data) {
     try {
       if (!socket.agentId) {
@@ -424,74 +546,18 @@ class AgentSystem {
         return;
       }
 
-      // Clean the identifier (remove @ symbol if present, trim whitespace)
+      // Clean the identifier
       const cleanIdentifier = userIdentifier.replace('@', '').trim().toLowerCase();
       
-      // Log for debugging
       console.log(`🔍 Searching for user: "${cleanIdentifier}" for agent ${agent.username}`);
       
-      // Find user by various methods with better matching
-      let user = null;
-      
-      // First try: Exact match on userId (case-insensitive)
-      user = await this.models.User.findOne({ 
-        userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') }
-      });
-
-      // Second try: Partial match on userId (for telegram IDs like "tg_123456789")
-      if (!user) {
-        user = await this.models.User.findOne({ 
-          userId: { $regex: cleanIdentifier, $options: 'i' }
-        });
-      }
-
-      // Third try: Case-insensitive search on userName (exact match)
-      if (!user) {
-        user = await this.models.User.findOne({ 
-          userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') }
-        });
-      }
-
-      // Fourth try: Partial match on userName
-      if (!user) {
-        user = await this.models.User.findOne({ 
-          userName: { $regex: cleanIdentifier, $options: 'i' }
-        });
-      }
-
-      // Fifth try: Check if it's a numeric ID (remove non-numeric and search)
-      if (!user && /^\d+$/.test(cleanIdentifier.replace('tg_', ''))) {
-        const numericId = cleanIdentifier.replace('tg_', '');
-        user = await this.models.User.findOne({ 
-          userId: { $regex: 'tg_' + numericId, $options: 'i' }
-        });
-      }
-
-      // Sixth try: Search by phone number if format matches
-      if (!user && /^09\d{8}$/.test(cleanIdentifier)) {
-        user = await this.models.User.findOne({ 
-          phoneNumber: cleanIdentifier
-        });
-      }
-
-      if (!user) {
-        // Try a broader search with OR query
-        const users = await this.models.User.find({
-          $or: [
-            { userId: { $regex: cleanIdentifier, $options: 'i' } },
-            { userName: { $regex: cleanIdentifier, $options: 'i' } },
-            { phoneNumber: { $regex: cleanIdentifier, $options: 'i' } }
-          ]
-        }).limit(1);
-        
-        user = users[0] || null;
-      }
+      // Find user by various methods
+      let user = await this.findUserByIdentifier(cleanIdentifier);
 
       if (!user) {
         socket.emit('agent:error', `User not found: "${userIdentifier}". Make sure the user has played at least once in the game.`);
-        console.log(`❌ User not found: "${cleanIdentifier}"`);
         
-        // Provide suggestions for the agent
+        // Provide suggestions
         const similarUsers = await this.models.User.find({
           $or: [
             { userName: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } },
@@ -555,9 +621,6 @@ class AgentSystem {
       });
       await referralRecord.save();
 
-      // Calculate estimated commission potential
-      const estimatedMonthly = (user.totalWins || 0) * 0.4; // 40% of wins
-      
       socket.emit('agent:manualReferralSuccess', {
         success: true,
         message: `✅ Successfully added ${user.userName || user.userId} as your referral!`,
@@ -575,8 +638,7 @@ class AgentSystem {
         agent: {
           totalReferrals: agent.totalReferrals,
           activeReferrals: agent.activeReferrals
-        },
-        estimatedMonthlyCommission: estimatedMonthly.toFixed(2)
+        }
       });
 
       // Send real-time notification to agent
@@ -587,19 +649,40 @@ class AgentSystem {
 
       console.log(`✅ Manual referral added: ${user.userId} (${user.userName || 'No Name'}) -> Agent ${agent.username} (${agent.referralCode})`);
 
-      // Update all admin agents
-      this.broadcastToAdmins('agent:newManualReferral', {
-        agentId: agent._id,
-        agentName: agent.name,
-        userId: user.userId,
-        userName: user.userName,
-        timestamp: new Date()
-      });
-
     } catch (error) {
       console.error('Manual referral error:', error);
       socket.emit('agent:error', 'Failed to add referral: ' + (error.message || 'Internal error'));
     }
+  }
+
+  // Helper function to find user by any identifier
+  async findUserByIdentifier(identifier) {
+    const cleanId = identifier.replace('@', '').trim().toLowerCase();
+    
+    // Try different search patterns
+    const searchPatterns = [
+      { userId: { $regex: new RegExp('^' + cleanId + '$', 'i') } },
+      { userId: { $regex: cleanId, $options: 'i' } },
+      { userName: { $regex: new RegExp('^' + cleanId + '$', 'i') } },
+      { userName: { $regex: cleanId, $options: 'i' } },
+      { userId: { $regex: 'tg_' + cleanId.replace('tg_', ''), $options: 'i' } },
+      { phoneNumber: cleanId }
+    ];
+
+    for (const pattern of searchPatterns) {
+      const user = await this.models.User.findOne(pattern);
+      if (user) return user;
+    }
+
+    // Broader search
+    const users = await this.models.User.find({
+      $or: [
+        { userId: { $regex: cleanId, $options: 'i' } },
+        { userName: { $regex: cleanId, $options: 'i' } }
+      ]
+    }).limit(1);
+    
+    return users[0] || null;
   }
 
   // Bulk manual referral assignment
@@ -638,22 +721,7 @@ class AgentSystem {
       for (const identifier of identifiersToProcess) {
         try {
           const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
-          
-          // Find user with multiple search methods
-          let user = null;
-          
-          // Try different search patterns
-          const searchPatterns = [
-            { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
-            { userId: { $regex: cleanIdentifier, $options: 'i' } },
-            { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
-            { userName: { $regex: cleanIdentifier, $options: 'i' } }
-          ];
-          
-          for (const pattern of searchPatterns) {
-            user = await this.models.User.findOne(pattern);
-            if (user) break;
-          }
+          const user = await this.findUserByIdentifier(cleanIdentifier);
 
           if (!user) {
             results.notFound++;
@@ -756,7 +824,7 @@ class AgentSystem {
     }
   }
 
-  // Search users for manual assignment - FIXED VERSION
+  // Search users for manual assignment
   async handleSearchUsers(socket, data) {
     try {
       if (!socket.agentId) {
@@ -773,22 +841,16 @@ class AgentSystem {
       const agent = await this.models.Agent.findById(socket.agentId);
       const cleanQuery = query.replace('@', '').trim().toLowerCase();
       
-      // Build comprehensive search query
+      // Build search query
       const searchQuery = {
         $and: [
           {
             $or: [
-              // Match userId exactly
               { userId: { $regex: new RegExp('^' + cleanQuery + '$', 'i') } },
-              // Match userId partially
               { userId: { $regex: cleanQuery, $options: 'i' } },
-              // Match userName exactly
               { userName: { $regex: new RegExp('^' + cleanQuery + '$', 'i') } },
-              // Match userName partially
               { userName: { $regex: cleanQuery, $options: 'i' } },
-              // Match telegram ID format
               { userId: { $regex: 'tg_' + cleanQuery.replace('tg_', ''), $options: 'i' } },
-              // Match phone number
               { phoneNumber: { $regex: cleanQuery, $options: 'i' } }
             ]
           }
@@ -927,19 +989,6 @@ class AgentSystem {
     }
   }
 
-  // Process referral when user joins (old method - still available but not used)
-  async processReferral(userId, referralCode) {
-    try {
-      // This method is kept for backward compatibility
-      // But we're moving to manual typing system
-      console.log(`⚠️ Referral links are deprecated. Use manual assignment instead. User: ${userId}, Code: ${referralCode}`);
-      return null;
-    } catch (error) {
-      console.error('Process referral error:', error);
-      return null;
-    }
-  }
-
   // Manual referral assignment by admin
   async handleManualReferralAssignment(socket, data) {
     try {
@@ -998,20 +1047,8 @@ class AgentSystem {
         return { success: false, message: 'Agent is inactive' };
       }
 
-      // Find user using multiple search methods
-      let user = null;
-      const searchPatterns = [
-        { userId: { $regex: new RegExp('^' + userId + '$', 'i') } },
-        { userId: { $regex: userId, $options: 'i' } },
-        { userName: { $regex: new RegExp('^' + userId + '$', 'i') } },
-        { userName: { $regex: userId, $options: 'i' } }
-      ];
-      
-      for (const pattern of searchPatterns) {
-        user = await this.models.User.findOne(pattern);
-        if (user) break;
-      }
-
+      // Find user
+      const user = await this.findUserByIdentifier(userId);
       if (!user) {
         return { success: false, message: 'User not found' };
       }
@@ -1618,249 +1655,6 @@ class AgentSystem {
     }
   }
 
-  // Super Admin: Reset agent password
-  async handleResetAgentPassword(socket, data) {
-    try {
-      if (!this.checkAdminAccess(socket)) {
-        socket.emit('agent:error', 'Unauthorized - Admin access required');
-        return;
-      }
-
-      const { agentId, newPassword } = data;
-      
-      if (!agentId || !newPassword) {
-        socket.emit('agent:error', 'Agent ID and new password are required');
-        return;
-      }
-
-      if (newPassword.length < 6) {
-        socket.emit('agent:error', 'Password must be at least 6 characters');
-        return;
-      }
-
-      const agent = await this.models.Agent.findById(agentId);
-      if (!agent) {
-        socket.emit('agent:error', 'Agent not found');
-        return;
-      }
-
-      // Hash new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      agent.password = hashedPassword;
-      agent.updatedAt = new Date();
-      await agent.save();
-
-      socket.emit('agent:passwordReset', {
-        message: 'Password reset successfully',
-        agentId: agentId,
-        agentName: agent.name
-      });
-
-      console.log(`🔑 Password reset for agent: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
-    } catch (error) {
-      console.error('Reset password error:', error);
-      socket.emit('agent:error', 'Failed to reset password');
-    }
-  }
-
-  // Get agent performance report
-  async handleAgentReport(socket, data) {
-    try {
-      if (!socket.agentId) {
-        socket.emit('agent:error', 'Not authenticated');
-        return;
-      }
-
-      const { startDate, endDate, agentId } = data;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-
-      let targetAgentId = socket.agentId;
-      
-      // If super admin viewing another agent's report
-      if (agentId && (socket.agentData?.isSuperAdmin || socket.admin)) {
-        targetAgentId = agentId;
-      }
-
-      const matchQuery = { 
-        agentId: targetAgentId,
-        createdAt: { $gte: start, $lte: end },
-        status: 'completed'
-      };
-
-      // Get commissions grouped by date and game type
-      const dailyCommissions = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: {
-              date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-              gameType: "$gameType"
-            },
-            totalCommission: { $sum: "$commissionAmount" },
-            totalGames: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" },
-            averageCommission: { $avg: "$commissionAmount" }
-          }
-        },
-        { $sort: { "_id.date": 1, "_id.gameType": 1 } }
-      ]);
-
-      // Get hourly distribution for the period
-      const hourlyDistribution = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: { $hour: "$createdAt" },
-            totalCommission: { $sum: "$commissionAmount" },
-            count: { $sum: 1 }
-          }
-        },
-        { $sort: { "_id": 1 } }
-      ]);
-
-      // Get top referral users by commission generated
-      const topReferrals = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: "$userId",
-            totalCommission: { $sum: "$commissionAmount" },
-            totalGames: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" }
-          }
-        },
-        { $sort: { totalCommission: -1 } },
-        { $limit: 10 }
-      ]);
-
-      // Get game type breakdown
-      const gameTypeBreakdown = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: "$gameType",
-            totalCommission: { $sum: "$commissionAmount" },
-            totalGames: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" },
-            averageCommission: { $avg: "$commissionAmount" }
-          }
-        }
-      ]);
-
-      // Get total summary
-      const summary = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: null,
-            totalCommission: { $sum: "$commissionAmount" },
-            totalGames: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" },
-            averageCommission: { $avg: "$commissionAmount" },
-            minCommission: { $min: "$commissionAmount" },
-            maxCommission: { $max: "$commissionAmount" }
-          }
-        }
-      ]);
-
-      // Get agent info
-      const agent = await this.models.Agent.findById(targetAgentId).select('name username referralCode');
-
-      socket.emit('agent:reportData', {
-        agent: agent ? {
-          name: agent.name,
-          username: agent.username,
-          referralCode: agent.referralCode
-        } : null,
-        period: {
-          startDate: start,
-          endDate: end,
-          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
-        },
-        dailyCommissions: dailyCommissions,
-        hourlyDistribution: hourlyDistribution,
-        topReferrals: topReferrals,
-        gameTypeBreakdown: gameTypeBreakdown,
-        summary: summary[0] || { 
-          totalCommission: 0, 
-          totalGames: 0, 
-          totalWinnings: 0,
-          averageCommission: 0,
-          minCommission: 0,
-          maxCommission: 0
-        }
-      });
-    } catch (error) {
-      console.error('Report error:', error);
-      socket.emit('agent:error', 'Failed to generate report');
-    }
-  }
-
-  // Export agent data to CSV
-  async handleExportAgentData(socket, data) {
-    try {
-      if (!this.checkAdminAccess(socket)) {
-        socket.emit('agent:error', 'Unauthorized - Admin access required');
-        return;
-      }
-
-      const { agentId, startDate, endDate } = data;
-      const start = startDate ? new Date(startDate) : new Date(0);
-      const end = endDate ? new Date(endDate) : new Date();
-      end.setHours(23, 59, 59, 999);
-
-      const matchQuery = { agentId };
-      if (startDate || endDate) {
-        matchQuery.createdAt = {};
-        if (startDate) matchQuery.createdAt.$gte = start;
-        if (endDate) matchQuery.createdAt.$lte = end;
-      }
-
-      const commissions = await this.models.AgentCommission.find(matchQuery)
-        .populate('userId', 'userName userId')
-        .sort({ createdAt: -1 });
-
-      // Format CSV data
-      const csvRows = [];
-      
-      // Header row
-      csvRows.push(['Date', 'Time', 'User ID', 'Username', 'Game Type', 'Stake (ETB)', 'Win Amount (ETB)', 'Commission Rate (%)', 'Commission (ETB)', 'Status'].join(','));
-
-      // Data rows
-      commissions.forEach(commission => {
-        const date = new Date(commission.createdAt);
-        const dateStr = date.toISOString().split('T')[0];
-        const timeStr = date.toTimeString().split(' ')[0];
-        
-        csvRows.push([
-          dateStr,
-          timeStr,
-          commission.userId?.userId || 'Unknown',
-          commission.userId?.userName || 'Unknown',
-          commission.gameType,
-          commission.stake.toFixed(2),
-          commission.winningAmount.toFixed(2),
-          commission.commissionRate,
-          commission.commissionAmount.toFixed(2),
-          commission.status
-        ].join(','));
-      });
-
-      const csvData = csvRows.join('\n');
-
-      socket.emit('agent:exportData', {
-        csvData: csvData,
-        filename: `agent_${agentId}_${new Date().toISOString().split('T')[0]}.csv`,
-        totalRecords: commissions.length
-      });
-    } catch (error) {
-      console.error('Export error:', error);
-      socket.emit('agent:error', 'Failed to export data');
-    }
-  }
-
   // Agent withdraw request
   async handleAgentWithdrawRequest(socket, data) {
     try {
@@ -1939,105 +1733,6 @@ class AgentSystem {
     }
   }
 
-  // Super Admin: Approve agent withdrawal
-  async handleApproveAgentWithdrawal(socket, transactionId) {
-    try {
-      if (!this.checkAdminAccess(socket)) {
-        socket.emit('agent:error', 'Unauthorized - Admin access required');
-        return;
-      }
-
-      const transaction = await this.models.AgentTransaction.findById(transactionId);
-      if (!transaction) {
-        socket.emit('agent:error', 'Transaction not found');
-        return;
-      }
-
-      if (transaction.type !== 'WITHDRAWAL' || transaction.status !== 'pending') {
-        socket.emit('agent:error', 'Invalid withdrawal transaction');
-        return;
-      }
-
-      transaction.status = 'completed';
-      await transaction.save();
-
-      // Notify agent
-      const agentSocket = this.agentSockets.get(transaction.agentId.toString());
-      if (agentSocket) {
-        agentSocket.emit('agent:withdrawalApproved', {
-          transactionId: transaction._id,
-          amount: -transaction.amount,
-          timestamp: new Date()
-        });
-      }
-
-      socket.emit('agent:withdrawalApprovedAdmin', {
-        message: 'Withdrawal approved successfully',
-        transactionId: transaction._id,
-        agentId: transaction.agentId
-      });
-
-      console.log(`✅ Agent withdrawal approved: ${transaction.agentId} - ${-transaction.amount} ETB`);
-    } catch (error) {
-      console.error('Approve withdrawal error:', error);
-      socket.emit('agent:error', 'Failed to approve withdrawal');
-    }
-  }
-
-  // Super Admin: Reject agent withdrawal
-  async handleRejectAgentWithdrawal(socket, transactionId) {
-    try {
-      if (!this.checkAdminAccess(socket)) {
-        socket.emit('agent:error', 'Unauthorized - Admin access required');
-        return;
-      }
-
-      const transaction = await this.models.AgentTransaction.findById(transactionId);
-      if (!transaction) {
-        socket.emit('agent:error', 'Transaction not found');
-        return;
-      }
-
-      if (transaction.type !== 'WITHDRAWAL' || transaction.status !== 'pending') {
-        socket.emit('agent:error', 'Invalid withdrawal transaction');
-        return;
-      }
-
-      // Return amount to agent
-      const agent = await this.models.Agent.findById(transaction.agentId);
-      if (agent) {
-        agent.totalEarnings += (-transaction.amount);
-        agent.updatedAt = new Date();
-        await agent.save();
-      }
-
-      transaction.status = 'failed';
-      transaction.description = `Withdrawal rejected by admin - ${transaction.description}`;
-      await transaction.save();
-
-      // Notify agent
-      const agentSocket = this.agentSockets.get(transaction.agentId.toString());
-      if (agentSocket) {
-        agentSocket.emit('agent:withdrawalRejected', {
-          transactionId: transaction._id,
-          amount: -transaction.amount,
-          timestamp: new Date()
-        });
-      }
-
-      socket.emit('agent:withdrawalRejectedAdmin', {
-        message: 'Withdrawal rejected',
-        transactionId: transaction._id,
-        agentId: transaction.agentId
-      });
-
-      console.log(`❌ Agent withdrawal rejected: ${transaction.agentId} - ${-transaction.amount} ETB`);
-    } catch (error) {
-      console.error('Reject withdrawal error:', error);
-      socket.emit('agent:error', 'Failed to reject withdrawal');
-    }
-  }
-
   // Get agent's withdrawal history
   async handleGetWithdrawalHistory(socket) {
     try {
@@ -2064,34 +1759,112 @@ class AgentSystem {
     }
   }
 
-  // Get all pending agent withdrawals (for admin)
-  async handleGetPendingWithdrawals(socket) {
+  // Get agent performance report
+  async handleAgentReport(socket, data) {
     try {
-      if (!this.checkAdminAccess(socket)) {
-        socket.emit('agent:error', 'Unauthorized - Admin access required');
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
         return;
       }
 
-      const withdrawals = await this.models.AgentTransaction.find({
-        type: 'WITHDRAWAL',
-        status: 'pending'
-      })
-      .populate('agentId', 'name username phoneNumber')
-      .sort({ createdAt: -1 });
+      const { startDate, endDate, agentId } = data;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
 
-      socket.emit('agent:pendingWithdrawals', withdrawals.map(w => ({
-        id: w._id,
-        agentId: w.agentId._id,
-        agentName: w.agentId.name,
-        agentUsername: w.agentId.username,
-        agentPhone: w.agentId.phoneNumber,
-        amount: -w.amount,
-        description: w.description,
-        createdAt: w.createdAt
-      })));
+      let targetAgentId = socket.agentId;
+      
+      // If super admin viewing another agent's report
+      if (agentId && (socket.agentData?.isSuperAdmin || socket.admin)) {
+        targetAgentId = agentId;
+      }
+
+      const matchQuery = { 
+        agentId: targetAgentId,
+        createdAt: { $gte: start, $lte: end },
+        status: 'completed'
+      };
+
+      // Get commissions grouped by date and game type
+      const dailyCommissions = await this.models.AgentCommission.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+              gameType: "$gameType"
+            },
+            totalCommission: { $sum: "$commissionAmount" },
+            totalGames: { $sum: 1 },
+            totalWinnings: { $sum: "$winningAmount" },
+            averageCommission: { $avg: "$commissionAmount" }
+          }
+        },
+        { $sort: { "_id.date": 1, "_id.gameType": 1 } }
+      ]);
+
+      // Get total summary
+      const summary = await this.models.AgentCommission.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: null,
+            totalCommission: { $sum: "$commissionAmount" },
+            totalGames: { $sum: 1 },
+            totalWinnings: { $sum: "$winningAmount" },
+            averageCommission: { $avg: "$commissionAmount" },
+            minCommission: { $min: "$commissionAmount" },
+            maxCommission: { $max: "$commissionAmount" }
+          }
+        }
+      ]);
+
+      // Get agent info
+      const agent = await this.models.Agent.findById(targetAgentId).select('name username referralCode');
+
+      socket.emit('agent:reportData', {
+        agent: agent ? {
+          name: agent.name,
+          username: agent.username,
+          referralCode: agent.referralCode
+        } : null,
+        period: {
+          startDate: start,
+          endDate: end,
+          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+        },
+        dailyCommissions: dailyCommissions,
+        summary: summary[0] || { 
+          totalCommission: 0, 
+          totalGames: 0, 
+          totalWinnings: 0,
+          averageCommission: 0,
+          minCommission: 0,
+          maxCommission: 0
+        }
+      });
     } catch (error) {
-      console.error('Get pending withdrawals error:', error);
-      socket.emit('agent:error', 'Failed to get pending withdrawals');
+      console.error('Report error:', error);
+      socket.emit('agent:error', 'Failed to generate report');
+    }
+  }
+
+  // Send notification to agent
+  async sendAgentNotification(agentId, message, type = 'info') {
+    try {
+      const agentSocket = this.agentSockets.get(agentId.toString());
+      if (agentSocket) {
+        agentSocket.emit('agent:notification', {
+          message,
+          type,
+          timestamp: new Date()
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Send agent notification error:', error);
+      return false;
     }
   }
 
@@ -2166,53 +1939,6 @@ class AgentSystem {
     }
   }
 
-  // Get agent statistics (for admin dashboard)
-  async getAgentStatistics() {
-    try {
-      const totalAgents = await this.models.Agent.countDocuments();
-      const activeAgents = await this.models.Agent.countDocuments({ isActive: true });
-      const totalCommissions = await this.models.AgentCommission.aggregate([
-        { $match: { status: 'completed' } },
-        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
-      ]);
-      const todayCommissions = await this.models.AgentCommission.aggregate([
-        { 
-          $match: { 
-            status: 'completed',
-            createdAt: { $gte: new Date().setHours(0, 0, 0, 0) }
-          } 
-        },
-        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
-      ]);
-
-      // Get pending withdrawals
-      const pendingWithdrawals = await this.models.AgentTransaction.aggregate([
-        { 
-          $match: { 
-            type: 'WITHDRAWAL',
-            status: 'pending'
-          } 
-        },
-        { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
-      ]);
-
-      // Get total referrals
-      const totalReferrals = await this.models.User.countDocuments({ agentId: { $exists: true, $ne: null } });
-
-      return {
-        totalAgents,
-        activeAgents,
-        totalCommissions: totalCommissions[0]?.total || 0,
-        todayCommissions: todayCommissions[0]?.total || 0,
-        pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
-        totalReferrals
-      };
-    } catch (error) {
-      console.error('Get agent statistics error:', error);
-      return null;
-    }
-  }
-
   // Process Bingo win for agent commission
   async processBingoWin(userId, room, winningAmount) {
     try {
@@ -2276,237 +2002,209 @@ class AgentSystem {
     }
   }
 
-  // Get processing claims (for debugging)
-  getProcessingClaims() {
-    return this.processingClaims;
+  // Get total agent earnings (for display in admin panel)
+  async getTotalAgentEarnings() {
+    try {
+      const result = await this.models.Agent.aggregate([
+        { $match: { isActive: true } },
+        { $group: { _id: null, total: { $sum: '$totalEarnings' } } }
+      ]);
+      
+      return result[0]?.total || 0;
+    } catch (error) {
+      console.error('Get total agent earnings error:', error);
+      return 0;
+    }
   }
 
-  // Get room winners (for debugging)
-  getRoomWinners() {
-    return this.roomWinners;
-  }
-
-  // Update user agent assignment (for manual admin updates)
-  async updateUserAgent(userId, agentId) {
+  // Update agent's active referrals (called when user goes online/offline)
+  async updateAgentActiveReferrals(userId, isOnline) {
     try {
       const user = await this.models.User.findOne({ userId });
-      if (!user) {
-        return { success: false, message: 'User not found' };
+      if (!user || !user.agentId) {
+        return;
       }
 
-      const oldAgentId = user.agentId;
-      user.agentId = agentId;
-      user.agentReferredAt = new Date();
-      await user.save();
-
-      // Update agent referral counts
-      if (oldAgentId) {
-        await this.models.Agent.findByIdAndUpdate(oldAgentId, {
-          $inc: { totalReferrals: -1, activeReferrals: -1 }
-        });
+      const agent = await this.models.Agent.findById(user.agentId);
+      if (!agent) {
+        return;
       }
 
-      if (agentId) {
-        await this.models.Agent.findByIdAndUpdate(agentId, {
-          $inc: { totalReferrals: 1 }
-        });
-
-        // Update active referrals count if user is online
-        if (user.isOnline) {
-          await this.models.Agent.findByIdAndUpdate(agentId, {
-            $inc: { activeReferrals: 1 }
-          });
-        }
+      if (isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      } else {
+        agent.activeReferrals = Math.max(0, (agent.activeReferrals || 0) - 1);
       }
-
-      return { 
-        success: true, 
-        message: 'User agent updated successfully',
-        userId,
-        oldAgentId,
-        newAgentId: agentId
-      };
+      
+      agent.updatedAt = new Date();
+      await agent.save();
     } catch (error) {
-      console.error('Update user agent error:', error);
-      return { success: false, message: error.message };
+      console.error('Update agent active referrals error:', error);
     }
   }
 
-  // Bulk assign users to agent by referral code pattern
-  async bulkAssignUsersByPattern(agentId, pattern) {
+  // Validate agent credentials (for API calls)
+  async validateAgentCredentials(username, password) {
     try {
-      const agent = await this.models.Agent.findById(agentId);
-      if (!agent) {
-        return { success: false, message: 'Agent not found' };
-      }
-
-      let query = {};
-      if (pattern === 'telegram') {
-        query = { userId: /^tg_/ }; // Users with Telegram IDs
-      } else if (pattern === 'all') {
-        query = { agentId: { $exists: false } }; // Users without agent
-      } else if (pattern === 'active') {
-        query = { isOnline: true, agentId: { $exists: false } }; // Active users without agent
-      }
-
-      const users = await this.models.User.find(query);
-      let assignedCount = 0;
-
-      for (const user of users) {
-        if (!user.agentId) {
-          user.agentId = agentId;
-          user.agentReferredAt = new Date();
-          await user.save();
-          assignedCount++;
-        }
-      }
-
-      // Update agent referral count
-      await this.models.Agent.findByIdAndUpdate(agentId, {
-        $inc: { totalReferrals: assignedCount }
-      });
-
-      return { 
-        success: true, 
-        message: `Assigned ${assignedCount} users to agent ${agent.username}`,
-        agent: agent.username,
-        assignedCount
-      };
-    } catch (error) {
-      console.error('Bulk assign users error:', error);
-      return { success: false, message: error.message };
-    }
-  }
-
-  // Generate agent referral report
-  async generateAgentReport(agentId, period = 'month') {
-    try {
-      const agent = await this.models.Agent.findById(agentId);
-      if (!agent) {
+      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
+      if (!agent || !agent.isActive) {
         return null;
       }
 
-      const now = new Date();
-      let startDate;
-      
-      switch (period) {
-        case 'today':
-          startDate = new Date(now.setHours(0, 0, 0, 0));
-          break;
-        case 'week':
-          startDate = new Date(now.setDate(now.getDate() - 7));
-          break;
-        case 'month':
-          startDate = new Date(now.setMonth(now.getMonth() - 1));
-          break;
-        case 'year':
-          startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-          break;
-        default:
-          startDate = new Date(now.setMonth(now.getMonth() - 1));
+      const isValid = await bcrypt.compare(password, agent.password);
+      if (!isValid) {
+        return null;
       }
 
-      // Get commissions
-      const commissions = await this.models.AgentCommission.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            createdAt: { $gte: startDate },
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: {
-              gameType: "$gameType"
-            },
-            totalCommission: { $sum: "$commissionAmount" },
-            count: { $sum: 1 },
-            totalWinnings: { $sum: "$winningAmount" }
-          }
-        }
-      ]);
-
-      // Get referral stats
-      const referralStats = await this.models.User.aggregate([
-        {
-          $match: {
-            agentId: agent._id,
-            joinedAt: { $gte: startDate }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalReferrals: { $sum: 1 },
-            activeReferrals: {
-              $sum: {
-                $cond: [{ $eq: ["$isOnline", true] }, 1, 0]
-              }
-            },
-            totalWagered: { $sum: "$totalWagered" },
-            totalWins: { $sum: "$totalWins" },
-            totalBingos: { $sum: "$totalBingos" }
-          }
-        }
-      ]);
-
       return {
-        agent: {
-          id: agent._id,
-          name: agent.name,
-          username: agent.username,
-          referralCode: agent.referralCode
-        },
-        period: {
-          startDate,
-          endDate: new Date(),
-          type: period
-        },
-        commissions: commissions.reduce((acc, curr) => {
-          acc[curr._id.gameType] = {
-            totalCommission: curr.totalCommission,
-            count: curr.count,
-            totalWinnings: curr.totalWinnings
-          };
-          return acc;
-        }, {}),
-        referrals: referralStats[0] || {
-          totalReferrals: 0,
-          activeReferrals: 0,
-          totalWagered: 0,
-          totalWins: 0,
-          totalBingos: 0
-        },
-        summary: {
-          totalCommission: commissions.reduce((sum, curr) => sum + curr.totalCommission, 0),
-          totalReferrals: referralStats[0]?.totalReferrals || 0,
-          activeReferrals: referralStats[0]?.activeReferrals || 0
-        }
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
       };
     } catch (error) {
-      console.error('Generate agent report error:', error);
+      console.error('Validate agent credentials error:', error);
       return null;
     }
   }
 
-  // Send notification to agent
-  async sendAgentNotification(agentId, message, type = 'info') {
+  // Check if agent exists by referral code
+  async checkAgentByReferralCode(referralCode) {
     try {
-      const agentSocket = this.agentSockets.get(agentId.toString());
-      if (agentSocket) {
-        agentSocket.emit('agent:notification', {
-          message,
-          type,
-          timestamp: new Date()
-        });
-        return true;
-      }
-      return false;
+      const agent = await this.models.Agent.findOne({ 
+        referralCode: referralCode,
+        isActive: true 
+      });
+      
+      return agent ? {
+        exists: true,
+        agentId: agent._id,
+        name: agent.name,
+        referralCode: agent.referralCode
+      } : { exists: false };
     } catch (error) {
-      console.error('Send agent notification error:', error);
-      return false;
+      console.error('Check agent by referral code error:', error);
+      return { exists: false };
     }
+  }
+
+  // Debug function to find user by any identifier
+  async debugFindUser(identifier) {
+    try {
+      const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
+      
+      console.log(`🔍 Debug search for: "${cleanIdentifier}"`);
+      
+      // Try all possible matches
+      const queries = [
+        // Exact userId match
+        { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userId match
+        { userId: { $regex: cleanIdentifier, $options: 'i' } },
+        // Exact userName match
+        { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userName match
+        { userName: { $regex: cleanIdentifier, $options: 'i' } },
+        // Telegram ID format
+        { userId: { $regex: 'tg_' + cleanIdentifier.replace('tg_', ''), $options: 'i' } },
+        // Numeric only (telegram ID)
+        { userId: { $regex: 'tg_' + cleanIdentifier, $options: 'i' } },
+        // Phone number
+        { phoneNumber: { $regex: cleanIdentifier, $options: 'i' } }
+      ];
+
+      for (const query of queries) {
+        const user = await this.models.User.findOne(query);
+        if (user) {
+          console.log(`✅ Found user with query:`, query);
+          console.log(`   User ID: ${user.userId}`);
+          console.log(`   User Name: ${user.userName || 'No Name'}`);
+          console.log(`   Agent ID: ${user.agentId}`);
+          console.log(`   Is Online: ${user.isOnline}`);
+          console.log(`   Total Wins: ${user.totalWins}`);
+          return user;
+        }
+      }
+      
+      console.log(`❌ No user found for: "${cleanIdentifier}"`);
+      
+      // List all users in database for debugging
+      const allUsers = await this.models.User.find({})
+        .select('userId userName agentId isOnline totalWins joinedAt')
+        .limit(50)
+        .sort({ joinedAt: -1 });
+      
+      console.log(`📋 Sample users in database (${allUsers.length} total):`);
+      allUsers.forEach(u => {
+        console.log(`   ${u.userId} - ${u.userName || 'No Name'} - Agent: ${u.agentId || 'None'} - Wins: ${u.totalWins} - Online: ${u.isOnline}`);
+      });
+      
+      return null;
+    } catch (error) {
+      console.error('Debug find user error:', error);
+      return null;
+    }
+  }
+
+  // Test function to check user database
+  async testUserDatabase(socket) {
+    try {
+      const users = await this.models.User.find({})
+        .select('userId userName agentId totalWins joinedAt isOnline')
+        .limit(20)
+        .sort({ joinedAt: -1 });
+      
+      console.log('📋 Recent users in database:');
+      users.forEach(user => {
+        console.log(`   ${user.userId} - ${user.userName || 'No Name'} - Agent: ${user.agentId || 'None'} - Wins: ${user.totalWins} - Online: ${user.isOnline}`);
+      });
+      
+      const totalUsers = await this.models.User.countDocuments();
+      const usersWithoutAgents = await this.models.User.countDocuments({
+        $or: [
+          { agentId: { $exists: false } },
+          { agentId: null }
+        ]
+      });
+      
+      socket.emit('agent:testResult', {
+        totalUsers,
+        usersWithoutAgents,
+        sampleUsers: users
+      });
+    } catch (error) {
+      console.error('Test error:', error);
+    }
+  }
+
+  // Cleanup agent system
+  async cleanup() {
+    try {
+      console.log('🧹 Cleaning up agent system...');
+      
+      // Clear caches
+      this.agentSockets.clear();
+      this.referralCache.clear();
+      this.processingClaims.clear();
+      this.roomWinners.clear();
+      
+      console.log('✅ Agent system cleanup completed');
+    } catch (error) {
+      console.error('Agent system cleanup error:', error);
+    }
+  }
+
+  // Get agent system status
+  getSystemStatus() {
+    return {
+      totalAgents: this.agentSockets.size,
+      totalReferralCodes: this.referralCache.size,
+      processingClaims: this.processingClaims.size,
+      roomWinners: this.roomWinners.size,
+      commissionRates: this.commissionRates,
+      botUsername: this.botUsername,
+      isInitialized: true
+    };
   }
 
   // Get agent leaderboard (top earning agents)
@@ -2636,401 +2334,50 @@ class AgentSystem {
     }
   }
 
-  // Reset agent statistics (for testing/admin)
-  async resetAgentStatistics(agentId) {
+  // Get agent statistics (for admin dashboard)
+  async getAgentStatistics() {
     try {
-      const agent = await this.models.Agent.findById(agentId);
-      if (!agent) {
-        return { success: false, message: 'Agent not found' };
-      }
-
-      // Reset agent stats
-      agent.totalEarnings = 0;
-      agent.totalReferrals = 0;
-      agent.activeReferrals = 0;
-      agent.lastCommissionDate = null;
-      agent.updatedAt = new Date();
-      await agent.save();
-
-      // Delete all commissions and transactions
-      await this.models.AgentCommission.deleteMany({ agentId: agent._id });
-      await this.models.AgentTransaction.deleteMany({ agentId: agent._id });
-
-      // Remove agent from user records
-      await this.models.User.updateMany(
-        { agentId: agent._id },
+      const totalAgents = await this.models.Agent.countDocuments();
+      const activeAgents = await this.models.Agent.countDocuments({ isActive: true });
+      const totalCommissions = await this.models.AgentCommission.aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+      ]);
+      const todayCommissions = await this.models.AgentCommission.aggregate([
         { 
-          $unset: { 
-            agentId: "",
-            agentReferredAt: "",
-            agentCommissionEarned: ""
+          $match: { 
+            status: 'completed',
+            createdAt: { $gte: new Date().setHours(0, 0, 0, 0) }
           } 
-        }
-      );
-
-      return { 
-        success: true, 
-        message: `Agent ${agent.username} statistics reset successfully`,
-        agentId: agent._id,
-        username: agent.username
-      };
-    } catch (error) {
-      console.error('Reset agent statistics error:', error);
-      return { success: false, message: error.message };
-    }
-  }
-
-  // Get total agent earnings (for display in admin panel)
-  async getTotalAgentEarnings() {
-    try {
-      const result = await this.models.Agent.aggregate([
-        { $match: { isActive: true } },
-        { $group: { _id: null, total: { $sum: '$totalEarnings' } } }
+        },
+        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
       ]);
-      
-      return result[0]?.total || 0;
-    } catch (error) {
-      console.error('Get total agent earnings error:', error);
-      return 0;
-    }
-  }
 
-  // Get agent earnings by date range
-  async getAgentEarningsByDateRange(agentId, startDate, endDate) {
-    try {
-      const result = await this.models.AgentCommission.aggregate([
-        {
-          $match: {
-            agentId: agentId,
-            status: 'completed',
-            createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) }
-          }
+      // Get pending withdrawals
+      const pendingWithdrawals = await this.models.AgentTransaction.aggregate([
+        { 
+          $match: { 
+            type: 'WITHDRAWAL',
+            status: 'pending'
+          } 
         },
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            totalCommission: { $sum: '$commissionAmount' },
-            count: { $sum: 1 }
-          }
-        },
-        { $sort: { '_id': 1 } }
+        { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
       ]);
-      
-      return result;
-    } catch (error) {
-      console.error('Get agent earnings by date range error:', error);
-      return [];
-    }
-  }
 
-  // Get top performing agents by game type
-  async getTopAgentsByGameType(gameType, limit = 5) {
-    try {
-      const result = await this.models.AgentCommission.aggregate([
-        {
-          $match: {
-            gameType: gameType,
-            status: 'completed',
-            createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
-          }
-        },
-        {
-          $group: {
-            _id: '$agentId',
-            totalCommission: { $sum: '$commissionAmount' },
-            count: { $sum: 1 }
-          }
-        },
-        {
-          $lookup: {
-            from: 'agents',
-            localField: '_id',
-            foreignField: '_id',
-            as: 'agent'
-          }
-        },
-        { $unwind: '$agent' },
-        { $match: { 'agent.isActive': true } },
-        {
-          $project: {
-            agentId: '$_id',
-            name: '$agent.name',
-            username: '$agent.username',
-            referralCode: '$agent.referralCode',
-            totalCommission: 1,
-            count: 1
-          }
-        },
-        { $sort: { totalCommission: -1 } },
-        { $limit: limit }
-      ]);
-      
-      return result;
-    } catch (error) {
-      console.error('Get top agents by game type error:', error);
-      return [];
-    }
-  }
-
-  // Get agent's active referrals count
-  async getAgentActiveReferrals(agentId) {
-    try {
-      return await this.models.User.countDocuments({
-        agentId: agentId,
-        isOnline: true
-      });
-    } catch (error) {
-      console.error('Get agent active referrals error:', error);
-      return 0;
-    }
-  }
-
-  // Update agent's active referrals (called when user goes online/offline)
-  async updateAgentActiveReferrals(userId, isOnline) {
-    try {
-      const user = await this.models.User.findOne({ userId });
-      if (!user || !user.agentId) {
-        return;
-      }
-
-      const agent = await this.models.Agent.findById(user.agentId);
-      if (!agent) {
-        return;
-      }
-
-      if (isOnline) {
-        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
-      } else {
-        agent.activeReferrals = Math.max(0, (agent.activeReferrals || 0) - 1);
-      }
-      
-      agent.updatedAt = new Date();
-      await agent.save();
-    } catch (error) {
-      console.error('Update agent active referrals error:', error);
-    }
-  }
-
-  // Get agent's total referrals with statistics
-  async getAgentReferralsWithStats(agentId) {
-    try {
-      const referrals = await this.models.User.find({ agentId: agentId })
-        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen')
-        .sort({ joinedAt: -1 });
-
-      const stats = await this.models.User.aggregate([
-        { $match: { agentId: agentId } },
-        {
-          $group: {
-            _id: null,
-            totalBalance: { $sum: '$balance' },
-            totalWagered: { $sum: '$totalWagered' },
-            totalWins: { $sum: '$totalWins' },
-            totalBingos: { $sum: '$totalBingos' },
-            activeCount: {
-              $sum: { $cond: [{ $eq: ['$isOnline', true] }, 1, 0] }
-            },
-            totalCount: { $sum: 1 }
-          }
-        }
-      ]);
+      // Get total referrals
+      const totalReferrals = await this.models.User.countDocuments({ agentId: { $exists: true, $ne: null } });
 
       return {
-        referrals: referrals,
-        stats: stats[0] || {
-          totalBalance: 0,
-          totalWagered: 0,
-          totalWins: 0,
-          totalBingos: 0,
-          activeCount: 0,
-          totalCount: 0
-        }
+        totalAgents,
+        activeAgents,
+        totalCommissions: totalCommissions[0]?.total || 0,
+        todayCommissions: todayCommissions[0]?.total || 0,
+        pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
+        totalReferrals
       };
     } catch (error) {
-      console.error('Get agent referrals with stats error:', error);
-      return { referrals: [], stats: {} };
-    }
-  }
-
-  // Validate agent credentials (for API calls)
-  async validateAgentCredentials(username, password) {
-    try {
-      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
-      if (!agent || !agent.isActive) {
-        return null;
-      }
-
-      const isValid = await bcrypt.compare(password, agent.password);
-      if (!isValid) {
-        return null;
-      }
-
-      return {
-        id: agent._id,
-        username: agent.username,
-        name: agent.name,
-        isSuperAdmin: agent.isSuperAdmin
-      };
-    } catch (error) {
-      console.error('Validate agent credentials error:', error);
+      console.error('Get agent statistics error:', error);
       return null;
-    }
-  }
-
-  // Get agent's commission summary
-  async getAgentCommissionSummary(agentId) {
-    try {
-      const summary = await this.models.AgentCommission.aggregate([
-        { $match: { agentId: agentId, status: 'completed' } },
-        {
-          $group: {
-            _id: '$gameType',
-            totalCommission: { $sum: '$commissionAmount' },
-            totalWinnings: { $sum: '$winningAmount' },
-            count: { $sum: 1 },
-            avgCommission: { $avg: '$commissionAmount' },
-            minCommission: { $min: '$commissionAmount' },
-            maxCommission: { $max: '$commissionAmount' }
-          }
-        }
-      ]);
-
-      const totalSummary = await this.models.AgentCommission.aggregate([
-        { $match: { agentId: agentId, status: 'completed' } },
-        {
-          $group: {
-            _id: null,
-            totalCommission: { $sum: '$commissionAmount' },
-            totalWinnings: { $sum: '$winningAmount' },
-            totalGames: { $sum: 1 }
-          }
-        }
-      ]);
-
-      return {
-        byGameType: summary.reduce((acc, curr) => {
-          acc[curr._id] = curr;
-          return acc;
-        }, {}),
-        total: totalSummary[0] || {
-          totalCommission: 0,
-          totalWinnings: 0,
-          totalGames: 0
-        }
-      };
-    } catch (error) {
-      console.error('Get agent commission summary error:', error);
-      return { byGameType: {}, total: {} };
-    }
-  }
-
-  // Check if agent exists by referral code
-  async checkAgentByReferralCode(referralCode) {
-    try {
-      const agent = await this.models.Agent.findOne({ 
-        referralCode: referralCode,
-        isActive: true 
-      });
-      
-      return agent ? {
-        exists: true,
-        agentId: agent._id,
-        name: agent.name,
-        referralCode: agent.referralCode
-      } : { exists: false };
-    } catch (error) {
-      console.error('Check agent by referral code error:', error);
-      return { exists: false };
-    }
-  }
-
-  // Get agent's recent activity
-  async getAgentRecentActivity(agentId, limit = 20) {
-    try {
-      const commissions = await this.models.AgentCommission.find({ agentId: agentId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .populate('userId', 'userName userId');
-
-      const withdrawals = await this.models.AgentTransaction.find({
-        agentId: agentId,
-        type: 'WITHDRAWAL'
-      })
-      .sort({ createdAt: -1 })
-      .limit(limit);
-
-      const manualReferrals = await this.models.Referral.find({
-        agentId: agentId,
-        referralMethod: { $in: ['manual', 'bulk_manual'] }
-      })
-      .sort({ createdAt: -1 })
-      .limit(limit);
-
-      return {
-        commissions: commissions.map(c => ({
-          type: 'COMMISSION',
-          gameType: c.gameType,
-          amount: c.commissionAmount,
-          description: `${c.gameType} from ${c.userId?.userName || 'Unknown'}`,
-          timestamp: c.createdAt
-        })),
-        withdrawals: withdrawals.map(w => ({
-          type: 'WITHDRAWAL',
-          amount: -w.amount,
-          description: w.description,
-          status: w.status,
-          timestamp: w.createdAt
-        })),
-        manualReferrals: manualReferrals.map(r => ({
-          type: 'MANUAL_REFERRAL',
-          userId: r.userId,
-          userName: r.userName,
-          method: r.referralMethod,
-          timestamp: r.createdAt
-        }))
-      };
-    } catch (error) {
-      console.error('Get agent recent activity error:', error);
-      return { commissions: [], withdrawals: [], manualReferrals: [] };
-    }
-  }
-
-  // Export agent's commission data
-  async exportAgentCommissions(agentId, format = 'csv') {
-    try {
-      const commissions = await this.models.AgentCommission.find({ agentId: agentId })
-        .populate('userId', 'userName userId')
-        .sort({ createdAt: -1 });
-
-      if (format === 'csv') {
-        const csvRows = [];
-        csvRows.push(['Date', 'Time', 'User ID', 'Username', 'Game Type', 'Stake', 'Win Amount', 'Commission Rate', 'Commission', 'Status']);
-        
-        commissions.forEach(c => {
-          const date = new Date(c.createdAt);
-          csvRows.push([
-            date.toISOString().split('T')[0],
-            date.toTimeString().split(' ')[0],
-            c.userId?.userId || 'Unknown',
-            c.userId?.userName || 'Unknown',
-            c.gameType,
-            c.stake.toFixed(2),
-            c.winningAmount.toFixed(2),
-            c.commissionRate,
-            c.commissionAmount.toFixed(2),
-            c.status
-          ].join(','));
-        });
-
-        return csvRows.join('\n');
-      } else if (format === 'json') {
-        return JSON.stringify(commissions, null, 2);
-      }
-
-      return '';
-    } catch (error) {
-      console.error('Export agent commissions error:', error);
-      return '';
     }
   }
 
@@ -3067,7 +2414,12 @@ class AgentSystem {
         isOnline: true
       });
 
-      // Get manual referral stats
+      // Get referral method stats
+      const telegramReferrals = await this.models.Referral.countDocuments({
+        agentId: agentId,
+        referralMethod: 'telegram_link'
+      });
+      
       const manualReferrals = await this.models.Referral.countDocuments({
         agentId: agentId,
         referralMethod: { $in: ['manual', 'bulk_manual'] }
@@ -3095,6 +2447,7 @@ class AgentSystem {
           totalEarnings: agent?.totalEarnings || 0,
           totalReferrals: agent?.totalReferrals || 0,
           activeReferrals: activeReferrals,
+          telegramReferrals: telegramReferrals,
           manualReferrals: manualReferrals,
           commissionRateBingo: agent?.commissionRateBingo || 40,
           commissionRateKeno: agent?.commissionRateKeno || 10
@@ -3104,124 +2457,6 @@ class AgentSystem {
       console.error('Get agent performance metrics error:', error);
       return null;
     }
-  }
-
-  // Debug function to find user by any identifier
-  async debugFindUser(identifier) {
-    try {
-      const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
-      
-      console.log(`🔍 Debug search for: "${cleanIdentifier}"`);
-      
-      // Try all possible matches
-      const queries = [
-        // Exact userId match
-        { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
-        // Partial userId match
-        { userId: { $regex: cleanIdentifier, $options: 'i' } },
-        // Exact userName match
-        { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
-        // Partial userName match
-        { userName: { $regex: cleanIdentifier, $options: 'i' } },
-        // Telegram ID format
-        { userId: { $regex: 'tg_' + cleanIdentifier.replace('tg_', ''), $options: 'i' } },
-        // Numeric only (telegram ID)
-        { userId: { $regex: 'tg_' + cleanIdentifier, $options: 'i' } },
-        // Phone number
-        { phoneNumber: { $regex: cleanIdentifier, $options: 'i' } }
-      ];
-
-      for (const query of queries) {
-        const user = await this.models.User.findOne(query);
-        if (user) {
-          console.log(`✅ Found user with query:`, query);
-          console.log(`   User ID: ${user.userId}`);
-          console.log(`   User Name: ${user.userName || 'No Name'}`);
-          console.log(`   Agent ID: ${user.agentId}`);
-          console.log(`   Is Online: ${user.isOnline}`);
-          console.log(`   Total Wins: ${user.totalWins}`);
-          return user;
-        }
-      }
-      
-      console.log(`❌ No user found for: "${cleanIdentifier}"`);
-      
-      // List all users in database for debugging
-      const allUsers = await this.models.User.find({})
-        .select('userId userName agentId isOnline totalWins joinedAt')
-        .limit(50)
-        .sort({ joinedAt: -1 });
-      
-      console.log(`📋 Sample users in database (${allUsers.length} total):`);
-      allUsers.forEach(u => {
-        console.log(`   ${u.userId} - ${u.userName || 'No Name'} - Agent: ${u.agentId || 'None'} - Wins: ${u.totalWins} - Online: ${u.isOnline}`);
-      });
-      
-      return null;
-    } catch (error) {
-      console.error('Debug find user error:', error);
-      return null;
-    }
-  }
-
-  // Test function to check user database
-  async testUserDatabase(socket) {
-    try {
-      const users = await this.models.User.find({})
-        .select('userId userName agentId totalWins joinedAt isOnline')
-        .limit(20)
-        .sort({ joinedAt: -1 });
-      
-      console.log('📋 Recent users in database:');
-      users.forEach(user => {
-        console.log(`   ${user.userId} - ${user.userName || 'No Name'} - Agent: ${user.agentId || 'None'} - Wins: ${user.totalWins} - Online: ${user.isOnline}`);
-      });
-      
-      const totalUsers = await this.models.User.countDocuments();
-      const usersWithoutAgents = await this.models.User.countDocuments({
-        $or: [
-          { agentId: { $exists: false } },
-          { agentId: null }
-        ]
-      });
-      
-      socket.emit('agent:testResult', {
-        totalUsers,
-        usersWithoutAgents,
-        sampleUsers: users
-      });
-    } catch (error) {
-      console.error('Test error:', error);
-    }
-  }
-
-  // Cleanup agent system
-  async cleanup() {
-    try {
-      console.log('🧹 Cleaning up agent system...');
-      
-      // Clear caches
-      this.agentSockets.clear();
-      this.referralCache.clear();
-      this.processingClaims.clear();
-      this.roomWinners.clear();
-      
-      console.log('✅ Agent system cleanup completed');
-    } catch (error) {
-      console.error('Agent system cleanup error:', error);
-    }
-  }
-
-  // Get agent system status
-  getSystemStatus() {
-    return {
-      totalAgents: this.agentSockets.size,
-      totalReferralCodes: this.referralCache.size,
-      processingClaims: this.processingClaims.size,
-      roomWinners: this.roomWinners.size,
-      commissionRates: this.commissionRates,
-      isInitialized: true
-    };
   }
 }
 
