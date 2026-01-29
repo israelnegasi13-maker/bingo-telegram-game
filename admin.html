@@ -4354,17 +4354,9 @@
             const agent = state.agents.find(a => a._id === agentId);
             if (!agent) return;
             
-            // Request referral link from server
-            if (state.socket && state.isAdmin) {
-                // This would need server-side implementation
-                // For now, we'll generate client-side
-                generateAgentReferralLink(agent);
-            }
-        }
-
-        function generateAgentReferralLink(agent) {
-            const referralLink = `https://t.me/ethio_games1_bot?start=ref_${agent.referralCode}`;
-            const referralMessage = `🎮 Join ETHIO GAMES and start winning big!\n\nUse my referral link to join and I'll earn commission from your wins:\n\n${referralLink}\n\n👑 Agent: ${agent.name}\n💰 Commission: ${agent.commissionRateBingo || 40}% from Bingo, ${agent.commissionRateKeno || 10}% from Keno`;
+            // Generate referral link with NEW bot username
+            const referralLink = `https://t.me/Ethio_elite_games_bot?start=ref_${agent.referralCode}`;
+            const referralMessage = `🎮 Join ETHIO ELITE GAMES and start winning big!\n\nUse my referral link to join and I'll earn commission from your wins:\n\n${referralLink}\n\n👑 Agent: ${agent.name}\n💰 Commission: ${agent.commissionRateBingo || 40}% from Bingo, ${agent.commissionRateKeno || 10}% from Keno`;
             
             const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`;
             
@@ -4669,8 +4661,6 @@
             document.getElementById('totalAgents').textContent = totalAgents;
         }
 
-        // Rest of the existing functions (Wallet Approvals, Rooms, etc.) remain the same...
-
         // Wallet Approvals Functions
         function refreshPendingTransactions() {
             if (state.socket && state.isAdmin) {
@@ -4964,9 +4954,10 @@
                 return;
             }
             
-            // This would need server-side implementation
-            showToast('Broadcast functionality requires server implementation', 'info');
+            state.socket.emit('admin:broadcast', { message, type });
             hideModal('broadcastModal');
+            showToast('Broadcast sent to all players', 'success');
+            addSystemLog(`Broadcast sent: ${message.substring(0, 50)}...`);
         }
 
         function showEmergencyModal() {
@@ -5700,6 +5691,7 @@
         function updateGameTimer() {
             const timer = document.getElementById('gameTimer').value;
             if (timer && timer > 0) {
+                state.socket.emit('admin:updateGameTimer', parseInt(timer));
                 showToast(`Game timer updated to ${timer} seconds`, 'success');
                 addSystemLog(`Game timer updated to ${timer} seconds`);
             }
@@ -5708,6 +5700,7 @@
         function updateMinPlayers() {
             const minPlayers = document.getElementById('minPlayers').value;
             if (minPlayers && minPlayers >= 1) {
+                state.socket.emit('admin:updateMinPlayers', parseInt(minPlayers));
                 showToast(`Minimum players updated to ${minPlayers}`, 'success');
                 addSystemLog(`Minimum players updated to ${minPlayers}`);
             }
@@ -5995,6 +5988,7 @@
                 addActivityItem({message: 'Welcome to Bingo Elite Admin Dashboard v4.0'});
                 addSystemLog('Admin dashboard loaded with Agent Management system', 'agent');
                 addSystemLog('Agent system: 40% Bingo commission, 10% Keno commission', 'agent');
+                addSystemLog('Referral system updated for @Ethio_elite_games_bot', 'agent');
             }
         }, 2000);
     </script>
