@@ -607,6 +607,13 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Agent verify token for auto login
+  socket.on('agent:verifyToken', (data) => {
+    if (agentSystem && agentSystem.handleVerifyAgentToken) {
+      agentSystem.handleVerifyAgentToken(socket, data);
+    }
+  });
+  
   // Agent dashboard data
   socket.on('agent:dashboard', () => {
     if (agentSystem && agentSystem.handleAgentDashboard) {
@@ -625,6 +632,34 @@ io.on('connection', (socket) => {
   socket.on('agent:generateReferralLink', () => {
     if (agentSystem && agentSystem.handleGenerateReferralLink) {
       agentSystem.handleGenerateReferralLink(socket);
+    }
+  });
+  
+  // Manual referral assignment by agent
+  socket.on('agent:manualReferralAssignment', (data) => {
+    if (agentSystem && agentSystem.handleManualReferralAssignmentByAgent) {
+      agentSystem.handleManualReferralAssignmentByAgent(socket, data);
+    }
+  });
+  
+  // Bulk manual referral assignment
+  socket.on('agent:bulkManualReferral', (data) => {
+    if (agentSystem && agentSystem.handleBulkManualReferral) {
+      agentSystem.handleBulkManualReferral(socket, data);
+    }
+  });
+  
+  // Search users for assignment
+  socket.on('agent:searchUsers', (data) => {
+    if (agentSystem && agentSystem.handleSearchUsers) {
+      agentSystem.handleSearchUsers(socket, data);
+    }
+  });
+  
+  // Get user suggestions
+  socket.on('agent:getUserSuggestions', () => {
+    if (agentSystem && agentSystem.handleGetUserSuggestions) {
+      agentSystem.handleGetUserSuggestions(socket);
     }
   });
   
@@ -660,6 +695,61 @@ io.on('connection', (socket) => {
   socket.on('agent:getWithdrawalHistory', () => {
     if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
       agentSystem.handleGetWithdrawalHistory(socket);
+    }
+  });
+  
+  // Test user database
+  socket.on('agent:testUserDatabase', () => {
+    if (agentSystem && agentSystem.testUserDatabase) {
+      agentSystem.testUserDatabase(socket);
+    }
+  });
+  
+  // Get agent referral tree
+  socket.on('agent:getReferralTree', (data) => {
+    if (agentSystem && agentSystem.getAgentReferralTree) {
+      const agentId = data.agentId || socket.agentId;
+      agentSystem.getAgentReferralTree(agentId, data.depth || 2)
+        .then(tree => socket.emit('agent:referralTree', tree))
+        .catch(err => socket.emit('agent:error', err.message));
+    }
+  });
+  
+  // Get agent leaderboard
+  socket.on('agent:getLeaderboard', (data) => {
+    if (agentSystem && agentSystem.getAgentLeaderboard) {
+      const limit = data.limit || 10;
+      const period = data.period || 'month';
+      agentSystem.getAgentLeaderboard(limit, period)
+        .then(leaderboard => socket.emit('agent:leaderboard', leaderboard))
+        .catch(err => socket.emit('agent:error', err.message));
+    }
+  });
+  
+  // Get agent performance metrics
+  socket.on('agent:getPerformanceMetrics', (data) => {
+    if (agentSystem && agentSystem.getAgentPerformanceMetrics) {
+      const agentId = data.agentId || socket.agentId;
+      agentSystem.getAgentPerformanceMetrics(agentId)
+        .then(metrics => socket.emit('agent:performanceMetrics', metrics))
+        .catch(err => socket.emit('agent:error', err.message));
+    }
+  });
+  
+  // Get agent statistics
+  socket.on('agent:getAgentStatistics', () => {
+    if (agentSystem && agentSystem.getAgentStatistics) {
+      agentSystem.getAgentStatistics()
+        .then(stats => socket.emit('agent:statistics', stats))
+        .catch(err => socket.emit('agent:error', err.message));
+    }
+  });
+  
+  // Get agent system status
+  socket.on('agent:getSystemStatus', () => {
+    if (agentSystem && agentSystem.getSystemStatus) {
+      const status = agentSystem.getSystemStatus();
+      socket.emit('agent:systemStatus', status);
     }
   });
   
@@ -713,54 +803,18 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Reset agent password (super admin only)
-  socket.on('admin:resetAgentPassword', (data) => {
-    if (socket.admin && agentSystem && agentSystem.handleResetAgentPassword) {
-      agentSystem.handleResetAgentPassword(socket, data);
+  // Get agent system status (admin)
+  socket.on('admin:getAgentSystemStatus', () => {
+    if (socket.admin && agentSystem && agentSystem.getSystemStatus) {
+      const status = agentSystem.getSystemStatus();
+      socket.emit('admin:agentSystemStatus', status);
     }
   });
   
-  // Export agent data (super admin only)
-  socket.on('admin:exportAgentData', (data) => {
-    if (socket.admin && agentSystem && agentSystem.handleExportAgentData) {
-      agentSystem.handleExportAgentData(socket, data);
-    }
-  });
-  
-  // Get pending agent withdrawals (super admin only)
-  socket.on('admin:getPendingAgentWithdrawals', () => {
-    if (socket.admin && agentSystem && agentSystem.handleGetPendingWithdrawals) {
-      agentSystem.handleGetPendingWithdrawals(socket);
-    }
-  });
-  
-  // Approve agent withdrawal (super admin only)
-  socket.on('admin:approveAgentWithdrawal', (transactionId) => {
-    if (socket.admin && agentSystem && agentSystem.handleApproveAgentWithdrawal) {
-      agentSystem.handleApproveAgentWithdrawal(socket, transactionId);
-    }
-  });
-  
-  // Reject agent withdrawal (super admin only)
-  socket.on('admin:rejectAgentWithdrawal', (transactionId) => {
-    if (socket.admin && agentSystem && agentSystem.handleRejectAgentWithdrawal) {
-      agentSystem.handleRejectAgentWithdrawal(socket, transactionId);
-    }
-  });
-  
-  // Update user agent assignment (super admin only)
-  socket.on('admin:updateUserAgent', async (data) => {
-    if (socket.admin && agentSystem && agentSystem.updateUserAgent) {
-      const result = await agentSystem.updateUserAgent(data.userId, data.agentId);
-      socket.emit('admin:userAgentUpdated', result);
-    }
-  });
-  
-  // Bulk assign users to agent (super admin only)
-  socket.on('admin:bulkAssignUsers', async (data) => {
-    if (socket.admin && agentSystem && agentSystem.bulkAssignUsersByPattern) {
-      const result = await agentSystem.bulkAssignUsersByPattern(data.agentId, data.pattern);
-      socket.emit('admin:bulkAssignComplete', result);
+  // Manual referral assignment by admin
+  socket.on('admin:manualReferralAssignment', (data) => {
+    if (socket.admin && agentSystem && agentSystem.handleManualReferralAssignment) {
+      agentSystem.handleManualReferralAssignment(socket, data);
     }
   });
   
@@ -771,14 +825,6 @@ io.on('connection', (socket) => {
       const period = data.period || 'month';
       const leaderboard = await agentSystem.getAgentLeaderboard(limit, period);
       socket.emit('admin:agentLeaderboard', leaderboard);
-    }
-  });
-  
-  // Reset agent statistics (super admin only)
-  socket.on('admin:resetAgentStats', async (agentId) => {
-    if (socket.admin && agentSystem && agentSystem.resetAgentStatistics) {
-      const result = await agentSystem.resetAgentStatistics(agentId);
-      socket.emit('admin:agentStatsReset', result);
     }
   });
   
@@ -2080,11 +2126,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'How to Play',
-                          message: 'BINGO:\\n1. Select room (10-100 ETB)\\n2. Choose an available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!',
+                          message: 'BINGO:\\\\n1. Select room (10-100 ETB)\\\\n2. Choose an available ticket\\\\n3. Wait for countdown\\\\n4. Mark numbers as called\\\\n5. Claim BINGO to win!\\\\n\\\\nKENO:\\\\n1. Select 5 numbers from 1-80\\\\n2. Choose bet amount (5-100 ETB)\\\\n3. 20 numbers drawn per round\\\\n4. Match 3-5 numbers to win!',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('How to Play\\n\\nBINGO:\\n1. Select room (10-100 ETB)\\n2. Choose an available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!');
+                      alert('How to Play\\\\n\\\\nBINGO:\\\\n1. Select room (10-100 ETB)\\\\n2. Choose an available ticket\\\\n3. Wait for countdown\\\\n4. Mark numbers as called\\\\n5. Claim BINGO to win!\\\\n\\\\nKENO:\\\\n1. Select 5 numbers from 1-80\\\\n2. Choose bet amount (5-100 ETB)\\\\n3. 20 numbers drawn per round\\\\n4. Match 3-5 numbers to win!');
                   }
               }
               
@@ -2096,7 +2142,7 @@ app.get('/telegram', async (req, res) => {
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Wallet Information\\n\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot');
+                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @ethio_games1_bot');
                   }
               }
               
@@ -2108,7 +2154,7 @@ app.get('/telegram', async (req, res) => {
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Terms & Conditions\\n\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support');
+                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @ethio_games1_bot for support');
                   }
               }
               
