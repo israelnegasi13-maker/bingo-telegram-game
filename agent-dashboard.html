@@ -672,6 +672,24 @@
             border: 1px solid rgba(6, 182, 212, 0.2);
         }
 
+        .badge.telegram {
+            background: rgba(0, 136, 204, 0.15);
+            color: #0088cc;
+            border: 1px solid rgba(0, 136, 204, 0.2);
+        }
+
+        .badge.manual {
+            background: rgba(40, 167, 69, 0.15);
+            color: #28a745;
+            border: 1px solid rgba(40, 167, 69, 0.2);
+        }
+
+        .badge.admin {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.2);
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .dashboard-header {
@@ -1089,6 +1107,73 @@
             margin-top: 16px;
             display: none;
         }
+
+        /* Referral Sources Cards */
+        .referral-source-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .referral-source-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .source-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 28px;
+        }
+
+        .source-icon.telegram {
+            background: rgba(0, 136, 204, 0.1);
+            color: #0088cc;
+        }
+
+        .source-icon.manual {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+
+        .source-icon.admin {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+        }
+
+        .source-icon.unknown {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+        }
+
+        .source-value {
+            font-size: 32px;
+            font-weight: 800;
+            margin: 8px 0;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .source-label {
+            color: var(--gray-400);
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .source-percentage {
+            font-size: 12px;
+            color: var(--gray-500);
+        }
     </style>
 </head>
 <body>
@@ -1220,6 +1305,63 @@
                     <div class="stat-value" id="agentRank">#0</div>
                     <div class="stat-label">Leaderboard Position</div>
                     <div class="stat-change" id="nextRank">Next: 0 ETB</div>
+                </div>
+            </div>
+
+            <!-- Referral Sources Section -->
+            <div class="section" id="referralSourcesSection">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-pie"></i> Referral Sources
+                </h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(0, 123, 255, 0.1); color: #007bff;">
+                                <i class="fab fa-telegram"></i>
+                            </div>
+                            <div class="stat-change positive" id="telegramGrowth">+0%</div>
+                        </div>
+                        <div class="stat-value" id="telegramReferrals">0</div>
+                        <div class="stat-label">Telegram Links</div>
+                        <div class="stat-change" id="telegramPercentage">0% of total</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(40, 167, 69, 0.1); color: #28a745;">
+                                <i class="fas fa-keyboard"></i>
+                            </div>
+                            <div class="stat-change positive" id="manualGrowth">+0%</div>
+                        </div>
+                        <div class="stat-value" id="manualReferrals">0</div>
+                        <div class="stat-label">Manual Adds</div>
+                        <div class="stat-change" id="manualPercentage">0% of total</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(255, 193, 7, 0.1); color: #ffc107;">
+                                <i class="fas fa-user-shield"></i>
+                            </div>
+                            <div class="stat-change">Admin</div>
+                        </div>
+                        <div class="stat-value" id="adminReferrals">0</div>
+                        <div class="stat-label">Admin Assigned</div>
+                        <div class="stat-change" id="adminPercentage">0% of total</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(108, 117, 125, 0.1); color: #6c757d;">
+                                <i class="fas fa-question-circle"></i>
+                            </div>
+                            <div class="stat-change">Method</div>
+                        </div>
+                        <div class="stat-value" id="unknownReferrals">0</div>
+                        <div class="stat-label">Unknown Source</div>
+                        <div class="stat-change">Needs verification</div>
+                    </div>
                 </div>
             </div>
 
@@ -1361,6 +1503,7 @@
                             <tr>
                                 <th>Date</th>
                                 <th>User</th>
+                                <th>Source</th>
                                 <th>Game</th>
                                 <th>Win Amount</th>
                                 <th>Commission</th>
@@ -1368,7 +1511,33 @@
                             </tr>
                         </thead>
                         <tbody id="recentActivityBody">
-                            <tr><td colspan="6" class="empty-state">No recent activity</td></tr>
+                            <tr><td colspan="7" class="empty-state">No recent activity</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Referrals List -->
+            <div class="section" id="referralsListSection">
+                <h2 class="section-title">
+                    <i class="fas fa-users"></i> Recent Referrals
+                </h2>
+                
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date Added</th>
+                                <th>User ID</th>
+                                <th>Username</th>
+                                <th>Source</th>
+                                <th>Balance</th>
+                                <th>Total Wins</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="referralsListBody">
+                            <tr><td colspan="7" class="empty-state">No referrals yet. Start adding users!</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1677,13 +1846,18 @@ display_name"></textarea>
         }
 
         function updateDashboard(data) {
+            console.log('Dashboard data received:', data);
+            
             // Update stats
             document.getElementById('totalEarnings').textContent = data.stats.totalEarnings.toFixed(2) + ' ETB';
             document.getElementById('todayEarnings').textContent = 'Today: ' + data.stats.todaysEarnings.toFixed(2) + ' ETB';
             document.getElementById('totalReferrals').textContent = data.stats.totalReferrals;
             document.getElementById('availableBalanceModal').textContent = data.agent.totalEarnings.toFixed(2) + ' ETB';
             
-            // Update activity
+            // Update referral sources
+            updateReferralStats(data);
+            
+            // Update activity table
             const activityBody = document.getElementById('recentActivityBody');
             if (data.commissions && data.commissions.length > 0) {
                 activityBody.innerHTML = '';
@@ -1692,6 +1866,7 @@ display_name"></textarea>
                     row.innerHTML = `
                         <td>${new Date(comm.createdAt).toLocaleDateString()}</td>
                         <td>${comm.userName || comm.userId?.substring(0, 8)}...</td>
+                        <td>${getReferralMethodBadge(comm.referralMethod || 'unknown')}</td>
                         <td>${comm.gameType}</td>
                         <td>${comm.winningAmount.toFixed(2)} ETB</td>
                         <td><strong>${comm.commissionAmount.toFixed(2)} ETB</strong></td>
@@ -1700,8 +1875,83 @@ display_name"></textarea>
                     activityBody.appendChild(row);
                 });
             } else {
-                activityBody.innerHTML = '<tr><td colspan="6" class="empty-state">No recent activity</td></tr>';
+                activityBody.innerHTML = '<tr><td colspan="7" class="empty-state">No recent activity</td></tr>';
             }
+            
+            // Update referrals list
+            const referralsBody = document.getElementById('referralsListBody');
+            if (data.referrals && data.referrals.length > 0) {
+                referralsBody.innerHTML = '';
+                data.referrals.slice(0, 10).forEach(ref => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(ref.referredAt || ref.joinedAt).toLocaleDateString()}</td>
+                        <td><small>${ref.userId.substring(0, 10)}...</small></td>
+                        <td>${ref.userName || 'No Name'}</td>
+                        <td>${getReferralMethodBadge(ref.referralMethod || 'unknown')}</td>
+                        <td>${ref.balance.toFixed(2)} ETB</td>
+                        <td>${ref.totalWins || 0}</td>
+                        <td>
+                            ${ref.isOnline ? 
+                                '<span class="badge success"><i class="fas fa-circle"></i> Online</span>' : 
+                                '<span class="badge"><i class="fas fa-circle"></i> Offline</span>'
+                            }
+                        </td>
+                    `;
+                    referralsBody.appendChild(row);
+                });
+            } else {
+                referralsBody.innerHTML = '<tr><td colspan="7" class="empty-state">No referrals yet. Start adding users!</td></tr>';
+            }
+        }
+
+        function updateReferralStats(data) {
+            if (data.stats) {
+                const stats = data.stats;
+                
+                // Update counts
+                document.getElementById('telegramReferrals').textContent = stats.telegramReferrals || 0;
+                document.getElementById('manualReferrals').textContent = stats.manualReferrals || 0;
+                document.getElementById('adminReferrals').textContent = stats.adminReferrals || 0;
+                
+                // Calculate percentages
+                const totalMethods = (stats.telegramReferrals || 0) + 
+                                    (stats.manualReferrals || 0) + 
+                                    (stats.adminReferrals || 0);
+                
+                const telegramPct = totalMethods > 0 ? 
+                    Math.round((stats.telegramReferrals / totalMethods) * 100) : 0;
+                const manualPct = totalMethods > 0 ? 
+                    Math.round((stats.manualReferrals / totalMethods) * 100) : 0;
+                const adminPct = totalMethods > 0 ? 
+                    Math.round((stats.adminReferrals / totalMethods) * 100) : 0;
+                
+                document.getElementById('telegramPercentage').textContent = `${telegramPct}% of total`;
+                document.getElementById('manualPercentage').textContent = `${manualPct}% of total`;
+                document.getElementById('adminPercentage').textContent = `${adminPct}% of total`;
+                
+                // Update unknown referrals (users without referral method recorded)
+                const totalReferrals = stats.totalReferrals || 0;
+                const unknownCount = Math.max(0, totalReferrals - totalMethods);
+                document.getElementById('unknownReferrals').textContent = unknownCount;
+                
+                // Update growth indicators (simplified for now)
+                document.getElementById('telegramGrowth').textContent = telegramPct > 50 ? '✓ Good' : '↑ Growing';
+                document.getElementById('manualGrowth').textContent = manualPct > 30 ? '✓ Active' : '↑ Adding';
+            }
+        }
+
+        function getReferralMethodBadge(method) {
+            const methodMap = {
+                'telegram_link': { text: 'Telegram Link', class: 'telegram', icon: 'fab fa-telegram' },
+                'manual': { text: 'Manual', class: 'manual', icon: 'fas fa-keyboard' },
+                'bulk_manual': { text: 'Bulk Manual', class: 'manual', icon: 'fas fa-users' },
+                'admin_assigned': { text: 'Admin', class: 'admin', icon: 'fas fa-user-shield' },
+                'unknown': { text: 'Unknown', class: 'info', icon: 'fas fa-question-circle' }
+            };
+            
+            const methodInfo = methodMap[method] || methodMap['unknown'];
+            return `<span class="badge ${methodInfo.class}"><i class="${methodInfo.icon}"></i> ${methodInfo.text}</span>`;
         }
 
         // Referral Link Functions
@@ -1780,7 +2030,18 @@ display_name"></textarea>
         // Modal Functions
         function showReferralMethods() {
             document.getElementById('referralMethodsSection').style.display = 'block';
+            document.getElementById('referralSourcesSection').style.display = 'none';
+            document.getElementById('referralsListSection').style.display = 'none';
             scrollToElement('referralMethodsSection');
+            updateMobileNav('referralMethods');
+        }
+
+        function showDashboard() {
+            document.getElementById('referralMethodsSection').style.display = 'none';
+            document.getElementById('referralSourcesSection').style.display = 'block';
+            document.getElementById('referralsListSection').style.display = 'block';
+            scrollToElement('dashboardScreen');
+            updateMobileNav('dashboard');
         }
 
         function showAdvancedSearchModal() {
@@ -1806,6 +2067,14 @@ display_name"></textarea>
             if (element) {
                 element.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+        }
+
+        function toggleSidebar() {
+            showNotification('Mobile sidebar coming soon!', 'info');
+        }
+
+        function toggleNotifications() {
+            showNotification('Notifications feature coming soon!', 'info');
         }
 
         // Search Functions
@@ -1932,6 +2201,11 @@ display_name"></textarea>
             }
         }
 
+        function showReports() {
+            showNotification('Reports feature coming soon!', 'info');
+            updateMobileNav('reports');
+        }
+
         // Notification System
         function showNotification(message, type = 'info') {
             const container = document.getElementById('notificationContainer');
@@ -1963,17 +2237,6 @@ display_name"></textarea>
         }
 
         // Mobile Navigation
-        function showDashboard() {
-            document.getElementById('referralMethodsSection').style.display = 'none';
-            scrollToElement('dashboardScreen');
-            updateMobileNav('dashboard');
-        }
-
-        function showReports() {
-            showNotification('Reports feature coming soon!', 'info');
-            updateMobileNav('reports');
-        }
-
         function updateMobileNav(activeItem) {
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(item => {
