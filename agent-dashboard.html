@@ -9,6 +9,7 @@
     <title>Agent Dashboard - Elite Games</title>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #2563eb;
@@ -369,6 +370,11 @@
             transform: translateY(-1px);
         }
 
+        /* Main Content */
+        .main-content {
+            padding: 24px;
+        }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -701,6 +707,10 @@
             .referral-methods {
                 padding: 20px;
             }
+
+            .main-content {
+                padding: 16px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -717,7 +727,7 @@
             }
         }
 
-        /* Additional professional styling */
+        /* Section Titles */
         .section {
             margin-bottom: 32px;
         }
@@ -736,23 +746,6 @@
         .section-title i {
             color: var(--primary);
             font-size: 22px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 28px;
-            margin-bottom: 24px;
-            box-shadow: var(--shadow);
-        }
-
-        .card-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            color: var(--light);
-            letter-spacing: -0.02em;
         }
 
         /* Referral Link Card */
@@ -847,237 +840,7 @@
             }
         }
 
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-        }
-
-        /* Progress Bar */
-        .progress-bar {
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--accent));
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-
-        /* Tooltip */
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-
-        .tooltip .tooltip-text {
-            visibility: hidden;
-            width: 200px;
-            background-color: var(--dark);
-            color: var(--light);
-            text-align: center;
-            padding: 10px 12px;
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 50%;
-            transform: translateX(-50%);
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 13px;
-            font-weight: 400;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .tooltip:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-
-        /* Enhanced empty states */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--gray-400);
-        }
-
-        .empty-state i {
-            font-size: 64px;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .empty-state h4 {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--light);
-        }
-
-        .empty-state p {
-            font-size: 15px;
-            margin-bottom: 24px;
-        }
-
-        /* Stats change indicator */
-        .stat-change {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 8px;
-        }
-
-        .stat-change.positive {
-            background: rgba(16, 185, 129, 0.15);
-            color: var(--accent);
-        }
-
-        .stat-change.negative {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-        }
-
-        /* Advanced search */
-        .advanced-search {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .search-filters {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-top: 16px;
-        }
-
-        /* Status indicators */
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-indicator.online {
-            background: rgba(16, 185, 129, 0.15);
-            color: var(--accent);
-        }
-
-        .status-indicator.offline {
-            background: rgba(100, 116, 139, 0.15);
-            color: var(--gray-400);
-        }
-
-        /* Gradient text */
-        .gradient-text {
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        /* Floating action button */
-        .fab {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            border: none;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            cursor: pointer;
-            box-shadow: var(--shadow-lg);
-            z-index: 90;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .fab:hover {
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.3);
-        }
-
-        /* Enhanced tabs */
-        .tabs-container {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            margin-bottom: 32px;
-        }
-
-        .tabs-header {
-            display: flex;
-            border-bottom: 1px solid var(--border);
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .tab-btn {
-            padding: 18px 32px;
-            background: none;
-            border: none;
-            color: var(--gray-400);
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s;
-            position: relative;
-            letter-spacing: -0.01em;
-        }
-
-        .tab-btn:hover {
-            color: var(--light);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .tab-btn.active {
-            color: var(--primary);
-        }
-
-        .tab-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            border-radius: 3px 3px 0 0;
-        }
-
-        .tab-content {
-            padding: 32px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        /* Mobile bottom navigation */
+        /* Mobile Bottom Navigation */
         .mobile-bottom-nav {
             position: fixed;
             bottom: 0;
@@ -1126,51 +889,101 @@
             .main-content {
                 padding-bottom: 80px;
             }
+        }
 
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            z-index: 90;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.3);
+        }
+
+        @media (max-width: 768px) {
             .fab {
                 bottom: 80px;
             }
         }
 
-        /* Statistics summary */
-        .stats-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
+        /* Notification Container */
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 320px;
         }
 
-        .stat-item {
+        .notification {
             background: var(--card-bg);
             border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
             border-radius: var(--radius);
-            padding: 20px;
+            padding: 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideUp 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .notification.error {
+            border-left-color: var(--danger);
+        }
+
+        .notification.warning {
+            border-left-color: var(--warning);
+        }
+
+        .notification.info {
+            border-left-color: var(--info);
+        }
+
+        /* Empty State */
+        .empty-state {
             text-align: center;
-            transition: transform 0.2s;
-        }
-
-        .stat-item:hover {
-            transform: translateY(-2px);
-        }
-
-        .stat-item-value {
-            font-size: 28px;
-            font-weight: 800;
-            margin-bottom: 4px;
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .stat-item-label {
+            padding: 60px 20px;
             color: var(--gray-400);
-            font-size: 13px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
         }
 
-        /* Enhanced modal */
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-state h4 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--light);
+        }
+
+        .empty-state p {
+            font-size: 15px;
+            margin-bottom: 24px;
+        }
+
+        /* Modal */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -1234,55 +1047,6 @@
             color: var(--light);
         }
 
-        /* Loading skeleton */
-        .skeleton {
-            background: linear-gradient(90deg, 
-                rgba(255, 255, 255, 0.05) 25%, 
-                rgba(255, 255, 255, 0.1) 50%, 
-                rgba(255, 255, 255, 0.05) 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-            border-radius: var(--radius);
-        }
-
-        @keyframes loading {
-            0% {
-                background-position: 200% 0;
-            }
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        /* Enhanced input groups */
-        .input-group {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .input-group .form-control {
-            flex: 1;
-        }
-
-        /* Chip component */
-        .chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--gray-300);
-        }
-
-        .chip i {
-            font-size: 12px;
-        }
-
         /* Divider */
         .divider {
             height: 1px;
@@ -1301,6 +1065,29 @@
             color: var(--gray-400);
             font-size: 13px;
             font-weight: 500;
+        }
+
+        /* Input Group */
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .input-group .form-control {
+            flex: 1;
+        }
+
+        /* Error Message */
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            font-size: 14px;
+            margin-top: 16px;
+            display: none;
         }
     </style>
 </head>
@@ -1340,7 +1127,7 @@
                     <i class="fas fa-sign-in-alt"></i> Sign In
                 </button>
                 
-                <div class="error-message" id="loginError" style="display: none; margin-top: 20px; padding: 12px; border-radius: var(--radius); background: rgba(239, 68, 68, 0.1); color: var(--danger); font-size: 14px;"></div>
+                <div class="error-message" id="loginError"></div>
                 
                 <div style="text-align: center; margin-top: 28px; color: var(--gray-400); font-size: 14px;">
                     <p>Need agent access? Contact system administrator</p>
@@ -1384,7 +1171,7 @@
         </div>
 
         <!-- Main Content -->
-        <div class="main-content" style="padding: 24px;">
+        <div class="main-content">
             <!-- Stats Grid -->
             <div class="stats-grid">
                 <div class="stat-card">
@@ -1438,7 +1225,7 @@
 
             <!-- Quick Actions -->
             <div class="quick-actions">
-                <div class="action-card" onclick="switchTab('manualReferral')">
+                <div class="action-card" onclick="showReferralMethods()">
                     <div class="action-icon">
                         <i class="fas fa-user-plus"></i>
                     </div>
@@ -1446,7 +1233,7 @@
                     <div class="action-desc">Add users manually or via link</div>
                 </div>
                 
-                <div class="action-card" onclick="switchTab('withdrawals')">
+                <div class="action-card" onclick="showWithdrawalModal()">
                     <div class="action-icon">
                         <i class="fas fa-money-bill-wave"></i>
                     </div>
@@ -1462,7 +1249,7 @@
                     <div class="action-desc">Update dashboard data</div>
                 </div>
                 
-                <div class="action-card" onclick="showReportModal()">
+                <div class="action-card" onclick="showReports()">
                     <div class="action-icon">
                         <i class="fas fa-chart-pie"></i>
                     </div>
@@ -1472,7 +1259,7 @@
             </div>
 
             <!-- Referral Methods Section -->
-            <div class="section">
+            <div class="section" id="referralMethodsSection" style="display: none;">
                 <h2 class="section-title">
                     <i class="fas fa-user-plus"></i> Referral Methods
                 </h2>
@@ -1481,6 +1268,9 @@
                     <h3 style="color: white; font-size: 24px; font-weight: 700; margin-bottom: 24px;">Grow Your Network</h3>
                     <p style="color: rgba(255, 255, 255, 0.8); font-size: 16px; margin-bottom: 32px;">Earn 40% commission on Bingo wins and 10% on Keno wins. Use both methods to maximize your earnings.</p>
                     
+                    <div class="divider"></div>
+                    
+                    <!-- Telegram Link Method -->
                     <div class="method-card" style="margin-bottom: 24px;">
                         <div class="method-header">
                             <div class="method-icon">
@@ -1492,20 +1282,20 @@
                             </div>
                         </div>
                         
-                        <div id="referralLinkSection" style="display: none;">
+                        <div id="referralLinkSection">
                             <div class="referral-link-display">
                                 <i class="fab fa-telegram" style="font-size: 20px;"></i>
-                                <a href="#" id="telegramLink">https://t.me/Ethio_elite_games_bot?start=agent123</a>
-                                <button class="copy-btn" onclick="copyTelegramLink()">
+                                <span id="telegramLinkText" style="flex: 1;">Generating link...</span>
+                                <button class="copy-btn" onclick="copyTelegramLink()" id="copyLinkBtn">
                                     <i class="fas fa-copy"></i> Copy
                                 </button>
                             </div>
                             
-                            <div style="display: flex; gap: 12px; margin-top: 20px;">
-                                <button class="btn btn-sm" onclick="shareTelegramLink('whatsapp')" style="flex: 1;">
+                            <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                                <button class="btn btn-sm" onclick="shareTelegramLink('whatsapp')" style="flex: 1; min-width: 120px;">
                                     <i class="fab fa-whatsapp"></i> WhatsApp
                                 </button>
-                                <button class="btn btn-sm btn-outline" onclick="shareTelegramLink('telegram')" style="flex: 1;">
+                                <button class="btn btn-sm btn-outline" onclick="shareTelegramLink('telegram')" style="flex: 1; min-width: 120px;">
                                     <i class="fab fa-telegram"></i> Telegram
                                 </button>
                             </div>
@@ -1519,6 +1309,7 @@
                         </ul>
                     </div>
                     
+                    <!-- Manual Method -->
                     <div class="method-card">
                         <div class="method-header">
                             <div class="method-icon">
@@ -1533,16 +1324,16 @@
                         <div style="margin-top: 20px;">
                             <div class="input-group">
                                 <input type="text" id="manualUserInput" class="form-control" placeholder="Enter Telegram ID, username, or display name..." onkeypress="if(event.key === 'Enter') addManualReferral()">
-                                <button class="btn btn-success" onclick="addManualReferral()">
+                                <button class="btn btn-success" onclick="addManualReferral()" id="addReferralBtn">
                                     <i class="fas fa-plus"></i> Add
                                 </button>
                             </div>
                             
-                            <div style="display: flex; gap: 12px; margin-top: 12px;">
-                                <button class="btn btn-sm" onclick="showAdvancedSearch()">
+                            <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                                <button class="btn btn-sm" onclick="showAdvancedSearchModal()" style="flex: 1; min-width: 120px;">
                                     <i class="fas fa-search"></i> Advanced Search
                                 </button>
-                                <button class="btn btn-sm btn-outline" onclick="showBulkAddModal()">
+                                <button class="btn btn-sm btn-outline" onclick="showBulkAddModal()" style="flex: 1; min-width: 120px;">
                                     <i class="fas fa-users"></i> Bulk Add
                                 </button>
                             </div>
@@ -1587,31 +1378,27 @@
         <!-- Mobile Bottom Navigation -->
         <div class="mobile-bottom-nav">
             <div class="nav-items">
-                <a href="#" class="nav-item active" onclick="switchTab('dashboard')">
+                <a href="#" class="nav-item active" onclick="showDashboard()">
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item" onclick="switchTab('referrals')">
-                    <i class="fas fa-users"></i>
-                    <span>Referrals</span>
-                </a>
-                <a href="#" class="nav-item" onclick="switchTab('commissions')">
-                    <i class="fas fa-money-bill-wave"></i>
-                    <span>Commissions</span>
-                </a>
-                <a href="#" class="nav-item" onclick="switchTab('manualReferral')">
+                <a href="#" class="nav-item" onclick="showReferralMethods()">
                     <i class="fas fa-user-plus"></i>
-                    <span>Add</span>
+                    <span>Add Referral</span>
                 </a>
-                <a href="#" class="nav-item" onclick="switchTab('withdrawals')">
+                <a href="#" class="nav-item" onclick="showWithdrawalModal()">
                     <i class="fas fa-wallet"></i>
-                    <span>Wallet</span>
+                    <span>Withdraw</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showReports()">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Reports</span>
                 </a>
             </div>
         </div>
 
         <!-- Floating Action Button -->
-        <button class="fab" onclick="switchTab('manualReferral')" title="Add Referral">
+        <button class="fab" onclick="showReferralMethods()" title="Add Referral">
             <i class="fas fa-plus"></i>
         </button>
     </div>
@@ -1629,8 +1416,11 @@
                 <input type="text" id="advancedSearchInput" class="form-control" placeholder="Search by ID, username, phone..." oninput="searchUsers()">
             </div>
             
-            <div id="searchResults" style="max-height: 400px; overflow-y: auto;">
-                <!-- Results will be loaded here -->
+            <div id="searchResults" style="max-height: 400px; overflow-y: auto; background: rgba(255,255,255,0.05); border-radius: var(--radius); padding: 16px;">
+                <div class="empty-state" style="padding: 20px;">
+                    <i class="fas fa-search"></i>
+                    <div>Enter a search query to find users</div>
+                </div>
             </div>
         </div>
     </div>
@@ -1643,14 +1433,18 @@
             </div>
             
             <div class="form-group">
-                <label>Enter usernames or IDs (one per line)</label>
-                <textarea id="bulkUserInput" class="form-control" rows="6" placeholder="@username1&#10;tg_123456789&#10;username2&#10;@username3"></textarea>
+                <label>Enter usernames or IDs (one per line, max 20)</label>
+                <textarea id="bulkUserInput" class="form-control" rows="6" placeholder="Example:
+@username1
+tg_123456789
+username2
+display_name"></textarea>
             </div>
             
             <div class="form-group">
-                <label>Maximum users: 20</label>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: 0%"></div>
+                <label>Line Count: <span id="lineCount">0</span>/20</label>
+                <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px; overflow: hidden;">
+                    <div id="progressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s;"></div>
                 </div>
             </div>
             
@@ -1660,37 +1454,108 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="withdrawalModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Withdraw Earnings</h3>
+                <button class="modal-close" onclick="closeModal('withdrawalModal')">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>Available Balance</label>
+                <div style="font-size: 32px; font-weight: 800; color: var(--accent); margin: 10px 0;" id="availableBalanceModal">0.00 ETB</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Amount to Withdraw (ETB)</label>
+                <input type="number" id="withdrawAmount" class="form-control" placeholder="Enter amount" min="10" step="0.01">
+                <div style="font-size: 13px; color: var(--gray-400); margin-top: 8px;">Minimum withdrawal: 10 ETB</div>
+            </div>
+            
+            <div class="form-group">
+                <label>Phone Number (Telebirr)</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-phone"></i>
+                    <input type="tel" id="withdrawPhone" class="form-control" placeholder="09xxxxxxxx">
+                </div>
+                <div style="font-size: 13px; color: var(--gray-400); margin-top: 8px;">Enter your Telebirr phone number</div>
+            </div>
+            
+            <button class="btn btn-success" onclick="submitWithdrawal()">
+                <i class="fas fa-paper-plane"></i> Submit Withdrawal Request
+            </button>
+            
+            <div style="margin-top: 20px; padding: 16px; background: rgba(255,255,255,0.05); border-radius: var(--radius); font-size: 14px; color: var(--gray-300);">
+                <i class="fas fa-info-circle" style="color: var(--info); margin-right: 8px;"></i>
+                Withdrawal requests are processed within 24 hours by admin.
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Container -->
-    <div id="notificationContainer" style="position: fixed; top: 20px; right: 20px; z-index: 1000; max-width: 320px;"></div>
+    <div class="notification-container" id="notificationContainer"></div>
 
     <script>
-        // Enhanced JavaScript with both referral methods
+        // Global variables
         let socket = null;
         let agentData = null;
         let theme = localStorage.getItem('agentTheme') || 'dark';
 
         // Initialize socket connection
         function initSocket() {
-            socket = io();
-            
-            socket.on('connect', () => {
-                console.log('Connected to agent server');
-                hideLoading();
+            try {
+                socket = io();
                 
-                const agentToken = localStorage.getItem('agentToken');
-                if (agentToken) {
-                    autoLogin();
-                } else {
-                    showLoginScreen();
-                }
-            });
-            
-            // Handle agent events
-            socket.on('agent:loginSuccess', handleLoginSuccess);
-            socket.on('agent:dashboardData', updateDashboard);
-            socket.on('agent:referralLink', updateReferralLink);
-            socket.on('agent:newCommission', handleNewCommission);
-            socket.on('agent:manualReferralSuccess', handleManualReferralSuccess);
+                socket.on('connect', () => {
+                    console.log('✅ Connected to agent server');
+                    hideLoading();
+                    
+                    const agentToken = localStorage.getItem('agentToken');
+                    if (agentToken) {
+                        autoLogin();
+                    } else {
+                        showLoginScreen();
+                    }
+                });
+                
+                socket.on('disconnect', () => {
+                    showNotification('Disconnected from server', 'error');
+                    setTimeout(() => {
+                        if (socket) socket.connect();
+                    }, 3000);
+                });
+                
+                socket.on('connect_error', (error) => {
+                    console.error('Socket connection error:', error);
+                    showNotification('Connection error. Please refresh.', 'error');
+                });
+                
+                // Handle agent events
+                socket.on('agent:loginSuccess', handleLoginSuccess);
+                socket.on('agent:loginError', handleLoginError);
+                socket.on('agent:tokenVerified', handleLoginSuccess);
+                socket.on('agent:tokenInvalid', handleTokenInvalid);
+                socket.on('agent:dashboardData', updateDashboard);
+                socket.on('agent:referralLink', updateReferralLink);
+                socket.on('agent:newCommission', handleNewCommission);
+                socket.on('agent:manualReferralSuccess', handleManualReferralSuccess);
+                socket.on('agent:error', handleAgentError);
+                socket.on('agent:searchUsersResult', handleSearchResults);
+                socket.on('agent:bulkManualReferralResult', handleBulkReferralResult);
+                
+            } catch (error) {
+                console.error('Socket initialization error:', error);
+                document.getElementById('loadingScreen').innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--danger);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 20px;"></i>
+                        <h3>Connection Error</h3>
+                        <p>Failed to connect to server. Please refresh.</p>
+                        <button onclick="location.reload()" style="margin-top: 20px; padding: 12px 24px; background: var(--primary); color: white; border: none; border-radius: var(--radius); cursor: pointer;">
+                            Refresh Page
+                        </button>
+                    </div>
+                `;
+            }
         }
 
         // UI Functions
@@ -1707,7 +1572,6 @@
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('dashboardScreen').style.display = 'block';
             applyTheme();
-            loadDashboard();
         }
 
         function toggleTheme() {
@@ -1720,7 +1584,9 @@
         function applyTheme() {
             document.body.setAttribute('data-theme', theme);
             const icon = document.querySelector('.theme-toggle i');
-            icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+            }
         }
 
         // Login Functions
@@ -1733,12 +1599,16 @@
                 return;
             }
             
-            socket.emit('agent:login', { username, password });
+            if (socket && socket.connected) {
+                socket.emit('agent:login', { username, password });
+            } else {
+                showLoginError('Not connected to server. Please refresh.');
+            }
         }
 
         function autoLogin() {
             const agentToken = localStorage.getItem('agentToken');
-            if (agentToken) {
+            if (agentToken && socket) {
                 socket.emit('agent:verifyToken', { token: agentToken });
             } else {
                 showLoginScreen();
@@ -1748,20 +1618,47 @@
         function handleLoginSuccess(data) {
             agentData = data;
             localStorage.setItem('agentToken', data.id);
+            
+            // Update UI
+            document.getElementById('agentName').textContent = data.name;
+            document.getElementById('agentUsername').textContent = '@' + data.username;
+            document.getElementById('agentAvatar').textContent = data.name.charAt(0).toUpperCase();
+            
             showDashboardScreen();
+            loadDashboard();
+            
+            // Generate referral link
             socket.emit('agent:generateReferralLink');
+            
+            showNotification('Welcome back, ' + data.name + '!', 'success');
+        }
+
+        function handleLoginError(message) {
+            showLoginError(message);
+        }
+
+        function handleTokenInvalid() {
+            localStorage.removeItem('agentToken');
+            showLoginScreen();
+            showNotification('Session expired. Please login again.', 'warning');
         }
 
         function showLoginError(message) {
             const errorDiv = document.getElementById('loginError');
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
-            setTimeout(() => errorDiv.style.display = 'none', 5000);
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
         }
 
         function logout() {
             if (confirm('Are you sure you want to logout?')) {
                 localStorage.removeItem('agentToken');
+                if (socket) {
+                    socket.disconnect();
+                }
+                agentData = null;
                 showLoginScreen();
                 showNotification('Logged out successfully', 'info');
             }
@@ -1769,7 +1666,9 @@
 
         // Dashboard Functions
         function loadDashboard() {
-            socket.emit('agent:getDashboard');
+            if (socket && socket.connected) {
+                socket.emit('agent:getDashboard');
+            }
         }
 
         function refreshDashboard() {
@@ -1782,9 +1681,7 @@
             document.getElementById('totalEarnings').textContent = data.stats.totalEarnings.toFixed(2) + ' ETB';
             document.getElementById('todayEarnings').textContent = 'Today: ' + data.stats.todaysEarnings.toFixed(2) + ' ETB';
             document.getElementById('totalReferrals').textContent = data.stats.totalReferrals;
-            document.getElementById('agentName').textContent = data.agent.name;
-            document.getElementById('agentUsername').textContent = '@' + data.agent.username;
-            document.getElementById('agentAvatar').textContent = data.agent.name.charAt(0).toUpperCase();
+            document.getElementById('availableBalanceModal').textContent = data.agent.totalEarnings.toFixed(2) + ' ETB';
             
             // Update activity
             const activityBody = document.getElementById('recentActivityBody');
@@ -1802,27 +1699,34 @@
                     `;
                     activityBody.appendChild(row);
                 });
+            } else {
+                activityBody.innerHTML = '<tr><td colspan="6" class="empty-state">No recent activity</td></tr>';
             }
         }
 
         // Referral Link Functions
         function updateReferralLink(data) {
-            const telegramLink = `https://t.me/Ethio_elite_games_bot?start=${data.referralCode}`;
-            document.getElementById('telegramLink').textContent = telegramLink;
-            document.getElementById('telegramLink').href = telegramLink;
-            document.getElementById('referralLinkSection').style.display = 'block';
+            const telegramLink = data.telegramLink || `https://t.me/Ethio_elite_games_bot?start=${data.referralCode}`;
+            document.getElementById('telegramLinkText').textContent = telegramLink;
+            document.getElementById('telegramLinkText').setAttribute('data-link', telegramLink);
+            document.getElementById('copyLinkBtn').disabled = false;
         }
 
         function copyTelegramLink() {
-            const link = document.getElementById('telegramLink').textContent;
-            navigator.clipboard.writeText(link).then(() => {
-                showNotification('Referral link copied to clipboard!', 'success');
-            });
+            const link = document.getElementById('telegramLinkText').getAttribute('data-link');
+            if (link && link !== 'Generating link...') {
+                navigator.clipboard.writeText(link).then(() => {
+                    showNotification('Referral link copied to clipboard!', 'success');
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    showNotification('Failed to copy link', 'error');
+                });
+            }
         }
 
         function shareTelegramLink(platform) {
-            const link = document.getElementById('telegramLink').textContent;
-            const text = `Join Elite Games using my referral link and let's earn together! ${link}`;
+            const link = document.getElementById('telegramLinkText').getAttribute('data-link');
+            const text = `Join Elite Games via my referral link and earn together! ${link}`;
             
             let url = '';
             switch(platform) {
@@ -1830,7 +1734,7 @@
                     url = `https://wa.me/?text=${encodeURIComponent(text)}`;
                     break;
                 case 'telegram':
-                    url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join via my referral link!')}`;
+                    url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join Elite Games via my referral link!')}`;
                     break;
             }
             
@@ -1847,11 +1751,19 @@
                 return;
             }
             
+            const btn = document.getElementById('addReferralBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
             socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: input });
             document.getElementById('manualUserInput').value = '';
         }
 
         function handleManualReferralSuccess(data) {
+            const btn = document.getElementById('addReferralBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plus"></i> Add';
+            
             showNotification(data.message, 'success');
             loadDashboard();
         }
@@ -1861,62 +1773,177 @@
             loadDashboard();
         }
 
+        function handleAgentError(message) {
+            showNotification(message, 'error');
+        }
+
         // Modal Functions
-        function showAdvancedSearch() {
+        function showReferralMethods() {
+            document.getElementById('referralMethodsSection').style.display = 'block';
+            scrollToElement('referralMethodsSection');
+        }
+
+        function showAdvancedSearchModal() {
             document.getElementById('advancedSearchModal').classList.add('active');
+            document.getElementById('advancedSearchInput').focus();
         }
 
         function showBulkAddModal() {
             document.getElementById('bulkAddModal').classList.add('active');
+            updateLineCount();
+        }
+
+        function showWithdrawalModal() {
+            document.getElementById('withdrawalModal').classList.add('active');
         }
 
         function closeModal(modalId) {
             document.getElementById(modalId).classList.remove('active');
         }
 
+        function scrollToElement(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // Search Functions
         function searchUsers() {
             const query = document.getElementById('advancedSearchInput').value;
-            // Implement search functionality
+            if (query.length >= 2) {
+                socket.emit('agent:searchUsers', { query, limit: 10 });
+            }
+        }
+
+        function handleSearchResults(data) {
+            const resultsContainer = document.getElementById('searchResults');
+            if (!data.users || data.users.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <i class="fas fa-search"></i>
+                        <div>No users found for "${data.query}"</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+            data.users.forEach(user => {
+                const canAdd = !user.hasAgent || user.currentAgentId !== agentData?.id;
+                html += `
+                    <div style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight: 600; color: var(--light);">${user.userName || 'No Name'}</div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 11px; padding: 4px 8px; border-radius: 12px; background: ${user.isOnline ? 'rgba(16,185,129,0.2)' : 'rgba(100,116,139,0.2)'}; color: ${user.isOnline ? 'var(--accent)' : 'var(--gray-400)'};">
+                                    ${user.isOnline ? 'Online' : 'Offline'}
+                                </span>
+                                ${canAdd ? 
+                                    `<button onclick="addUserAsReferral('${user.userId}')" style="padding: 6px 12px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;">
+                                        <i class="fas fa-plus"></i> Add
+                                    </button>` :
+                                    `<span style="font-size: 11px; padding: 4px 8px; border-radius: 12px; background: rgba(239,68,68,0.2); color: var(--danger);">
+                                        Already has agent
+                                    </span>`
+                                }
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">${user.userId}</div>
+                        <div style="display: flex; gap: 16px; font-size: 11px; color: var(--gray-400);">
+                            <span>${user.totalWins} wins</span>
+                            <span>${user.totalWagered.toFixed(2)} ETB wagered</span>
+                            <span>${new Date(user.joinedAt).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            resultsContainer.innerHTML = html;
+        }
+
+        function addUserAsReferral(userId) {
+            socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: userId });
+            closeModal('advancedSearchModal');
+        }
+
+        // Bulk Add Functions
+        function updateLineCount() {
+            const textarea = document.getElementById('bulkUserInput');
+            const lines = textarea.value.split('\n').filter(line => line.trim()).length;
+            document.getElementById('lineCount').textContent = lines;
+            const progress = Math.min((lines / 20) * 100, 100);
+            document.getElementById('progressBar').style.width = progress + '%';
         }
 
         function processBulkAdd() {
-            const input = document.getElementById('bulkUserInput').value;
-            const users = input.split('\n').filter(u => u.trim()).slice(0, 20);
+            const textarea = document.getElementById('bulkUserInput');
+            const lines = textarea.value.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
             
-            if (users.length === 0) {
+            if (lines.length === 0) {
                 showNotification('Please enter at least one username', 'error');
                 return;
             }
             
-            socket.emit('agent:bulkManualReferral', { userIdentifiers: users });
-            closeModal('bulkAddModal');
+            if (lines.length > 20) {
+                showNotification('Maximum 20 users allowed. Using first 20.', 'warning');
+                lines.splice(20);
+            }
+            
+            if (confirm(`Add ${lines.length} users as referrals?`)) {
+                socket.emit('agent:bulkManualReferral', { userIdentifiers: lines });
+                closeModal('bulkAddModal');
+                textarea.value = '';
+                updateLineCount();
+            }
+        }
+
+        function handleBulkReferralResult(data) {
+            if (data.success) {
+                const summary = data.summary;
+                showNotification(`Bulk add: ${summary.success} added, ${summary.failed} failed`, 
+                    summary.success > 0 ? 'success' : 'warning');
+                loadDashboard();
+            }
+        }
+
+        // Withdrawal Functions
+        function submitWithdrawal() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const phone = document.getElementById('withdrawPhone').value;
+            
+            if (!amount || amount < 10) {
+                showNotification('Minimum withdrawal amount is 10 ETB', 'error');
+                return;
+            }
+            
+            if (!phone || !/^09[0-9]{8}$/.test(phone)) {
+                showNotification('Please enter a valid phone number (09xxxxxxxx)', 'error');
+                return;
+            }
+            
+            if (confirm(`Request withdrawal of ${amount.toFixed(2)} ETB to ${phone}?`)) {
+                socket.emit('agent:withdrawRequest', { amount, phoneNumber: phone });
+                closeModal('withdrawalModal');
+                document.getElementById('withdrawAmount').value = '';
+                document.getElementById('withdrawPhone').value = '';
+            }
         }
 
         // Notification System
         function showNotification(message, type = 'info') {
             const container = document.getElementById('notificationContainer');
             const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.style.cssText = `
-                background: var(--card-bg);
-                border: 1px solid var(--border);
-                border-left: 4px solid ${type === 'success' ? 'var(--accent)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--info)'};
-                border-radius: var(--radius);
-                padding: 16px;
-                margin-bottom: 10px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                animation: slideUp 0.3s ease;
-                box-shadow: var(--shadow);
-            `;
+            notification.className = `notification ${type}`;
             
             const icon = type === 'success' ? 'fa-check-circle' : 
                          type === 'error' ? 'fa-exclamation-circle' : 
                          type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
             
             notification.innerHTML = `
-                <i class="fas ${icon}" style="color: ${type === 'success' ? 'var(--accent)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--info)'}; font-size: 20px;"></i>
+                <i class="fas ${icon}" style="font-size: 20px;"></i>
                 <div style="flex: 1; font-size: 14px;">${message}</div>
                 <button onclick="this.parentElement.remove()" style="background: none; border: none; color: var(--gray-400); cursor: pointer; padding: 4px;">
                     <i class="fas fa-times"></i>
@@ -1925,6 +1952,7 @@
             
             container.appendChild(notification);
             
+            // Auto remove after 5 seconds
             setTimeout(() => {
                 if (notification.parentNode) {
                     notification.style.opacity = '0';
@@ -1934,24 +1962,35 @@
             }, 5000);
         }
 
-        // Tab Switching
-        function switchTab(tab) {
-            // Update mobile nav
+        // Mobile Navigation
+        function showDashboard() {
+            document.getElementById('referralMethodsSection').style.display = 'none';
+            scrollToElement('dashboardScreen');
+            updateMobileNav('dashboard');
+        }
+
+        function showReports() {
+            showNotification('Reports feature coming soon!', 'info');
+            updateMobileNav('reports');
+        }
+
+        function updateMobileNav(activeItem) {
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(item => {
-                if (item.getAttribute('onclick')?.includes(tab)) {
+                if (item.getAttribute('onclick')?.includes(activeItem)) {
                     item.classList.add('active');
                 }
             });
-            
-            // For now, just show notification
-            showNotification(`Switched to ${tab} tab`, 'info');
         }
 
         // Initialize
-        window.onload = function() {
+        document.addEventListener('DOMContentLoaded', function() {
             initSocket();
             applyTheme();
+            
+            // Add event listeners
+            document.getElementById('bulkUserInput').addEventListener('input', updateLineCount);
+            document.getElementById('advancedSearchInput').addEventListener('input', searchUsers);
             
             // Handle offline/online
             window.addEventListener('online', () => showNotification('Back online', 'success'));
@@ -1961,7 +2000,7 @@
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/agent-sw.js').catch(console.error);
             }
-        };
+        });
     </script>
 </body>
 </html>
