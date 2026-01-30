@@ -1260,7 +1260,7 @@
         // Game Configuration
         const SOCKET_URL = window.location.origin;
         
-        // Game State - UPDATED PAYOUT TABLE
+        // Game State - SIMPLIFIED
         let gameState = {
             playerId: null,
             userName: null,
@@ -1283,7 +1283,7 @@
             NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
             isDrawComplete: false,
             hasBetInCurrentRound: false,
-            // UPDATED PAYOUT TABLE TO MATCH SERVER
+            // UPDATED PAYOUT TABLE
             PAYOUT_TABLE: {
                 1: {1: 3, 0: 0},
                 2: {2: 10, 1: 0, 0: 0},
@@ -1294,14 +1294,12 @@
             currentBall: 0,
             totalBalls: 20,
             isAutoSelectApplied: false,
-            roundStatus: 'waiting', // 'waiting', 'betting', 'drawing', 'completed'
-            joinedDuringDraw: false, // Track if player joined during a draw
-            isRandomOrderDraw: false, // Track if draw is in random order
-            reconnectToken: null,
+            roundStatus: 'waiting',
+            joinedDuringDraw: false,
+            isRandomOrderDraw: false,
             isReconnecting: false,
-            lastStateSave: 0,
-            heartbeatInterval: null,
-            autoSaveInterval: null
+            reconnectAttempts: 0,
+            maxReconnectAttempts: 5
         };
         
         // DOM Elements
@@ -1339,13 +1337,9 @@
             confirmOk: document.getElementById('confirm-ok'),
             confirmMaxWin: document.getElementById('confirm-max-win'),
             confirmPayoutExamples: document.getElementById('confirm-payout-examples'),
-            
-            // Ball counter elements
             ballCounter: document.getElementById('ball-counter'),
             currentBall: document.getElementById('current-ball'),
             totalBalls: document.getElementById('total-balls'),
-            
-            // Telegram back button
             telegramBackBtn: document.getElementById('telegram-back'),
             balanceCard: document.getElementById('balance-card')
         };
@@ -1409,8 +1403,6 @@
             createNumberGrid();
             setupEventListeners();
             connectSocketIO();
-            startHeartbeat();
-            startAutoSave();
             
             // Setup network monitoring
             setupNetworkMonitoring();
@@ -1435,7 +1427,6 @@
             if (tg && tg.BackButton) {
                 tg.BackButton.show();
                 tg.BackButton.onClick(() => {
-                    // Close the app or go back
                     tg.close();
                 });
                 
@@ -1493,10 +1484,10 @@
                     gameState.betAmount = parseInt(this.dataset.value);
                     elements.currentBet.textContent = gameState.betAmount;
                     
-                    // Save state for reconnection
+                    // Save state
                     saveStateForReconnection();
                     
-                    // Update button text based on selection status
+                    // Update button text
                     updatePlayButtonState();
                     
                     vibrate(50);
@@ -1582,7 +1573,7 @@
         function showBetConfirmation() {
             if (!gameState.roundActive || !gameState.isConnected || gameState.hasPlacedBet) return;
             
-            // Calculate potential winnings for confirmation modal
+            // Calculate potential winnings
             const selectionCount = gameState.selectedNumbers.length;
             const payoutTable = gameState.PAYOUT_TABLE[selectionCount] || {};
             let maxPossibleWin = 0;
@@ -1615,7 +1606,7 @@
             elements.confirmationModal.classList.add('active');
         }
         
-        // Socket.IO Connection with reconnection support
+        // Socket.IO Connection - SIMPLIFIED
         function connectSocketIO() {
             try {
                 // Disconnect existing socket if any
@@ -1624,35 +1615,25 @@
                 }
                 
                 updateConnectionStatus(false, 'CONNECTING...');
+                elements.manualReconnect.style.display = 'none';
                 
-                // Get reconnect token if exists
-                const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`) || null;
-                const isReconnect = !!reconnectToken;
-                
-                // Connect with Socket.IO
+                // Connect with simplified options
                 gameState.socket = io(SOCKET_URL, {
                     transports: ['websocket', 'polling'],
                     reconnection: true,
-                    reconnectionAttempts: 10, // Increased attempts
-                    reconnectionDelay: 1000,
-                    reconnectionDelayMax: 5000,
-                    timeout: 15000,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 2000,
+                    timeout: 10000,
                     query: {
-                        userId: gameState.playerId,
-                        reconnectToken: reconnectToken,
-                        isReconnect: isReconnect
+                        userId: gameState.playerId
                     }
                 });
                 
-                // Setup event handlers
+                // Setup event handlers - SIMPLIFIED
                 gameState.socket.on('connect', handleSocketConnect);
                 gameState.socket.on('disconnect', handleSocketDisconnect);
                 gameState.socket.on('connect_error', handleSocketError);
                 gameState.socket.on('reconnect', handleSocketReconnect);
-                gameState.socket.on('reconnecting', (attemptNumber) => {
-                    console.log(`Reconnecting attempt ${attemptNumber}`);
-                    updateConnectionStatus(false, `RECONNECTING (${attemptNumber}/10)...`);
-                });
                 
                 // Keno game events
                 gameState.socket.on('keno:welcome', handleWelcome);
@@ -1670,7 +1651,6 @@
                 gameState.socket.on('keno:warning', (data) => showNotification(data.message, 'warning'));
                 gameState.socket.on('keno:error', (data) => showNotification(data.message || 'An error occurred', 'error'));
                 gameState.socket.on('keno:waiting', (data) => {
-                    showNotification(data.message || 'Waiting for players...', 'info');
                     elements.waitingMessage.classList.add('active');
                 });
                 gameState.socket.on('keno:game_paused', (data) => {
@@ -1684,17 +1664,13 @@
                     }
                 });
                 gameState.socket.on('keno:draw_state', handleDrawState);
-                
-                // NEW: Reconnection events
-                gameState.socket.on('keno:reconnected', handleReconnected);
-                gameState.socket.on('keno:reconnect_success', handleReconnectSuccess);
-                gameState.socket.on('keno:reconnect_failed', handleReconnectFailed);
-                gameState.socket.on('keno:selectionsRestored', handleSelectionsRestored);
+                gameState.socket.on('keno:game_reset', () => {
+                    showNotification('Game reset. Waiting for players...', 'info');
+                });
                 
                 // Heartbeat response
                 gameState.socket.on('pong', () => {
                     // Connection is alive
-                    lastPong = Date.now();
                 });
                 
             } catch (error) {
@@ -1705,26 +1681,21 @@
             }
         }
         
-        // Socket.IO Event Handlers
+        // Socket.IO Event Handlers - SIMPLIFIED
         function handleSocketConnect() {
-            console.log('✅ Connected to Keno server via Socket.IO');
+            console.log('✅ Connected to Keno server');
             gameState.isConnected = true;
+            gameState.reconnectAttempts = 0;
             updateConnectionStatus(true, 'CONNECTED');
             
-            // Authenticate with server (include reconnect info)
-            const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`);
+            // Authenticate with server
             gameState.socket.emit('keno:auth', {
                 userId: gameState.playerId,
-                userName: gameState.userName,
-                reconnectToken: reconnectToken,
-                isReconnect: !!reconnectToken
+                userName: gameState.userName
             });
             
             // Join Keno room
             gameState.socket.emit('keno:join');
-            
-            // Clear reconnect flag
-            gameState.isReconnecting = false;
             
             vibrate(100);
             showNotification('Connected to Keno server!', 'info');
@@ -1735,20 +1706,11 @@
             gameState.isConnected = true;
             updateConnectionStatus(true, 'RECONNECTED');
             
-            // Try to reconnect with token
-            const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`);
-            if (reconnectToken) {
-                gameState.socket.emit('keno:reconnect', {
-                    userId: gameState.playerId,
-                    reconnectToken: reconnectToken
-                });
-            } else {
-                // Fallback to normal auth
-                gameState.socket.emit('keno:auth', {
-                    userId: gameState.playerId,
-                    userName: gameState.userName
-                });
-            }
+            // Re-authenticate
+            gameState.socket.emit('keno:auth', {
+                userId: gameState.playerId,
+                userName: gameState.userName
+            });
             
             showNotification('Reconnected to server!', 'info');
         }
@@ -1758,7 +1720,7 @@
             gameState.isConnected = false;
             updateConnectionStatus(false, 'DISCONNECTED');
             
-            // Save current state for reconnection
+            // Save current state
             saveStateForReconnection();
             
             // Show reconnect button after delay
@@ -1768,16 +1730,6 @@
                 }
             }, 3000);
             
-            // Try to reconnect after delay
-            const reconnectDelay = reason === 'io server disconnect' ? 5000 : 2000;
-            
-            setTimeout(() => {
-                if (!gameState.isConnected) {
-                    console.log('Attempting auto-reconnect...');
-                    connectSocketIO();
-                }
-            }, reconnectDelay);
-            
             showNotification('Disconnected. Reconnecting...', 'warning');
         }
         
@@ -1785,57 +1737,6 @@
             console.error('Socket.IO error:', error);
             updateConnectionStatus(false, 'CONNECTION ERROR');
             showNotification('Connection error', 'error');
-        }
-        
-        // NEW: Reconnection Event Handlers
-        function handleReconnected(data) {
-            console.log('Successfully reconnected to game');
-            gameState.isReconnecting = false;
-            
-            showNotification(data.message || 'Successfully reconnected!', 'success');
-            
-            // If state was restored, update UI
-            if (data.restoredState && data.restoredSelections) {
-                updateSelectedNumbersDisplay(data.restoredSelections);
-                showNotification('Your previous selections have been restored', 'info');
-            }
-            
-            // Update game state
-            if (data.round) gameState.currentRound = data.round;
-            if (data.roundActive !== undefined) gameState.roundActive = data.roundActive;
-            if (data.hasBet !== undefined) gameState.hasBetInCurrentRound = data.hasBet;
-        }
-        
-        function handleReconnectSuccess(data) {
-            console.log('Manual reconnection successful');
-            gameState.isReconnecting = false;
-            updateConnectionStatus(true, 'CONNECTED');
-            showNotification(data.message || 'Reconnection successful!', 'success');
-        }
-        
-        function handleReconnectFailed(data) {
-            console.log('Reconnection failed:', data.message);
-            gameState.isReconnecting = false;
-            
-            // Clear invalid token
-            localStorage.removeItem(`kenoReconnectToken_${gameState.playerId}`);
-            
-            // Try normal auth
-            gameState.socket.emit('keno:auth', {
-                userId: gameState.playerId,
-                userName: gameState.userName
-            });
-            
-            showNotification('Reconnection failed. Connecting as new user...', 'warning');
-        }
-        
-        function handleSelectionsRestored(data) {
-            if (data.numbers && data.numbers.length > 0) {
-                updateSelectedNumbersDisplay(data.numbers);
-                if (data.message) {
-                    showNotification(data.message, 'info');
-                }
-            }
         }
         
         // Game Message Handlers
@@ -1850,17 +1751,11 @@
             gameState.isDrawComplete = data.isDrawComplete || false;
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
-            gameState.joinedDuringDraw = false; // Reset this flag
+            gameState.joinedDuringDraw = false;
             gameState.isRandomOrderDraw = data.willBeRandomOrder || false;
-            gameState.reconnectToken = data.reconnectToken || null;
-            
-            // Store reconnect token
-            if (gameState.reconnectToken) {
-                localStorage.setItem(`kenoReconnectToken_${gameState.playerId}`, gameState.reconnectToken);
-            }
             
             // Restore selections if provided
-            if (data.restoredState && data.selectedNumbers && data.selectedNumbers.length > 0) {
+            if (data.selectedNumbers && data.selectedNumbers.length > 0) {
                 gameState.selectedNumbers = data.selectedNumbers;
                 gameState.betAmount = data.currentBet || gameState.betAmount;
                 gameState.hasPlacedBet = data.hasPlacedBet || false;
@@ -1890,30 +1785,31 @@
                 });
             }
             
-            // Show/hide waiting message based on player count
+            // Show/hide waiting message
             if (gameState.playersCount === 0) {
                 elements.waitingMessage.classList.add('active');
             } else {
                 elements.waitingMessage.classList.remove('active');
             }
             
-            // If there are already drawn numbers and draw is complete, display them
+            // If there are already drawn numbers, display them
             if (gameState.currentDrawnNumbers.length > 0 && gameState.isDrawComplete) {
                 displayNumbersImmediately(gameState.currentDrawnNumbers);
                 
-                // Update ball counter to show all balls drawn
+                // Update ball counter
                 elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
                 elements.totalBalls.textContent = gameState.currentDrawnNumbers.length;
                 
-                // If player had a bet in this round, we'll wait for server to send results
                 if (gameState.hasBetInCurrentRound) {
                     showNotification('Round already completed. Waiting for your results...', 'info');
                 } else {
                     showNotification('Round already in progress. Watch the results!', 'info');
                 }
             } else if (gameState.currentDrawnNumbers.length > 0 && !gameState.isDrawComplete) {
-                // Draw is in progress - we'll handle this with draw_state event
-                // Don't display numbers here to avoid double display
+                // Draw is in progress
+                elements.ballCounter.classList.add('active');
+                elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
+                elements.totalBalls.textContent = '20';
             }
             
             // Update play button state
@@ -1976,13 +1872,12 @@
             elements.currentBall.textContent = '0';
             elements.totalBalls.textContent = '20';
             
-            // Clear drawn numbers display for fresh draw
+            // Clear drawn numbers display
             elements.drawnNumbers.innerHTML = '';
             
             console.log('Draw starting, numbers will be drawn in random order');
         }
         
-        // UPDATED: Handle draw state when joining during a draw
         function handleDrawState(data) {
             // Player joined during a draw
             console.log('Joined during draw in progress');
@@ -1990,21 +1885,6 @@
             gameState.roundStatus = 'drawing';
             gameState.roundActive = false;
             gameState.isRandomOrderDraw = data.isRandomOrder || false;
-            
-            // Only display numbers immediately if player has a bet in this round
-            // AND if the server sent drawnNumbers (which it only does for players with bets)
-            if (data.hasBet && data.drawnNumbers && data.drawnNumbers.length > 0) {
-                console.log('Player has bet, displaying drawn numbers so far');
-                displayNumbersImmediately(data.drawnNumbers);
-            } else {
-                // New player without bet - don't show pre-drawn numbers
-                // They'll see them as they come in via keno:number_drawn events
-                console.log('Player without bet - waiting for live draw');
-                elements.drawnNumbers.innerHTML = '';
-                elements.ballCounter.classList.add('active');
-                elements.currentBall.textContent = data.currentBall || 0;
-                elements.totalBalls.textContent = data.totalBalls || 20;
-            }
             
             // Update ball counter
             elements.ballCounter.classList.add('active');
@@ -2028,7 +1908,7 @@
             // Handle individual number drawn
             const num = data.number;
             
-            // Check if this number was already displayed (in case of reconnection)
+            // Check if this number was already displayed
             const alreadyDisplayed = gameState.currentDrawnNumbers.includes(num);
             if (!alreadyDisplayed) {
                 gameState.currentDrawnNumbers.push(num);
@@ -2080,7 +1960,7 @@
             // Hide ball counter
             elements.ballCounter.classList.remove('active');
             
-            // Draw is complete, display immediately (sorted for readability)
+            // Draw is complete, display immediately
             displayNumbersImmediately(gameState.drawnNumbers);
             
             // Update stats
@@ -2223,12 +2103,6 @@
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
             gameState.isRandomOrderDraw = data.wasRandomOrder || false;
             
-            // Store reconnect token if provided
-            if (data.reconnectToken) {
-                gameState.reconnectToken = data.reconnectToken;
-                localStorage.setItem(`kenoReconnectToken_${gameState.playerId}`, data.reconnectToken);
-            }
-            
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
             updatePlayersCount(gameState.playersCount, gameState.betsCount);
@@ -2261,7 +2135,7 @@
                 });
             }
             
-            // Show/hide waiting message based on player count
+            // Show/hide waiting message
             if (gameState.playersCount === 0) {
                 elements.waitingMessage.classList.add('active');
             } else {
@@ -2274,12 +2148,10 @@
                 elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
                 elements.totalBalls.textContent = gameState.currentDrawnNumbers.length;
             } else if (gameState.currentDrawnNumbers.length > 0 && !gameState.isDrawComplete) {
-                // Draw in progress - only update if we haven't already displayed them
-                if (!gameState.joinedDuringDraw) {
-                    elements.ballCounter.classList.add('active');
-                    elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
-                    elements.totalBalls.textContent = '20';
-                }
+                // Draw in progress
+                elements.ballCounter.classList.add('active');
+                elements.currentBall.textContent = gameState.currentDrawnNumbers.length;
+                elements.totalBalls.textContent = '20';
             }
         }
         
@@ -2301,7 +2173,7 @@
                     // Update play button state
                     updatePlayButtonState();
                     
-                    // Save state for reconnection
+                    // Save state
                     saveStateForReconnection();
                     
                     vibrate(30);
@@ -2316,7 +2188,7 @@
                 // Update play button state
                 updatePlayButtonState();
                 
-                // Save state for reconnection
+                // Save state
                 saveStateForReconnection();
                 
                 vibrate(30);
@@ -2363,7 +2235,7 @@
             // Reset play button
             updatePlayButtonState();
             
-            // Save state for reconnection
+            // Save state
             saveStateForReconnection();
             
             vibrate(50);
@@ -2410,16 +2282,6 @@
                 return;
             }
             
-            // Send state to server for reconnection safety
-            if (gameState.socket.connected) {
-                gameState.socket.emit('keno:saveState', {
-                    userId: gameState.playerId,
-                    selectedNumbers: gameState.selectedNumbers,
-                    betAmount: gameState.betAmount,
-                    roundNumber: gameState.currentRound
-                });
-            }
-            
             // Send bet to server
             gameState.socket.emit('keno:placeBet', {
                 numbers: gameState.selectedNumbers,
@@ -2431,59 +2293,6 @@
         }
         
         // Display Functions
-        function displayNumbersWithAnimation(drawnNumbers) {
-            elements.drawnNumbers.innerHTML = '';
-            
-            // Clear grid highlights
-            document.querySelectorAll('.keno-number').forEach(el => {
-                el.classList.remove('drawn', 'matched');
-            });
-            
-            // Show ball counter
-            elements.ballCounter.classList.add('active');
-            elements.currentBall.textContent = '0';
-            elements.totalBalls.textContent = '20';
-            
-            // Reset current drawn numbers
-            gameState.currentDrawnNumbers = [];
-            
-            // Animate numbers one by one with 3-second interval
-            drawnNumbers.forEach((num, index) => {
-                setTimeout(() => {
-                    // Update ball counter
-                    elements.currentBall.textContent = index + 1;
-                    
-                    // Add to current drawn numbers
-                    gameState.currentDrawnNumbers.push(num);
-                    
-                    // Highlight in grid
-                    const gridNum = document.querySelector(`.keno-number[data-number="${num}"]`);
-                    if (gridNum) {
-                        gridNum.classList.add('drawn');
-                        if (gameState.selectedNumbers.includes(num)) {
-                            gridNum.classList.add('matched');
-                            vibrate(50);
-                        }
-                    }
-                    
-                    // Add to display
-                    const numEl = document.createElement('div');
-                    numEl.className = 'drawn-number';
-                    numEl.textContent = num;
-                    
-                    if (gameState.selectedNumbers.includes(num)) {
-                        numEl.classList.add('matched');
-                    }
-                    
-                    elements.drawnNumbers.appendChild(numEl);
-                    
-                    // Play sound effect
-                    playSound('pop');
-                    
-                }, index * gameState.NUMBER_POP_INTERVAL);
-            });
-        }
-        
         function displayNumbersImmediately(drawnNumbers) {
             elements.drawnNumbers.innerHTML = '';
             
@@ -2557,7 +2366,6 @@
             if (seconds <= 10) {
                 elements.countdown.style.color = '#FF6B6B';
                 if (seconds <= 5) {
-                    // Don't vibrate too much, only on last 3 seconds
                     if (seconds <= 3) {
                         vibrate(100);
                     }
@@ -2574,7 +2382,7 @@
             elements.playersCount.textContent = players.toLocaleString();
             elements.betsCount.textContent = gameState.betsCount.toLocaleString();
             
-            // Show/hide waiting message based on player count
+            // Show/hide waiting message
             if (gameState.playersCount === 0) {
                 elements.waitingMessage.classList.add('active');
             } else {
@@ -2721,46 +2529,7 @@
                 };
                 
                 localStorage.setItem(`kenoState_${gameState.playerId}`, JSON.stringify(state));
-                
-                // Also send to server if connected
-                if (gameState.socket && gameState.socket.connected) {
-                    gameState.socket.emit('keno:saveState', {
-                        userId: gameState.playerId,
-                        selectedNumbers: gameState.selectedNumbers,
-                        betAmount: gameState.betAmount,
-                        roundNumber: gameState.currentRound
-                    });
-                }
-                
-                gameState.lastStateSave = Date.now();
             }
-        }
-        
-        // Start heartbeat system
-        function startHeartbeat() {
-            if (gameState.heartbeatInterval) {
-                clearInterval(gameState.heartbeatInterval);
-            }
-            
-            gameState.heartbeatInterval = setInterval(() => {
-                if (gameState.socket && gameState.socket.connected) {
-                    // Send ping to keep connection alive
-                    gameState.socket.emit('ping', { timestamp: Date.now() });
-                }
-            }, 25000); // Every 25 seconds
-        }
-        
-        // Start auto-save
-        function startAutoSave() {
-            if (gameState.autoSaveInterval) {
-                clearInterval(gameState.autoSaveInterval);
-            }
-            
-            gameState.autoSaveInterval = setInterval(() => {
-                if (gameState.roundActive && !gameState.hasPlacedBet && gameState.selectedNumbers.length > 0) {
-                    saveStateForReconnection();
-                }
-            }, 10000); // Save every 10 seconds
         }
         
         // Setup network monitoring
