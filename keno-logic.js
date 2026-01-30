@@ -1,11 +1,11 @@
-// keno-logic.js - KENO GAME LOGIC MODULE
+// keno-logic.js - KENO GAME LOGIC MODULE - SIMPLIFIED
 module.exports = {
     // Game configuration - UPDATED for 1-5 numbers
     CONFIG: {
         KENO_GAME_TIMER: 30, // seconds between rounds
         KENO_MIN_BET: 5,     // Minimum bet amount
         KENO_MAX_BET: 100,   // Maximum bet amount
-        KENO_MIN_SELECTIONS: 1,  // Minimum numbers to select (CHANGED from 5)
+        KENO_MIN_SELECTIONS: 1,  // Minimum numbers to select
         KENO_MAX_SELECTIONS: 5,  // Maximum numbers to select
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
@@ -26,9 +26,9 @@ module.exports = {
         MIN_WITHDRAWAL: 100,
         WITHDRAWAL_FEE_PERCENTAGE: 5,
         ALLOWED_BETS: [5, 10, 20, 50, 100], // Only these bet amounts allowed
-        // Reconnection settings
-        RECONNECT_TIMEOUT: 30000, // 30 seconds to allow reconnection
-        AUTO_RECONNECT: true
+        // Reconnection settings - SIMPLIFIED
+        AUTO_RECONNECT: true,
+        RECONNECT_TIMEOUT: 60000 // 60 seconds to allow reconnection
     },
 
     // Initialize Keno logic
@@ -49,12 +49,11 @@ module.exports = {
         this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
         this.kenoCountdownInterval = null;
         this.totalKenoEarnings = 0;
-        this.minimumPlayers = 1; // Game stops if no players
-        this.isRoundScheduled = false; // Prevent multiple round scheduling
-        this.isDrawing = false; // Track if we're currently in draw phase
-        this.roundTransitionTimeout = null; // Track round transition timeout
-        this.disconnectedPlayers = new Map(); // Track recently disconnected players for reconnection
-        this.playerReconnectTokens = new Map(); // Store reconnect tokens
+        this.minimumPlayers = 1;
+        this.isRoundScheduled = false;
+        this.isDrawing = false;
+        this.roundTransitionTimeout = null;
+        this.disconnectedPlayers = new Map(); // Track disconnected players
         
         console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
         console.log('🎰 NEW payout table loaded:');
@@ -64,7 +63,7 @@ module.exports = {
         console.log('   2 Numbers: 2 hits = 10x');
         console.log('   1 Number:  1 hit = 3x');
         console.log('💰 Wallet system integrated');
-        console.log('🔄 Reconnection system enabled');
+        console.log('🔄 Simplified reconnection system');
         
         // Load existing stats
         this.loadKenoStats();
@@ -93,7 +92,7 @@ module.exports = {
     startReconnectionCleanup: function() {
         const self = this;
         
-        // Clean up disconnected players every minute
+        // Clean up disconnected players every 30 seconds
         setInterval(() => {
             const now = Date.now();
             const maxReconnectTime = self.CONFIG.RECONNECT_TIMEOUT;
@@ -101,10 +100,16 @@ module.exports = {
             for (const [userId, disconnectTime] of self.disconnectedPlayers) {
                 if (now - disconnectTime > maxReconnectTime) {
                     self.disconnectedPlayers.delete(userId);
-                    console.log(`🧹 Removed expired reconnection for player ${userId}`);
+                    
+                    // Also remove player if they've been offline too long
+                    const player = self.kenoPlayers.get(userId);
+                    if (player && !player.isOnline) {
+                        self.kenoPlayers.delete(userId);
+                        console.log(`🧹 Removed inactive player ${player.userName} after timeout`);
+                    }
                 }
             }
-        }, 60000); // Every minute
+        }, 30000); // Every 30 seconds
     },
 
     // Start game health check system
@@ -124,7 +129,6 @@ module.exports = {
             console.log('  Countdown:', self.kenoCountdown);
             console.log('  Round Number:', self.kenoRoundNumber);
             console.log('  Total Bets:', activeGame.totalBets);
-            console.log('  Disconnected Players:', self.disconnectedPlayers.size);
             
             // Detect stuck state: Round active but no players for too long
             if (self.isKenoRoundActive && onlinePlayers === 0 && activeGame.totalBets === 0) {
@@ -248,7 +252,7 @@ module.exports = {
         }
     },
 
-    // Handle Keno socket connection
+    // Handle Keno socket connection - SIMPLIFIED
     handleKenoConnection: function(socket) {
         const self = this;
         
@@ -262,23 +266,18 @@ module.exports = {
             socket.emit('pong', { timestamp: data?.timestamp || Date.now() });
         });
         
-        // Keno authentication with reconnection support
+        // Keno authentication - SIMPLIFIED
         socket.on('keno:auth', async (data) => {
             try {
-                const { userId, userName, reconnectToken, isReconnect } = data;
+                const { userId, userName } = data;
                 
                 // Find user in database
                 const user = await self.User.findOne({ userId: userId });
                 
                 if (!user) {
-                    socket.emit('keno:error', 'User not found');
+                    socket.emit('keno:error', { message: 'User not found' });
                     return;
                 }
-                
-                // Check if this is a reconnection
-                const wasDisconnected = self.disconnectedPlayers.has(userId);
-                const existingPlayer = self.kenoPlayers.get(userId);
-                const isReconnecting = wasDisconnected || (isReconnect && existingPlayer);
                 
                 // Get current game state BEFORE adding player
                 const activeGame = self.getActiveKenoGame();
@@ -289,58 +288,33 @@ module.exports = {
                 const currentRoundBets = activeGame.bets || {};
                 const playerHasBetInCurrentRound = !!currentRoundBets[userId];
                 
-                // Generate reconnect token
-                const newReconnectToken = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-                self.playerReconnectTokens.set(userId, {
-                    token: newReconnectToken,
-                    expires: Date.now() + 300000 // 5 minutes
-                });
-                
-                // Store player info
+                // Set socket properties
                 socket.userId = userId;
                 socket.userName = userName;
                 socket.kenoPlayer = true;
-                socket.reconnectToken = newReconnectToken;
                 
-                let player;
-                let restoredState = false;
+                let player = self.kenoPlayers.get(userId);
+                let wasReconnected = false;
                 
-                if (existingPlayer && isReconnecting) {
-                    // Player reconnecting - restore their state
+                if (player) {
+                    // Existing player reconnecting
                     console.log(`🔄 Player reconnecting: ${userName} (${userId})`);
+                    wasReconnected = true;
                     
-                    player = existingPlayer;
+                    // Update player socket info
                     player.socketId = socket.id;
                     player.isOnline = true;
                     player.lastSeen = new Date();
                     player.balance = user.balance;
-                    player.reconnectedAt = new Date();
                     
-                    // Check if they had pending selections before disconnect
-                    if (player.pendingSelections && 
-                        player.pendingSelections.length > 0 && 
-                        !player.hasPlacedBet && 
-                        isRoundActive) {
-                        // Restore pending selections
-                        player.selectedNumbers = player.pendingSelections;
-                        player.currentBet = player.pendingBet || 5;
-                        restoredState = true;
+                    // Check if they were in disconnected players
+                    if (self.disconnectedPlayers.has(userId)) {
+                        self.disconnectedPlayers.delete(userId);
                     }
-                    
-                    // Remove from disconnected players
-                    self.disconnectedPlayers.delete(userId);
-                    
-                    // Notify about reconnection
-                    socket.emit('keno:reconnected', {
-                        message: 'Successfully reconnected!',
-                        restoredState: restoredState,
-                        round: currentRoundNumber,
-                        roundActive: isRoundActive,
-                        hasBet: playerHasBetInCurrentRound
-                    });
-                    
                 } else {
-                    // New player or clean reconnection
+                    // New player
+                    console.log(`🎰 New player connected: ${userName} (${userId})`);
+                    
                     player = {
                         socketId: socket.id,
                         userId: userId,
@@ -358,16 +332,8 @@ module.exports = {
                         sessionStart: new Date(),
                         totalDeposits: user.totalDeposits || 0,
                         totalWithdrawals: user.totalWithdrawals || 0,
-                        // Reconnection fields
-                        pendingSelections: [],
-                        pendingBet: null,
-                        disconnectTime: null,
-                        reconnectedAt: null,
-                        // IMPORTANT: Mark this player as "new" - didn't participate in current round initially
                         isNewInCurrentRound: !playerHasBetInCurrentRound && currentDrawnNumbers.length > 0
                     };
-                    
-                    console.log(`🎰 New player connected: ${userName} (${userId})`);
                 }
                 
                 // Update player in map
@@ -408,15 +374,11 @@ module.exports = {
                     payoutTable: self.CONFIG.PAYOUT_TABLE,
                     playersCount: activeGame ? activeGame.players.length : 0,
                     totalBets: activeGame ? activeGame.totalBets : 0,
-                    // Send current drawn numbers if any exist
                     currentDrawnNumbers: currentDrawnNumbers,
                     isDrawComplete: activeGame.drawComplete || false,
                     hasBetInCurrentRound: playerHasBetInCurrentRound,
                     isDrawing: activeGame.status === 'drawing',
-                    // Reconnection info
-                    reconnected: isReconnecting,
-                    reconnectToken: newReconnectToken,
-                    restoredState: restoredState,
+                    reconnected: wasReconnected,
                     selectedNumbers: player.selectedNumbers,
                     currentBet: player.currentBet,
                     hasPlacedBet: player.hasPlacedBet,
@@ -429,15 +391,14 @@ module.exports = {
                         drawCount: self.CONFIG.KENO_DRAW_COUNT,
                         gameTimer: self.CONFIG.KENO_GAME_TIMER,
                         allowPreSelection: self.CONFIG.ALLOW_PRE_SELECTION,
-                        allowedBets: self.CONFIG.ALLOWED_BETS,
-                        reconnectTimeout: self.CONFIG.RECONNECT_TIMEOUT
+                        allowedBets: self.CONFIG.ALLOWED_BETS
                     },
                     potentialWinnings: potentialWinnings
                 };
                 
                 socket.emit('keno:welcome', welcomeData);
                 
-                console.log(`🎰 Keno player ${isReconnecting ? 'reconnected' : 'authenticated'}: ${userName} - Balance: ${user.balance} ETB`);
+                console.log(`🎰 Keno player ${wasReconnected ? 'reconnected' : 'authenticated'}: ${userName} - Balance: ${user.balance} ETB`);
                 
                 // If draw is already in progress or complete, handle it properly
                 if (currentDrawnNumbers.length > 0) {
@@ -460,7 +421,7 @@ module.exports = {
                             }, 1000);
                         }
                     } else if (activeGame.status === 'drawing') {
-                        // Draw is in progress - send current state and let them watch live
+                        // Draw is in progress - send current state
                         const drawState = {
                             round: currentRoundNumber,
                             currentBall: currentDrawnNumbers.length,
@@ -468,14 +429,8 @@ module.exports = {
                             playersCount: activeGame.players.length,
                             totalBets: activeGame.totalBets,
                             message: 'Draw in progress. Watching live...',
-                            hasBet: playerHasBetInCurrentRound,
-                            isReconnecting: isReconnecting
+                            hasBet: playerHasBetInCurrentRound
                         };
-                        
-                        // Only send drawn numbers if player has a bet in this round
-                        if (playerHasBetInCurrentRound) {
-                            drawState.drawnNumbers = currentDrawnNumbers;
-                        }
                         
                         socket.emit('keno:draw_state', drawState);
                     }
@@ -499,73 +454,14 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno auth error:', error);
-                socket.emit('keno:error', 'Authentication failed');
-            }
-        });
-        
-        // Reconnect request - for when client knows it's reconnecting
-        socket.on('keno:reconnect', async (data) => {
-            try {
-                const { userId, reconnectToken } = data;
-                
-                if (!userId) {
-                    socket.emit('keno:error', 'User ID required');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(userId);
-                const tokenData = self.playerReconnectTokens.get(userId);
-                
-                if (!player || !tokenData || tokenData.token !== reconnectToken) {
-                    socket.emit('keno:reconnect_failed', {
-                        message: 'Invalid reconnect token or player not found'
-                    });
-                    return;
-                }
-                
-                // Token expired
-                if (Date.now() > tokenData.expires) {
-                    self.playerReconnectTokens.delete(userId);
-                    socket.emit('keno:reconnect_failed', {
-                        message: 'Reconnect token expired'
-                    });
-                    return;
-                }
-                
-                // Valid reconnection
-                socket.userId = userId;
-                socket.userName = player.userName;
-                socket.kenoPlayer = true;
-                
-                // Update player socket
-                player.socketId = socket.id;
-                player.isOnline = true;
-                player.lastSeen = new Date();
-                self.kenoPlayers.set(userId, player);
-                
-                // Remove from disconnected
-                self.disconnectedPlayers.delete(userId);
-                
-                // Send successful reconnection
-                socket.emit('keno:reconnect_success', {
-                    message: 'Successfully reconnected',
-                    userId: userId,
-                    userName: player.userName,
-                    balance: player.balance
-                });
-                
-                console.log(`🔄 Manual reconnection successful: ${player.userName}`);
-                
-            } catch (error) {
-                console.error('Reconnect error:', error);
-                socket.emit('keno:error', 'Reconnection failed');
+                socket.emit('keno:error', { message: 'Authentication failed' });
             }
         });
         
         // Save player state for reconnection
         socket.on('keno:saveState', (data) => {
             try {
-                const { userId, selectedNumbers, betAmount, roundNumber } = data;
+                const { userId, selectedNumbers, betAmount } = data;
                 
                 if (!userId || !socket.userId || socket.userId !== userId) {
                     return;
@@ -573,9 +469,9 @@ module.exports = {
                 
                 const player = self.kenoPlayers.get(userId);
                 if (player && self.isKenoRoundActive && !player.hasPlacedBet) {
-                    // Save pending selections for potential reconnection
-                    player.pendingSelections = selectedNumbers || [];
-                    player.pendingBet = betAmount || 5;
+                    // Save selections for potential reconnection
+                    player.selectedNumbers = selectedNumbers || [];
+                    player.currentBet = betAmount || 5;
                     self.kenoPlayers.set(userId, player);
                     
                     console.log(`💾 Saved state for player ${player.userName}: ${selectedNumbers?.length || 0} numbers`);
@@ -591,47 +487,47 @@ module.exports = {
                 const { numbers, betAmount } = data;
                 
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
                 // Check if round is active
                 if (!self.isKenoRoundActive) {
-                    socket.emit('keno:error', 'Round not active. Please wait for next round.');
+                    socket.emit('keno:error', { message: 'Round not active. Please wait for next round.' });
                     return;
                 }
                 
                 // Check if already placed bet in this round
                 if (player.hasPlacedBet) {
-                    socket.emit('keno:error', 'You have already placed a bet this round');
+                    socket.emit('keno:error', { message: 'You have already placed a bet this round' });
                     return;
                 }
                 
                 // Validate bet amount - ONLY allowed bets
                 const bet = parseFloat(betAmount);
                 if (isNaN(bet) || !self.CONFIG.ALLOWED_BETS.includes(bet)) {
-                    socket.emit('keno:error', `Bet amount must be one of: ${self.CONFIG.ALLOWED_BETS.join(', ')} ETB`);
+                    socket.emit('keno:error', { message: `Bet amount must be one of: ${self.CONFIG.ALLOWED_BETS.join(', ')} ETB` });
                     return;
                 }
                 
-                // Validate numbers - CAN be 1-5 numbers (CHANGED from exactly 5)
+                // Validate numbers - CAN be 1-5 numbers
                 if (!Array.isArray(numbers) || 
                     numbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
                     numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                    socket.emit('keno:error', `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers`);
+                    socket.emit('keno:error', { message: `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers` });
                     return;
                 }
                 
                 // Check unique numbers
                 const uniqueNumbers = [...new Set(numbers)];
                 if (uniqueNumbers.length !== numbers.length) {
-                    socket.emit('keno:error', 'Duplicate numbers not allowed');
+                    socket.emit('keno:error', { message: 'Duplicate numbers not allowed' });
                     return;
                 }
                 
@@ -639,7 +535,7 @@ module.exports = {
                 for (const num of numbers) {
                     const n = parseInt(num);
                     if (isNaN(n) || n < 1 || n > self.CONFIG.KENO_TOTAL_NUMBERS) {
-                        socket.emit('keno:error', `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}`);
+                        socket.emit('keno:error', { message: `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}` });
                         return;
                     }
                 }
@@ -650,7 +546,7 @@ module.exports = {
                 // Check balance
                 const user = await self.User.findOne({ userId: socket.userId });
                 if (!user || user.balance < bet) {
-                    socket.emit('keno:error', 'Insufficient balance');
+                    socket.emit('keno:error', { message: 'Insufficient balance' });
                     return;
                 }
                 
@@ -681,8 +577,6 @@ module.exports = {
                 player.totalWagered += bet;
                 player.isReadyForNextRound = false;
                 player.isNewInCurrentRound = false; // Now they're participating
-                player.pendingSelections = []; // Clear pending selections
-                player.pendingBet = null;
                 self.kenoPlayers.set(socket.userId, player);
                 
                 // Add to active game
@@ -746,7 +640,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno place bet error:', error);
-                socket.emit('keno:error', 'Failed to place bet');
+                socket.emit('keno:error', { message: 'Failed to place bet' });
             }
         });
         
@@ -756,13 +650,13 @@ module.exports = {
                 const { numbers } = data;
                 
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -770,14 +664,14 @@ module.exports = {
                 if (!Array.isArray(numbers) || 
                     numbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
                     numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                    socket.emit('keno:error', `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers`);
+                    socket.emit('keno:error', { message: `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers` });
                     return;
                 }
                 
                 // Check unique numbers
                 const uniqueNumbers = [...new Set(numbers)];
                 if (uniqueNumbers.length !== numbers.length) {
-                    socket.emit('keno:error', 'Duplicate numbers not allowed');
+                    socket.emit('keno:error', { message: 'Duplicate numbers not allowed' });
                     return;
                 }
                 
@@ -785,7 +679,7 @@ module.exports = {
                 for (const num of numbers) {
                     const n = parseInt(num);
                     if (isNaN(n) || n < 1 || n > self.CONFIG.KENO_TOTAL_NUMBERS) {
-                        socket.emit('keno:error', `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}`);
+                        socket.emit('keno:error', { message: `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}` });
                         return;
                     }
                 }
@@ -810,7 +704,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno pre-select error:', error);
-                socket.emit('keno:error', 'Failed to pre-select numbers');
+                socket.emit('keno:error', { message: 'Failed to pre-select numbers' });
             }
         });
         
@@ -818,13 +712,13 @@ module.exports = {
         socket.on('keno:quickPick', (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -855,7 +749,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno quick pick error:', error);
-                socket.emit('keno:error', 'Failed to generate quick pick');
+                socket.emit('keno:error', { message: 'Failed to generate quick pick' });
             }
         });
         
@@ -863,13 +757,13 @@ module.exports = {
         socket.on('keno:getState', () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -907,14 +801,12 @@ module.exports = {
                     isDrawComplete: activeGame.drawComplete || false,
                     potentialWinnings: potentialWinnings,
                     payoutTable: self.CONFIG.PAYOUT_TABLE[player.selectedNumbers.length] || {},
-                    // Reconnection info
-                    canReconnect: self.disconnectedPlayers.has(socket.userId),
-                    reconnectToken: self.playerReconnectTokens.get(socket.userId)?.token
+                    canReconnect: self.disconnectedPlayers.has(socket.userId)
                 });
                 
             } catch (error) {
                 console.error('Keno get state error:', error);
-                socket.emit('keno:error', 'Failed to get game state');
+                socket.emit('keno:error', { message: 'Failed to get game state' });
             }
         });
         
@@ -922,13 +814,13 @@ module.exports = {
         socket.on('keno:getBalance', async () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const user = await self.User.findOne({ userId: socket.userId });
                 if (!user) {
-                    socket.emit('keno:error', 'User not found');
+                    socket.emit('keno:error', { message: 'User not found' });
                     return;
                 }
                 
@@ -951,7 +843,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno get balance error:', error);
-                socket.emit('keno:error', 'Failed to get balance');
+                socket.emit('keno:error', { message: 'Failed to get balance' });
             }
         });
         
@@ -959,13 +851,13 @@ module.exports = {
         socket.on('keno:clearSelection', () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -973,9 +865,6 @@ module.exports = {
                 if (!player.hasPlacedBet || !self.isKenoRoundActive) {
                     player.selectedNumbers = [];
                     player.currentBet = null;
-                    // Also clear pending selections
-                    player.pendingSelections = [];
-                    player.pendingBet = null;
                     self.kenoPlayers.set(socket.userId, player);
                     
                     socket.emit('keno:selectionCleared', {
@@ -983,12 +872,12 @@ module.exports = {
                         message: 'Selection cleared'
                     });
                 } else {
-                    socket.emit('keno:error', 'Cannot clear after placing bet in active round');
+                    socket.emit('keno:error', { message: 'Cannot clear after placing bet in active round' });
                 }
                 
             } catch (error) {
                 console.error('Keno clear selection error:', error);
-                socket.emit('keno:error', 'Failed to clear selection');
+                socket.emit('keno:error', { message: 'Failed to clear selection' });
             }
         });
         
@@ -996,13 +885,13 @@ module.exports = {
         socket.on('keno:clearPreselection', () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
                 const player = self.kenoPlayers.get(socket.userId);
                 if (!player) {
-                    socket.emit('keno:error', 'Player not found');
+                    socket.emit('keno:error', { message: 'Player not found' });
                     return;
                 }
                 
@@ -1017,7 +906,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Keno clear pre-selection error:', error);
-                socket.emit('keno:error', 'Failed to clear pre-selection');
+                socket.emit('keno:error', { message: 'Failed to clear pre-selection' });
             }
         });
         
@@ -1025,7 +914,7 @@ module.exports = {
         socket.on('keno:getPotentialWinnings', (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -1071,7 +960,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Get potential winnings error:', error);
-                socket.emit('keno:error', 'Failed to calculate potential winnings');
+                socket.emit('keno:error', { message: 'Failed to calculate potential winnings' });
             }
         });
         
@@ -1079,7 +968,7 @@ module.exports = {
         socket.on('keno:getDrawState', () => {
             try {
                 if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
+                    socket.emit('keno:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -1087,7 +976,6 @@ module.exports = {
                 const playerHasBet = !!activeGame.bets[socket.userId];
                 
                 if (activeGame.status === 'drawing' && activeGame.drawnNumbers.length > 0) {
-                    // For players requesting draw state, only send limited info if they don't have a bet
                     const drawState = {
                         round: activeGame.roundNumber,
                         currentBall: activeGame.drawnNumbers.length,
@@ -1097,12 +985,6 @@ module.exports = {
                         message: 'Draw in progress. Watching live...',
                         hasBet: playerHasBet
                     };
-                    
-                    // Only send drawn numbers if player has a bet in this round
-                    if (playerHasBet) {
-                        drawState.drawnNumbers = activeGame.drawnNumbers;
-                        drawState.message = 'Draw in progress. You have a bet in this round.';
-                    }
                     
                     socket.emit('keno:draw_state', drawState);
                 }
@@ -1117,7 +999,7 @@ module.exports = {
         socket.on('wallet:getTransactions', async (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
+                    socket.emit('wallet:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -1125,7 +1007,7 @@ module.exports = {
                 
                 // Verify user
                 if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
+                    socket.emit('wallet:error', { message: 'Unauthorized' });
                     return;
                 }
                 
@@ -1144,7 +1026,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Wallet get transactions error:', error);
-                socket.emit('wallet:error', 'Failed to get transactions');
+                socket.emit('wallet:error', { message: 'Failed to get transactions' });
             }
         });
         
@@ -1152,7 +1034,7 @@ module.exports = {
         socket.on('wallet:requestDeposit', async (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
+                    socket.emit('wallet:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -1160,7 +1042,7 @@ module.exports = {
                 
                 // Verify user
                 if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
+                    socket.emit('wallet:error', { message: 'Unauthorized' });
                     return;
                 }
                 
@@ -1169,14 +1051,14 @@ module.exports = {
                 if (isNaN(depositAmount) || 
                     depositAmount < self.CONFIG.MIN_DEPOSIT || 
                     depositAmount > self.CONFIG.MAX_DEPOSIT) {
-                    socket.emit('wallet:error', `Deposit amount must be between ${self.CONFIG.MIN_DEPOSIT} and ${self.CONFIG.MAX_DEPOSIT} ETB`);
+                    socket.emit('wallet:error', { message: `Deposit amount must be between ${self.CONFIG.MIN_DEPOSIT} and ${self.CONFIG.MAX_DEPOSIT} ETB` });
                     return;
                 }
                 
                 // Get user
                 const user = await self.User.findOne({ userId: userId });
                 if (!user) {
-                    socket.emit('wallet:error', 'User not found');
+                    socket.emit('wallet:error', { message: 'User not found' });
                     return;
                 }
                 
@@ -1233,7 +1115,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Wallet deposit request error:', error);
-                socket.emit('wallet:error', 'Failed to process deposit request');
+                socket.emit('wallet:error', { message: 'Failed to process deposit request' });
             }
         });
         
@@ -1241,7 +1123,7 @@ module.exports = {
         socket.on('wallet:requestWithdrawal', async (data) => {
             try {
                 if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
+                    socket.emit('wallet:error', { message: 'Not authenticated' });
                     return;
                 }
                 
@@ -1249,33 +1131,33 @@ module.exports = {
                 
                 // Verify user
                 if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
+                    socket.emit('wallet:error', { message: 'Unauthorized' });
                     return;
                 }
                 
                 // Validate amount
                 const withdrawalAmount = parseFloat(amount);
                 if (isNaN(withdrawalAmount) || withdrawalAmount < self.CONFIG.MIN_WITHDRAWAL) {
-                    socket.emit('wallet:error', `Minimum withdrawal is ${self.CONFIG.MIN_WITHDRAWAL} ETB`);
+                    socket.emit('wallet:error', { message: `Minimum withdrawal is ${self.CONFIG.MIN_WITHDRAWAL} ETB` });
                     return;
                 }
                 
                 // Validate account info
                 if (!accountInfo || accountInfo.trim() === '') {
-                    socket.emit('wallet:error', 'Account information is required');
+                    socket.emit('wallet:error', { message: 'Account information is required' });
                     return;
                 }
                 
                 // Get user
                 const user = await self.User.findOne({ userId: userId });
                 if (!user) {
-                    socket.emit('wallet:error', 'User not found');
+                    socket.emit('wallet:error', { message: 'User not found' });
                     return;
                 }
                 
                 // Check balance
                 if (user.balance < withdrawalAmount) {
-                    socket.emit('wallet:error', 'Insufficient balance');
+                    socket.emit('wallet:error', { message: 'Insufficient balance' });
                     return;
                 }
                 
@@ -1346,7 +1228,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Wallet withdrawal request error:', error);
-                socket.emit('wallet:error', 'Failed to process withdrawal request');
+                socket.emit('wallet:error', { message: 'Failed to process withdrawal request' });
             }
         });
         
@@ -1354,18 +1236,17 @@ module.exports = {
         socket.on('wallet:processDeposit', async (data) => {
             try {
                 // Admin authentication would go here
-                // For now, we'll implement the logic
                 
                 const { transactionId, action, adminNotes } = data;
                 
                 const transaction = await self.WalletTransaction.findById(transactionId);
                 if (!transaction || transaction.type !== 'DEPOSIT_REQUEST') {
-                    socket.emit('wallet:error', 'Transaction not found or invalid type');
+                    socket.emit('wallet:error', { message: 'Transaction not found or invalid type' });
                     return;
                 }
                 
                 if (transaction.status !== 'pending') {
-                    socket.emit('wallet:error', 'Transaction already processed');
+                    socket.emit('wallet:error', { message: 'Transaction already processed' });
                     return;
                 }
                 
@@ -1373,7 +1254,7 @@ module.exports = {
                     // Get user
                     const user = await self.User.findOne({ userId: transaction.userId });
                     if (!user) {
-                        socket.emit('wallet:error', 'User not found');
+                        socket.emit('wallet:error', { message: 'User not found' });
                         return;
                     }
                     
@@ -1454,7 +1335,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Process deposit error:', error);
-                socket.emit('wallet:error', 'Failed to process deposit');
+                socket.emit('wallet:error', { message: 'Failed to process deposit' });
             }
         });
         
@@ -1465,12 +1346,12 @@ module.exports = {
                 
                 const transaction = await self.WalletTransaction.findById(transactionId);
                 if (!transaction || transaction.type !== 'WITHDRAWAL_REQUEST') {
-                    socket.emit('wallet:error', 'Transaction not found or invalid type');
+                    socket.emit('wallet:error', { message: 'Transaction not found or invalid type' });
                     return;
                 }
                 
                 if (transaction.status !== 'pending') {
-                    socket.emit('wallet:error', 'Transaction already processed');
+                    socket.emit('wallet:error', { message: 'Transaction already processed' });
                     return;
                 }
                 
@@ -1478,13 +1359,13 @@ module.exports = {
                     // Get user
                     const user = await self.User.findOne({ userId: transaction.userId });
                     if (!user) {
-                    socket.emit('wallet:error', 'User not found');
+                        socket.emit('wallet:error', { message: 'User not found' });
                         return;
                     }
                     
                     // Check balance again
                     if (user.balance < Math.abs(transaction.amount)) {
-                        socket.emit('wallet:error', 'User has insufficient balance');
+                        socket.emit('wallet:error', { message: 'User has insufficient balance' });
                         return;
                     }
                     
@@ -1568,7 +1449,7 @@ module.exports = {
                 
             } catch (error) {
                 console.error('Process withdrawal error:', error);
-                socket.emit('wallet:error', 'Failed to process withdrawal');
+                socket.emit('wallet:error', { message: 'Failed to process withdrawal' });
             }
         });
         
@@ -1578,36 +1459,26 @@ module.exports = {
             console.log(`🎰 Player joined Keno room: ${socket.id}`);
         });
         
-        // Handle disconnection
+        // Handle disconnection - SIMPLIFIED
         socket.on('disconnect', () => {
             self.handleKenoDisconnect(socket);
         });
     },
     
-    // Handle Keno disconnection
+    // Handle Keno disconnection - SIMPLIFIED
     handleKenoDisconnect: function(socket) {
         const self = this;
         
         console.log(`🎰 Keno disconnected: ${socket.id}`);
         
-        // Track disconnection time for reconnection
         if (socket.userId) {
             const player = self.kenoPlayers.get(socket.userId);
             if (player) {
-                // Mark as offline but keep player data
+                // Mark as offline
                 player.isOnline = false;
                 player.lastSeen = new Date();
-                player.disconnectTime = Date.now();
                 
-                // Save pending selections for reconnection
-                if (self.isKenoRoundActive && !player.hasPlacedBet && player.selectedNumbers.length > 0) {
-                    player.pendingSelections = [...player.selectedNumbers];
-                    player.pendingBet = player.currentBet;
-                }
-                
-                self.kenoPlayers.set(socket.userId, player);
-                
-                // Add to disconnected players map for reconnection tracking
+                // Track disconnect time for cleanup
                 self.disconnectedPlayers.set(socket.userId, Date.now());
                 
                 // Remove player from active game if they haven't placed a bet
@@ -1639,8 +1510,6 @@ module.exports = {
         
         // Check if we need to pause the game (no players left)
         const onlinePlayers = self.getOnlinePlayersCount();
-        
-        // FIX: Check if round is active but no players with bets
         const activeGame = self.getActiveKenoGame();
         const hasActiveBets = activeGame && activeGame.totalBets > 0;
         
@@ -1666,7 +1535,7 @@ module.exports = {
             self.roundTransitionTimeout = null;
         }
         
-        // FIX: Check if we actually have online players
+        // Check if we actually have online players
         const onlinePlayers = self.getOnlinePlayersCount();
         if (onlinePlayers < self.minimumPlayers) {
             console.log('🎰 Not enough players to start round. Cancelling...');
@@ -1755,10 +1624,6 @@ module.exports = {
                     }
                 }
                 
-                // Clear pending selections for new round
-                player.pendingSelections = [];
-                player.pendingBet = null;
-                
                 // Reset new player flag for this round
                 player.isNewInCurrentRound = false;
                 
@@ -1784,7 +1649,6 @@ module.exports = {
         console.log('  isRoundScheduled:', self.isRoundScheduled);
         console.log('  onlinePlayers:', self.getOnlinePlayersCount());
         console.log('  minimumPlayers:', self.minimumPlayers);
-        console.log('  disconnectedPlayers:', self.disconnectedPlayers.size);
         
         // Only start a new round if:
         // 1. No round is active
@@ -1874,7 +1738,7 @@ module.exports = {
                 return;
             }
             
-            // FIX: Check if we lost all players during countdown
+            // Check if we lost all players during countdown
             const onlinePlayers = self.getOnlinePlayersCount();
             if (onlinePlayers === 0) {
                 clearInterval(self.kenoCountdownInterval);
@@ -1915,7 +1779,7 @@ module.exports = {
         }, 1000);
     },
     
-    // Draw Keno numbers - UPDATED with ball counter and random order drawing
+    // Draw Keno numbers - with ball counter and random order drawing
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
@@ -1924,7 +1788,7 @@ module.exports = {
         
         console.log('🎰 Drawing Keno numbers...');
         
-        // IMPORTANT: Set game status to drawing
+        // Set game status to drawing
         activeGame.status = 'drawing';
         self.isKenoRoundActive = false;
         self.isDrawing = true;
@@ -1935,12 +1799,12 @@ module.exports = {
             message: 'Drawing numbers...',
             popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
             totalBalls: self.CONFIG.KENO_DRAW_COUNT,
-            willBeRandomOrder: true // Inform clients numbers will come in random order
+            willBeRandomOrder: true
         });
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate 20 random unique numbers - DO NOT SORT THEM
+            // Generate 20 random unique numbers
             const drawnNumbers = [];
             while (drawnNumbers.length < self.CONFIG.KENO_DRAW_COUNT) {
                 const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
@@ -1955,14 +1819,14 @@ module.exports = {
             
             console.log(`🎰 Numbers to draw (random order): ${drawnNumbers.join(', ')}`);
             
-            // Draw numbers one by one in RANDOM ORDER (as they were generated)
+            // Draw numbers one by one in RANDOM ORDER
             for (let i = 0; i < drawnNumbers.length; i++) {
                 setTimeout(() => {
                     self.io.to('keno').emit('keno:number_drawn', {
-                        number: drawnNumbers[i], // This is the random number at position i
+                        number: drawnNumbers[i],
                         index: i,
                         total: drawnNumbers.length,
-                        drawnCount: i + 1, // Current ball number (1/20, 2/20, etc.)
+                        drawnCount: i + 1,
                         round: activeGame.roundNumber,
                         isRandomOrder: true
                     });
@@ -1976,8 +1840,8 @@ module.exports = {
                 
                 self.io.to('keno').emit('keno:round_results', {
                     round: activeGame.roundNumber,
-                    drawnNumbers: sortedForDisplay, // Send sorted for final display
-                    originalOrder: drawnNumbers, // Keep original random order too
+                    drawnNumbers: sortedForDisplay,
+                    originalOrder: drawnNumbers,
                     playersCount: activeGame.players.length,
                     totalBets: activeGame.totalBets,
                     popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
@@ -2121,9 +1985,6 @@ module.exports = {
                             if (!player.isReadyForNextRound) {
                                 player.selectedNumbers = [];
                             }
-                            // Clear pending selections
-                            player.pendingSelections = [];
-                            player.pendingBet = null;
                             self.kenoPlayers.set(playerId, player);
                         }
                         
@@ -2172,9 +2033,6 @@ module.exports = {
                         if (!player.isReadyForNextRound) {
                             player.selectedNumbers = [];
                         }
-                        // Clear pending selections
-                        player.pendingSelections = [];
-                        player.pendingBet = null;
                         self.kenoPlayers.set(playerId, player);
                     }
                 }
@@ -2226,7 +2084,7 @@ module.exports = {
         
         // Reset the current game to waiting state after a delay
         setTimeout(() => {
-            // IMPORTANT: Set game back to waiting state for next round
+            // Set game back to waiting state for next round
             activeGame.status = 'waiting';
             activeGame.bets = {};
             activeGame.players = [];
@@ -2270,7 +2128,7 @@ module.exports = {
         }, 3000);
     },
     
-    // Update Keno stats in database - UPDATED for wallet
+    // Update Keno stats in database
     updateKenoStats: async function(wagered, payout, depositAmount, withdrawalAmount, games) {
         try {
             const today = new Date().toISOString().split('T')[0];
@@ -2479,7 +2337,6 @@ module.exports = {
             totalWithdrawals: totalWithdrawals,
             netWalletFlow: totalDeposits - totalWithdrawals,
             disconnectedPlayers: disconnectedPlayers,
-            reconnectTokens: this.playerReconnectTokens.size,
             config: this.CONFIG
         };
     },
@@ -2533,11 +2390,6 @@ module.exports = {
                 totalDeposits: player.totalDeposits || 0,
                 totalWithdrawals: player.totalWithdrawals || 0,
                 sessionStart: player.sessionStart,
-                // Reconnection info
-                pendingSelections: player.pendingSelections || [],
-                pendingBet: player.pendingBet,
-                disconnectTime: player.disconnectTime,
-                reconnectedAt: player.reconnectedAt,
                 socketId: player.socketId
             });
         }
@@ -2557,11 +2409,12 @@ module.exports = {
             }
         }
         
-        // Clean up expired reconnect tokens
+        // Clean up disconnected players map
         const now = Date.now();
-        for (const [userId, tokenData] of this.playerReconnectTokens) {
-            if (now > tokenData.expires) {
-                this.playerReconnectTokens.delete(userId);
+        const maxReconnectTime = this.CONFIG.RECONNECT_TIMEOUT;
+        for (const [userId, disconnectTime] of this.disconnectedPlayers) {
+            if (now - disconnectTime > maxReconnectTime) {
+                this.disconnectedPlayers.delete(userId);
             }
         }
         
@@ -2586,7 +2439,7 @@ module.exports = {
         const activeGame = this.getActiveKenoGame();
         const gameStatus = activeGame.status || 'waiting';
         
-        // FIX: Detect if game is stuck in active state with no players
+        // Detect if game is stuck in active state with no players
         if (this.isKenoRoundActive && onlinePlayers === 0) {
             console.log('🎰 Stuck game detected: Round active but no players online');
             const hasBets = activeGame && activeGame.totalBets > 0;
@@ -2598,7 +2451,7 @@ module.exports = {
             }
         }
         
-        // FIX: Detect if countdown is stuck
+        // Detect if countdown is stuck
         if (this.kenoCountdown <= 0 && !this.isDrawing && !this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, resetting...');
             this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
@@ -2629,7 +2482,6 @@ module.exports = {
                 selectionCount: player.selectedNumbers.length,
                 preSelectionCount: player.preSelectedNumbers.length,
                 isNewInCurrentRound: player.isNewInCurrentRound || false,
-                hasPendingSelections: (player.pendingSelections && player.pendingSelections.length > 0) || false,
                 isOnline: player.isOnline
             };
         }
@@ -2830,9 +2682,6 @@ module.exports = {
         // Remove from disconnected players
         this.disconnectedPlayers.delete(userId);
         
-        // Clear reconnect token
-        this.playerReconnectTokens.delete(userId);
-        
         console.log(`🔄 Admin forced reconnection cleanup for player ${player.userName}`);
         
         return { success: true, message: `Reconnection state cleared for ${player.userName}` };
@@ -2850,8 +2699,8 @@ module.exports = {
                     disconnectTime: new Date(disconnectTime).toISOString(),
                     timeAgo: Math.floor((Date.now() - disconnectTime) / 1000) + ' seconds',
                     balance: player.balance,
-                    hasPendingSelections: (player.pendingSelections && player.pendingSelections.length > 0) || false,
-                    pendingSelectionsCount: player.pendingSelections?.length || 0
+                    hasPlacedBet: player.hasPlacedBet || false,
+                    isOnline: player.isOnline
                 });
             }
         }
