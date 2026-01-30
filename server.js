@@ -1,3 +1,5 @@
+[file name]: server.js
+[file content begin]
 // server.js - BINGO ELITE + KENO ULTRA + AGENT SYSTEM - TELEGRAM MINI APP - MAIN SERVER FILE
 require('dotenv').config();
 const express = require('express');
@@ -500,7 +502,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Content-Security-Policy', "frame-ancestors 'self' https://*.telegram.org https://web.telegram.org");
-  res.header('X-Frame-Options', 'ALLOW-FROM https://telegram.org');
+  res.header('X-Frame-Options', 'ALLOW-FROM https://telegram.org);
   res.header('X-Content-Type-Options', 'nosniff');
   res.header('X-XSS-Protection', '1; mode=block');
   
@@ -1152,6 +1154,48 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== TELEGRAM ENTRY PAGE WALLET EVENTS ==========
+  socket.on('telegram:getUserData', async (data) => {
+    try {
+      const { telegramId } = data;
+      if (!telegramId) {
+        socket.emit('telegram:userDataError', 'No Telegram ID provided');
+        return;
+      }
+      
+      // Find user by telegramId
+      const user = await User.findOne({ telegramId: telegramId.toString() });
+      if (!user) {
+        socket.emit('telegram:userDataError', 'User not found');
+        return;
+      }
+      
+      socket.emit('telegram:userData', {
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        isOnline: user.isOnline,
+        telegramId: user.telegramId,
+        phoneNumber: user.phoneNumber || ''
+      });
+    } catch (error) {
+      console.error('Error getting user data for Telegram entry:', error);
+      socket.emit('telegram:userDataError', error.message);
+    }
+  });
+  
+  socket.on('telegram:depositRequest', async (data) => {
+    if (gameLogic && gameLogic.handleDepositRequest) {
+      gameLogic.handleDepositRequest(socket, data);
+    }
+  });
+  
+  socket.on('telegram:withdrawRequest', async (data) => {
+    if (gameLogic && gameLogic.handleWithdrawRequest) {
+      gameLogic.handleWithdrawRequest(socket, data);
+    }
+  });
+  
   // ========== AGENT PORTAL REQUEST ==========
   socket.on('getAgentPortal', async () => {
     try {
@@ -1644,11 +1688,12 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE (AGENT PORTAL REMOVED) ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE WITH 4 GAMES AND WALLET ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+    const minDeposit = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 10;
     
     res.send(`
       <!DOCTYPE html>
@@ -1659,6 +1704,7 @@ app.get('/telegram', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
           <title>ETHIO GAMES - Telegram Mini App</title>
           <script src="https://telegram.org/js/telegram-web-app.js"></script>
+          <script src="/socket.io/socket.io.js"></script>
           <style>
               :root {
                   --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1672,6 +1718,8 @@ app.get('/telegram', async (req, res) => {
                   --success: #10b981;
                   --warning: #f59e0b;
                   --keno-color: #8b5cf6;
+                  --slot-color: #ef4444;
+                  --poker-color: #10b981;
                   --glass-bg: rgba(15, 23, 42, 0.7);
                   --glass-border: rgba(255, 255, 255, 0.08);
               }
@@ -1751,6 +1799,73 @@ app.get('/telegram', async (req, res) => {
                   line-height: 1.3;
               }
               
+              /* Wallet Section */
+              .wallet-section {
+                  width: 100%;
+                  max-width: 360px;
+                  background: var(--glass-bg);
+                  backdrop-filter: blur(10px);
+                  border: 1px solid var(--glass-border);
+                  border-radius: 16px;
+                  padding: 16px;
+                  margin: 0 auto 20px;
+                  text-align: center;
+              }
+              
+              .wallet-header {
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 8px;
+                  margin-bottom: 12px;
+                  color: var(--accent-color);
+                  font-size: 0.85rem;
+                  font-weight: 600;
+              }
+              
+              .wallet-balance {
+                  font-size: 2rem;
+                  font-weight: 800;
+                  margin: 8px 0;
+                  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+                  -webkit-background-clip: text;
+                  -webkit-text-fill-color: transparent;
+                  background-clip: text;
+              }
+              
+              .wallet-actions {
+                  display: flex;
+                  gap: 12px;
+                  margin-top: 16px;
+              }
+              
+              .wallet-btn {
+                  flex: 1;
+                  padding: 10px 0;
+                  border-radius: 12px;
+                  border: none;
+                  font-weight: 700;
+                  font-size: 0.8rem;
+                  cursor: pointer;
+                  transition: all 0.2s;
+              }
+              
+              .deposit-btn {
+                  background: linear-gradient(135deg, #10b981, #059669);
+                  color: white;
+              }
+              
+              .withdraw-btn {
+                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                  color: white;
+              }
+              
+              .wallet-btn:hover {
+                  transform: translateY(-1px);
+                  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+              }
+              
+              /* Games Section */
               .games-section {
                   width: 100%;
                   max-width: 360px;
@@ -1799,6 +1914,17 @@ app.get('/telegram', async (req, res) => {
                   overflow: hidden;
               }
               
+              .game-card.coming-soon {
+                  opacity: 0.6;
+                  cursor: not-allowed;
+              }
+              
+              .game-card.coming-soon:hover {
+                  transform: none;
+                  border-color: var(--card-border);
+                  box-shadow: none;
+              }
+              
               .game-card::before {
                   content: '';
                   position: absolute;
@@ -1809,13 +1935,13 @@ app.get('/telegram', async (req, res) => {
                   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
               }
               
-              .game-card:hover {
+              .game-card:hover:not(.coming-soon) {
                   transform: translateY(-2px);
                   border-color: rgba(139, 92, 246, 0.3);
                   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
               }
               
-              .game-card:active {
+              .game-card:active:not(.coming-soon) {
                   transform: translateY(0);
               }
               
@@ -1848,6 +1974,16 @@ app.get('/telegram', async (req, res) => {
               .keno-icon {
                   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
                   color: #a78bfa;
+              }
+              
+              .slots-icon {
+                  background: linear-gradient(135deg, #ef4444, #dc2626);
+                  color: #f87171;
+              }
+              
+              .poker-icon {
+                  background: linear-gradient(135deg, #10b981, #059669);
+                  color: #34d399;
               }
               
               .game-content {
@@ -1892,6 +2028,18 @@ app.get('/telegram', async (req, res) => {
                   border-color: rgba(139, 92, 246, 0.2);
               }
               
+              .feature-tag.slots {
+                  background: rgba(239, 68, 68, 0.1);
+                  color: #f87171;
+                  border-color: rgba(239, 68, 68, 0.2);
+              }
+              
+              .feature-tag.poker {
+                  background: rgba(16, 185, 129, 0.1);
+                  color: #34d399;
+                  border-color: rgba(16, 185, 129, 0.2);
+              }
+              
               .game-action {
                   margin-left: auto;
               }
@@ -1915,53 +2063,195 @@ app.get('/telegram', async (req, res) => {
                   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
               }
               
-              .play-btn:hover {
+              .play-btn.slots {
+                  background: linear-gradient(135deg, #ef4444, #dc2626);
+                  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+              }
+              
+              .play-btn.poker {
+                  background: linear-gradient(135deg, #10b981, #059669);
+                  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+              }
+              
+              .play-btn.coming-soon {
+                  background: linear-gradient(135deg, #6b7280, #4b5563);
+                  cursor: not-allowed;
+                  opacity: 0.7;
+              }
+              
+              .play-btn:hover:not(.coming-soon) {
                   transform: scale(1.05);
                   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
               }
               
-              .play-btn.keno:hover {
+              .play-btn.keno:hover:not(.coming-soon) {
                   box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
               }
               
-              .features-highlight {
+              .play-btn.slots:hover:not(.coming-soon) {
+                  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+              }
+              
+              .play-btn.poker:hover:not(.coming-soon) {
+                  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+              }
+              
+              /* Modal Styles */
+              .modal-overlay {
+                  display: none;
+                  position: fixed;
+                  top: 0;
+                  left: 0;
+                  right: 0;
+                  bottom: 0;
+                  background: rgba(0, 0, 0, 0.7);
+                  backdrop-filter: blur(5px);
+                  z-index: 1000;
+                  align-items: center;
+                  justify-content: center;
+                  padding: 20px;
+              }
+              
+              .modal {
+                  background: var(--dark-bg);
+                  border-radius: 20px;
+                  padding: 24px;
+                  max-width: 400px;
                   width: 100%;
-                  max-width: 360px;
-                  margin: 0 auto 20px;
-                  background: var(--glass-bg);
-                  backdrop-filter: blur(10px);
+                  max-height: 90vh;
+                  overflow-y: auto;
                   border: 1px solid var(--glass-border);
-                  border-radius: 16px;
-                  padding: 16px;
+                  animation: slideIn 0.3s ease;
               }
               
-              .features-title {
-                  font-size: 0.9rem;
+              .modal-header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 20px;
+              }
+              
+              .modal-title {
+                  font-size: 1.2rem;
                   font-weight: 700;
-                  margin-bottom: 10px;
                   color: var(--accent-color);
-                  display: flex;
-                  align-items: center;
-                  gap: 6px;
               }
               
-              .features-grid {
-                  display: grid;
-                  grid-template-columns: repeat(2, 1fr);
-                  gap: 8px;
-              }
-              
-              .feature-item {
-                  display: flex;
-                  align-items: center;
-                  gap: 6px;
-                  font-size: 0.7rem;
+              .close-btn {
+                  background: none;
+                  border: none;
                   color: var(--text-secondary);
+                  font-size: 1.5rem;
+                  cursor: pointer;
+                  padding: 5px;
               }
               
-              .feature-icon {
-                  color: var(--success);
+              .form-group {
+                  margin-bottom: 16px;
+              }
+              
+              .form-label {
+                  display: block;
+                  margin-bottom: 6px;
+                  color: var(--text-secondary);
                   font-size: 0.8rem;
+                  font-weight: 600;
+              }
+              
+              .form-input {
+                  width: 100%;
+                  padding: 12px;
+                  background: rgba(255, 255, 255, 0.05);
+                  border: 1px solid var(--glass-border);
+                  border-radius: 10px;
+                  color: var(--text-primary);
+                  font-size: 0.9rem;
+              }
+              
+              .form-input:focus {
+                  outline: none;
+                  border-color: var(--accent-color);
+              }
+              
+              .amount-buttons {
+                  display: grid;
+                  grid-template-columns: repeat(3, 1fr);
+                  gap: 10px;
+                  margin: 10px 0;
+              }
+              
+              .amount-btn {
+                  padding: 10px;
+                  background: rgba(255, 255, 255, 0.05);
+                  border: 1px solid var(--glass-border);
+                  border-radius: 8px;
+                  color: var(--text-primary);
+                  cursor: pointer;
+                  transition: all 0.2s;
+              }
+              
+              .amount-btn:hover {
+                  background: rgba(59, 130, 246, 0.1);
+                  border-color: #3b82f6;
+              }
+              
+              .submit-btn {
+                  width: 100%;
+                  padding: 14px;
+                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                  color: white;
+                  border: none;
+                  border-radius: 12px;
+                  font-weight: 700;
+                  font-size: 1rem;
+                  cursor: pointer;
+                  margin-top: 20px;
+                  transition: all 0.2s;
+              }
+              
+              .submit-btn:hover {
+                  transform: translateY(-1px);
+                  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+              }
+              
+              .telebirr-info {
+                  background: rgba(59, 130, 246, 0.1);
+                  padding: 12px;
+                  border-radius: 10px;
+                  margin: 15px 0;
+                  text-align: center;
+              }
+              
+              .telebirr-number {
+                  font-size: 1.2rem;
+                  font-weight: 700;
+                  color: #60a5fa;
+                  margin: 5px 0;
+              }
+              
+              .message {
+                  padding: 10px;
+                  border-radius: 8px;
+                  margin: 10px 0;
+                  display: none;
+              }
+              
+              .success-message {
+                  background: rgba(16, 185, 129, 0.1);
+                  color: #34d399;
+                  border: 1px solid rgba(16, 185, 129, 0.2);
+              }
+              
+              .error-message {
+                  background: rgba(239, 68, 68, 0.1);
+                  color: #f87171;
+                  border: 1px solid rgba(239, 68, 68, 0.2);
+              }
+              
+              .info-message {
+                  background: rgba(59, 130, 246, 0.1);
+                  color: #60a5fa;
+                  border: 1px solid rgba(59, 130, 246, 0.2);
               }
               
               .footer {
@@ -2011,6 +2301,11 @@ app.get('/telegram', async (req, res) => {
                   color: #a78bfa;
               }
               
+              .status-badge.coming-soon {
+                  background: rgba(107, 114, 128, 0.1);
+                  color: #9ca3af;
+              }
+              
               @keyframes float {
                   0%, 100% { transform: translateY(0px); }
                   50% { transform: translateY(-5px); }
@@ -2046,8 +2341,8 @@ app.get('/telegram', async (req, res) => {
                       padding: 12px;
                   }
                   
-                  .features-grid {
-                      grid-template-columns: 1fr;
+                  .amount-buttons {
+                      grid-template-columns: repeat(2, 1fr);
                   }
               }
           </style>
@@ -2067,12 +2362,25 @@ app.get('/telegram', async (req, res) => {
                   <p class="subtitle">Premium gaming experience on Telegram</p>
               </div>
               
+              <!-- Wallet Section -->
+              <div class="wallet-section">
+                  <div class="wallet-header">
+                      <span>💰 WALLET BALANCE</span>
+                  </div>
+                  <div class="wallet-balance" id="walletBalance">0.00 ETB</div>
+                  <div class="wallet-actions">
+                      <button class="wallet-btn deposit-btn" onclick="openDepositModal()">DEPOSIT</button>
+                      <button class="wallet-btn withdraw-btn" onclick="openWithdrawModal()">WITHDRAW</button>
+                  </div>
+              </div>
+              
               <div class="games-section">
                   <div class="section-label">
-                      <span>🎯 FEATURED GAMES</span>
+                      <span>🎮 ALL GAMES</span>
                   </div>
                   
                   <div class="games-grid">
+                      <!-- Bingo Game -->
                       <div class="game-card" onclick="launchGame('bingo')">
                           <div class="game-icon bingo-icon">
                               🎱
@@ -2098,6 +2406,7 @@ app.get('/telegram', async (req, res) => {
                           </div>
                       </div>
                       
+                      <!-- Keno Game -->
                       <div class="game-card" onclick="launchGame('keno')">
                           <div class="game-icon keno-icon">
                               🎲
@@ -2122,29 +2431,57 @@ app.get('/telegram', async (req, res) => {
                               </button>
                           </div>
                       </div>
-                  </div>
-              </div>
-              
-              <div class="features-highlight">
-                  <div class="features-title">
-                      ⭐ FEATURES
-                  </div>
-                  <div class="features-grid">
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Real-time Multiplayer</span>
+                      
+                      <!-- Slots Game (Coming Soon) -->
+                      <div class="game-card coming-soon" onclick="showComingSoon('slots')">
+                          <div class="game-icon slots-icon">
+                              🎰
+                          </div>
+                          <div class="game-content">
+                              <h3 class="game-title">
+                                  SLOTS GALAXY
+                                  <span class="status-badge coming-soon">COMING SOON</span>
+                              </h3>
+                              <p class="game-description">
+                                  Classic slot machines with modern jackpots
+                              </p>
+                              <div class="game-features">
+                                  <span class="feature-tag slots">🎯 Progressive</span>
+                                  <span class="feature-tag slots">💰 Jackpots</span>
+                                  <span class="feature-tag slots">🎁 Free Spins</span>
+                              </div>
+                          </div>
+                          <div class="game-action">
+                              <button class="play-btn slots coming-soon" id="slotsBtn">
+                                  SOON
+                              </button>
+                          </div>
                       </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Four Corners Bonus</span>
-                      </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Auto Start Games</span>
-                      </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Telebirr Payments</span>
+                      
+                      <!-- Poker Game (Coming Soon) -->
+                      <div class="game-card coming-soon" onclick="showComingSoon('poker')">
+                          <div class="game-icon poker-icon">
+                              ♠️
+                          </div>
+                          <div class="game-content">
+                              <h3 class="game-title">
+                                  POKER MASTERS
+                                  <span class="status-badge coming-soon">COMING SOON</span>
+                              </h3>
+                              <p class="game-description">
+                                  Texas Hold'em poker against real players
+                              </p>
+                              <div class="game-features">
+                                  <span class="feature-tag poker">🎯 Tournaments</span>
+                                  <span class="feature-tag poker">💰 High Stakes</span>
+                                  <span class="feature-tag poker">👑 Leaderboard</span>
+                              </div>
+                          </div>
+                          <div class="game-action">
+                              <button class="play-btn poker coming-soon" id="pokerBtn">
+                                  SOON
+                              </button>
+                          </div>
                       </div>
                   </div>
               </div>
@@ -2159,9 +2496,80 @@ app.get('/telegram', async (req, res) => {
               </div>
           </div>
           
+          <!-- Deposit Modal -->
+          <div class="modal-overlay" id="depositModal">
+              <div class="modal">
+                  <div class="modal-header">
+                      <h2 class="modal-title">💳 DEPOSIT FUNDS</h2>
+                      <button class="close-btn" onclick="closeDepositModal()">×</button>
+                  </div>
+                  <div class="telebirr-info">
+                      <div>Send money to Telebirr:</div>
+                      <div class="telebirr-number" id="modalTelebirrNumber">${telebirrNumber}</div>
+                      <div style="font-size: 0.7rem; color: #94a3b8;">Min deposit: ${minDeposit} ETB</div>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Amount (ETB)</label>
+                      <div class="amount-buttons">
+                          <button class="amount-btn" onclick="setAmount(50)">50 ETB</button>
+                          <button class="amount-btn" onclick="setAmount(100)">100 ETB</button>
+                          <button class="amount-btn" onclick="setAmount(200)">200 ETB</button>
+                          <button class="amount-btn" onclick="setAmount(500)">500 ETB</button>
+                          <button class="amount-btn" onclick="setAmount(1000)">1000 ETB</button>
+                          <button class="amount-btn" onclick="setAmount(2000)">2000 ETB</button>
+                      </div>
+                      <input type="number" class="form-input" id="depositAmount" placeholder="Enter amount" min="${minDeposit}" step="10">
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Telebirr Receipt Number</label>
+                      <input type="text" class="form-input" id="receiptNumber" placeholder="Enter receipt number">
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Your Phone Number</label>
+                      <input type="text" class="form-input" id="phoneNumber" placeholder="09xxxxxxxx" value="" maxlength="10">
+                  </div>
+                  <div class="message" id="depositMessage"></div>
+                  <button class="submit-btn" onclick="submitDeposit()">SUBMIT DEPOSIT</button>
+              </div>
+          </div>
+          
+          <!-- Withdraw Modal -->
+          <div class="modal-overlay" id="withdrawModal">
+              <div class="modal">
+                  <div class="modal-header">
+                      <h2 class="modal-title">💰 WITHDRAW FUNDS</h2>
+                      <button class="close-btn" onclick="closeWithdrawModal()">×</button>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Amount (ETB)</label>
+                      <div class="amount-buttons">
+                          <button class="amount-btn" onclick="setWithdrawAmount(50)">50 ETB</button>
+                          <button class="amount-btn" onclick="setWithdrawAmount(100)">100 ETB</button>
+                          <button class="amount-btn" onclick="setWithdrawAmount(200)">200 ETB</button>
+                          <button class="amount-btn" onclick="setWithdrawAmount(500)">500 ETB</button>
+                          <button class="amount-btn" onclick="setWithdrawAmount(1000)">1000 ETB</button>
+                          <button class="amount-btn" onclick="setWithdrawAmount(2000)">2000 ETB</button>
+                      </div>
+                      <input type="number" class="form-input" id="withdrawAmount" placeholder="Enter amount" min="${minWithdrawal}" step="10">
+                      <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 5px;">Min withdrawal: ${minWithdrawal} ETB</div>
+                  </div>
+                  <div class="form-group">
+                      <label class="form-label">Telebirr Phone Number</label>
+                      <input type="text" class="form-input" id="withdrawPhone" placeholder="09xxxxxxxx" maxlength="10">
+                  </div>
+                  <div class="message" id="withdrawMessage"></div>
+                  <button class="submit-btn" onclick="submitWithdraw()">REQUEST WITHDRAWAL</button>
+              </div>
+          </div>
+          
           <script>
               const tg = window.Telegram.WebApp;
+              const socket = io();
+              let currentUserId = null;
+              let currentUserName = null;
+              let currentTelegramId = null;
               
+              // Initialize Telegram Web App
               if (tg) {
                   tg.ready();
                   tg.expand();
@@ -2172,18 +2580,76 @@ app.get('/telegram', async (req, res) => {
                   const user = tg.initDataUnsafe?.user;
                   
                   if (user) {
-                      document.getElementById('userGreeting').style.display = 'flex';
-                      document.getElementById('userName').textContent = user.first_name || 'User';
+                      currentTelegramId = user.id;
+                      currentUserName = user.first_name || 'User';
                       
-                      localStorage.setItem('telegramUser', JSON.stringify({
-                          id: user.id,
-                          firstName: user.first_name,
-                          username: user.username,
-                          languageCode: user.language_code
-                      }));
+                      document.getElementById('userGreeting').style.display = 'flex';
+                      document.getElementById('userName').textContent = currentUserName;
+                      
+                      // Request user data from server
+                      socket.emit('telegram:getUserData', { telegramId: currentTelegramId });
                   }
               }
               
+              // Socket event handlers for Telegram entry page
+              socket.on('telegram:userData', (data) => {
+                  currentUserId = data.userId;
+                  document.getElementById('walletBalance').textContent = data.balance.toFixed(2) + ' ETB';
+              });
+              
+              socket.on('telegram:userDataError', (error) => {
+                  console.error('Error getting user data:', error);
+              });
+              
+              socket.on('balanceUpdate', (data) => {
+                  if (data.userId === currentUserId) {
+                      document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
+                      
+                      // Show update notification
+                      showMessage('depositMessage', 'Balance updated successfully!', 'success');
+                  }
+              });
+              
+              socket.on('depositResponse', (data) => {
+                  if (data.success) {
+                      showMessage('depositMessage', 'Deposit request submitted! Admin will approve within 24 hours.', 'success');
+                      document.getElementById('depositAmount').value = '';
+                      document.getElementById('receiptNumber').value = '';
+                      document.getElementById('phoneNumber').value = '';
+                      
+                      // Update balance if available
+                      if (data.newBalance) {
+                          document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
+                      }
+                      
+                      setTimeout(() => {
+                          closeDepositModal();
+                      }, 3000);
+                  } else {
+                      showMessage('depositMessage', data.message || 'Deposit failed', 'error');
+                  }
+              });
+              
+              socket.on('withdrawResponse', (data) => {
+                  if (data.success) {
+                      showMessage('withdrawMessage', 'Withdrawal request submitted! Admin will process within 24 hours.', 'success');
+                      document.getElementById('withdrawAmount').value = '';
+                      document.getElementById('withdrawPhone').value = '';
+                      
+                      // Update balance if available
+                      if (data.newBalance) {
+                          document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
+                      }
+                      
+                      setTimeout(() => {
+                          closeWithdrawModal();
+                      }, 3000);
+                  } else {
+                      showMessage('withdrawMessage', data.message || 'Withdrawal failed', 'error');
+                  }
+              });
+              
+              // Game launching functions
               function launchGame(game) {
                   if (tg && tg.HapticFeedback) {
                       tg.HapticFeedback.impactOccurred('light');
@@ -2194,6 +2660,121 @@ app.get('/telegram', async (req, res) => {
                   } else if (game === 'keno') {
                       window.location.href = '/keno';
                   }
+              }
+              
+              function showComingSoon(game) {
+                  if (tg) {
+                      tg.showPopup({
+                          title: 'Coming Soon!',
+                          message: 'This game is currently in development. Stay tuned for updates!',
+                          buttons: [{ type: 'ok' }]
+                      });
+                  } else {
+                      alert('Coming Soon!\\n\\nThis game is currently in development. Stay tuned for updates!');
+                  }
+              }
+              
+              // Wallet modal functions
+              function openDepositModal() {
+                  document.getElementById('depositModal').style.display = 'flex';
+                  document.getElementById('modalTelebirrNumber').textContent = '${telebirrNumber}';
+                  if (tg && tg.HapticFeedback) {
+                      tg.HapticFeedback.impactOccurred('light');
+                  }
+              }
+              
+              function closeDepositModal() {
+                  document.getElementById('depositModal').style.display = 'none';
+                  document.getElementById('depositMessage').style.display = 'none';
+              }
+              
+              function openWithdrawModal() {
+                  document.getElementById('withdrawModal').style.display = 'flex';
+                  if (tg && tg.HapticFeedback) {
+                      tg.HapticFeedback.impactOccurred('light');
+                  }
+              }
+              
+              function closeWithdrawModal() {
+                  document.getElementById('withdrawModal').style.display = 'none';
+                  document.getElementById('withdrawMessage').style.display = 'none';
+              }
+              
+              // Amount setting functions
+              function setAmount(amount) {
+                  document.getElementById('depositAmount').value = amount;
+              }
+              
+              function setWithdrawAmount(amount) {
+                  document.getElementById('withdrawAmount').value = amount;
+              }
+              
+              // Form submission functions
+              function submitDeposit() {
+                  const amount = parseFloat(document.getElementById('depositAmount').value);
+                  const receiptNumber = document.getElementById('receiptNumber').value.trim();
+                  const phoneNumber = document.getElementById('phoneNumber').value.trim();
+                  
+                  if (!amount || amount < ${minDeposit}) {
+                      showMessage('depositMessage', \`Minimum deposit is ${minDeposit} ETB\`, 'error');
+                      return;
+                  }
+                  
+                  if (!receiptNumber) {
+                      showMessage('depositMessage', 'Please enter receipt number', 'error');
+                      return;
+                  }
+                  
+                  if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+                      showMessage('depositMessage', 'Please enter valid phone number (09xxxxxxxx)', 'error');
+                      return;
+                  }
+                  
+                  // Submit deposit request
+                  socket.emit('telegram:depositRequest', {
+                      userId: currentUserId,
+                      userName: currentUserName,
+                      amount: amount,
+                      receiptNumber: receiptNumber,
+                      phoneNumber: phoneNumber,
+                      description: \`Deposit via Telegram entry page: \${receiptNumber}\`
+                  });
+                  
+                  showMessage('depositMessage', 'Processing deposit request...', 'info');
+              }
+              
+              function submitWithdraw() {
+                  const amount = parseFloat(document.getElementById('withdrawAmount').value);
+                  const phoneNumber = document.getElementById('withdrawPhone').value.trim();
+                  
+                  if (!amount || amount < ${minWithdrawal}) {
+                      showMessage('withdrawMessage', \`Minimum withdrawal is ${minWithdrawal} ETB\`, 'error');
+                      return;
+                  }
+                  
+                  if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+                      showMessage('withdrawMessage', 'Please enter valid phone number (09xxxxxxxx)', 'error');
+                      return;
+                  }
+                  
+                  // Submit withdrawal request
+                  socket.emit('telegram:withdrawRequest', {
+                      userId: currentUserId,
+                      userName: currentUserName,
+                      amount: amount,
+                      phoneNumber: phoneNumber,
+                      description: \`Withdrawal via Telegram entry page to \${phoneNumber}\`
+                  });
+                  
+                  showMessage('withdrawMessage', 'Processing withdrawal request...', 'info');
+              }
+              
+              // Utility functions
+              function showMessage(elementId, message, type) {
+                  const element = document.getElementById(elementId);
+                  element.textContent = message;
+                  element.className = 'message ' + type + '-message';
+                  element.style.display = 'block';
               }
               
               function showHelp() {
@@ -2212,11 +2793,11 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Wallet Information',
-                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n🎮 Play: @Ethio_elite_games_bot',
+                          message: '💳 Deposit to: ${telebirrNumber}\\\\n💰 Min deposit: ${minDeposit} ETB\\\\n💰 Min withdrawal: ${minWithdrawal} ETB\\\\n🎮 Play: @Ethio_elite_games_bot',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @Ethio_elite_games_bot');
+                      alert('Wallet Information\\\\n\\\\n💳 Deposit to: ${telebirrNumber}\\n💰 Min deposit: ${minDeposit} ETB\\n💰 Min withdrawal: ${minWithdrawal} ETB\\n🎮 Play: @Ethio_elite_games_bot');
                   }
               }
               
@@ -2224,17 +2805,15 @@ app.get('/telegram', async (req, res) => {
                   if (tg) {
                       tg.showPopup({
                           title: 'Terms & Conditions',
-                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @Ethio_elite_games_bot for support',
+                          message: '• Must be 18+ to play\\\\n• Play responsibly\\\\n• Admin decisions are final\\\\n• Contact @Ethio_elite_games_bot for support\\\\n• All transactions are final\\\\n• Verification may be required',
                           buttons: [{ type: 'ok' }]
                       });
                   } else {
-                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @Ethio_elite_games_bot for support');
+                      alert('Terms & Conditions\\\\n\\\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @Ethio_elite_games_bot for support\\n• All transactions are final\\n• Verification may be required');
                   }
               }
               
-              document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
-              document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
-              
+              // Set up Telegram Main Button if available
               if (tg && tg.MainButton) {
                   tg.MainButton.setText('🎮 PLAY GAMES');
                   tg.MainButton.show();
@@ -2263,6 +2842,14 @@ app.get('/telegram', async (req, res) => {
               document.querySelectorAll('.game-card').forEach((card, index) => {
                   card.style.animation = \`slideIn 0.4s ease \${index * 0.1}s both\`;
               });
+              
+              // Close modals when clicking outside
+              window.onclick = function(event) {
+                  if (event.target.classList.contains('modal-overlay')) {
+                      closeDepositModal();
+                      closeWithdrawModal();
+                  }
+              }
           </script>
       </body>
       </html>
@@ -2466,6 +3053,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       
       const telebirrNumber = await getTelebirrNumber();
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+      const minDeposit = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 10;
       
       // Check for referral parameter in start command
       const referralMatch = text.match(/\/start ref_(\w+)/);
@@ -2502,11 +3090,15 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                   `🎯 *Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection game\n\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+                  `• 🎰 **SLOTS GALAXY** - Classic slots (Coming Soon)\n` +
+                  `• ♠️ **POKER MASTERS** - Texas Hold'em (Coming Soon)\n\n` +
                   `💳 *Wallet Instructions:*\n` +
                   `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Enter receipt number in game wallet\n` +
-                  `3. Admin will approve within 24 hours\n\n` +
+                  `3. Admin will approve within 24 hours\n` +
+                  `4. Min deposit: ${minDeposit} ETB\n` +
+                  `5. Min withdrawal: ${minWithdrawal} ETB\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2518,6 +3110,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                 {
                   text: '🎰 Play Keno',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/keno' }
+                }
+              ], [
+                {
+                  text: '💰 Open Wallet',
+                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
                 }
               ]]
             }
@@ -2553,7 +3150,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `1. Send money to Telebirr: *${telebirrNumber}*\n` +
                   `2. Open game and go to Wallet (💰 button)\n` +
                   `3. Enter receipt number and amount\n` +
-                  `4. Admin will approve within 24 hours\n\n` +
+                  `4. Admin will approve within 24 hours\n` +
+                  `5. Min deposit: ${minDeposit} ETB\n\n` +
                   `*How to Withdraw:*\n` +
                   `1. Minimum withdrawal: ${minWithdrawal} ETB\n` +
                   `2. Open game Wallet\n` +
@@ -2564,7 +3162,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             reply_markup: {
               inline_keyboard: [[
                 {
-                  text: '🎮 Open Games',
+                  text: '💰 Open Wallet',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
                 }
               ]]
@@ -2611,7 +3209,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *ETHIO GAMES Help*\n\n` +
                   `*Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection (NEW)\n\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number selection (NEW)\n` +
+                  `• 🎰 **SLOTS GALAXY** - Classic slots (Coming Soon)\n` +
+                  `• ♠️ **POKER MASTERS** - Texas Hold'em (Coming Soon)\n\n` +
                   `*Commands:*\n` +
                   `/start - Start the bot\n` +
                   `/play - Play games\n` +
@@ -2621,6 +3221,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `/help - This message\n\n` +
                   `💳 *Wallet:*\n` +
                   `Deposit to Telebirr: *${telebirrNumber}*\n` +
+                  `Min deposit: ${minDeposit} ETB\n` +
                   `Min withdrawal: ${minWithdrawal} ETB\n\n` +
                   `_Need help? Contact admin_`,
             parse_mode: 'Markdown'
@@ -2641,7 +3242,12 @@ app.get('/setup-telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
+    const minDeposit = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 10;
+    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
+      totalAgents: 0, 
+      activeAgents: 0, 
+      totalCommissions: 0 
+    };
     
     const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
       method: 'POST',
@@ -2681,6 +3287,7 @@ app.get('/setup-telegram', async (req, res) => {
           .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
           .agent-highlight { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
           .game-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
+          .new-features { background: rgba(239, 68, 68, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(239, 68, 68, 0.3); }
         </style>
       </head>
       <body>
@@ -2689,12 +3296,25 @@ app.get('/setup-telegram', async (req, res) => {
           <div class="success">✓ Webhook Configured</div>
           <div class="success">✓ Menu Button Set</div>
           <div class="success">✓ Agent System Active</div>
+          <div class="success">✓ 4 Games Available (2 Active, 2 Coming Soon)</div>
           
           <div class="telebirr-highlight">
             <h3>📱 TELEBIRR PAYMENT NUMBER (DATABASE PERSISTED)</h3>
             <div class="telebirr-number">${telebirrNumber}</div>
             <p>This number is stored in MongoDB and will survive server restarts.</p>
             <p>Admin can update it in Admin Panel → Settings</p>
+          </div>
+          
+          <div class="new-features">
+            <h3>🎮 NEW FEATURES ADDED</h3>
+            <p><strong>✅ Telegram Entry Page Now Has:</strong></p>
+            <p>1. 📱 <strong>Wallet System</strong> - Full deposit/withdraw functionality</p>
+            <p>2. 🎮 <strong>4 Games Total</strong> - 2 active, 2 coming soon</p>
+            <p>3. 💰 <strong>Real-time Balance Updates</strong></p>
+            <p>4. 📱 <strong>Telebirr Integration</strong> - Same as main games</p>
+            <p><strong>New Games (Coming Soon):</strong></p>
+            <p>• 🎰 SLOTS GALAXY - Classic slot machines</p>
+            <p>• ♠️ POKER MASTERS - Texas Hold'em poker</p>
           </div>
           
           <div class="agent-highlight">
@@ -2707,13 +3327,6 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Commission Rates:</strong></p>
             <p>• Bingo wins: 40% commission</p>
             <p>• Keno wins: 10% commission</p>
-            <p><strong>Agent Features:</strong></p>
-            <p>• Real-time commission tracking</p>
-            <p>• Agent dashboard with statistics</p>
-            <p>• Referral link generation</p>
-            <p>• Agent withdrawal system</p>
-            <p>• Super admin management panel</p>
-            <p>• Agent leaderboard</p>
           </div>
           
           <div class="game-highlight">
@@ -2724,8 +3337,6 @@ app.get('/setup-telegram', async (req, res) => {
             <p>• 20 numbers drawn per round</p>
             <p>• 30-second automatic rounds</p>
             <p>• Payouts: Match 3=1x, Match 4=5x, Match 5=50x</p>
-            <p>• Real-time multiplayer with all players seeing same numbers</p>
-            <p>• 5% house commission</p>
           </div>
           
           <div class="info-box">
@@ -2740,16 +3351,13 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Games Available:</strong></p>
             <p>1. 🎱 <strong>BINGO ELITE:</strong> Real-time multiplayer bingo</p>
             <p>2. 🎰 <strong>KENO ULTRA:</strong> Fast number selection game</p>
+            <p>3. 🎰 <strong>SLOTS GALAXY:</strong> Classic slots (Coming Soon)</p>
+            <p>4. ♠️ <strong>POKER MASTERS:</strong> Texas Hold'em (Coming Soon)</p>
             <p><strong>Wallet Features:</strong></p>
             <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
+            <p>• Minimum Deposit: ${minDeposit} ETB</p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
-            <p><strong>Agent Features:</strong></p>
-            <p>• 40% commission from Bingo wins</p>
-            <p>• 10% commission from Keno wins</p>
-            <p>• Real-time commission tracking</p>
-            <p>• Weekly withdrawal processing</p>
-            <p>• Referral link with unique code</p>
           </div>
           
           <div>
@@ -2757,6 +3365,7 @@ app.get('/setup-telegram', async (req, res) => {
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
             <a href="/agent" class="btn" style="background: #f59e0b;" target="_blank">Test Agent Portal</a>
             <a href="/keno" class="btn" style="background: #8b5cf6;" target="_blank">Test Keno Game</a>
+            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">Test Telegram Entry (NEW)</a>
           </div>
           
           <div style="margin-top: 30px; text-align: left;">
@@ -2765,26 +3374,16 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Open @Ethio_elite_games_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
-              <li>Choose between Bingo or Keno!</li>
+              <li>You'll see the new Telegram entry page with wallet and 4 games!</li>
             </ol>
             
-            <h4>Agent System Instructions:</h4>
+            <h4>New Features on Telegram Entry Page:</h4>
             <ol>
-              <li>Open Agent Portal (/agent)</li>
-              <li>Login with agent credentials (contact admin)</li>
-              <li>Generate referral link</li>
-              <li>Share link with friends</li>
-              <li>Earn 40% from Bingo, 10% from Keno wins</li>
-              <li>Request withdrawal when you have earnings</li>
+              <li><strong>Wallet System:</strong> Full deposit/withdraw functionality</li>
+              <li><strong>4 Games:</strong> Bingo, Keno, Slots (Coming Soon), Poker (Coming Soon)</li>
+              <li><strong>Real-time Balance:</strong> See your balance without entering games</li>
+              <li><strong>Telebirr Integration:</strong> Same payment system as main games</li>
             </ol>
-            
-            <h4>Default Admin Agent:</h4>
-            <ul>
-              <li>Username: admin</li>
-              <li>Password: admin123</li>
-              <li>Referral Code: ADMIN001</li>
-              <li>Can create new agents in admin panel</li>
-            </ul>
           </div>
         </div>
       </body>
@@ -3034,3 +3633,4 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
+[file content end]
