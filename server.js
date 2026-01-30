@@ -1,5 +1,3 @@
-[file name]: server.js
-[file content begin]
 // server.js - BINGO ELITE + KENO ULTRA + AGENT SYSTEM - TELEGRAM MINI APP - MAIN SERVER FILE
 require('dotenv').config();
 const express = require('express');
@@ -3633,4 +3631,3 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
-[file content end]
