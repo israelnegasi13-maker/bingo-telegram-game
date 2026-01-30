@@ -118,6 +118,32 @@
             letter-spacing: 0.2px;
         }
         
+        /* Back Button for Telegram */
+        .telegram-back-btn {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+            transition: all 0.3s ease;
+            margin-right: 8px;
+            display: none; /* Hidden by default, shown via JS */
+        }
+        
+        .telegram-back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(-2px);
+        }
+        
+        .telegram-back-btn i {
+            font-size: 14px;
+        }
+        
         /* User Info - Compact */
         .user-info {
             display: flex;
@@ -132,6 +158,13 @@
             padding: 6px 8px;
             min-width: 70px;
             text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .balance-card:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateY(-1px);
         }
         
         .balance-label {
@@ -175,6 +208,24 @@
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
+        
+        /* Reconnect Button */
+        .reconnect-btn {
+            margin-left: auto;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 5px;
+            padding: 4px 8px;
+            font-size: 8px;
+            color: var(--keno-blue);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: none;
+        }
+        
+        .reconnect-btn:hover {
+            background: rgba(59, 130, 246, 0.3);
         }
         
         /* Game Container - Compact */
@@ -1005,10 +1056,16 @@
         <div class="connection-status" id="connection-status">
             <div class="status-dot"></div>
             <span id="status-text">CONNECTING...</span>
+            <button class="reconnect-btn" id="manual-reconnect">RECONNECT</button>
         </div>
         
         <!-- Header -->
         <header class="app-header">
+            <!-- Telegram Back Button -->
+            <div class="telegram-back-btn" id="telegram-back">
+                <i class="fas fa-arrow-left"></i>
+            </div>
+            
             <div class="logo-section">
                 <div class="logo-icon">
                     🎰
@@ -1019,7 +1076,7 @@
                 </div>
             </div>
             <div class="user-info">
-                <div class="balance-card">
+                <div class="balance-card" id="balance-card">
                     <div class="balance-label">BALANCE</div>
                     <div class="balance-amount" id="balance">0 ETB</div>
                 </div>
@@ -1152,7 +1209,7 @@
             <p>KENO ULTRA • SELECT 1-5 NUMBERS • 5,10,20,50,100 ETB BETS ONLY</p>
             <p style="margin-top: 3px; font-size: 7px; color: rgba(148, 163, 184, 0.7);">
                 <i class="fas fa-shield-alt" style="margin-right: 3px;"></i>
-                All players see same numbers • 5% commission
+                All players see same numbers • 5% commission • Auto-reconnect enabled
             </p>
         </footer>
     </div>
@@ -1239,7 +1296,12 @@
             isAutoSelectApplied: false,
             roundStatus: 'waiting', // 'waiting', 'betting', 'drawing', 'completed'
             joinedDuringDraw: false, // Track if player joined during a draw
-            isRandomOrderDraw: false // Track if draw is in random order
+            isRandomOrderDraw: false, // Track if draw is in random order
+            reconnectToken: null,
+            isReconnecting: false,
+            lastStateSave: 0,
+            heartbeatInterval: null,
+            autoSaveInterval: null
         };
         
         // DOM Elements
@@ -1264,6 +1326,7 @@
             historyList: document.getElementById('history-list'),
             connectionStatus: document.getElementById('connection-status'),
             statusText: document.getElementById('status-text'),
+            manualReconnect: document.getElementById('manual-reconnect'),
             controlPanel: document.getElementById('control-panel'),
             waitingMessage: document.getElementById('waiting-message'),
             confirmationModal: document.getElementById('confirmation-modal'),
@@ -1280,7 +1343,11 @@
             // Ball counter elements
             ballCounter: document.getElementById('ball-counter'),
             currentBall: document.getElementById('current-ball'),
-            totalBalls: document.getElementById('total-balls')
+            totalBalls: document.getElementById('total-balls'),
+            
+            // Telegram back button
+            telegramBackBtn: document.getElementById('telegram-back'),
+            balanceCard: document.getElementById('balance-card')
         };
         
         // Initialize Game
@@ -1290,6 +1357,9 @@
             tg.expand();
             tg.setHeaderColor('#2563eb');
             tg.setBackgroundColor('#0f172a');
+            
+            // Setup Telegram Back Button
+            setupTelegramBackButton();
             
             // Get user data from Telegram
             const user = tg.initDataUnsafe?.user;
@@ -1317,9 +1387,33 @@
                 }
             }
             
+            // Try to restore previous state
+            try {
+                const savedState = localStorage.getItem(`kenoState_${gameState.playerId}`);
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+                    
+                    // Only restore if within last hour
+                    if (state.lastSave && state.lastSave > oneHourAgo) {
+                        gameState.selectedNumbers = state.selectedNumbers || [];
+                        gameState.betAmount = state.betAmount || 5;
+                        
+                        console.log('🔁 Restored previous game state from localStorage');
+                    }
+                }
+            } catch (e) {
+                console.log('No previous state to restore');
+            }
+            
             createNumberGrid();
             setupEventListeners();
             connectSocketIO();
+            startHeartbeat();
+            startAutoSave();
+            
+            // Setup network monitoring
+            setupNetworkMonitoring();
             
             // Prevent zoom on double tap
             document.addEventListener('touchstart', (e) => {
@@ -1333,6 +1427,24 @@
                 e.preventDefault();
                 return false;
             });
+        }
+        
+        // Setup Telegram Back Button
+        function setupTelegramBackButton() {
+            // Show Telegram's native back button
+            if (tg && tg.BackButton) {
+                tg.BackButton.show();
+                tg.BackButton.onClick(() => {
+                    // Close the app or go back
+                    tg.close();
+                });
+                
+                // Also show our custom back button for consistency
+                elements.telegramBackBtn.style.display = 'flex';
+                elements.telegramBackBtn.addEventListener('click', () => {
+                    tg.close();
+                });
+            }
         }
         
         // Create Number Grid
@@ -1381,6 +1493,9 @@
                     gameState.betAmount = parseInt(this.dataset.value);
                     elements.currentBet.textContent = gameState.betAmount;
                     
+                    // Save state for reconnection
+                    saveStateForReconnection();
+                    
                     // Update button text based on selection status
                     updatePlayButtonState();
                     
@@ -1417,9 +1532,16 @@
             }, { passive: false });
             
             // Refresh balance button
-            document.querySelector('.balance-card').addEventListener('click', () => {
+            elements.balanceCard.addEventListener('click', () => {
                 if (gameState.socket && gameState.socket.connected) {
                     gameState.socket.emit('keno:getBalance');
+                }
+            });
+            
+            // Manual Reconnect Button
+            elements.manualReconnect.addEventListener('click', () => {
+                if (!gameState.isConnected) {
+                    connectSocketIO();
                 }
             });
             
@@ -1438,6 +1560,7 @@
                 if (document.visibilityState === 'visible') {
                     // Reconnect if disconnected
                     if (!gameState.isConnected || !gameState.socket || !gameState.socket.connected) {
+                        console.log('Page visible again, checking connection...');
                         connectSocketIO();
                     }
                 }
@@ -1492,7 +1615,7 @@
             elements.confirmationModal.classList.add('active');
         }
         
-        // Socket.IO Connection
+        // Socket.IO Connection with reconnection support
         function connectSocketIO() {
             try {
                 // Disconnect existing socket if any
@@ -1502,13 +1625,23 @@
                 
                 updateConnectionStatus(false, 'CONNECTING...');
                 
+                // Get reconnect token if exists
+                const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`) || null;
+                const isReconnect = !!reconnectToken;
+                
                 // Connect with Socket.IO
                 gameState.socket = io(SOCKET_URL, {
                     transports: ['websocket', 'polling'],
                     reconnection: true,
-                    reconnectionAttempts: 5,
+                    reconnectionAttempts: 10, // Increased attempts
                     reconnectionDelay: 1000,
-                    timeout: 10000
+                    reconnectionDelayMax: 5000,
+                    timeout: 15000,
+                    query: {
+                        userId: gameState.playerId,
+                        reconnectToken: reconnectToken,
+                        isReconnect: isReconnect
+                    }
                 });
                 
                 // Setup event handlers
@@ -1516,6 +1649,10 @@
                 gameState.socket.on('disconnect', handleSocketDisconnect);
                 gameState.socket.on('connect_error', handleSocketError);
                 gameState.socket.on('reconnect', handleSocketReconnect);
+                gameState.socket.on('reconnecting', (attemptNumber) => {
+                    console.log(`Reconnecting attempt ${attemptNumber}`);
+                    updateConnectionStatus(false, `RECONNECTING (${attemptNumber}/10)...`);
+                });
                 
                 // Keno game events
                 gameState.socket.on('keno:welcome', handleWelcome);
@@ -1546,15 +1683,25 @@
                         vibrate(100);
                     }
                 });
-                
-                // Handle draw state when joining during a draw
                 gameState.socket.on('keno:draw_state', handleDrawState);
+                
+                // NEW: Reconnection events
+                gameState.socket.on('keno:reconnected', handleReconnected);
+                gameState.socket.on('keno:reconnect_success', handleReconnectSuccess);
+                gameState.socket.on('keno:reconnect_failed', handleReconnectFailed);
+                gameState.socket.on('keno:selectionsRestored', handleSelectionsRestored);
+                
+                // Heartbeat response
+                gameState.socket.on('pong', () => {
+                    // Connection is alive
+                    lastPong = Date.now();
+                });
                 
             } catch (error) {
                 console.error('Failed to connect:', error);
                 updateConnectionStatus(false, 'CONNECTION FAILED');
                 showNotification('Connection failed. Retrying...', 'error');
-                setTimeout(connectSocketIO, 5000);
+                setTimeout(connectSocketIO, 3000);
             }
         }
         
@@ -1564,21 +1711,20 @@
             gameState.isConnected = true;
             updateConnectionStatus(true, 'CONNECTED');
             
-            // Authenticate with server
+            // Authenticate with server (include reconnect info)
+            const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`);
             gameState.socket.emit('keno:auth', {
                 userId: gameState.playerId,
-                userName: gameState.userName
+                userName: gameState.userName,
+                reconnectToken: reconnectToken,
+                isReconnect: !!reconnectToken
             });
             
             // Join Keno room
             gameState.socket.emit('keno:join');
             
-            // Start heartbeat
-            setInterval(() => {
-                if (gameState.socket && gameState.socket.connected) {
-                    gameState.socket.emit('ping');
-                }
-            }, 25000);
+            // Clear reconnect flag
+            gameState.isReconnecting = false;
             
             vibrate(100);
             showNotification('Connected to Keno server!', 'info');
@@ -1589,11 +1735,20 @@
             gameState.isConnected = true;
             updateConnectionStatus(true, 'RECONNECTED');
             
-            // Re-authenticate
-            gameState.socket.emit('keno:auth', {
-                userId: gameState.playerId,
-                userName: gameState.userName
-            });
+            // Try to reconnect with token
+            const reconnectToken = localStorage.getItem(`kenoReconnectToken_${gameState.playerId}`);
+            if (reconnectToken) {
+                gameState.socket.emit('keno:reconnect', {
+                    userId: gameState.playerId,
+                    reconnectToken: reconnectToken
+                });
+            } else {
+                // Fallback to normal auth
+                gameState.socket.emit('keno:auth', {
+                    userId: gameState.playerId,
+                    userName: gameState.userName
+                });
+            }
             
             showNotification('Reconnected to server!', 'info');
         }
@@ -1603,15 +1758,25 @@
             gameState.isConnected = false;
             updateConnectionStatus(false, 'DISCONNECTED');
             
-            // Clear any ongoing animations
-            clearAllTimeouts();
+            // Save current state for reconnection
+            saveStateForReconnection();
             
-            // Try to reconnect after 3 seconds
+            // Show reconnect button after delay
             setTimeout(() => {
                 if (!gameState.isConnected) {
-                    connectSocketIO();
+                    elements.manualReconnect.style.display = 'block';
                 }
             }, 3000);
+            
+            // Try to reconnect after delay
+            const reconnectDelay = reason === 'io server disconnect' ? 5000 : 2000;
+            
+            setTimeout(() => {
+                if (!gameState.isConnected) {
+                    console.log('Attempting auto-reconnect...');
+                    connectSocketIO();
+                }
+            }, reconnectDelay);
             
             showNotification('Disconnected. Reconnecting...', 'warning');
         }
@@ -1622,10 +1787,55 @@
             showNotification('Connection error', 'error');
         }
         
-        // Clear all timeouts to prevent memory leaks
-        function clearAllTimeouts() {
-            // This would need to track all timeouts, but for now we'll just note it
-            console.log('Clearing game timeouts...');
+        // NEW: Reconnection Event Handlers
+        function handleReconnected(data) {
+            console.log('Successfully reconnected to game');
+            gameState.isReconnecting = false;
+            
+            showNotification(data.message || 'Successfully reconnected!', 'success');
+            
+            // If state was restored, update UI
+            if (data.restoredState && data.restoredSelections) {
+                updateSelectedNumbersDisplay(data.restoredSelections);
+                showNotification('Your previous selections have been restored', 'info');
+            }
+            
+            // Update game state
+            if (data.round) gameState.currentRound = data.round;
+            if (data.roundActive !== undefined) gameState.roundActive = data.roundActive;
+            if (data.hasBet !== undefined) gameState.hasBetInCurrentRound = data.hasBet;
+        }
+        
+        function handleReconnectSuccess(data) {
+            console.log('Manual reconnection successful');
+            gameState.isReconnecting = false;
+            updateConnectionStatus(true, 'CONNECTED');
+            showNotification(data.message || 'Reconnection successful!', 'success');
+        }
+        
+        function handleReconnectFailed(data) {
+            console.log('Reconnection failed:', data.message);
+            gameState.isReconnecting = false;
+            
+            // Clear invalid token
+            localStorage.removeItem(`kenoReconnectToken_${gameState.playerId}`);
+            
+            // Try normal auth
+            gameState.socket.emit('keno:auth', {
+                userId: gameState.playerId,
+                userName: gameState.userName
+            });
+            
+            showNotification('Reconnection failed. Connecting as new user...', 'warning');
+        }
+        
+        function handleSelectionsRestored(data) {
+            if (data.numbers && data.numbers.length > 0) {
+                updateSelectedNumbersDisplay(data.numbers);
+                if (data.message) {
+                    showNotification(data.message, 'info');
+                }
+            }
         }
         
         // Game Message Handlers
@@ -1642,11 +1852,43 @@
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
             gameState.joinedDuringDraw = false; // Reset this flag
             gameState.isRandomOrderDraw = data.willBeRandomOrder || false;
+            gameState.reconnectToken = data.reconnectToken || null;
+            
+            // Store reconnect token
+            if (gameState.reconnectToken) {
+                localStorage.setItem(`kenoReconnectToken_${gameState.playerId}`, gameState.reconnectToken);
+            }
+            
+            // Restore selections if provided
+            if (data.restoredState && data.selectedNumbers && data.selectedNumbers.length > 0) {
+                gameState.selectedNumbers = data.selectedNumbers;
+                gameState.betAmount = data.currentBet || gameState.betAmount;
+                gameState.hasPlacedBet = data.hasPlacedBet || false;
+            }
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
             updatePlayersCount(gameState.playersCount, data.totalBets || 0);
             updateCountdown(gameState.countdown);
+            
+            // Update selections in UI
+            if (gameState.selectedNumbers.length > 0) {
+                updateSelectedNumbersDisplay(gameState.selectedNumbers);
+            }
+            
+            // Update bet amount
+            if (data.currentBet) {
+                gameState.betAmount = data.currentBet;
+                elements.currentBet.textContent = gameState.betAmount;
+                
+                // Update chip selection
+                document.querySelectorAll('.chip').forEach(chip => {
+                    chip.classList.remove('selected');
+                    if (parseInt(chip.dataset.value) === gameState.betAmount) {
+                        chip.classList.add('selected');
+                    }
+                });
+            }
             
             // Show/hide waiting message based on player count
             if (gameState.playersCount === 0) {
@@ -1673,6 +1915,9 @@
                 // Draw is in progress - we'll handle this with draw_state event
                 // Don't display numbers here to avoid double display
             }
+            
+            // Update play button state
+            updatePlayButtonState();
         }
         
         function handleRoundStart(data) {
@@ -1699,22 +1944,24 @@
             elements.winResult.style.display = 'none';
             elements.waitingMessage.classList.remove('active');
             
-            // Reset stake to default (5 ETB)
-            gameState.betAmount = 5;
-            elements.currentBet.textContent = gameState.betAmount;
-            
-            // Reset chip selection
-            document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-            document.querySelector('.chip[data-value="5"]').classList.add('selected');
+            // Reset stake to default (5 ETB) unless player has selections
+            if (gameState.selectedNumbers.length === 0) {
+                gameState.betAmount = 5;
+                elements.currentBet.textContent = gameState.betAmount;
+                
+                // Reset chip selection
+                document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+                document.querySelector('.chip[data-value="5"]').classList.add('selected');
+            }
             
             // Reset play button
             updatePlayButtonState();
             
-            // Clear number selections
-            clearSelection();
-            
             // Show notification
             showNotification(`ROUND ${gameState.currentRound} STARTED! PLACE YOUR BET`, 'info');
+            
+            // Save state after round start
+            saveStateForReconnection();
         }
         
         function handleDrawStart(data) {
@@ -1845,6 +2092,9 @@
             } else {
                 elements.waitingMessage.classList.remove('active');
             }
+            
+            // Clear saved state after round completion
+            localStorage.removeItem(`kenoState_${gameState.playerId}`);
         }
         
         function handlePersonalResult(data) {
@@ -1878,6 +2128,18 @@
             // Reset for next round
             gameState.hasPlacedBet = false;
             gameState.hasBetInCurrentRound = false;
+            
+            // Clear saved selections
+            gameState.selectedNumbers = [];
+            gameState.betAmount = 5;
+            updateSelectedNumbersDisplay([]);
+            
+            // Update chip selection
+            document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+            document.querySelector('.chip[data-value="5"]').classList.add('selected');
+            
+            // Clear saved state
+            localStorage.removeItem(`kenoState_${gameState.playerId}`);
         }
         
         function showWinResult(data) {
@@ -1909,6 +2171,9 @@
             if (gameState.playersCount > 0) {
                 elements.waitingMessage.classList.remove('active');
             }
+            
+            // Clear saved state since bet is placed
+            localStorage.removeItem(`kenoState_${gameState.playerId}`);
         }
         
         function handleAutoSelect(data) {
@@ -1920,6 +2185,9 @@
             
             gameState.isAutoSelectApplied = true;
             showNotification(`Auto-selected ${data.selectionCount} numbers for this round!`, 'info');
+            
+            // Save state
+            saveStateForReconnection();
         }
         
         function handleQuickPickNumbers(data) {
@@ -1934,6 +2202,9 @@
             });
             
             showNotification(`QUICK PICK: ${data.numbers.length} NUMBERS`, 'info');
+            
+            // Save state
+            saveStateForReconnection();
         }
         
         function updateGameState(data) {
@@ -1951,6 +2222,12 @@
             gameState.hasBetInCurrentRound = data.hasBetInCurrentRound || false;
             gameState.roundStatus = data.isRoundActive ? 'betting' : (data.isDrawComplete ? 'completed' : 'waiting');
             gameState.isRandomOrderDraw = data.wasRandomOrder || false;
+            
+            // Store reconnect token if provided
+            if (data.reconnectToken) {
+                gameState.reconnectToken = data.reconnectToken;
+                localStorage.setItem(`kenoReconnectToken_${gameState.playerId}`, data.reconnectToken);
+            }
             
             updateBalanceDisplay(gameState.balance);
             updateRoundNumber(gameState.currentRound);
@@ -2024,6 +2301,9 @@
                     // Update play button state
                     updatePlayButtonState();
                     
+                    // Save state for reconnection
+                    saveStateForReconnection();
+                    
                     vibrate(30);
                 } else {
                     showNotification(`Maximum ${gameState.MAX_SELECTIONS} numbers allowed`, 'warning');
@@ -2035,6 +2315,9 @@
                 
                 // Update play button state
                 updatePlayButtonState();
+                
+                // Save state for reconnection
+                saveStateForReconnection();
                 
                 vibrate(30);
             }
@@ -2080,6 +2363,9 @@
             // Reset play button
             updatePlayButtonState();
             
+            // Save state for reconnection
+            saveStateForReconnection();
+            
             vibrate(50);
         }
         
@@ -2124,11 +2410,24 @@
                 return;
             }
             
+            // Send state to server for reconnection safety
+            if (gameState.socket.connected) {
+                gameState.socket.emit('keno:saveState', {
+                    userId: gameState.playerId,
+                    selectedNumbers: gameState.selectedNumbers,
+                    betAmount: gameState.betAmount,
+                    roundNumber: gameState.currentRound
+                });
+            }
+            
             // Send bet to server
             gameState.socket.emit('keno:placeBet', {
                 numbers: gameState.selectedNumbers,
                 betAmount: gameState.betAmount
             });
+            
+            // Clear saved state since bet is being placed
+            localStorage.removeItem(`kenoState_${gameState.playerId}`);
         }
         
         // Display Functions
@@ -2379,6 +2678,7 @@
                 elements.connectionStatus.style.borderColor = 'rgba(16, 185, 129, 0.2)';
                 elements.connectionStatus.style.color = 'var(--success-color)';
                 elements.statusText.textContent = message;
+                elements.manualReconnect.style.display = 'none';
             } else {
                 elements.connectionStatus.style.background = 'rgba(239, 68, 68, 0.1)';
                 elements.connectionStatus.style.borderColor = 'rgba(239, 68, 68, 0.2)';
@@ -2409,13 +2709,86 @@
             }, 3000);
         }
         
+        // Save state for reconnection
+        function saveStateForReconnection() {
+            // Only save if round is active and player hasn't placed bet
+            if (gameState.roundActive && !gameState.hasPlacedBet && gameState.selectedNumbers.length > 0) {
+                const state = {
+                    selectedNumbers: gameState.selectedNumbers,
+                    betAmount: gameState.betAmount,
+                    currentRound: gameState.currentRound,
+                    lastSave: Date.now()
+                };
+                
+                localStorage.setItem(`kenoState_${gameState.playerId}`, JSON.stringify(state));
+                
+                // Also send to server if connected
+                if (gameState.socket && gameState.socket.connected) {
+                    gameState.socket.emit('keno:saveState', {
+                        userId: gameState.playerId,
+                        selectedNumbers: gameState.selectedNumbers,
+                        betAmount: gameState.betAmount,
+                        roundNumber: gameState.currentRound
+                    });
+                }
+                
+                gameState.lastStateSave = Date.now();
+            }
+        }
+        
+        // Start heartbeat system
+        function startHeartbeat() {
+            if (gameState.heartbeatInterval) {
+                clearInterval(gameState.heartbeatInterval);
+            }
+            
+            gameState.heartbeatInterval = setInterval(() => {
+                if (gameState.socket && gameState.socket.connected) {
+                    // Send ping to keep connection alive
+                    gameState.socket.emit('ping', { timestamp: Date.now() });
+                }
+            }, 25000); // Every 25 seconds
+        }
+        
+        // Start auto-save
+        function startAutoSave() {
+            if (gameState.autoSaveInterval) {
+                clearInterval(gameState.autoSaveInterval);
+            }
+            
+            gameState.autoSaveInterval = setInterval(() => {
+                if (gameState.roundActive && !gameState.hasPlacedBet && gameState.selectedNumbers.length > 0) {
+                    saveStateForReconnection();
+                }
+            }, 10000); // Save every 10 seconds
+        }
+        
+        // Setup network monitoring
+        function setupNetworkMonitoring() {
+            window.addEventListener('online', () => {
+                console.log('Network connection restored');
+                showNotification('Network connection restored. Reconnecting...', 'info');
+                
+                if (!gameState.isConnected) {
+                    connectSocketIO();
+                }
+            });
+            
+            window.addEventListener('offline', () => {
+                console.log('Network connection lost');
+                showNotification('Network connection lost. Attempting to reconnect...', 'warning');
+                updateConnectionStatus(false, 'NETWORK LOST');
+            });
+        }
+        
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', initGame);
         
         // Auto-reconnect if connection is lost
         setInterval(() => {
-            if (!gameState.isConnected) {
+            if (!gameState.isConnected && !gameState.isReconnecting) {
                 console.log('Attempting to reconnect...');
+                gameState.isReconnecting = true;
                 connectSocketIO();
             }
         }, 10000);
