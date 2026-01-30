@@ -455,330 +455,6 @@ io.engine.on("connection_error", (err) => {
   console.log('Socket.IO connection error:', err.req, err.code, err.message, err.context);
 });
 
-// ========== WALLET AND TRANSACTION HANDLERS ==========
-// Handle deposit request from users
-async function handleDeposit(socket, data) {
-  try {
-    const { userId, receiptNumber, amount, userName, phoneNumber } = data;
-    
-    // Check if receipt already exists
-    const existingTransaction = await Transaction.findOne({ 
-      receiptNumber, 
-      type: 'DEPOSIT' 
-    });
-    
-    if (existingTransaction) {
-      socket.emit('depositResponse', {
-        success: false,
-        message: 'This receipt number has already been used'
-      });
-      return;
-    }
-    
-    // Create deposit transaction
-    const transaction = new Transaction({
-      type: 'DEPOSIT',
-      userId,
-      userName,
-      amount: parseFloat(amount),
-      receiptNumber,
-      phoneNumber,
-      description: `Deposit request via Telebirr - Receipt: ${receiptNumber}`,
-      status: 'pending'
-    });
-    
-    await transaction.save();
-    
-    // Notify admin about new deposit
-    io.emit('admin:newDeposit', {
-      transactionId: transaction._id,
-      userId,
-      userName,
-      amount: parseFloat(amount),
-      receiptNumber,
-      phoneNumber,
-      timestamp: new Date()
-    });
-    
-    socket.emit('depositResponse', {
-      success: true,
-      message: 'Deposit request submitted! Admin will approve within 24 hours.',
-      transactionId: transaction._id
-    });
-    
-    console.log(`💰 Deposit request from ${userName} (${userId}): ${amount} ETB`);
-    
-  } catch (error) {
-    console.error('Error handling deposit:', error);
-    socket.emit('depositResponse', {
-      success: false,
-      message: 'Error processing deposit request'
-    });
-  }
-}
-
-// Handle withdrawal request from users
-async function handleWithdraw(socket, data) {
-  try {
-    const { userId, amount, phoneNumber, userName } = data;
-    
-    // Check user balance
-    const user = await User.findOne({ userId });
-    if (!user) {
-      socket.emit('withdrawResponse', {
-        success: false,
-        message: 'User not found'
-      });
-      return;
-    }
-    
-    if (user.balance < parseFloat(amount)) {
-      socket.emit('withdrawResponse', {
-        success: false,
-        message: 'Insufficient balance'
-      });
-      return;
-    }
-    
-    // Create withdrawal transaction
-    const transaction = new Transaction({
-      type: 'WITHDRAWAL',
-      userId,
-      userName,
-      amount: parseFloat(amount),
-      phoneNumber,
-      description: `Withdrawal request to ${phoneNumber}`,
-      status: 'pending'
-    });
-    
-    await transaction.save();
-    
-    // Notify admin about new withdrawal
-    io.emit('admin:newWithdrawal', {
-      transactionId: transaction._id,
-      userId,
-      userName,
-      amount: parseFloat(amount),
-      phoneNumber,
-      currentBalance: user.balance,
-      timestamp: new Date()
-    });
-    
-    socket.emit('withdrawResponse', {
-      success: true,
-      message: 'Withdrawal request submitted! Admin will process within 24 hours.',
-      transactionId: transaction._id
-    });
-    
-    console.log(`💸 Withdrawal request from ${userName} (${userId}): ${amount} ETB to ${phoneNumber}`);
-    
-  } catch (error) {
-    console.error('Error handling withdrawal:', error);
-    socket.emit('withdrawResponse', {
-      success: false,
-      message: 'Error processing withdrawal request'
-    });
-  }
-}
-
-// Approve deposit (admin only)
-async function approveDeposit(transactionId, adminId) {
-  try {
-    const transaction = await Transaction.findById(transactionId);
-    if (!transaction) {
-      throw new Error('Transaction not found');
-    }
-    
-    if (transaction.status !== 'pending') {
-      throw new Error('Transaction already processed');
-    }
-    
-    // Find user
-    const user = await User.findOne({ userId: transaction.userId });
-    if (!user) {
-      throw new Error('User not found');
-    }
-    
-    // Update user balance
-    user.balance += transaction.amount;
-    await user.save();
-    
-    // Update transaction
-    transaction.status = 'approved';
-    transaction.approvedBy = adminId;
-    transaction.approvedAt = new Date();
-    await transaction.save();
-    
-    // Notify user
-    const userSocket = Array.from(io.sockets.sockets.values()).find(
-      socket => socket.userId === transaction.userId
-    );
-    if (userSocket) {
-      userSocket.emit('depositApproved', {
-        amount: transaction.amount,
-        newBalance: user.balance,
-        transactionId: transaction._id
-      });
-    }
-    
-    // Update admin panel
-    io.emit('admin:depositApproved', {
-      transactionId: transaction._id,
-      userId: transaction.userId,
-      userName: transaction.userName,
-      amount: transaction.amount,
-      approvedBy: adminId
-    });
-    
-    console.log(`✅ Deposit approved: ${transaction.userName} +${transaction.amount} ETB`);
-    
-    return { success: true, transaction, user };
-  } catch (error) {
-    console.error('Error approving deposit:', error);
-    throw error;
-  }
-}
-
-// Approve withdrawal (admin only)
-async function approveWithdrawal(transactionId, adminId) {
-  try {
-    const transaction = await Transaction.findById(transactionId);
-    if (!transaction) {
-      throw new Error('Transaction not found');
-    }
-    
-    if (transaction.status !== 'pending') {
-      throw new Error('Transaction already processed');
-    }
-    
-    // Find user
-    const user = await User.findOne({ userId: transaction.userId });
-    if (!user) {
-      throw new Error('User not found');
-    }
-    
-    // Check if user has enough balance (double-check)
-    if (user.balance < transaction.amount) {
-      transaction.status = 'rejected';
-      transaction.approvedBy = adminId;
-      transaction.approvedAt = new Date();
-      await transaction.save();
-      throw new Error('User has insufficient balance');
-    }
-    
-    // Update user balance
-    user.balance -= transaction.amount;
-    await user.save();
-    
-    // Update transaction
-    transaction.status = 'approved';
-    transaction.approvedBy = adminId;
-    transaction.approvedAt = new Date();
-    await transaction.save();
-    
-    // Notify user
-    const userSocket = Array.from(io.sockets.sockets.values()).find(
-      socket => socket.userId === transaction.userId
-    );
-    if (userSocket) {
-      userSocket.emit('withdrawalApproved', {
-        amount: transaction.amount,
-        newBalance: user.balance,
-        transactionId: transaction._id
-      });
-    }
-    
-    // Update admin panel
-    io.emit('admin:withdrawalApproved', {
-      transactionId: transaction._id,
-      userId: transaction.userId,
-      userName: transaction.userName,
-      amount: transaction.amount,
-      phoneNumber: transaction.phoneNumber,
-      approvedBy: adminId
-    });
-    
-    console.log(`✅ Withdrawal approved: ${transaction.userName} -${transaction.amount} ETB to ${transaction.phoneNumber}`);
-    
-    return { success: true, transaction, user };
-  } catch (error) {
-    console.error('Error approving withdrawal:', error);
-    throw error;
-  }
-}
-
-// Reject transaction (admin only)
-async function rejectTransaction(transactionId, adminId, reason = 'Rejected by admin') {
-  try {
-    const transaction = await Transaction.findById(transactionId);
-    if (!transaction) {
-      throw new Error('Transaction not found');
-    }
-    
-    if (transaction.status !== 'pending') {
-      throw new Error('Transaction already processed');
-    }
-    
-    // Update transaction
-    transaction.status = 'rejected';
-    transaction.approvedBy = adminId;
-    transaction.approvedAt = new Date();
-    transaction.description += ` - ${reason}`;
-    await transaction.save();
-    
-    // Notify user
-    const userSocket = Array.from(io.sockets.sockets.values()).find(
-      socket => socket.userId === transaction.userId
-    );
-    if (userSocket) {
-      if (transaction.type === 'DEPOSIT') {
-        userSocket.emit('depositRejected', {
-          amount: transaction.amount,
-          reason: reason,
-          transactionId: transaction._id
-        });
-      } else if (transaction.type === 'WITHDRAWAL') {
-        userSocket.emit('withdrawalRejected', {
-          amount: transaction.amount,
-          reason: reason,
-          transactionId: transaction._id
-        });
-      }
-    }
-    
-    // Update admin panel
-    io.emit('admin:transactionRejected', {
-      transactionId: transaction._id,
-      userId: transaction.userId,
-      userName: transaction.userName,
-      type: transaction.type,
-      amount: transaction.amount,
-      rejectedBy: adminId,
-      reason: reason
-    });
-    
-    console.log(`❌ Transaction rejected: ${transaction.userName} ${transaction.type} ${transaction.amount} ETB - ${reason}`);
-    
-    return { success: true, transaction };
-  } catch (error) {
-    console.error('Error rejecting transaction:', error);
-    throw error;
-  }
-}
-
-// Get pending transactions
-async function getPendingTransactions() {
-  try {
-    const transactions = await Transaction.find({ status: 'pending' })
-      .sort({ createdAt: -1 })
-      .limit(50);
-    return transactions;
-  } catch (error) {
-    console.error('Error getting pending transactions:', error);
-    return [];
-  }
-}
-
 // ========== MIDDLEWARE ==========
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -935,10 +611,6 @@ io.on('connection', (socket) => {
       const telebirrNumber = await getTelebirrNumber();
       socket.emit('admin:telebirrNumber', telebirrNumber);
       
-      // Send pending transactions
-      const pendingTransactions = await getPendingTransactions();
-      socket.emit('admin:pendingTransactions', pendingTransactions);
-      
       // Send Keno stats
       if (kenoLogic && kenoLogic.getKenoGameStats) {
         const kenoStats = kenoLogic.getKenoGameStats();
@@ -957,59 +629,268 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ADMIN TRANSACTION HANDLING ==========
-  socket.on('admin:getPendingTransactions', async () => {
-    if (socket.admin) {
-      try {
-        const transactions = await getPendingTransactions();
-        socket.emit('admin:pendingTransactions', transactions);
-      } catch (error) {
-        socket.emit('admin:error', error.message);
+  // ========== TELEGRAM WALLET AUTHENTICATION ==========
+  socket.on('telegram:auth', async (data) => {
+    try {
+      const { userId, userName, telegramId, telegramUsername } = data;
+      
+      if (!userId) {
+        socket.emit('telegram:authError', 'User ID is required');
+        return;
+      }
+      
+      // Find or create user
+      let user = await User.findOne({ userId: userId });
+      
+      if (!user) {
+        user = new User({
+          userId: userId,
+          userName: userName || 'Telegram User',
+          balance: 0.00,
+          referralCode: `TG${Date.now()}`,
+          telegramId: telegramId || null,
+          telegramUsername: telegramUsername || null,
+          isOnline: true,
+          lastSeen: new Date()
+        });
+        await user.save();
+        console.log(`👤 New Telegram user created: ${userName} (${userId})`);
+      } else {
+        // Update user online status
+        user.isOnline = true;
+        user.lastSeen = new Date();
+        user.sessionCount += 1;
+        await user.save();
+      }
+      
+      socket.userId = userId;
+      socket.userName = userName;
+      socket.emit('telegram:authSuccess', {
+        userId: userId,
+        userName: userName,
+        balance: user.balance,
+        telegramId: user.telegramId,
+        phoneNumber: user.phoneNumber || ''
+      });
+      
+      console.log(`✅ Telegram user authenticated: ${userName} (${userId})`);
+      
+    } catch (error) {
+      console.error('Telegram auth error:', error);
+      socket.emit('telegram:authError', error.message || 'Authentication failed');
+    }
+  });
+  
+  // ========== TELEGRAM WALLET BALANCE REQUEST ==========
+  socket.on('telegram:getBalance', async (data, callback) => {
+    try {
+      const userId = data.userId || socket.userId;
+      
+      if (!userId) {
+        if (callback) callback({ error: 'User ID is required' });
+        else socket.emit('telegram:balanceError', 'User ID is required');
+        return;
+      }
+      
+      const user = await User.findOne({ userId: userId });
+      
+      if (!user) {
+        if (callback) callback({ error: 'User not found' });
+        else socket.emit('telegram:balanceError', 'User not found');
+        return;
+      }
+      
+      const balanceData = {
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        telegramId: user.telegramId,
+        phoneNumber: user.phoneNumber || '',
+        lastSeen: user.lastSeen
+      };
+      
+      if (callback) {
+        callback(balanceData);
+      } else {
+        socket.emit('telegram:balance', balanceData);
+      }
+      
+    } catch (error) {
+      console.error('Get balance error:', error);
+      if (callback) {
+        callback({ error: error.message || 'Failed to get balance' });
+      } else {
+        socket.emit('telegram:balanceError', error.message || 'Failed to get balance');
       }
     }
   });
   
-  socket.on('admin:approveDeposit', async (transactionId) => {
-    if (socket.admin) {
-      try {
-        const result = await approveDeposit(transactionId, socket.id);
-        socket.emit('admin:depositApproved', result);
-      } catch (error) {
-        socket.emit('admin:error', error.message);
+  // ========== TELEGRAM DEPOSIT REQUEST ==========
+  socket.on('telegram:depositRequest', async (data) => {
+    try {
+      const { userId, receiptNumber, amount, userName } = data;
+      
+      if (!userId || !receiptNumber || !amount || !userName) {
+        socket.emit('telegram:depositResponse', {
+          success: false,
+          message: 'Missing required fields'
+        });
+        return;
       }
+      
+      const user = await User.findOne({ userId: userId });
+      
+      if (!user) {
+        socket.emit('telegram:depositResponse', {
+          success: false,
+          message: 'User not found'
+        });
+        return;
+      }
+      
+      // Check if receipt number already exists
+      const existingTransaction = await Transaction.findOne({ 
+        receiptNumber: receiptNumber,
+        type: 'DEPOSIT'
+      });
+      
+      if (existingTransaction) {
+        socket.emit('telegram:depositResponse', {
+          success: false,
+          message: 'Receipt number already used'
+        });
+        return;
+      }
+      
+      // Create deposit transaction
+      const transaction = new Transaction({
+        type: 'DEPOSIT',
+        userId: userId,
+        userName: userName,
+        amount: amount,
+        receiptNumber: receiptNumber,
+        description: `Deposit via Telegram wallet: ${receiptNumber}`,
+        status: 'pending',
+        createdAt: new Date()
+      });
+      
+      await transaction.save();
+      
+      socket.emit('telegram:depositResponse', {
+        success: true,
+        message: 'Deposit request submitted successfully. Admin will approve within 24 hours.',
+        transactionId: transaction._id,
+        amount: amount,
+        receiptNumber: receiptNumber
+      });
+      
+      // Notify admin about pending deposit
+      io.emit('admin:pendingTransaction', {
+        type: 'DEPOSIT',
+        transactionId: transaction._id,
+        userId: userId,
+        userName: userName,
+        amount: amount,
+        receiptNumber: receiptNumber,
+        createdAt: new Date()
+      });
+      
+      console.log(`📥 Telegram deposit request: ${userName} - ${amount} ETB (${receiptNumber})`);
+      
+    } catch (error) {
+      console.error('Telegram deposit error:', error);
+      socket.emit('telegram:depositResponse', {
+        success: false,
+        message: error.message || 'Deposit request failed'
+      });
     }
   });
   
-  socket.on('admin:approveWithdrawal', async (transactionId) => {
-    if (socket.admin) {
-      try {
-        const result = await approveWithdrawal(transactionId, socket.id);
-        socket.emit('admin:withdrawalApproved', result);
-      } catch (error) {
-        socket.emit('admin:error', error.message);
+  // ========== TELEGRAM WITHDRAWAL REQUEST ==========
+  socket.on('telegram:withdrawRequest', async (data) => {
+    try {
+      const { userId, amount, phoneNumber, userName } = data;
+      
+      if (!userId || !amount || !phoneNumber || !userName) {
+        socket.emit('telegram:withdrawResponse', {
+          success: false,
+          message: 'Missing required fields'
+        });
+        return;
       }
-    }
-  });
-  
-  socket.on('admin:rejectTransaction', async (data) => {
-    if (socket.admin) {
-      try {
-        const { transactionId, reason } = data;
-        const result = await rejectTransaction(transactionId, socket.id, reason);
-        socket.emit('admin:transactionRejected', result);
-      } catch (error) {
-        socket.emit('admin:error', error.message);
+      
+      const user = await User.findOne({ userId: userId });
+      
+      if (!user) {
+        socket.emit('telegram:withdrawResponse', {
+          success: false,
+          message: 'User not found'
+        });
+        return;
       }
+      
+      // Check minimum withdrawal amount
+      const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+      
+      if (amount < minWithdrawal) {
+        socket.emit('telegram:withdrawResponse', {
+          success: false,
+          message: `Minimum withdrawal is ${minWithdrawal} ETB`
+        });
+        return;
+      }
+      
+      // Check if user has sufficient balance
+      if (user.balance < amount) {
+        socket.emit('telegram:withdrawResponse', {
+          success: false,
+          message: `Insufficient balance. Available: ${user.balance.toFixed(2)} ETB`
+        });
+        return;
+      }
+      
+      // Create withdrawal transaction
+      const transaction = new Transaction({
+        type: 'WITHDRAWAL',
+        userId: userId,
+        userName: userName,
+        amount: amount,
+        phoneNumber: phoneNumber,
+        description: `Withdrawal request via Telegram wallet to ${phoneNumber}`,
+        status: 'pending',
+        createdAt: new Date()
+      });
+      
+      await transaction.save();
+      
+      socket.emit('telegram:withdrawResponse', {
+        success: true,
+        message: 'Withdrawal request submitted successfully. Admin will process within 24 hours.',
+        transactionId: transaction._id,
+        amount: amount,
+        phoneNumber: phoneNumber
+      });
+      
+      // Notify admin about pending withdrawal
+      io.emit('admin:pendingTransaction', {
+        type: 'WITHDRAWAL',
+        transactionId: transaction._id,
+        userId: userId,
+        userName: userName,
+        amount: amount,
+        phoneNumber: phoneNumber,
+        createdAt: new Date()
+      });
+      
+      console.log(`📤 Telegram withdrawal request: ${userName} - ${amount} ETB to ${phoneNumber}`);
+      
+    } catch (error) {
+      console.error('Telegram withdrawal error:', error);
+      socket.emit('telegram:withdrawResponse', {
+        success: false,
+        message: error.message || 'Withdrawal request failed'
+      });
     }
-  });
-  
-  // ========== USER WALLET TRANSACTIONS ==========
-  socket.on('depositRequest', async (data) => {
-    await handleDeposit(socket, data);
-  });
-  
-  socket.on('withdrawRequest', async (data) => {
-    await handleWithdraw(socket, data);
   });
   
   // ========== AGENT SYSTEM SOCKET EVENTS ==========
@@ -1420,11 +1301,72 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('admin:getPendingTransactions', async () => {
+    if (socket.admin && gameLogic && gameLogic.handleAdminGetPendingTransactions) {
+      await gameLogic.handleAdminGetPendingTransactions(socket);
+    }
+  });
+  
+  socket.on('admin:approveDeposit', (transactionId) => {
+    if (socket.admin && gameLogic && gameLogic.handleAdminApproveDeposit) {
+      gameLogic.handleAdminApproveDeposit(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:approveWithdrawal', (transactionId) => {
+    if (socket.admin && gameLogic && gameLogic.handleAdminApproveWithdrawal) {
+      gameLogic.handleAdminApproveWithdrawal(socket, transactionId);
+    }
+  });
+  
+  socket.on('admin:rejectTransaction', (transactionId) => {
+    if (socket.admin && gameLogic && gameLogic.handleAdminRejectTransaction) {
+      gameLogic.handleAdminRejectTransaction(socket, transactionId);
+    }
+  });
+  
   // ========== KENO GAME SOCKET EVENTS ==========
   // Handle Keno socket connection
   if (kenoLogic && kenoLogic.handleKenoConnection) {
     kenoLogic.handleKenoConnection(socket);
   }
+  
+  // ========== DISCONNECT HANDLER ==========
+  socket.on('disconnect', () => {
+    console.log(`🔌 Disconnected: ${socket.id}`);
+    clearTimeout(authTimeout);
+    
+    if (socket.admin) {
+      console.log(`🔑 Admin disconnected: ${socket.id}`);
+    }
+    
+    // Handle player disconnect in game logic
+    if (gameLogic && gameLogic.handleDisconnect) {
+      gameLogic.handleDisconnect(socket);
+    }
+    
+    // Handle Keno disconnection
+    if (kenoLogic && kenoLogic.handleKenoDisconnect) {
+      kenoLogic.handleKenoDisconnect(socket);
+    }
+    
+    // Handle Agent disconnection
+    if (agentSystem && agentSystem.handleAgentDisconnect) {
+      agentSystem.handleAgentDisconnect(socket);
+    }
+    
+    // Handle Telegram user disconnect
+    if (socket.userId) {
+      // Update user offline status
+      User.findOneAndUpdate(
+        { userId: socket.userId },
+        { 
+          isOnline: false,
+          lastSeen: new Date()
+        }
+      ).catch(err => console.error('Error updating user offline status:', err));
+    }
+  });
   
   // ========== GAME EVENTS (FORWARDED TO GAME LOGIC) ==========
   socket.on('join', (data) => {
@@ -1456,6 +1398,18 @@ io.on('connection', (socket) => {
     }
   });
   
+  socket.on('depositRequest', (data) => {
+    if (gameLogic && gameLogic.handleDepositRequest) {
+      gameLogic.handleDepositRequest(socket, data);
+    }
+  });
+  
+  socket.on('withdrawRequest', (data) => {
+    if (gameLogic && gameLogic.handleWithdrawRequest) {
+      gameLogic.handleWithdrawRequest(socket, data);
+    }
+  });
+  
   socket.on('getUserData', (data) => {
     if (gameLogic && gameLogic.handleGetUserData) {
       gameLogic.handleGetUserData(socket, data);
@@ -1476,31 +1430,6 @@ io.on('connection', (socket) => {
       if (callback) {
         callback({ telebirrNumber: '0962577855' });
       }
-    }
-  });
-  
-  // ========== DISCONNECT HANDLER ==========
-  socket.on('disconnect', () => {
-    console.log(`🔌 Disconnected: ${socket.id}`);
-    clearTimeout(authTimeout);
-    
-    if (socket.admin) {
-      console.log(`🔑 Admin disconnected: ${socket.id}`);
-    }
-    
-    // Handle player disconnect in game logic
-    if (gameLogic && gameLogic.handleDisconnect) {
-      gameLogic.handleDisconnect(socket);
-    }
-    
-    // Handle Keno disconnection
-    if (kenoLogic && kenoLogic.handleKenoDisconnect) {
-      kenoLogic.handleKenoDisconnect(socket);
-    }
-    
-    // Handle Agent disconnection
-    if (agentSystem && agentSystem.handleAgentDisconnect) {
-      agentSystem.handleAgentDisconnect(socket);
     }
   });
   
@@ -1669,21 +1598,16 @@ app.get('/', async (req, res) => {
             </div>
             
             <div class="fix-highlight">
-              <h3 style="color: #10b981;">✅ WALLET SYSTEM - NOW WORKING</h3>
+              <h3 style="color: #10b981;">✅ WALLET SYSTEM - FULLY FUNCTIONAL</h3>
               <p style="color: #94a3b8;">
-                <strong>Deposit/Withdrawal Features:</strong><br>
-                1. ✅ Telebirr integration (${telebirrNumber})<br>
-                2. ✅ Deposit requests with receipt validation<br>
-                3. ✅ Withdrawal requests with balance checks<br>
-                4. ✅ Admin approval system for transactions<br>
-                5. ✅ Real-time balance updates<br>
-                6. ✅ Transaction history tracking<br>
-                7. ✅ Pending transactions queue<br>
-              </p>
-              <p style="color: #fbbf24;">
-                <strong>Wallet Status:</strong> ✅ Fully Functional<br>
-                <strong>Min Deposit:</strong> ${gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10} ETB<br>
-                <strong>Min Withdrawal:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB
+                <strong>Telegram Wallet Features:</strong><br>
+                1. ✅ Real-time balance updates<br>
+                2. ✅ Deposit via Telebirr<br>
+                3. ✅ Withdrawal requests<br>
+                4. ✅ Transaction history<br>
+                5. ✅ Admin approval system<br>
+                6. ✅ Multiple payment methods<br>
+                7. ✅ Secure transactions<br>
               </p>
             </div>
             
@@ -1693,7 +1617,7 @@ app.get('/', async (req, res) => {
             <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
             <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
             <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
-            <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ ACTIVE & WORKING</p>
+            <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ ACTIVE</p>
             <p style="color: #f59e0b; margin-top: 10px;">👑 Agent System: ✅ ACTIVE</p>
             <p style="color: #8b5cf6; margin-top: 10px; font-weight: bold;">🎮 More Games Coming Soon: Lottery & Slots!</p>
           </div>
@@ -1733,7 +1657,7 @@ app.get('/', async (req, res) => {
               Keno Timer: ${kenoLogic.CONFIG ? kenoLogic.CONFIG.KENO_GAME_TIMER : 30}s rounds<br>
               Bot Username: @Ethio_elite_games_bot<br>
               Real-time Box Updates: ✅ ACTIVE<br>
-              <strong>WALLET SYSTEM: ✅ ACTIVE & WORKING</strong><br>
+              Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
               Agent System: ✅ ACTIVE (40% Bingo, 10% Keno commissions)<br>
               Referral System: ✅ ACTIVE (${usersWithAgents} users with agents)<br>
               <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
@@ -2854,8 +2778,10 @@ app.get('/telegram', async (req, res) => {
               const tg = window.Telegram.WebApp;
               const socket = io();
               let currentUserId = null;
+              let currentUserName = null;
               let currentBalance = 0;
               
+              // Initialize Telegram WebApp
               if (tg) {
                   tg.ready();
                   tg.expand();
@@ -2870,6 +2796,15 @@ app.get('/telegram', async (req, res) => {
                       document.getElementById('userName').textContent = user.first_name || 'User';
                       
                       currentUserId = 'tg_' + user.id;
+                      currentUserName = user.first_name || 'User';
+                      
+                      // Authenticate with server
+                      socket.emit('telegram:auth', {
+                          userId: currentUserId,
+                          userName: currentUserName,
+                          telegramId: user.id.toString(),
+                          telegramUsername: user.username
+                      });
                       
                       // Store user info
                       localStorage.setItem('telegramUser', JSON.stringify({
@@ -2889,20 +2824,39 @@ app.get('/telegram', async (req, res) => {
                   }
               }
               
-              async function loadUserBalance() {
+              // Handle authentication success
+              socket.on('telegram:authSuccess', (data) => {
+                  console.log('Telegram auth success:', data);
+                  currentUserId = data.userId;
+                  currentUserName = data.userName;
+                  currentBalance = data.balance || 0;
+                  
+                  document.getElementById('walletBalance').textContent = currentBalance.toFixed(2) + ' ETB';
+                  
+                  // Update withdrawal phone if available
+                  if (data.phoneNumber) {
+                      document.getElementById('withdrawPhone').value = data.phoneNumber;
+                  }
+              });
+              
+              // Handle authentication error
+              socket.on('telegram:authError', (error) => {
+                  console.error('Telegram auth error:', error);
+                  alert('Authentication failed: ' + error);
+              });
+              
+              // Load user balance
+              function loadUserBalance() {
                   if (!currentUserId) return;
                   
-                  try {
-                      const response = await fetch('/api/user/' + currentUserId);
-                      const data = await response.json();
-                      
-                      if (data.balance !== undefined) {
-                          currentBalance = data.balance;
-                          document.getElementById('walletBalance').textContent = data.balance.toFixed(2) + ' ETB';
+                  socket.emit('telegram:getBalance', { userId: currentUserId }, (response) => {
+                      if (response.error) {
+                          console.error('Error loading balance:', response.error);
+                      } else {
+                          currentBalance = response.balance || 0;
+                          document.getElementById('walletBalance').textContent = currentBalance.toFixed(2) + ' ETB';
                       }
-                  } catch (error) {
-                      console.error('Error loading balance:', error);
-                  }
+                  });
               }
               
               function launchGame(game) {
@@ -2911,9 +2865,9 @@ app.get('/telegram', async (req, res) => {
                   }
                   
                   if (game === 'bingo') {
-                      window.location.href = '/game';
+                      window.location.href = '/game?userId=' + encodeURIComponent(currentUserId);
                   } else if (game === 'keno') {
-                      window.location.href = '/keno';
+                      window.location.href = '/keno?userId=' + encodeURIComponent(currentUserId);
                   }
               }
               
@@ -2944,9 +2898,14 @@ app.get('/telegram', async (req, res) => {
               function openWithdrawModal() {
                   if (currentBalance < ${minWithdrawal}) {
                       showError('withdrawError', \`Minimum withdrawal is \${${minWithdrawal}} ETB. Your balance is \${currentBalance.toFixed(2)} ETB.\`);
+                      openWithdrawModalDirect();
                       return;
                   }
                   
+                  openWithdrawModalDirect();
+              }
+              
+              function openWithdrawModalDirect() {
                   document.getElementById('withdrawModal').style.display = 'flex';
                   document.getElementById('withdrawError').style.display = 'none';
                   document.getElementById('withdrawSuccess').style.display = 'none';
@@ -2978,34 +2937,30 @@ app.get('/telegram', async (req, res) => {
                   submitBtn.textContent = 'Processing...';
                   
                   // Send deposit request via socket
-                  socket.emit('depositRequest', {
+                  socket.emit('telegram:depositRequest', {
                       userId: currentUserId,
                       receiptNumber: receipt,
                       amount: amount,
-                      userName: document.getElementById('userName').textContent
+                      userName: currentUserName
                   });
+              }
+              
+              // Handle deposit response
+              socket.on('telegram:depositResponse', (response) => {
+                  const submitBtn = document.getElementById('depositSubmit');
                   
-                  // Handle response
-                  socket.once('depositResponse', (response) => {
-                      if (response.success) {
-                          showSuccess('depositSuccess', 'Deposit submitted! Admin will approve within 24 hours.');
-                          setTimeout(() => {
-                              closeDepositModal();
-                              loadUserBalance(); // Refresh balance
-                          }, 2000);
-                      } else {
-                          showError('depositError', response.message || 'Deposit failed');
-                          submitBtn.disabled = false;
-                          submitBtn.textContent = 'Submit Deposit';
-                      }
-                  });
-                  
-                  // Timeout fallback
-                  setTimeout(() => {
+                  if (response.success) {
+                      showSuccess('depositSuccess', 'Deposit submitted! Admin will approve within 24 hours.');
+                      setTimeout(() => {
+                          closeDepositModal();
+                          loadUserBalance(); // Refresh balance
+                      }, 2000);
+                  } else {
+                      showError('depositError', response.message || 'Deposit failed');
                       submitBtn.disabled = false;
                       submitBtn.textContent = 'Submit Deposit';
-                  }, 10000);
-              }
+                  }
+              });
               
               function submitWithdraw() {
                   const amount = parseFloat(document.getElementById('withdrawAmount').value);
@@ -3032,34 +2987,30 @@ app.get('/telegram', async (req, res) => {
                   submitBtn.textContent = 'Processing...';
                   
                   // Send withdrawal request via socket
-                  socket.emit('withdrawRequest', {
+                  socket.emit('telegram:withdrawRequest', {
                       userId: currentUserId,
                       amount: amount,
                       phoneNumber: phone,
-                      userName: document.getElementById('userName').textContent
+                      userName: currentUserName
                   });
+              }
+              
+              // Handle withdrawal response
+              socket.on('telegram:withdrawResponse', (response) => {
+                  const submitBtn = document.getElementById('withdrawSubmit');
                   
-                  // Handle response
-                  socket.once('withdrawResponse', (response) => {
-                      if (response.success) {
-                          showSuccess('withdrawSuccess', 'Withdrawal submitted! Admin will process within 24 hours.');
-                          setTimeout(() => {
-                              closeWithdrawModal();
-                              loadUserBalance(); // Refresh balance
-                          }, 2000);
-                      } else {
-                          showError('withdrawError', response.message || 'Withdrawal failed');
-                          submitBtn.disabled = false;
-                          submitBtn.textContent = 'Request Withdrawal';
-                      }
-                  });
-                  
-                  // Timeout fallback
-                  setTimeout(() => {
+                  if (response.success) {
+                      showSuccess('withdrawSuccess', 'Withdrawal submitted! Admin will process within 24 hours.');
+                      setTimeout(() => {
+                          closeWithdrawModal();
+                          loadUserBalance(); // Refresh balance
+                      }, 2000);
+                  } else {
+                      showError('withdrawError', response.message || 'Withdrawal failed');
                       submitBtn.disabled = false;
                       submitBtn.textContent = 'Request Withdrawal';
-                  }, 10000);
-              }
+                  }
+              });
               
               function showError(elementId, message) {
                   const element = document.getElementById(elementId);
@@ -3315,67 +3266,6 @@ app.get('/api/referral-stats', async (req, res) => {
         }
       }
     });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to get pending transactions (admin only)
-app.get('/api/admin/transactions/pending', async (req, res) => {
-  try {
-    const adminPassword = req.headers['x-admin-password'] || req.query.adminPassword;
-    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const transactions = await getPendingTransactions();
-    res.json({ success: true, transactions });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to approve deposit (admin only)
-app.post('/api/admin/transactions/:transactionId/approve-deposit', async (req, res) => {
-  try {
-    const adminPassword = req.headers['x-admin-password'] || req.query.adminPassword;
-    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const result = await approveDeposit(req.params.transactionId, 'API');
-    res.json({ success: true, ...result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to approve withdrawal (admin only)
-app.post('/api/admin/transactions/:transactionId/approve-withdrawal', async (req, res) => {
-  try {
-    const adminPassword = req.headers['x-admin-password'] || req.query.adminPassword;
-    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const result = await approveWithdrawal(req.params.transactionId, 'API');
-    res.json({ success: true, ...result });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to reject transaction (admin only)
-app.post('/api/admin/transactions/:transactionId/reject', async (req, res) => {
-  try {
-    const adminPassword = req.headers['x-admin-password'] || req.query.adminPassword;
-    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    
-    const { reason } = req.body;
-    const result = await rejectTransaction(req.params.transactionId, 'API', reason);
-    res.json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3674,7 +3564,6 @@ app.get('/setup-telegram', async (req, res) => {
             <p>• Minimum Deposit: ${minDeposit} ETB</p>
             <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
             <p>• Admin approval for all transactions</p>
-            <p><strong>Wallet Status: ✅ WORKING - Deposits and withdrawals now functional</strong></p>
           </div>
           
           <div class="info-box">
@@ -3703,8 +3592,6 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Click menu button (bottom left)</li>
               <li>Choose between Bingo or Keno!</li>
               <li>Check your wallet balance on the main screen</li>
-              <li>Deposit: Send to ${telebirrNumber}, enter receipt in game</li>
-              <li>Withdraw: Request in game, admin will send to your phone</li>
             </ol>
             
             <h4>Agent System Instructions:</h4>
@@ -3879,24 +3766,34 @@ app.get('/debug/referrals', async (req, res) => {
 app.get('/debug/transactions', async (req, res) => {
   try {
     const transactions = await Transaction.find().sort({ createdAt: -1 }).limit(50);
+    const pendingTransactions = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(20);
     
     res.json({
       totalTransactions: await Transaction.countDocuments(),
-      pendingTransactions: await Transaction.countDocuments({ status: 'pending' }),
-      approvedTransactions: await Transaction.countDocuments({ status: 'approved' }),
-      rejectedTransactions: await Transaction.countDocuments({ status: 'rejected' }),
+      pendingTransactions: pendingTransactions.length,
       transactions: transactions.map(t => ({
         id: t._id,
         type: t.type,
         userId: t.userId,
         userName: t.userName,
         amount: t.amount,
+        receiptNumber: t.receiptNumber,
+        phoneNumber: t.phoneNumber,
         status: t.status,
+        description: t.description,
+        createdAt: t.createdAt,
+        approvedBy: t.approvedBy,
+        approvedAt: t.approvedAt
+      })),
+      pending: pendingTransactions.map(t => ({
+        id: t._id,
+        type: t.type,
+        userId: t.userId,
+        userName: t.userName,
+        amount: t.amount,
         receiptNumber: t.receiptNumber,
         phoneNumber: t.phoneNumber,
         description: t.description,
-        approvedBy: t.approvedBy,
-        approvedAt: t.approvedAt,
         createdAt: t.createdAt
       }))
     });
@@ -3963,7 +3860,9 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Environment:  ${process.env.NODE_ENV || 'development'}                     ║
 ║  Bot Username: @Ethio_elite_games_bot                                       ║
 ║  Telebirr:     ${telebirrNumber}                                            ║
-║  Wallet:       ✅ DEPOSITS & WITHDRAWALS WORKING                           ║
+║  Wallet:       ✅ ACTIVE                                                    ║
+║  Agent System: ✅ ACTIVE                                                    ║
+║  Telegram:     ✅ READY                                                     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
