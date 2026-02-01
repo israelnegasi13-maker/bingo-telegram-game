@@ -1,3 +1,5 @@
+[file name]: admin.html
+[file content begin]
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1455,6 +1457,30 @@
         .transaction-withdrawal { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
         .transaction-win { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
         .transaction-agent { background: rgba(139, 92, 246, 0.15); color: var(--agent-color); }
+
+        /* Flash animation for new transactions */
+        .flash-row {
+            animation: flashAnimation 1s ease-in-out;
+        }
+
+        @keyframes flashAnimation {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgba(59, 130, 246, 0.2); }
+        }
+
+        /* Notification alert */
+        .notification-alert {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 2500;
+            animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -1469,7 +1495,7 @@
                     <div class="login-logo-text">Bingo Elite</div>
                 </div>
                 
-                <p class="login-subtitle">Admin Dashboard v4.0 - Agent System</p>
+                <p class="login-subtitle">Admin Dashboard v4.0 - Enhanced Wallet Notifications</p>
                 
                 <div class="input-group">
                     <i class="fas fa-key"></i>
@@ -1926,17 +1952,20 @@
                 </div>
             </div>
 
-            <!-- Wallet Approvals Section - UPDATED -->
+            <!-- Wallet Approvals Section - ENHANCED -->
             <div id="walletApprovalsSection" class="content-section">
                 <div class="table-card">
                     <div class="table-header">
-                        <h3>Wallet Approvals</h3>
+                        <h3>Wallet Approvals <span id="pendingAlert" class="badge warning blink" style="display: none;">NEW!</span></h3>
                         <div class="table-controls">
                             <button class="btn btn-primary" onclick="refreshPendingTransactions()">
                                 <i class="fas fa-sync"></i> Refresh
                             </button>
                             <button class="btn btn-secondary" onclick="showTransactionHistory()">
                                 <i class="fas fa-history"></i> View History
+                            </button>
+                            <button class="btn btn-warning" onclick="enableAutoRefresh()" id="autoRefreshBtn">
+                                <i class="fas fa-play-circle"></i> Auto-Refresh
                             </button>
                         </div>
                     </div>
@@ -1958,6 +1987,13 @@
                                     <option value="oldest">Oldest First</option>
                                     <option value="amount_high">Amount (High to Low)</option>
                                     <option value="amount_low">Amount (Low to High)</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Sound Alerts</label>
+                                <select class="filter-select" id="soundAlertToggle" onchange="toggleSoundAlerts()">
+                                    <option value="on">On</option>
+                                    <option value="off">Off</option>
                                 </select>
                             </div>
                         </div>
@@ -2541,6 +2577,7 @@
         const CONFIG = {
             SERVER_URL: "https://bingo-telegram-game.onrender.com",
             AUTO_REFRESH_INTERVAL: 3000,
+            WALLET_REFRESH_INTERVAL: 5000, // Check wallet every 5 seconds
             MAX_ACTIVITY_ITEMS: 15
         };
 
@@ -2568,11 +2605,18 @@
                 activeAgents: 0,
                 totalCommissions: 0,
                 referralUsers: 0
-            }
+            },
+            pendingTransactionIds: new Set(),
+            autoRefreshEnabled: true,
+            soundAlertsEnabled: true,
+            notificationAudio: null
         };
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize notification sound
+            initNotificationSound();
+            
             // Check for saved session
             const savedSession = localStorage.getItem('bingo_admin_session');
             if (savedSession) {
@@ -2590,7 +2634,45 @@
             addSystemLog('Admin panel initialized - Enhanced wallet approvals', 'info');
             attachNavListeners();
             setupKeyboardShortcuts();
+            
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
         });
+        
+        function initNotificationSound() {
+            // Create a notification sound using Web Audio API
+            try {
+                state.notificationAudio = new Audio();
+                state.notificationAudio.autoplay = false;
+                // Create a simple beep sound
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+                
+                // Store for reuse
+                state.notificationAudio.context = audioContext;
+                state.notificationAudio.oscillator = oscillator;
+                state.notificationAudio.gainNode = gainNode;
+            } catch (e) {
+                console.log("Web Audio API not supported, using fallback");
+                // Fallback: Use a data URI for a simple beep
+                state.notificationAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ");
+            }
+        }
         
         function attachNavListeners() {
             document.querySelectorAll('.nav-item').forEach(item => {
@@ -2628,6 +2710,8 @@
                     if (section === 'wallet-approvals') {
                         refreshPendingTransactions();
                         loadTransactionHistory();
+                        // Hide the alert when viewing wallet approvals
+                        document.getElementById('pendingAlert').style.display = 'none';
                     } else if (section === 'agents') {
                         refreshAgents();
                     } else if (section === 'controls') {
@@ -2737,6 +2821,9 @@
                 showToast('Connected to server', 'success');
                 updateServerStatus('Connected', true);
                 addSystemLog('Connected to server');
+                
+                // Start auto-refresh for pending transactions
+                startWalletAutoRefresh();
             });
 
             state.socket.on('disconnect', () => {
@@ -2765,6 +2852,7 @@
                 state.socket.emit('admin:getTelebirrNumber');
                 state.socket.emit('agent:getAgentStatistics');
                 state.socket.emit('admin:getTransactionHistory');
+                state.socket.emit('admin:getPendingTransactions');
                 
                 // Start auto-refresh
                 startAutoRefresh();
@@ -2854,53 +2942,37 @@
                 addSystemLog(`Telebirr number updated to ${data.telebirrNumber}`);
             });
 
-            // Wallet approval events - ENHANCED
+            // Enhanced Wallet Approval Events with Automatic Notifications
             state.socket.on('admin:pendingTransactions', (data) => {
+                const previousCount = state.pendingTransactions.length;
+                const previousIds = new Set(state.pendingTransactionIds);
+                
                 state.pendingTransactions = data;
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
+                
+                // Check for new transactions
+                const newTransactions = [];
+                data.forEach(transaction => {
+                    state.pendingTransactionIds.add(transaction._id);
+                    if (!previousIds.has(transaction._id)) {
+                        newTransactions.push(transaction);
+                    }
+                });
+                
+                // Show alert for new transactions
+                if (newTransactions.length > 0) {
+                    handleNewTransactions(newTransactions);
+                }
             });
 
+            // Enhanced real-time notification events
             state.socket.on('admin:newDepositRequest', (transaction) => {
-                state.pendingTransactions.unshift({
-                    _id: transaction.transactionId,
-                    type: 'DEPOSIT_REQUEST',
-                    userId: transaction.userId,
-                    userName: transaction.userName,
-                    amount: transaction.amount,
-                    receiptNumber: transaction.receiptNumber,
-                    createdAt: transaction.timestamp,
-                    status: 'pending',
-                    userBalance: transaction.userBalance
-                });
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                showToast('New deposit request from ' + transaction.userName, 'info');
-                addSystemLog(`New deposit request: ${transaction.userName} - ${transaction.amount} ETB`, 'wallet');
-                
-                // Play notification sound if enabled
-                playNotificationSound();
+                handleNewTransactionRequest(transaction, 'deposit');
             });
 
             state.socket.on('admin:newWithdrawRequest', (transaction) => {
-                state.pendingTransactions.unshift({
-                    _id: transaction.transactionId,
-                    type: 'WITHDRAW_REQUEST',
-                    userId: transaction.userId,
-                    userName: transaction.userName,
-                    amount: transaction.amount,
-                    phoneNumber: transaction.phoneNumber,
-                    createdAt: transaction.timestamp,
-                    status: 'pending',
-                    userBalance: transaction.userBalance
-                });
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                showToast('New withdrawal request from ' + transaction.userName, 'info');
-                addSystemLog(`New withdrawal request: ${transaction.userName} - ${transaction.amount} ETB`, 'wallet');
-                
-                // Play notification sound if enabled
-                playNotificationSound();
+                handleNewTransactionRequest(transaction, 'withdrawal');
             });
 
             // Transaction approval/rejection events
@@ -2910,6 +2982,7 @@
                 
                 // Remove from pending transactions
                 state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                state.pendingTransactionIds.delete(data.transactionId);
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
                 
@@ -2928,6 +3001,7 @@
                 
                 // Remove from pending transactions
                 state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                state.pendingTransactionIds.delete(data.transactionId);
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
                 
@@ -2969,6 +3043,143 @@
                 showToast('Failed to reset house earnings: ' + message, 'error');
                 addSystemLog('House earnings reset failed: ' + message, 'error');
             });
+        }
+
+        // Enhanced notification handler
+        function handleNewTransactionRequest(transaction, type) {
+            // Add to pending transactions
+            const transactionData = {
+                _id: transaction.transactionId,
+                type: type === 'deposit' ? 'DEPOSIT_REQUEST' : 'WITHDRAW_REQUEST',
+                userId: transaction.userId,
+                userName: transaction.userName,
+                amount: transaction.amount,
+                receiptNumber: transaction.receiptNumber,
+                phoneNumber: transaction.phoneNumber,
+                createdAt: transaction.timestamp,
+                status: 'pending',
+                userBalance: transaction.userBalance
+            };
+            
+            state.pendingTransactions.unshift(transactionData);
+            state.pendingTransactionIds.add(transaction.transactionId);
+            
+            updateWalletApprovalsTable();
+            updatePendingTransactionsBadge();
+            
+            // Enhanced notification
+            const message = `New ${type} request from ${transaction.userName} for ${transaction.amount} ETB`;
+            
+            // Show immediate alert
+            showImmediateAlert(message, type);
+            
+            // Play notification sound
+            playNotificationSound();
+            
+            // Add to system log
+            addSystemLog(`${type} request: ${transaction.userName} - ${transaction.amount} ETB`, 'wallet');
+            
+            // Show browser notification
+            if (Notification.permission === 'granted') {
+                new Notification(`Bingo Elite - New ${type.charAt(0).toUpperCase() + type.slice(1)} Request`, {
+                    body: `${transaction.userName} requested ${transaction.amount} ETB`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/2176/2176860.png',
+                    tag: 'new-transaction'
+                });
+            }
+        }
+
+        function handleNewTransactions(newTransactions) {
+            if (newTransactions.length === 0) return;
+            
+            const type = newTransactions[0].type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
+            const message = `${newTransactions.length} new ${type} request${newTransactions.length > 1 ? 's' : ''} waiting for approval`;
+            
+            // Show alert in UI
+            const pendingAlert = document.getElementById('pendingAlert');
+            if (pendingAlert) {
+                pendingAlert.style.display = 'inline-block';
+                pendingAlert.textContent = `${newTransactions.length} NEW!`;
+                
+                // Add blinking animation
+                pendingAlert.style.animation = 'flashAnimation 1s infinite';
+            }
+            
+            // Only show popup if not on wallet approvals page
+            const walletSection = document.getElementById('walletApprovalsSection');
+            if (!walletSection.classList.contains('active')) {
+                showImmediateAlert(message, 'info');
+                playNotificationSound();
+            }
+            
+            // Update document title
+            document.title = `(${state.pendingTransactions.length}) Bingo Elite - Admin Dashboard`;
+        }
+
+        function showImmediateAlert(message, type = 'info') {
+            // Create a more prominent alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `toast ${type}`;
+            alertDiv.style.position = 'fixed';
+            alertDiv.style.top = '80px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '2500';
+            alertDiv.style.animation = 'slideInRight 0.3s ease';
+            
+            const icon = type === 'deposit' ? 'fa-arrow-down' : 
+                         type === 'withdrawal' ? 'fa-arrow-up' : 'fa-bell';
+            
+            alertDiv.innerHTML = `
+                <div class="toast-icon">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <div class="toast-content">
+                    <h4>New Transaction Alert</h4>
+                    <p>${message}</p>
+                    <button class="btn btn-sm btn-primary mt-8" onclick="this.closest('.toast').remove()">
+                        <i class="fas fa-eye"></i> View Now
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 10000);
+        }
+
+        function playNotificationSound() {
+            if (!state.soundAlertsEnabled) return;
+            
+            try {
+                if (state.notificationAudio && state.notificationAudio.context) {
+                    // Recreate the sound using Web Audio API
+                    const audioContext = state.notificationAudio.context;
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.value = 800;
+                    oscillator.type = 'sine';
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                } else if (state.notificationAudio instanceof Audio) {
+                    state.notificationAudio.currentTime = 0;
+                    state.notificationAudio.play().catch(e => console.log("Audio play failed"));
+                }
+            } catch (e) {
+                console.log("Could not play notification sound");
+            }
         }
 
         // Login Function
@@ -3576,6 +3787,36 @@
             }
         }
 
+        function startWalletAutoRefresh() {
+            // Refresh wallet every 5 seconds
+            setInterval(() => {
+                if (state.isAdmin && state.socket && state.autoRefreshEnabled) {
+                    state.socket.emit('admin:getPendingTransactions');
+                }
+            }, CONFIG.WALLET_REFRESH_INTERVAL);
+        }
+
+        function enableAutoRefresh() {
+            const btn = document.getElementById('autoRefreshBtn');
+            if (state.autoRefreshEnabled) {
+                state.autoRefreshEnabled = false;
+                btn.innerHTML = '<i class="fas fa-pause-circle"></i> Auto-Refresh';
+                btn.className = 'btn btn-warning';
+                showToast('Auto-refresh disabled', 'warning');
+            } else {
+                state.autoRefreshEnabled = true;
+                btn.innerHTML = '<i class="fas fa-play-circle"></i> Auto-Refresh';
+                btn.className = 'btn btn-success';
+                showToast('Auto-refresh enabled', 'success');
+            }
+        }
+
+        function toggleSoundAlerts() {
+            const select = document.getElementById('soundAlertToggle');
+            state.soundAlertsEnabled = select.value === 'on';
+            showToast(`Sound alerts ${state.soundAlertsEnabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+
         function filterWalletTransactions() {
             updateWalletApprovalsTable();
         }
@@ -3623,10 +3864,15 @@
             
             tbody.innerHTML = '';
             
-            filtered.forEach(transaction => {
+            filtered.forEach((transaction, index) => {
                 const row = document.createElement('tr');
                 const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                // Add flash animation for new transactions (first 3)
+                if (index < 3) {
+                    row.classList.add('flash-row');
+                }
                 
                 let details = '';
                 if (transaction.type === 'DEPOSIT_REQUEST') {
@@ -3663,7 +3909,7 @@
                             </div>
                             <div>
                                 <div class="font-semibold">${transaction.userName}</div>
-                                <div class="text-xs text-muted">${transaction.userId.substring(0, 8)}...</div>
+                                <div class="text-xs text-muted">${transaction.userId?.substring(0, 8) || 'N/A'}...</div>
                                 <div class="text-xs text-muted">${timeAgo}</div>
                             </div>
                         </div>
@@ -3700,7 +3946,7 @@
                 tbody.appendChild(row);
             });
             
-            document.getElementById('walletCountDisplay').textContent = `Showing ${filtered.length} pending transactions`;
+            document.getElementById('walletCountDisplay').textContent = `Showing ${filtered.length} pending transaction${filtered.length !== 1 ? 's' : ''}`;
         }
 
         function approveTransaction(transactionId, type, userName, amount) {
@@ -3717,6 +3963,7 @@
                 
                 // Update UI immediately
                 state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
+                state.pendingTransactionIds.delete(transactionId);
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
                 
@@ -3755,6 +4002,7 @@
                 
                 // Update UI immediately
                 state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
+                state.pendingTransactionIds.delete(transactionId);
                 updateWalletApprovalsTable();
                 updatePendingTransactionsBadge();
                 
@@ -3822,10 +4070,21 @@
                 
                 // Update browser tab title with count
                 document.title = `(${count}) Bingo Elite - Admin Dashboard`;
+                
+                // Show alert if not in wallet section
+                const walletSection = document.getElementById('walletApprovalsSection');
+                if (!walletSection.classList.contains('active')) {
+                    const pendingAlert = document.getElementById('pendingAlert');
+                    if (pendingAlert) {
+                        pendingAlert.style.display = 'inline-block';
+                        pendingAlert.textContent = `${count} PENDING`;
+                    }
+                }
             } else {
                 badge.className = 'badge';
                 walletBadge.className = 'badge';
                 document.title = 'Bingo Elite - Admin Dashboard';
+                document.getElementById('pendingAlert').style.display = 'none';
             }
         }
 
@@ -4314,31 +4573,6 @@
             }
         }
 
-        // Utility Functions
-        function playNotificationSound() {
-            // Create a simple notification sound
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
-                oscillator.type = 'sine';
-                
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.5);
-            } catch (e) {
-                // Audio not supported or permission issue
-                console.log('Audio notification not available');
-            }
-        }
-
         // Chart Functions
         function initCharts() {
             // Revenue Chart
@@ -4399,3 +4633,4 @@
     </script>
 </body>
 </html>
+[file content end]
