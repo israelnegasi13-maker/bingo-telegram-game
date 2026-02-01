@@ -1,2967 +1,3136 @@
-// keno-logic.js - KENO GAME LOGIC MODULE
-module.exports = {
-    // Game configuration - UPDATED for 1-5 numbers
-    CONFIG: {
-        KENO_GAME_TIMER: 30, // seconds between rounds
-        KENO_MIN_BET: 5,     // Minimum bet amount
-        KENO_MAX_BET: 100,   // Maximum bet amount
-        KENO_MIN_SELECTIONS: 1,  // Minimum numbers to select (CHANGED from 5)
-        KENO_MAX_SELECTIONS: 5,  // Maximum numbers to select
-        KENO_TOTAL_NUMBERS: 80,
-        KENO_DRAW_COUNT: 20,
-        NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
-        // UPDATED PAYOUT TABLE:
-        PAYOUT_TABLE: {
-            1: {1: 3, 0: 0},                    // Pick 1: Match 1 = 3x
-            2: {2: 10, 1: 0, 0: 0},            // Pick 2: Match 2 = 10x
-            3: {3: 15, 2: 1, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x, Match 2 = 1x
-            4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
-            5: {5: 200, 4: 50, 3: 15, 2: 1, 1: 0, 0: 0} // Pick 5: Match 5 = 200x, Match 4 = 50x, Match 3 = 15x, Match 2 = 1x
+// agent-logic.js - Complete Agent/Referral System for Elite Games
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+
+class AgentSystem {
+  constructor(io, models) {
+    this.io = io;
+    this.models = models;
+    this.agentSockets = new Map(); // agentId -> socket
+    this.referralCache = new Map(); // referralCode -> agentId for quick lookups
+    this.commissionRates = {
+      BINGO: 40, // 40% commission from Bingo wins
+      KENO: 10   // 10% commission from Keno wins
+    };
+    this.processingClaims = new Map(); // user-room combo -> timestamp for preventing double claims
+    this.roomWinners = new Map(); // room-stake -> winnerId for preventing double winners
+    this.gameLogic = null; // Will be set from server.js
+    this.kenoLogic = null; // Will be set from server.js
+    this.botUsername = '@Ethio_elite_games_bot'; // New bot username
+  }
+
+  async initialize() {
+    console.log('✅ Agent system initializing...');
+    console.log(`🤖 Bot username: ${this.botUsername}`);
+    
+    // Create admin agent if doesn't exist
+    await this.ensureAdminAgent();
+    
+    // Load referral codes into cache
+    await this.loadReferralCache();
+    
+    // Start commission calculation job
+    this.startCommissionCalculationJob();
+    
+    // Start cleanup job for processing claims
+    this.startCleanupJob();
+    
+    console.log('👑 Agent system ready with 40% Bingo and 10% Keno commissions');
+  }
+
+  // Set game logic references from server.js
+  setGameLogic(gameLogic) {
+    this.gameLogic = gameLogic;
+  }
+
+  setKenoLogic(kenoLogic) {
+    this.kenoLogic = kenoLogic;
+  }
+
+  // Helper method to check admin access
+  checkAdminAccess(socket) {
+    return socket.admin || (socket.agentData && socket.agentData.isSuperAdmin);
+  }
+
+  async ensureAdminAgent() {
+    try {
+      const adminExists = await this.models.Agent.findOne({ username: 'admin' });
+      if (!adminExists) {
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        const adminAgent = await this.models.Agent.create({
+          username: 'admin',
+          password: hashedPassword,
+          name: 'System Administrator',
+          commissionRateBingo: 40,
+          commissionRateKeno: 10,
+          totalEarnings: 0,
+          totalReferrals: 0,
+          activeReferrals: 0,
+          isActive: true,
+          isSuperAdmin: true,
+          referralCode: 'ADMIN001',
+          phoneNumber: '0962577855',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        console.log('👑 Default admin agent created with username: admin, password: admin123');
+        
+        // Add to cache
+        this.referralCache.set('ADMIN001', adminAgent._id.toString());
+        
+        return adminAgent;
+      } else {
+        console.log('✅ Admin agent already exists');
+        return adminExists;
+      }
+    } catch (error) {
+      console.error('Error creating admin agent:', error);
+      return null;
+    }
+  }
+
+  async loadReferralCache() {
+    try {
+      const agents = await this.models.Agent.find({ isActive: true }).select('referralCode');
+      agents.forEach(agent => {
+        if (agent.referralCode) {
+          this.referralCache.set(agent.referralCode, agent._id.toString());
+        }
+      });
+      console.log(`📊 Loaded ${this.referralCache.size} referral codes into cache`);
+    } catch (error) {
+      console.error('Error loading referral cache:', error);
+    }
+  }
+
+  // Agent login
+  async handleAgentLogin(socket, data) {
+    try {
+      const { username, password } = data;
+      
+      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
+      if (!agent) {
+        socket.emit('agent:loginError', 'Invalid username or password');
+        return;
+      }
+
+      if (!agent.isActive) {
+        socket.emit('agent:loginError', 'Account is deactivated');
+        return;
+      }
+
+      const isValid = await bcrypt.compare(password, agent.password);
+      if (!isValid) {
+        socket.emit('agent:loginError', 'Invalid username or password');
+        return;
+      }
+
+      // Store agent info in socket
+      socket.agentId = agent._id.toString();
+      socket.agentData = {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
+      };
+
+      this.agentSockets.set(agent._id.toString(), socket);
+
+      // Update last login
+      agent.lastLogin = new Date();
+      await agent.save();
+
+      socket.emit('agent:loginSuccess', {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        commissionRateBingo: agent.commissionRateBingo,
+        commissionRateKeno: agent.commissionRateKeno,
+        totalEarnings: agent.totalEarnings,
+        totalReferrals: agent.totalReferrals,
+        activeReferrals: agent.activeReferrals,
+        isSuperAdmin: agent.isSuperAdmin,
+        phoneNumber: agent.phoneNumber || '',
+        referralCode: agent.referralCode || ''
+      });
+
+      console.log(`👤 Agent logged in: ${agent.username} (Super Admin: ${agent.isSuperAdmin})`);
+    } catch (error) {
+      console.error('Agent login error:', error);
+      socket.emit('agent:loginError', 'Login failed');
+    }
+  }
+
+  // Verify agent token for auto login
+  async handleVerifyAgentToken(socket, data) {
+    try {
+      const { token } = data;
+      
+      if (!token) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(token);
+      if (!agent) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      if (!agent.isActive) {
+        socket.emit('agent:tokenInvalid');
+        return;
+      }
+
+      // Store agent info in socket
+      socket.agentId = agent._id.toString();
+      socket.agentData = {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
+      };
+
+      this.agentSockets.set(agent._id.toString(), socket);
+
+      socket.emit('agent:tokenVerified', {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        commissionRateBingo: agent.commissionRateBingo,
+        commissionRateKeno: agent.commissionRateKeno,
+        totalEarnings: agent.totalEarnings,
+        totalReferrals: agent.totalReferrals,
+        activeReferrals: agent.activeReferrals,
+        isSuperAdmin: agent.isSuperAdmin,
+        phoneNumber: agent.phoneNumber || '',
+        referralCode: agent.referralCode || ''
+      });
+
+      console.log(`👤 Agent auto-logged in: ${agent.username} via token`);
+    } catch (error) {
+      console.error('Token verification error:', error);
+      socket.emit('agent:tokenInvalid');
+    }
+  }
+
+  // Get agent dashboard data - UPDATED to show referral methods
+  async handleAgentDashboard(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Get recent referrals (last 50) with referral method
+      const referrals = await this.models.User.find({ agentId: agent._id })
+        .sort({ agentReferredAt: -1 })
+        .limit(50)
+        .select('userId userName balance totalWagered totalWins totalBingos joinedAt lastSeen isOnline referredBy agentReferredAt');
+
+      // Get referral records for more details - FETCH ALL FOR THESE USERS
+      const referralRecords = await this.models.Referral.find({ 
+        agentId: agent._id,
+        userId: { $in: referrals.map(r => r.userId) }
+      }).sort({ createdAt: -1 });
+
+      // Create a map of userId -> referral record for quick lookup
+      const referralRecordMap = {};
+      referralRecords.forEach(record => {
+        if (!referralRecordMap[record.userId]) {
+          referralRecordMap[record.userId] = record;
+        }
+      });
+
+      // Combine user data with referral method
+      const enhancedReferrals = referrals.map(user => {
+        const referralRecord = referralRecordMap[user.userId];
+        return {
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          balance: user.balance || 0,
+          totalWagered: user.totalWagered || 0,
+          totalWins: user.totalWins || 0,
+          totalBingos: user.totalBingos || 0,
+          joinedAt: user.joinedAt,
+          lastSeen: user.lastSeen,
+          isOnline: user.isOnline || false,
+          referralMethod: user.referredBy || (referralRecord ? referralRecord.referralMethod : 'unknown'),
+          referredAt: user.agentReferredAt || (referralRecord ? referralRecord.createdAt : null),
+          referralCode: referralRecord ? referralRecord.referralCode : 'N/A'
+        };
+      });
+
+      // Get recent commissions (last 50) with referral method
+      const commissions = await this.models.AgentCommission.find({ agentId: agent._id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('userId', 'userName userId');
+
+      // Get referral records for commissions to include referral method
+      const commissionUserIds = commissions.map(c => c.userId?.userId || c.userId);
+      const commissionReferralRecords = await this.models.Referral.find({
+        agentId: agent._id,
+        userId: { $in: commissionUserIds }
+      });
+
+      // Create map for commission referral methods
+      const commissionReferralMap = {};
+      commissionReferralRecords.forEach(record => {
+        commissionReferralMap[record.userId] = record.referralMethod;
+      });
+
+      // Enhance commissions with referral method
+      const enhancedCommissions = commissions.map(comm => ({
+        id: comm._id,
+        userId: comm.userId?.userId || 'Unknown',
+        userName: comm.userId?.userName || 'Unknown',
+        gameType: comm.gameType,
+        stake: comm.stake,
+        winningAmount: comm.winningAmount,
+        commissionRate: comm.commissionRate,
+        commissionAmount: comm.commissionAmount,
+        referralMethod: commissionReferralMap[comm.userId?.userId] || 'unknown',
+        status: comm.status,
+        createdAt: comm.createdAt
+      }));
+
+      // Get today's earnings
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const todaysEarnings = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            agentId: agent._id,
+            createdAt: { $gte: today },
+            status: 'completed'
+          }
         },
-        COMMISSION_PERCENTAGE: 5, // 5% house commission
-        ALLOW_PRE_SELECTION: true,
-        // Wallet settings
-        MIN_DEPOSIT: 100,
-        MAX_DEPOSIT: 10000,
-        MIN_WITHDRAWAL: 100,
-        WITHDRAWAL_FEE_PERCENTAGE: 5,
-        ALLOWED_BETS: [5, 10, 20, 50, 100], // Only these bet amounts allowed
-        // Reconnection settings
-        RECONNECT_TIMEOUT: 30000, // 30 seconds to allow reconnection
-        AUTO_RECONNECT: true,
-        MAX_RECONNECT_ATTEMPTS: 3,
-        RECONNECT_BACKOFF: 2000 // Start with 2 seconds
-    },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$commissionAmount' }
+          }
+        }
+      ]);
 
-    // Initialize Keno logic
-    initialize: function(io, models) {
-        this.io = io;
-        this.User = models.User;
-        this.Transaction = models.Transaction;
-        this.Stats = models.Stats;
-        this.WalletTransaction = models.WalletTransaction;
-        
-        // Active Keno games state
-        this.activeKenoGames = new Map();
-        this.kenoPlayers = new Map();
-        this.kenoSockets = new Map();
-        this.kenoRoundHistory = [];
-        this.kenoRoundNumber = 1;
-        this.isKenoRoundActive = false;
-        this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
-        this.kenoCountdownInterval = null;
-        this.totalKenoEarnings = 0;
-        this.minimumPlayers = 1; // Game stops if no players
-        this.isRoundScheduled = false; // Prevent multiple round scheduling
-        this.isDrawing = false; // Track if we're currently in draw phase
-        this.roundTransitionTimeout = null; // Track round transition timeout
-        this.disconnectedPlayers = new Map(); // Track recently disconnected players for reconnection
-        this.playerReconnectTokens = new Map(); // Store reconnect tokens
-        this.playerReconnectAttempts = new Map(); // Track reconnect attempts per player
-        
-        console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
-        console.log('🎰 NEW payout table loaded:');
-        console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 15x, 2 hits = 1x');
-        console.log('   4 Numbers: 4 hits = 50x');
-        console.log('   3 Numbers: 3 hits = 15x, 2 hits = 1x');
-        console.log('   2 Numbers: 2 hits = 10x');
-        console.log('   1 Number:  1 hit = 3x');
-        console.log('💰 Wallet system integrated');
-        console.log('🔄 Reconnection system enabled');
-        
-        // Load existing stats
-        this.loadKenoStats();
-        
-        // Clean up old data periodically
-        setInterval(() => {
-            this.cleanupOldKenoData();
-        }, 3600000); // Every hour
-        
-        // Check game status periodically
-        setInterval(() => {
-            this.checkGameStatus();
-        }, 5000);
-        
-        // Start game if we have players
-        this.startGameIfReady();
-        
-        // Start health check system
-        this.startGameHealthCheck();
-        
-        // Start reconnection cleanup
-        this.startReconnectionCleanup();
-    },
+      // Get yesterday's earnings for comparison
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayEarnings = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            agentId: agent._id,
+            createdAt: { $gte: yesterday, $lt: today },
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$commissionAmount' }
+          }
+        }
+      ]);
 
-    // Start reconnection cleanup
-    startReconnectionCleanup: function() {
-        const self = this;
-        
-        // Clean up disconnected players every minute
-        setInterval(() => {
-            const now = Date.now();
-            const maxReconnectTime = self.CONFIG.RECONNECT_TIMEOUT;
-            
-            for (const [userId, disconnectTime] of self.disconnectedPlayers) {
-                if (now - disconnectTime > maxReconnectTime) {
-                    self.disconnectedPlayers.delete(userId);
-                    self.playerReconnectAttempts.delete(userId);
-                    console.log(`🧹 Removed expired reconnection for player ${userId}`);
-                    
-                    // Clear player's pending selections
-                    const player = self.kenoPlayers.get(userId);
-                    if (player) {
-                        player.pendingSelections = [];
-                        player.pendingBet = null;
-                        player.hasPlacedBet = false;
-                        self.kenoPlayers.set(userId, player);
-                    }
-                }
-            }
-        }, 60000); // Every minute
-    },
+      // Get this month's earnings
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const monthlyEarnings = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            agentId: agent._id,
+            createdAt: { $gte: startOfMonth },
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$commissionAmount' }
+          }
+        }
+      ]);
 
-    // Start game health check system
-    startGameHealthCheck: function() {
-        const self = this;
-        
-        // Run health check every 30 seconds
-        setInterval(() => {
-            const activeGame = self.getActiveKenoGame();
-            const onlinePlayers = self.getOnlinePlayersCount();
-            
-            console.log('🩺 Keno Health Check:');
-            console.log('  Round Active:', self.isKenoRoundActive);
-            console.log('  Drawing:', self.isDrawing);
-            console.log('  Online Players:', onlinePlayers);
-            console.log('  Game Status:', activeGame.status);
-            console.log('  Countdown:', self.kenoCountdown);
-            console.log('  Round Number:', self.kenoRoundNumber);
-            console.log('  Total Bets:', activeGame.totalBets);
-            console.log('  Disconnected Players:', self.disconnectedPlayers.size);
-            
-            // Detect stuck state: Round active but no players for too long
-            if (self.isKenoRoundActive && onlinePlayers === 0 && activeGame.totalBets === 0) {
-                const now = new Date();
-                const gameStartTime = activeGame.startTime || now;
-                const timeElapsed = (now - gameStartTime) / 1000; // in seconds
-                
-                // If round has been active for more than 60 seconds with no players
-                if (timeElapsed > 60) {
-                    console.log('🩺 Health Check: Detected stuck round, resetting...');
-                    self.resetStuckKenoGame();
-                }
-            }
-            
-            // Detect stuck in drawing state with no activity
-            if (self.isDrawing && onlinePlayers === 0) {
-                console.log('🩺 Health Check: Detected stuck drawing state, resetting...');
-                self.resetStuckKenoGame();
-            }
-            
-            // Detect stuck countdown
-            if (self.kenoCountdown <= 0 && !self.isDrawing && !self.isKenoRoundActive) {
-                console.log('🩺 Health Check: Detected stuck countdown, resetting...');
-                self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
-            }
-        }, 30000); // Check every 30 seconds
-    },
+      // Get active referrals count
+      const activeReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        isOnline: true
+      });
 
-    // Reset stuck Keno game
-    resetStuckKenoGame: function() {
-        const self = this;
-        
-        console.log('🔄 Resetting stuck Keno game...');
-        
-        // Clear all intervals and timeouts
-        if (self.kenoCountdownInterval) {
-            clearInterval(self.kenoCountdownInterval);
-            self.kenoCountdownInterval = null;
-        }
-        
-        if (self.roundTransitionTimeout) {
-            clearTimeout(self.roundTransitionTimeout);
-            self.roundTransitionTimeout = null;
-        }
-        
-        // Reset game state
-        self.isKenoRoundActive = false;
-        self.isDrawing = false;
-        self.isRoundScheduled = false;
-        self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
-        
-        // Reset active game
-        const activeGame = self.getActiveKenoGame();
-        activeGame.status = 'waiting';
-        activeGame.players = [];
-        activeGame.bets = {};
-        activeGame.drawnNumbers = [];
-        activeGame.drawnNumbersOriginalOrder = [];
-        activeGame.winners = [];
-        activeGame.totalBets = 0;
-        activeGame.totalBetAmount = 0;
-        activeGame.totalPayout = 0;
-        activeGame.commissionCollected = 0;
-        activeGame.drawComplete = false;
-        activeGame.processedResults = false;
-        
-        // Clear all pending selections for offline players
-        for (const [userId, player] of self.kenoPlayers) {
-            if (!player.isOnline) {
-                player.hasPlacedBet = false;
-                player.currentBet = null;
-                player.selectedNumbers = [];
-                player.isNewInCurrentRound = false;
-                player.pendingSelections = [];
-                player.pendingBet = null;
-                self.kenoPlayers.set(userId, player);
-            }
-        }
-        
-        // Clear disconnected players
-        self.disconnectedPlayers.clear();
-        
-        // Broadcast reset
-        self.io.to('keno').emit('keno:game_reset', {
-            message: 'Game reset. Waiting for players...',
-            round: self.kenoRoundNumber
-        });
-        
-        console.log('✅ Keno game reset successfully');
-        
-        // Try to restart if we have players
-        setTimeout(() => {
-            self.startGameIfReady();
-        }, 3000);
-    },
+      // Update agent's active referrals
+      agent.activeReferrals = activeReferrals;
+      await agent.save();
 
-    // Load Keno stats from database
-    loadKenoStats: async function() {
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            let stats = await this.Stats.findOne({ date: today });
-            
-            if (!stats) {
-                stats = new this.Stats({
-                    date: today,
-                    totalWagered: 0,
-                    totalEarnings: 0,
-                    totalGames: 0,
-                    totalUsers: 0,
-                    totalKenoWagered: 0,
-                    totalKenoEarnings: 0,
-                    totalKenoGames: 0,
-                    totalKenoWins: 0,
-                    totalDeposits: 0,
-                    totalWithdrawals: 0,
-                    totalWalletTransactions: 0
-                });
-                await stats.save();
-            }
-            
-            this.totalKenoEarnings = stats.totalKenoEarnings || 0;
-            console.log(`📊 Keno stats loaded: ${this.totalKenoEarnings.toFixed(2)} ETB earnings`);
-            
-        } catch (error) {
-            console.error('Error loading Keno stats:', error);
-        }
-    },
+      // Calculate earnings growth
+      const todayTotal = todaysEarnings[0]?.total || 0;
+      const yesterdayTotal = yesterdayEarnings[0]?.total || 0;
+      const earningsGrowth = yesterdayTotal > 0 
+        ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1)
+        : todayTotal > 0 ? 100 : 0;
 
-    // Handle Keno socket connection - IMPROVED RECONNECTION LOGIC
-    handleKenoConnection: function(socket) {
-        const self = this;
+      // Get referral methods breakdown - FIXED to properly count each method
+      const telegramReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: 'telegram_link'
+      });
+      
+      const manualReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: { $in: ['manual', 'bulk_manual'] }
+      });
+
+      const adminReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: 'admin_assigned'
+      });
+
+      // Also count from User model as fallback
+      const userTelegramReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: 'telegram_link'
+      });
+
+      const userManualReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: { $in: ['manual', 'bulk_manual'] }
+      });
+
+      const userAdminReferrals = await this.models.User.countDocuments({
+        agentId: agent._id,
+        referredBy: 'admin_assigned'
+      });
+
+      // Use the maximum of both counts to ensure accuracy
+      const finalTelegramReferrals = Math.max(telegramReferrals, userTelegramReferrals);
+      const finalManualReferrals = Math.max(manualReferrals, userManualReferrals);
+      const finalAdminReferrals = Math.max(adminReferrals, userAdminReferrals);
+
+      socket.emit('agent:dashboardData', {
+        agent: {
+          id: agent._id,
+          username: agent.username,
+          name: agent.name,
+          commissionRateBingo: agent.commissionRateBingo,
+          commissionRateKeno: agent.commissionRateKeno,
+          totalEarnings: agent.totalEarnings,
+          totalReferrals: agent.totalReferrals,
+          activeReferrals: agent.activeReferrals,
+          referralCode: agent.referralCode,
+          phoneNumber: agent.phoneNumber || '',
+          createdAt: agent.createdAt,
+          lastLogin: agent.lastLogin
+        },
+        stats: {
+          todaysEarnings: todayTotal,
+          yesterdayEarnings: yesterdayTotal,
+          earningsGrowth: earningsGrowth,
+          monthlyEarnings: monthlyEarnings[0]?.total || 0,
+          totalEarnings: agent.totalEarnings,
+          totalReferrals: agent.totalReferrals,
+          activeReferrals: agent.activeReferrals,
+          pendingCommissions: await this.models.AgentCommission.countDocuments({
+            agentId: agent._id,
+            status: 'pending'
+          }),
+          telegramReferrals: finalTelegramReferrals,
+          manualReferrals: finalManualReferrals,
+          adminReferrals: finalAdminReferrals,
+          totalReferralMethods: finalTelegramReferrals + finalManualReferrals + finalAdminReferrals
+        },
+        referrals: enhancedReferrals,
+        commissions: enhancedCommissions
+      });
+
+      console.log(`📊 Dashboard sent to agent ${agent.username}: ${enhancedReferrals.length} referrals, ${enhancedCommissions.length} commissions`);
+    } catch (error) {
+      console.error('Dashboard error:', error);
+      socket.emit('agent:error', 'Failed to load dashboard');
+    }
+  }
+
+  // Generate referral link for the new bot
+  async handleGenerateReferralLink(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Generate unique referral code if not exists
+      if (!agent.referralCode) {
+        let newCode;
+        let isUnique = false;
         
-        console.log(`🎰 Keno connection: ${socket.id}`);
-        
-        // Store socket for keno
-        self.kenoSockets.set(socket.id, socket);
-        
-        // Handle ping/pong for connection health
-        socket.on('ping', (data) => {
-            socket.emit('pong', { timestamp: data?.timestamp || Date.now() });
-        });
-        
-        // Keno authentication with reconnection support - SIMPLIFIED
-        socket.on('keno:auth', async (data) => {
-            try {
-                const { userId, userName, reconnectToken, isReconnect } = data;
-                
-                // Find user in database
-                const user = await self.User.findOne({ userId: userId });
-                
-                if (!user) {
-                    socket.emit('keno:error', 'User not found');
-                    return;
-                }
-                
-                // Check if this is a reconnection
-                const wasDisconnected = self.disconnectedPlayers.has(userId);
-                const existingPlayer = self.kenoPlayers.get(userId);
-                
-                // Get current game state
-                const activeGame = self.getActiveKenoGame();
-                const currentDrawnNumbers = activeGame.drawnNumbers || [];
-                const currentRoundNumber = self.kenoRoundNumber;
-                const isRoundActive = self.isKenoRoundActive;
-                const countdown = self.kenoCountdown;
-                const currentRoundBets = activeGame.bets || {};
-                const playerHasBetInCurrentRound = !!currentRoundBets[userId];
-                
-                // Generate new reconnect token
-                const newReconnectToken = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-                
-                // Store player info
-                socket.userId = userId;
-                socket.userName = userName;
-                socket.kenoPlayer = true;
-                socket.reconnectToken = newReconnectToken;
-                
-                let player;
-                let isNewConnection = true;
-                
-                if (existingPlayer) {
-                    // Existing player - update socket
-                    player = existingPlayer;
-                    player.socketId = socket.id;
-                    player.isOnline = true;
-                    player.lastSeen = new Date();
-                    player.balance = user.balance;
-                    player.reconnectedAt = new Date();
-                    isNewConnection = false;
-                    
-                    // Remove from disconnected players if they were there
-                    if (self.disconnectedPlayers.has(userId)) {
-                        self.disconnectedPlayers.delete(userId);
-                        console.log(`🔄 Player reconnected: ${userName} (${userId})`);
-                        
-                        // Clear reconnect attempts
-                        self.playerReconnectAttempts.delete(userId);
-                    } else {
-                        console.log(`🎰 Player connected (existing): ${userName} (${userId})`);
-                    }
-                    
-                    // IMPORTANT: Only restore pending selections if player hasn't placed bet AND round is active
-                    if (player.pendingSelections && 
-                        player.pendingSelections.length > 0 && 
-                        !player.hasPlacedBet && 
-                        isRoundActive) {
-                        // Restore pending selections
-                        player.selectedNumbers = player.pendingSelections;
-                        player.currentBet = player.pendingBet || 5;
-                        
-                        // Clear pending after restore
-                        player.pendingSelections = [];
-                        player.pendingBet = null;
-                    }
-                    
-                } else {
-                    // New player
-                    player = {
-                        socketId: socket.id,
-                        userId: userId,
-                        userName: userName,
-                        balance: user.balance,
-                        currentBet: playerHasBetInCurrentRound ? activeGame.bets[userId]?.amount : null,
-                        selectedNumbers: playerHasBetInCurrentRound ? activeGame.bets[userId]?.numbers || [] : [],
-                        hasPlacedBet: playerHasBetInCurrentRound,
-                        totalWagered: user.totalWagered || 0,
-                        totalWins: user.totalWins || 0,
-                        isOnline: true,
-                        lastSeen: new Date(),
-                        preSelectedNumbers: [],
-                        isReadyForNextRound: false,
-                        sessionStart: new Date(),
-                        totalDeposits: user.totalDeposits || 0,
-                        totalWithdrawals: user.totalWithdrawals || 0,
-                        // Reconnection fields
-                        pendingSelections: [],
-                        pendingBet: null,
-                        disconnectTime: null,
-                        reconnectedAt: null,
-                        // Mark as "new" only if they don't have a bet and join during draw
-                        isNewInCurrentRound: !playerHasBetInCurrentRound && currentDrawnNumbers.length > 0
-                    };
-                    console.log(`🎰 New player connected: ${userName} (${userId})`);
-                }
-                
-                // Update player in map
-                self.kenoPlayers.set(userId, player);
-                
-                // Store reconnect token
-                self.playerReconnectTokens.set(userId, {
-                    token: newReconnectToken,
-                    expires: Date.now() + 300000 // 5 minutes
-                });
-                
-                // Update user online status
-                user.isOnline = true;
-                user.lastSeen = new Date();
-                user.sessionCount = (user.sessionCount || 0) + 1;
-                await user.save();
-                
-                // Join Keno room
-                socket.join('keno');
-                
-                // Calculate potential winnings for feedback
-                let potentialWinnings = 0;
-                if (player.selectedNumbers.length > 0 && player.currentBet) {
-                    const selectionCount = player.selectedNumbers.length;
-                    if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-                        const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
-                        const maxPayout = self.CONFIG.PAYOUT_TABLE[selectionCount][maxMatches];
-                        if (maxPayout !== undefined && maxPayout > 0) {
-                            potentialWinnings = player.currentBet * maxPayout;
-                        }
-                    }
-                }
-                
-                // Prepare welcome data - SIMPLIFIED
-                const welcomeData = {
-                    playerId: userId,
-                    userName: userName,
-                    balance: user.balance,
-                    currentRound: currentRoundNumber,
-                    isRoundActive: isRoundActive,
-                    countdown: countdown,
-                    nextDrawTime: Date.now() + (countdown * 1000),
-                    roundHistory: self.kenoRoundHistory.slice(0, 10),
-                    payoutTable: self.CONFIG.PAYOUT_TABLE,
-                    playersCount: activeGame ? activeGame.players.length : 0,
-                    totalBets: activeGame ? activeGame.totalBets : 0,
-                    // Send current drawn numbers if any exist
-                    currentDrawnNumbers: currentDrawnNumbers,
-                    isDrawComplete: activeGame.drawComplete || false,
-                    hasBetInCurrentRound: playerHasBetInCurrentRound,
-                    isDrawing: activeGame.status === 'drawing',
-                    // Reconnection info
-                    reconnectToken: newReconnectToken,
-                    // Send player's current state
-                    selectedNumbers: player.selectedNumbers,
-                    currentBet: player.currentBet,
-                    hasPlacedBet: player.hasPlacedBet,
-                    isNewConnection: isNewConnection,
-                    config: {
-                        minBet: self.CONFIG.KENO_MIN_BET,
-                        maxBet: self.CONFIG.KENO_MAX_BET,
-                        minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
-                        maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
-                        totalNumbers: self.CONFIG.KENO_TOTAL_NUMBERS,
-                        drawCount: self.CONFIG.KENO_DRAW_COUNT,
-                        gameTimer: self.CONFIG.KENO_GAME_TIMER,
-                        allowPreSelection: self.CONFIG.ALLOW_PRE_SELECTION,
-                        allowedBets: self.CONFIG.ALLOWED_BETS,
-                        reconnectTimeout: self.CONFIG.RECONNECT_TIMEOUT
-                    },
-                    potentialWinnings: potentialWinnings
-                };
-                
-                socket.emit('keno:welcome', welcomeData);
-                
-                // If this was a reconnection, send specific reconnection event
-                if (!isNewConnection && wasDisconnected) {
-                    socket.emit('keno:reconnected', {
-                        message: 'Successfully reconnected!',
-                        restoredState: player.selectedNumbers.length > 0,
-                        restoredSelections: player.selectedNumbers,
-                        round: currentRoundNumber,
-                        roundActive: isRoundActive,
-                        hasBet: playerHasBetInCurrentRound
-                    });
-                }
-                
-                // If draw is already in progress or complete, handle it properly
-                if (currentDrawnNumbers.length > 0) {
-                    if (activeGame.drawComplete) {
-                        // Draw is complete, show all numbers immediately
-                        socket.emit('keno:round_results', {
-                            round: currentRoundNumber,
-                            drawnNumbers: currentDrawnNumbers,
-                            playersCount: activeGame.players.length,
-                            totalBets: activeGame.totalBets,
-                            isDrawComplete: true,
-                            message: `Round ${currentRoundNumber} results!`,
-                            totalDrawn: currentDrawnNumbers.length
-                        });
-                        
-                        // If player had a bet in this round, send their result
-                        if (playerHasBetInCurrentRound && activeGame.processedResults) {
-                            setTimeout(() => {
-                                self.sendPlayerRoundResult(socket, userId, activeGame);
-                            }, 1000);
-                        }
-                    } else if (activeGame.status === 'drawing') {
-                        // Draw is in progress
-                        const drawState = {
-                            round: currentRoundNumber,
-                            currentBall: currentDrawnNumbers.length,
-                            totalBalls: self.CONFIG.KENO_DRAW_COUNT,
-                            playersCount: activeGame.players.length,
-                            totalBets: activeGame.totalBets,
-                            message: 'Draw in progress. Watching live...',
-                            hasBet: playerHasBetInCurrentRound,
-                            isReconnecting: !isNewConnection
-                        };
-                        
-                        socket.emit('keno:draw_state', drawState);
-                    }
-                }
-                
-                // Broadcast updated player count
-                self.broadcastKenoPlayersUpdate();
-                
-                // Check if we should start a new round
-                if (!self.isKenoRoundActive && 
-                    !self.isDrawing &&
-                    activeGame.status === 'waiting' && 
-                    !self.isRoundScheduled &&
-                    self.getOnlinePlayersCount() >= self.minimumPlayers) {
-                    
-                    // Schedule round start but don't start immediately
-                    setTimeout(() => {
-                        self.startGameIfReady();
-                    }, 3000);
-                }
-                
-            } catch (error) {
-                console.error('Keno auth error:', error);
-                socket.emit('keno:error', 'Authentication failed');
-            }
-        });
-        
-        // Reconnect request - for when client knows it's reconnecting
-        socket.on('keno:reconnect', async (data) => {
-            try {
-                const { userId, reconnectToken } = data;
-                
-                if (!userId) {
-                    socket.emit('keno:error', 'User ID required');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(userId);
-                const tokenData = self.playerReconnectTokens.get(userId);
-                
-                // Check reconnect attempts
-                const attempts = self.playerReconnectAttempts.get(userId) || 0;
-                if (attempts > self.CONFIG.MAX_RECONNECT_ATTEMPTS) {
-                    socket.emit('keno:reconnect_failed', {
-                        message: 'Too many reconnection attempts. Please refresh the page.'
-                    });
-                    return;
-                }
-                
-                if (!player || !tokenData || tokenData.token !== reconnectToken) {
-                    self.playerReconnectAttempts.set(userId, attempts + 1);
-                    socket.emit('keno:reconnect_failed', {
-                        message: 'Invalid reconnect token or player not found'
-                    });
-                    return;
-                }
-                
-                // Token expired
-                if (Date.now() > tokenData.expires) {
-                    self.playerReconnectTokens.delete(userId);
-                    socket.emit('keno:reconnect_failed', {
-                        message: 'Reconnect token expired'
-                    });
-                    return;
-                }
-                
-                // Valid reconnection
-                socket.userId = userId;
-                socket.userName = player.userName;
-                socket.kenoPlayer = true;
-                
-                // Update player socket
-                player.socketId = socket.id;
-                player.isOnline = true;
-                player.lastSeen = new Date();
-                self.kenoPlayers.set(userId, player);
-                
-                // Remove from disconnected
-                self.disconnectedPlayers.delete(userId);
-                self.playerReconnectAttempts.delete(userId);
-                
-                // Send successful reconnection
-                socket.emit('keno:reconnect_success', {
-                    message: 'Successfully reconnected',
-                    userId: userId,
-                    userName: player.userName,
-                    balance: player.balance
-                });
-                
-                console.log(`🔄 Manual reconnection successful: ${player.userName}`);
-                
-            } catch (error) {
-                console.error('Reconnect error:', error);
-                socket.emit('keno:error', 'Reconnection failed');
-            }
-        });
-        
-        // Save player state for reconnection
-        socket.on('keno:saveState', (data) => {
-            try {
-                const { userId, selectedNumbers, betAmount, roundNumber } = data;
-                
-                if (!userId || !socket.userId || socket.userId !== userId) {
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(userId);
-                if (player && self.isKenoRoundActive && !player.hasPlacedBet) {
-                    // Only save pending selections if round is active and player hasn't placed bet
-                    player.pendingSelections = selectedNumbers || [];
-                    player.pendingBet = betAmount || 5;
-                    self.kenoPlayers.set(userId, player);
-                    
-                    console.log(`💾 Saved state for player ${player.userName}: ${selectedNumbers?.length || 0} numbers`);
-                }
-            } catch (error) {
-                console.error('Save state error:', error);
-            }
-        });
-        
-        // Clear reconnection state
-        socket.on('keno:clearReconnectionState', (data) => {
-            try {
-                const { userId } = data;
-                
-                if (!userId || !socket.userId || socket.userId !== userId) {
-                    return;
-                }
-                
-                // Clear all reconnection data
-                self.disconnectedPlayers.delete(userId);
-                self.playerReconnectTokens.delete(userId);
-                self.playerReconnectAttempts.delete(userId);
-                
-                const player = self.kenoPlayers.get(userId);
-                if (player) {
-                    player.pendingSelections = [];
-                    player.pendingBet = null;
-                    self.kenoPlayers.set(userId, player);
-                }
-                
-                console.log(`🧹 Cleared reconnection state for player ${userId}`);
-                
-            } catch (error) {
-                console.error('Clear reconnection state error:', error);
-            }
-        });
-        
-        // Place bet in Keno - UPDATED for 1-5 numbers
-        socket.on('keno:placeBet', async (data) => {
-            try {
-                const { numbers, betAmount } = data;
-                
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                // Check if round is active
-                if (!self.isKenoRoundActive) {
-                    socket.emit('keno:error', 'Round not active. Please wait for next round.');
-                    return;
-                }
-                
-                // Check if already placed bet in this round
-                if (player.hasPlacedBet) {
-                    socket.emit('keno:error', 'You have already placed a bet this round');
-                    return;
-                }
-                
-                // Validate bet amount - ONLY allowed bets
-                const bet = parseFloat(betAmount);
-                if (isNaN(bet) || !self.CONFIG.ALLOWED_BETS.includes(bet)) {
-                    socket.emit('keno:error', `Bet amount must be one of: ${self.CONFIG.ALLOWED_BETS.join(', ')} ETB`);
-                    return;
-                }
-                
-                // Validate numbers - CAN be 1-5 numbers (CHANGED from exactly 5)
-                if (!Array.isArray(numbers) || 
-                    numbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
-                    numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                    socket.emit('keno:error', `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers`);
-                    return;
-                }
-                
-                // Check unique numbers
-                const uniqueNumbers = [...new Set(numbers)];
-                if (uniqueNumbers.length !== numbers.length) {
-                    socket.emit('keno:error', 'Duplicate numbers not allowed');
-                    return;
-                }
-                
-                // Check number range
-                for (const num of numbers) {
-                    const n = parseInt(num);
-                    if (isNaN(n) || n < 1 || n > self.CONFIG.KENO_TOTAL_NUMBERS) {
-                        socket.emit('keno:error', `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}`);
-                        return;
-                    }
-                }
-                
-                // Sort numbers
-                const sortedNumbers = [...numbers].sort((a, b) => a - b);
-                
-                // Check balance
-                const user = await self.User.findOne({ userId: socket.userId });
-                if (!user || user.balance < bet) {
-                    socket.emit('keno:error', 'Insufficient balance');
-                    return;
-                }
-                
-                // Calculate potential winnings for feedback
-                const selectionCount = sortedNumbers.length;
-                let potentialWinnings = 0;
-                
-                // Calculate maximum potential win (if all numbers match)
-                if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-                    const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
-                    const maxPayout = self.CONFIG.PAYOUT_TABLE[selectionCount][maxMatches];
-                    if (maxPayout !== undefined && maxPayout > 0) {
-                        potentialWinnings = bet * maxPayout;
-                    }
-                }
-                
-                // Deduct bet amount
-                user.balance -= bet;
-                user.totalWagered += bet;
-                user.kenoBets = (user.kenoBets || 0) + 1;
-                await user.save();
-                
-                // Update player state
-                player.balance = user.balance;
-                player.selectedNumbers = sortedNumbers;
-                player.currentBet = bet;
-                player.hasPlacedBet = true;
-                player.totalWagered += bet;
-                player.isReadyForNextRound = false;
-                player.isNewInCurrentRound = false; // Now they're participating
-                player.pendingSelections = []; // Clear pending selections
-                player.pendingBet = null;
-                self.kenoPlayers.set(socket.userId, player);
-                
-                // Add to active game
-                const activeGame = self.getActiveKenoGame();
-                if (!activeGame.players.includes(socket.userId)) {
-                    activeGame.players.push(socket.userId);
-                }
-                
-                // Add bet
-                activeGame.bets[socket.userId] = {
-                    numbers: sortedNumbers,
-                    amount: bet,
-                    selectionCount: sortedNumbers.length, // Store how many numbers selected
-                    placedAt: new Date(),
-                    userName: player.userName,
-                    potentialWinnings: potentialWinnings,
-                    playerSocketId: socket.id
-                };
-                activeGame.totalBets++;
-                activeGame.totalBetAmount += bet;
-                
-                // Create transaction record
-                const transaction = new self.Transaction({
-                    type: 'KENO_BET',
-                    userId: socket.userId,
-                    userName: player.userName,
-                    amount: -bet,
-                    description: `Keno bet: ${bet} ETB on ${sortedNumbers.length} numbers`,
-                    game: 'keno',
-                    status: 'completed',
-                    details: {
-                        numbers: sortedNumbers,
-                        round: activeGame.roundNumber,
-                        selectionCount: sortedNumbers.length,
-                        potentialWinnings: potentialWinnings,
-                        socketId: socket.id
-                    }
-                });
-                await transaction.save();
-                
-                // Update stats
-                await self.updateKenoStats(bet, 0, 0, 0, 1);
-                
-                // Emit confirmation with potential winnings
-                socket.emit('keno:betConfirmed', {
-                    success: true,
-                    balance: user.balance,
-                    betAmount: bet,
-                    numbers: sortedNumbers,
-                    selectionCount: sortedNumbers.length,
-                    potentialWinnings: potentialWinnings,
-                    message: `Bet placed: ${bet} ETB on ${sortedNumbers.length} numbers`,
-                    payoutTable: self.CONFIG.PAYOUT_TABLE[selectionCount],
-                    round: activeGame.roundNumber
-                });
-                
-                // Clear any reconnection state since bet is placed
-                self.disconnectedPlayers.delete(socket.userId);
-                self.playerReconnectAttempts.delete(socket.userId);
-                
-                // Broadcast updated player count
-                self.broadcastKenoPlayersUpdate();
-                
-                console.log(`🎰 Bet placed: ${player.userName} - ${bet} ETB on ${sortedNumbers.length} numbers, Potential win: ${potentialWinnings} ETB`);
-                
-            } catch (error) {
-                console.error('Keno place bet error:', error);
-                socket.emit('keno:error', 'Failed to place bet');
-            }
-        });
-        
-        // Pre-select numbers for next round
-        socket.on('keno:preselect', async (data) => {
-            try {
-                const { numbers } = data;
-                
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                // Validate numbers - CAN be 1-5 numbers
-                if (!Array.isArray(numbers) || 
-                    numbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
-                    numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                    socket.emit('keno:error', `You must select ${self.CONFIG.KENO_MIN_SELECTIONS}-${self.CONFIG.KENO_MAX_SELECTIONS} numbers`);
-                    return;
-                }
-                
-                // Check unique numbers
-                const uniqueNumbers = [...new Set(numbers)];
-                if (uniqueNumbers.length !== numbers.length) {
-                    socket.emit('keno:error', 'Duplicate numbers not allowed');
-                    return;
-                }
-                
-                // Check number range
-                for (const num of numbers) {
-                    const n = parseInt(num);
-                    if (isNaN(n) || n < 1 || n > self.CONFIG.KENO_TOTAL_NUMBERS) {
-                        socket.emit('keno:error', `Numbers must be between 1 and ${self.CONFIG.KENO_TOTAL_NUMBERS}`);
-                        return;
-                    }
-                }
-                
-                // Sort numbers
-                const sortedNumbers = [...numbers].sort((a, b) => a - b);
-                
-                // Update player state
-                player.preSelectedNumbers = sortedNumbers;
-                player.isReadyForNextRound = true;
-                self.kenoPlayers.set(socket.userId, player);
-                
-                // Emit confirmation
-                socket.emit('keno:preselectConfirmed', {
-                    success: true,
-                    numbers: sortedNumbers,
-                    selectionCount: sortedNumbers.length,
-                    message: `Numbers pre-selected for next round (${sortedNumbers.length} numbers)`
-                });
-                
-                console.log(`🎯 Player ${player.userName} pre-selected ${sortedNumbers.length} numbers for next round`);
-                
-            } catch (error) {
-                console.error('Keno pre-select error:', error);
-                socket.emit('keno:error', 'Failed to pre-select numbers');
-            }
-        });
-        
-        // Quick pick numbers - Returns 1-5 numbers based on current selection or max
-        socket.on('keno:quickPick', (data) => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                // Determine how many numbers to generate
-                let count = self.CONFIG.KENO_MAX_SELECTIONS; // Default to max
-                if (data && data.count) {
-                    count = Math.min(Math.max(data.count, self.CONFIG.KENO_MIN_SELECTIONS), self.CONFIG.KENO_MAX_SELECTIONS);
-                }
-                
-                // Generate random unique numbers
-                const numbers = [];
-                while (numbers.length < count) {
-                    const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
-                    if (!numbers.includes(num)) {
-                        numbers.push(num);
-                    }
-                }
-                
-                numbers.sort((a, b) => a - b);
-                
-                socket.emit('keno:quickPickNumbers', { 
-                    success: true,
-                    numbers: numbers,
-                    count: numbers.length
-                });
-                
-                console.log(`🎲 Quick pick generated ${numbers.length} numbers for ${player.userName}`);
-                
-            } catch (error) {
-                console.error('Keno quick pick error:', error);
-                socket.emit('keno:error', 'Failed to generate quick pick');
-            }
-        });
-        
-        // Get current game state
-        socket.on('keno:getState', () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                const activeGame = self.getActiveKenoGame();
-                
-                // Calculate potential winnings
-                let potentialWinnings = 0;
-                if (player.selectedNumbers.length > 0 && player.currentBet) {
-                    const selectionCount = player.selectedNumbers.length;
-                    if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-                        const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
-                        const maxPayout = self.CONFIG.PAYOUT_TABLE[selectionCount][maxMatches];
-                        if (maxPayout !== undefined && maxPayout > 0) {
-                            potentialWinnings = player.currentBet * maxPayout;
-                        }
-                    }
-                }
-                
-                socket.emit('keno:state', {
-                    success: true,
-                    balance: player.balance,
-                    currentRound: self.kenoRoundNumber,
-                    isRoundActive: self.isKenoRoundActive,
-                    countdown: self.kenoCountdown,
-                    playersCount: activeGame ? activeGame.players.length : 0,
-                    totalBets: activeGame ? activeGame.totalBets : 0,
-                    hasPlacedBet: player.hasPlacedBet,
-                    selectedNumbers: player.selectedNumbers,
-                    currentBet: player.currentBet,
-                    preSelectedNumbers: player.preSelectedNumbers,
-                    isReadyForNextRound: player.isReadyForNextRound,
-                    selectionCount: player.selectedNumbers.length,
-                    preSelectionCount: player.preSelectedNumbers.length,
-                    currentDrawnNumbers: activeGame.drawnNumbers || [],
-                    isDrawComplete: activeGame.drawComplete || false,
-                    potentialWinnings: potentialWinnings,
-                    payoutTable: self.CONFIG.PAYOUT_TABLE[player.selectedNumbers.length] || {},
-                    // Reconnection info
-                    canReconnect: self.disconnectedPlayers.has(socket.userId),
-                    reconnectToken: self.playerReconnectTokens.get(socket.userId)?.token,
-                    reconnectAttempts: self.playerReconnectAttempts.get(socket.userId) || 0,
-                    maxReconnectAttempts: self.CONFIG.MAX_RECONNECT_ATTEMPTS
-                });
-                
-            } catch (error) {
-                console.error('Keno get state error:', error);
-                socket.emit('keno:error', 'Failed to get game state');
-            }
-        });
-        
-        // Get user balance
-        socket.on('keno:getBalance', async () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const user = await self.User.findOne({ userId: socket.userId });
-                if (!user) {
-                    socket.emit('keno:error', 'User not found');
-                    return;
-                }
-                
-                // Update player state
-                const player = self.kenoPlayers.get(socket.userId);
-                if (player) {
-                    player.balance = user.balance;
-                    self.kenoPlayers.set(socket.userId, player);
-                }
-                
-                socket.emit('keno:balance', {
-                    success: true,
-                    balance: user.balance,
-                    userName: user.userName,
-                    totalDeposits: user.totalDeposits || 0,
-                    totalWithdrawals: user.totalWithdrawals || 0,
-                    totalWagered: user.totalWagered || 0,
-                    totalWins: user.totalWins || 0
-                });
-                
-            } catch (error) {
-                console.error('Keno get balance error:', error);
-                socket.emit('keno:error', 'Failed to get balance');
-            }
-        });
-        
-        // Clear current selection
-        socket.on('keno:clearSelection', () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                // Only allow clearing if haven't placed bet yet in active round
-                if (!player.hasPlacedBet || !self.isKenoRoundActive) {
-                    player.selectedNumbers = [];
-                    player.currentBet = null;
-                    // Also clear pending selections
-                    player.pendingSelections = [];
-                    player.pendingBet = null;
-                    self.kenoPlayers.set(socket.userId, player);
-                    
-                    socket.emit('keno:selectionCleared', {
-                        success: true,
-                        message: 'Selection cleared'
-                    });
-                } else {
-                    socket.emit('keno:error', 'Cannot clear after placing bet in active round');
-                }
-                
-            } catch (error) {
-                console.error('Keno clear selection error:', error);
-                socket.emit('keno:error', 'Failed to clear selection');
-            }
-        });
-        
-        // Clear pre-selection
-        socket.on('keno:clearPreselection', () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const player = self.kenoPlayers.get(socket.userId);
-                if (!player) {
-                    socket.emit('keno:error', 'Player not found');
-                    return;
-                }
-                
-                player.preSelectedNumbers = [];
-                player.isReadyForNextRound = false;
-                self.kenoPlayers.set(socket.userId, player);
-                
-                socket.emit('keno:preselectionCleared', {
-                    success: true,
-                    message: 'Pre-selection cleared'
-                });
-                
-            } catch (error) {
-                console.error('Keno clear pre-selection error:', error);
-                socket.emit('keno:error', 'Failed to clear pre-selection');
-            }
-        });
-        
-        // Get potential winnings for current selection
-        socket.on('keno:getPotentialWinnings', (data) => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const { numbers, betAmount, selectionCount } = data;
-                const bet = parseFloat(betAmount) || 5;
-                const count = selectionCount || (numbers ? numbers.length : 0);
-                
-                if (count < 1 || count > 5) {
-                    socket.emit('keno:potentialWinnings', {
-                        success: false,
-                        message: 'Invalid selection count'
-                    });
-                    return;
-                }
-                
-                const payoutTable = self.CONFIG.PAYOUT_TABLE[count] || {};
-                const potentialWinnings = {};
-                
-                // Calculate winnings for each possible match count
-                for (let matches = 0; matches <= Math.min(count, self.CONFIG.KENO_DRAW_COUNT); matches++) {
-                    const payoutMultiplier = payoutTable[matches] || 0;
-                    potentialWinnings[matches] = {
-                        multiplier: payoutMultiplier,
-                        amount: bet * payoutMultiplier,
-                        matches: matches,
-                        totalSelected: count
-                    };
-                }
-                
-                // Also send maximum possible win
-                const maxMatches = Math.min(count, self.CONFIG.KENO_DRAW_COUNT);
-                const maxPayout = payoutTable[maxMatches] || 0;
-                
-                socket.emit('keno:potentialWinnings', {
-                    success: true,
-                    betAmount: bet,
-                    selectionCount: count,
-                    payoutTable: payoutTable,
-                    potentialWinnings: potentialWinnings,
-                    maxPossibleWin: bet * maxPayout,
-                    message: `Potential winnings for ${count} numbers with ${bet} ETB bet`
-                });
-                
-            } catch (error) {
-                console.error('Get potential winnings error:', error);
-                socket.emit('keno:error', 'Failed to calculate potential winnings');
-            }
-        });
-        
-        // Draw state event (when player joins during draw)
-        socket.on('keno:getDrawState', () => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('keno:error', 'Not authenticated');
-                    return;
-                }
-                
-                const activeGame = self.getActiveKenoGame();
-                const playerHasBet = !!activeGame.bets[socket.userId];
-                
-                if (activeGame.status === 'drawing' && activeGame.drawnNumbers.length > 0) {
-                    // For players requesting draw state, only send limited info if they don't have a bet
-                    const drawState = {
-                        round: activeGame.roundNumber,
-                        currentBall: activeGame.drawnNumbers.length,
-                        totalBalls: self.CONFIG.KENO_DRAW_COUNT,
-                        playersCount: activeGame.players.length,
-                        totalBets: activeGame.totalBets,
-                        message: 'Draw in progress. Watching live...',
-                        hasBet: playerHasBet
-                    };
-                    
-                    // Only send drawn numbers if player has a bet in this round
-                    if (playerHasBet) {
-                        drawState.drawnNumbers = activeGame.drawnNumbers;
-                        drawState.message = 'Draw in progress. You have a bet in this round.';
-                    }
-                    
-                    socket.emit('keno:draw_state', drawState);
-                }
-            } catch (error) {
-                console.error('Get draw state error:', error);
-            }
-        });
-        
-        // ==================== WALLET FUNCTIONALITY ====================
-        
-        // Get wallet transactions
-        socket.on('wallet:getTransactions', async (data) => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
-                    return;
-                }
-                
-                const { userId } = data;
-                
-                // Verify user
-                if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
-                    return;
-                }
-                
-                // Get recent transactions (last 20)
-                const transactions = await self.WalletTransaction.find({ 
-                    userId: userId 
-                })
-                .sort({ timestamp: -1 })
-                .limit(20);
-                
-                socket.emit('wallet:transactions', {
-                    success: true,
-                    transactions: transactions,
-                    count: transactions.length
-                });
-                
-            } catch (error) {
-                console.error('Wallet get transactions error:', error);
-                socket.emit('wallet:error', 'Failed to get transactions');
-            }
-        });
-        
-        // Request deposit
-        socket.on('wallet:requestDeposit', async (data) => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
-                    return;
-                }
-                
-                const { userId, amount, userName } = data;
-                
-                // Verify user
-                if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
-                    return;
-                }
-                
-                // Validate amount
-                const depositAmount = parseFloat(amount);
-                if (isNaN(depositAmount) || 
-                    depositAmount < self.CONFIG.MIN_DEPOSIT || 
-                    depositAmount > self.CONFIG.MAX_DEPOSIT) {
-                    socket.emit('wallet:error', `Deposit amount must be between ${self.CONFIG.MIN_DEPOSIT} and ${self.CONFIG.MAX_DEPOSIT} ETB`);
-                    return;
-                }
-                
-                // Get user
-                const user = await self.User.findOne({ userId: userId });
-                if (!user) {
-                    socket.emit('wallet:error', 'User not found');
-                    return;
-                }
-                
-                // Create deposit request
-                const depositTransaction = new self.WalletTransaction({
-                    type: 'DEPOSIT_REQUEST',
-                    userId: userId,
-                    userName: userName,
-                    amount: depositAmount,
-                    status: 'pending',
-                    description: `Deposit request: ${depositAmount} ETB`,
-                    details: {
-                        processedBy: 'system',
-                        notes: 'Awaiting admin approval'
-                    }
-                });
-                await depositTransaction.save();
-                
-                // Update user stats
-                user.totalDepositRequests = (user.totalDepositRequests || 0) + 1;
-                user.totalDepositAmount = (user.totalDepositAmount || 0) + depositAmount;
-                await user.save();
-                
-                // Update player state
-                const player = self.kenoPlayers.get(userId);
-                if (player) {
-                    player.totalDeposits = (player.totalDeposits || 0) + depositAmount;
-                    self.kenoPlayers.set(userId, player);
-                }
-                
-                // Update global stats
-                await self.updateKenoStats(0, 0, depositAmount, 0, 0);
-                
-                // Create admin notification transaction
-                const adminNotification = new self.Transaction({
-                    type: 'DEPOSIT_REQUEST',
-                    userId: userId,
-                    userName: userName,
-                    amount: depositAmount,
-                    description: `Deposit request from ${userName}: ${depositAmount} ETB`,
-                    status: 'pending',
-                    admin: true
-                });
-                await adminNotification.save();
-                
-                socket.emit('wallet:depositRequested', {
-                    success: true,
-                    amount: depositAmount,
-                    transactionId: depositTransaction._id,
-                    message: `Deposit request of ${depositAmount} ETB submitted. Admin will process shortly.`
-                });
-                
-                console.log(`💰 Deposit request: ${userName} - ${depositAmount} ETB`);
-                
-            } catch (error) {
-                console.error('Wallet deposit request error:', error);
-                socket.emit('wallet:error', 'Failed to process deposit request');
-            }
-        });
-        
-        // Request withdrawal
-        socket.on('wallet:requestWithdrawal', async (data) => {
-            try {
-                if (!socket.userId) {
-                    socket.emit('wallet:error', 'Not authenticated');
-                    return;
-                }
-                
-                const { userId, amount, accountInfo, userName } = data;
-                
-                // Verify user
-                if (userId !== socket.userId) {
-                    socket.emit('wallet:error', 'Unauthorized');
-                    return;
-                }
-                
-                // Validate amount
-                const withdrawalAmount = parseFloat(amount);
-                if (isNaN(withdrawalAmount) || withdrawalAmount < self.CONFIG.MIN_WITHDRAWAL) {
-                    socket.emit('wallet:error', `Minimum withdrawal is ${self.CONFIG.MIN_WITHDRAWAL} ETB`);
-                    return;
-                }
-                
-                // Validate account info
-                if (!accountInfo || accountInfo.trim() === '') {
-                    socket.emit('wallet:error', 'Account information is required');
-                    return;
-                }
-                
-                // Get user
-                const user = await self.User.findOne({ userId: userId });
-                if (!user) {
-                    socket.emit('wallet:error', 'User not found');
-                    return;
-                }
-                
-                // Check balance
-                if (user.balance < withdrawalAmount) {
-                    socket.emit('wallet:error', 'Insufficient balance');
-                    return;
-                }
-                
-                // Calculate fee and net amount
-                const fee = (withdrawalAmount * self.CONFIG.WITHDRAWAL_FEE_PERCENTAGE) / 100;
-                const netAmount = withdrawalAmount - fee;
-                
-                // Create withdrawal request
-                const withdrawalTransaction = new self.WalletTransaction({
-                    type: 'WITHDRAWAL_REQUEST',
-                    userId: userId,
-                    userName: userName,
-                    amount: -withdrawalAmount,
-                    status: 'pending',
-                    description: `Withdrawal request: ${withdrawalAmount} ETB (Net: ${netAmount} ETB after ${fee.toFixed(2)} ETB fee)`,
-                    details: {
-                        accountInfo: accountInfo,
-                        netAmount: netAmount,
-                        fee: fee,
-                        processedBy: 'system',
-                        notes: 'Awaiting admin processing'
-                    }
-                });
-                await withdrawalTransaction.save();
-                
-                // Update user stats
-                user.totalWithdrawalRequests = (user.totalWithdrawalRequests || 0) + 1;
-                user.totalWithdrawalAmount = (user.totalWithdrawalAmount || 0) + withdrawalAmount;
-                await user.save();
-                
-                // Update player state
-                const player = self.kenoPlayers.get(userId);
-                if (player) {
-                    player.totalWithdrawals = (player.totalWithdrawals || 0) + withdrawalAmount;
-                    self.kenoPlayers.set(userId, player);
-                }
-                
-                // Update global stats
-                await self.updateKenoStats(0, 0, 0, withdrawalAmount, 0);
-                
-                // Create admin notification transaction
-                const adminNotification = new self.Transaction({
-                    type: 'WITHDRAWAL_REQUEST',
-                    userId: userId,
-                    userName: userName,
-                    amount: -withdrawalAmount,
-                    description: `Withdrawal request from ${userName}: ${withdrawalAmount} ETB to ${accountInfo}`,
-                    status: 'pending',
-                    admin: true,
-                    details: {
-                        accountInfo: accountInfo,
-                        netAmount: netAmount,
-                        fee: fee
-                    }
-                });
-                await adminNotification.save();
-                
-                socket.emit('wallet:withdrawalRequested', {
-                    success: true,
-                    amount: withdrawalAmount,
-                    netAmount: netAmount,
-                    fee: fee,
-                    transactionId: withdrawalTransaction._id,
-                    message: `Withdrawal request of ${withdrawalAmount} ETB submitted. Will be processed within 24 hours.`
-                });
-                
-                console.log(`💰 Withdrawal request: ${userName} - ${withdrawalAmount} ETB to ${accountInfo}`);
-                
-            } catch (error) {
-                console.error('Wallet withdrawal request error:', error);
-                socket.emit('wallet:error', 'Failed to process withdrawal request');
-            }
-        });
-        
-        // Process deposit (Admin only - triggered via separate admin interface)
-        socket.on('wallet:processDeposit', async (data) => {
-            try {
-                // Admin authentication would go here
-                // For now, we'll implement the logic
-                
-                const { transactionId, action, adminNotes } = data;
-                
-                const transaction = await self.WalletTransaction.findById(transactionId);
-                if (!transaction || transaction.type !== 'DEPOSIT_REQUEST') {
-                    socket.emit('wallet:error', 'Transaction not found or invalid type');
-                    return;
-                }
-                
-                if (transaction.status !== 'pending') {
-                    socket.emit('wallet:error', 'Transaction already processed');
-                    return;
-                }
-                
-                if (action === 'approve') {
-                    // Get user
-                    const user = await self.User.findOne({ userId: transaction.userId });
-                    if (!user) {
-                        socket.emit('wallet:error', 'User not found');
-                        return;
-                    }
-                    
-                    // Update user balance
-                    user.balance += transaction.amount;
-                    user.totalDeposits = (user.totalDeposits || 0) + transaction.amount;
-                    user.lastDeposit = new Date();
-                    await user.save();
-                    
-                    // Update transaction
-                    transaction.status = 'completed';
-                    transaction.details.processedBy = socket.userId || 'admin';
-                    transaction.details.notes = adminNotes || 'Approved by admin';
-                    transaction.processedAt = new Date();
-                    await transaction.save();
-                    
-                    // Create completed transaction record
-                    const completedTransaction = new self.WalletTransaction({
-                        type: 'DEPOSIT',
-                        userId: transaction.userId,
-                        userName: transaction.userName,
-                        amount: transaction.amount,
-                        status: 'completed',
-                        description: `Deposit completed: ${transaction.amount} ETB`,
-                        details: {
-                            originalTransactionId: transactionId,
-                            processedBy: socket.userId || 'admin'
-                        }
-                    });
-                    await completedTransaction.save();
-                    
-                    // Update player state
-                    const player = self.kenoPlayers.get(transaction.userId);
-                    if (player) {
-                        player.balance = user.balance;
-                        self.kenoPlayers.set(transaction.userId, player);
-                        
-                        // Notify player
-                        const playerSocket = self.getKenoSocketByUserId(transaction.userId);
-                        if (playerSocket) {
-                            playerSocket.emit('wallet:balanceUpdated', {
-                                balance: user.balance,
-                                amount: transaction.amount,
-                                type: 'deposit',
-                                message: `Deposit of ${transaction.amount} ETB completed`
-                            });
-                        }
-                    }
-                    
-                    socket.emit('wallet:depositProcessed', {
-                        success: true,
-                        transactionId: transaction._id,
-                        userId: transaction.userId,
-                        amount: transaction.amount,
-                        message: `Deposit approved for ${transaction.userName}`
-                    });
-                    
-                    console.log(`💰 Deposit approved: ${transaction.userName} - ${transaction.amount} ETB`);
-                    
-                } else if (action === 'reject') {
-                    // Update transaction
-                    transaction.status = 'rejected';
-                    transaction.details.processedBy = socket.userId || 'admin';
-                    transaction.details.notes = adminNotes || 'Rejected by admin';
-                    transaction.processedAt = new Date();
-                    await transaction.save();
-                    
-                    socket.emit('wallet:depositProcessed', {
-                        success: true,
-                        transactionId: transaction._id,
-                        userId: transaction.userId,
-                        amount: transaction.amount,
-                        message: `Deposit rejected for ${transaction.userName}`
-                    });
-                    
-                    console.log(`💰 Deposit rejected: ${transaction.userName} - ${transaction.amount} ETB`);
-                }
-                
-            } catch (error) {
-                console.error('Process deposit error:', error);
-                socket.emit('wallet:error', 'Failed to process deposit');
-            }
-        });
-        
-        // Process withdrawal (Admin only)
-        socket.on('wallet:processWithdrawal', async (data) => {
-            try {
-                const { transactionId, action, adminNotes } = data;
-                
-                const transaction = await self.WalletTransaction.findById(transactionId);
-                if (!transaction || transaction.type !== 'WITHDRAWAL_REQUEST') {
-                    socket.emit('wallet:error', 'Transaction not found or invalid type');
-                    return;
-                }
-                
-                if (transaction.status !== 'pending') {
-                    socket.emit('wallet:error', 'Transaction already processed');
-                    return;
-                }
-                
-                if (action === 'approve') {
-                    // Get user
-                    const user = await self.User.findOne({ userId: transaction.userId });
-                    if (!user) {
-                    socket.emit('wallet:error', 'User not found');
-                        return;
-                    }
-                    
-                    // Check balance again
-                    if (user.balance < Math.abs(transaction.amount)) {
-                        socket.emit('wallet:error', 'User has insufficient balance');
-                        return;
-                    }
-                    
-                    // Update user balance
-                    user.balance += transaction.amount; // Amount is negative
-                    user.totalWithdrawals = (user.totalWithdrawals || 0) + Math.abs(transaction.amount);
-                    user.lastWithdrawal = new Date();
-                    await user.save();
-                    
-                    // Update transaction
-                    transaction.status = 'completed';
-                    transaction.details.processedBy = socket.userId || 'admin';
-                    transaction.details.notes = adminNotes || 'Approved by admin';
-                    transaction.processedAt = new Date();
-                    await transaction.save();
-                    
-                    // Create completed transaction record
-                    const completedTransaction = new self.WalletTransaction({
-                        type: 'WITHDRAWAL',
-                        userId: transaction.userId,
-                        userName: transaction.userName,
-                        amount: transaction.amount,
-                        status: 'completed',
-                        description: `Withdrawal completed: ${Math.abs(transaction.amount)} ETB`,
-                        details: {
-                            originalTransactionId: transactionId,
-                            processedBy: socket.userId || 'admin',
-                            accountInfo: transaction.details.accountInfo,
-                            netAmount: transaction.details.netAmount,
-                            fee: transaction.details.fee
-                        }
-                    });
-                    await completedTransaction.save();
-                    
-                    // Update player state
-                    const player = self.kenoPlayers.get(transaction.userId);
-                    if (player) {
-                        player.balance = user.balance;
-                        self.kenoPlayers.set(transaction.userId, player);
-                        
-                        // Notify player
-                        const playerSocket = self.getKenoSocketByUserId(transaction.userId);
-                        if (playerSocket) {
-                            playerSocket.emit('wallet:balanceUpdated', {
-                                balance: user.balance,
-                                amount: transaction.amount,
-                                type: 'withdrawal',
-                                message: `Withdrawal of ${Math.abs(transaction.amount)} ETB completed`
-                            });
-                        }
-                    }
-                    
-                    socket.emit('wallet:withdrawalProcessed', {
-                        success: true,
-                        transactionId: transaction._id,
-                        userId: transaction.userId,
-                        amount: Math.abs(transaction.amount),
-                        message: `Withdrawal approved for ${transaction.userName}`
-                    });
-                    
-                    console.log(`💰 Withdrawal approved: ${transaction.userName} - ${Math.abs(transaction.amount)} ETB`);
-                    
-                } else if (action === 'reject') {
-                    // Update transaction
-                    transaction.status = 'rejected';
-                    transaction.details.processedBy = socket.userId || 'admin';
-                    transaction.details.notes = adminNotes || 'Rejected by admin';
-                    transaction.processedAt = new Date();
-                    await transaction.save();
-                    
-                    socket.emit('wallet:withdrawalProcessed', {
-                        success: true,
-                        transactionId: transaction._id,
-                        userId: transaction.userId,
-                        amount: Math.abs(transaction.amount),
-                        message: `Withdrawal rejected for ${transaction.userName}`
-                    });
-                    
-                    console.log(`💰 Withdrawal rejected: ${transaction.userName} - ${Math.abs(transaction.amount)} ETB`);
-                }
-                
-            } catch (error) {
-                console.error('Process withdrawal error:', error);
-                socket.emit('wallet:error', 'Failed to process withdrawal');
-            }
-        });
-        
-        // Join Keno room
-        socket.on('keno:join', () => {
-            socket.join('keno');
-            console.log(`🎰 Player joined Keno room: ${socket.id}`);
-        });
-        
-        // Handle disconnection
-        socket.on('disconnect', () => {
-            self.handleKenoDisconnect(socket);
-        });
-    },
-    
-    // Handle Keno disconnection - IMPROVED
-    handleKenoDisconnect: function(socket) {
-        const self = this;
-        
-        console.log(`🎰 Keno disconnected: ${socket.id}`);
-        
-        // Track disconnection time for reconnection
-        if (socket.userId) {
-            const player = self.kenoPlayers.get(socket.userId);
-            if (player) {
-                // Mark as offline but keep player data
-                player.isOnline = false;
-                player.lastSeen = new Date();
-                player.disconnectTime = Date.now();
-                
-                // Save pending selections for reconnection
-                // ONLY if round is active, player hasn't placed bet, and has selections
-                if (self.isKenoRoundActive && 
-                    !player.hasPlacedBet && 
-                    player.selectedNumbers.length > 0) {
-                    player.pendingSelections = [...player.selectedNumbers];
-                    player.pendingBet = player.currentBet;
-                    console.log(`💾 Saved pending selections for ${player.userName}: ${player.selectedNumbers.length} numbers`);
-                }
-                
-                self.kenoPlayers.set(socket.userId, player);
-                
-                // Add to disconnected players map for reconnection tracking
-                // Only if they were online and actively playing
-                if (player.socketId && player.isOnline) {
-                    self.disconnectedPlayers.set(socket.userId, Date.now());
-                    console.log(`📝 Added ${player.userName} to disconnected players`);
-                }
-                
-                // Remove player from active game if they haven't placed a bet
-                const activeGame = self.getActiveKenoGame();
-                if (activeGame && activeGame.players) {
-                    const playerIndex = activeGame.players.indexOf(socket.userId);
-                    if (playerIndex > -1 && !player.hasPlacedBet) {
-                        activeGame.players.splice(playerIndex, 1);
-                        console.log(`🎰 Removed disconnected player ${player.userName} from active game`);
-                    }
-                }
-                
-                // Update in database
-                self.User.findOneAndUpdate(
-                    { userId: socket.userId },
-                    { 
-                        isOnline: false,
-                        lastSeen: new Date()
-                    }
-                ).catch(err => console.error('Error updating user status:', err));
-            }
+        while (!isUnique) {
+          newCode = `AGENT${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+          const existing = await this.models.Agent.findOne({ referralCode: newCode });
+          if (!existing) {
+            isUnique = true;
+          }
         }
         
-        // Remove from keno sockets
-        self.kenoSockets.delete(socket.id);
+        agent.referralCode = newCode;
+        await agent.save();
         
-        // Broadcast updated player count
-        self.broadcastKenoPlayersUpdate();
-        
-        // Check if we need to pause the game (no players left)
-        const onlinePlayers = self.getOnlinePlayersCount();
-        
-        // FIX: Check if round is active but no players with bets
-        const activeGame = self.getActiveKenoGame();
-        const hasActiveBets = activeGame && activeGame.totalBets > 0;
-        
-        if (onlinePlayers === 0 && self.isKenoRoundActive && !hasActiveBets) {
-            console.log('🎰 No players online and no active bets, resetting game...');
-            self.resetStuckKenoGame();
-        } else if (onlinePlayers === 0 && self.isKenoRoundActive) {
-            console.log('🎰 No players online, pausing game...');
-            self.pauseKenoGame();
-        }
-    },
-    
-    // Start Keno game round
-    startKenoRound: function() {
-        const self = this;
-        
-        // Clear any scheduled flag
-        self.isRoundScheduled = false;
-        
-        // Clear any existing timeout
-        if (self.roundTransitionTimeout) {
-            clearTimeout(self.roundTransitionTimeout);
-            self.roundTransitionTimeout = null;
-        }
-        
-        // FIX: Check if we actually have online players
-        const onlinePlayers = self.getOnlinePlayersCount();
-        if (onlinePlayers < self.minimumPlayers) {
-            console.log('🎰 Not enough players to start round. Cancelling...');
-            // Don't start round, just wait
-            self.isKenoRoundActive = false;
-            
-            // Broadcast waiting status
-            self.io.to('keno').emit('keno:waiting', {
-                message: 'Waiting for players...',
-                playersNeeded: self.minimumPlayers
+        // Update cache
+        this.referralCache.set(newCode, agent._id.toString());
+      }
+
+      // Generate Telegram referral link for the new bot
+      const telegramLink = `https://t.me/Ethio_elite_games_bot?start=${agent.referralCode}`;
+
+      socket.emit('agent:referralLink', {
+        referralCode: agent.referralCode,
+        telegramLink: telegramLink,
+        referralMessage: `Join Elite Games via my referral link and earn together! ${telegramLink}`
+      });
+    } catch (error) {
+      console.error('Generate link error:', error);
+      socket.emit('agent:error', 'Failed to generate referral code');
+    }
+  }
+
+  // Handle Telegram bot referral when user clicks start link - UPDATED to create referral record
+  async handleTelegramReferral(userId, startParam) {
+    try {
+      // Extract referral code from start parameter
+      let referralCode = startParam;
+      
+      // Check if startParam contains the referral code
+      if (startParam && startParam.startsWith('agent')) {
+        referralCode = startParam.toUpperCase();
+      }
+
+      console.log(`🤖 Processing Telegram referral: User ${userId}, Code: ${referralCode}`);
+
+      // Find agent by referral code
+      const agent = await this.getAgentByReferralCode(referralCode);
+      if (!agent) {
+        console.log(`❌ Agent not found for referral code: ${referralCode}`);
+        return {
+          success: false,
+          message: 'Invalid referral code'
+        };
+      }
+
+      if (!agent.isActive) {
+        console.log(`❌ Agent ${agent.username} is inactive`);
+        return {
+          success: false,
+          message: 'Agent account is inactive'
+        };
+      }
+
+      // Find user
+      const user = await this.models.User.findOne({ userId });
+      if (!user) {
+        console.log(`❌ User not found: ${userId}`);
+        return {
+          success: false,
+          message: 'User not found in system'
+        };
+      }
+
+      // Check if user already has an agent
+      if (user.agentId) {
+        if (user.agentId.toString() === agent._id.toString()) {
+          console.log(`ℹ️ User ${userId} is already referral of agent ${agent.username}`);
+          
+          // Check if referral record exists
+          const existingReferral = await this.models.Referral.findOne({
+            agentId: agent._id,
+            userId: userId
+          });
+          
+          if (!existingReferral) {
+            // Create referral record if missing
+            const referralRecord = new this.models.Referral({
+              agentId: agent._id,
+              userId: user.userId,
+              userName: user.userName,
+              referralMethod: 'telegram_link',
+              referralCode: agent.referralCode,
+              status: 'active',
+              createdAt: user.agentReferredAt || new Date(),
+              updatedAt: new Date()
             });
+            await referralRecord.save();
+          }
+          
+          return {
+            success: true,
+            already: true,
+            message: `You are already registered under ${agent.name}`,
+            agent: agent.name
+          };
+        }
+        
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        return {
+          success: false,
+          alreadyHasAgent: true,
+          message: `You are already registered under agent: ${currentAgent?.name || 'Another agent'}`
+        };
+      }
+
+      // Assign user to agent
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      user.referredBy = 'telegram_link';
+      await user.save();
+
+      // Update agent referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      if (user.isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      }
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      // Create referral record
+      const referralRecord = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        referralMethod: 'telegram_link',
+        referralCode: agent.referralCode,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await referralRecord.save();
+
+      // Notify agent in real-time
+      this.sendAgentNotification(agent._id, 
+        `✅ New Telegram referral: ${user.userName || user.userId} via your link`, 
+        'success'
+      );
+
+      console.log(`✅ Telegram referral success: ${user.userId} -> Agent ${agent.username} (${referralCode})`);
+
+      return {
+        success: true,
+        message: `Successfully registered under agent ${agent.name}! You will now earn commissions for them.`,
+        agent: {
+          name: agent.name,
+          username: agent.username,
+          referralCode: agent.referralCode
+        },
+        user: {
+          userId: user.userId,
+          userName: user.userName
+        }
+      };
+    } catch (error) {
+      console.error('Telegram referral error:', error);
+      return {
+        success: false,
+        message: 'Failed to process referral'
+      };
+    }
+  }
+
+  // Process manual referral when agent types username/user ID - FIXED AND UPDATED
+  async handleManualReferralAssignmentByAgent(socket, data) {
+    try {
+      console.log('🔍 handleManualReferralAssignmentByAgent called:', {
+        socketAgentId: socket.agentId,
+        data: data
+      });
+
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { userIdentifier } = data; // Can be Telegram username, user ID, or display name
+      if (!userIdentifier || typeof userIdentifier !== 'string' || userIdentifier.trim() === '') {
+        socket.emit('agent:error', 'Please enter a valid username, user ID, or display name');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Clean the identifier
+      const cleanIdentifier = userIdentifier.trim();
+      console.log(`🔍 Agent ${agent.username} searching for user: "${cleanIdentifier}"`);
+
+      // Enhanced user search with multiple strategies
+      let user = null;
+      let searchStrategy = '';
+
+      // Strategy 1: Try exact username match (with or without @)
+      if (!user) {
+        const usernameSearch = cleanIdentifier.startsWith('@') ? 
+            cleanIdentifier.substring(1) : cleanIdentifier;
+        user = await this.models.User.findOne({
+            $or: [
+                { userName: new RegExp('^' + usernameSearch + '$', 'i') },
+                { userId: new RegExp('^' + usernameSearch + '$', 'i') }
+            ]
+        });
+        if (user) searchStrategy = 'exact_username';
+      }
+
+      // Strategy 2: Try partial match on userId (including tg_ prefix)
+      if (!user) {
+        let searchId = cleanIdentifier;
+        if (cleanIdentifier.startsWith('tg_')) {
+            searchId = cleanIdentifier;
+        } else if (/^\d+$/.test(cleanIdentifier)) {
+            // If it's all numbers, search with tg_ prefix
+            searchId = 'tg_' + cleanIdentifier;
+        }
+        
+        user = await this.models.User.findOne({
+            userId: new RegExp('^' + searchId + '$', 'i')
+        });
+        if (user) searchStrategy = 'userid_match';
+      }
+
+      // Strategy 3: Try case-insensitive partial search
+      if (!user) {
+        user = await this.models.User.findOne({
+            $or: [
+                { userName: { $regex: cleanIdentifier, $options: 'i' } },
+                { userId: { $regex: cleanIdentifier, $options: 'i' } }
+            ]
+        });
+        if (user) searchStrategy = 'partial_match';
+      }
+
+      // Strategy 4: Try phone number (if applicable)
+      if (!user && /^09\d{8}$/.test(cleanIdentifier)) {
+        user = await this.models.User.findOne({ 
+            phoneNumber: cleanIdentifier 
+        });
+        if (user) searchStrategy = 'phone_match';
+      }
+
+      // Strategy 5: Try removing special characters and search
+      if (!user) {
+        const cleanSearch = cleanIdentifier.replace(/[^a-zA-Z0-9_]/g, '');
+        if (cleanSearch.length >= 3) {
+            user = await this.models.User.findOne({
+                $or: [
+                    { userName: { $regex: cleanSearch, $options: 'i' } },
+                    { userId: { $regex: cleanSearch, $options: 'i' } }
+                ]
+            });
+            if (user) searchStrategy = 'clean_partial_match';
+        }
+      }
+
+      if (!user) {
+        console.log(`❌ User not found for identifier: "${cleanIdentifier}"`);
+        
+        // Get suggestions for similar users
+        const suggestions = await this.getUserSuggestions(cleanIdentifier, 5);
+        
+        socket.emit('agent:error', {
+            message: `User not found: "${cleanIdentifier}"`,
+            suggestions: suggestions.length > 0 ? {
+                count: suggestions.length,
+                users: suggestions.map(u => ({
+                    userId: u.userId,
+                    userName: u.userName || 'No Name',
+                    isOnline: u.isOnline,
+                    totalWins: u.totalWins || 0,
+                    lastSeen: u.lastSeen
+                }))
+            } : null
+        });
+        
+        return;
+      }
+
+      console.log(`✅ User found: ${user.userId} (${user.userName || 'No Name'}) via ${searchStrategy}`);
+
+      // Check if user already has an agent
+      if (user.agentId) {
+        if (user.agentId.toString() === agent._id.toString()) {
+            // Check if referral record exists
+            const existingReferral = await this.models.Referral.findOne({
+                agentId: agent._id,
+                userId: user.userId
+            });
+            
+            if (!existingReferral) {
+                // Create missing referral record
+                const referralRecord = new this.models.Referral({
+                    agentId: agent._id,
+                    userId: user.userId,
+                    userName: user.userName,
+                    referralMethod: 'manual',
+                    referralCode: agent.referralCode,
+                    status: 'active',
+                    createdAt: user.agentReferredAt || new Date(),
+                    updatedAt: new Date()
+                });
+                await referralRecord.save();
+                console.log(`📝 Created missing referral record for ${user.userId}`);
+            }
+            
+            socket.emit('agent:error', 
+                `"${user.userName || user.userId}" is already your referral.`
+            );
             return;
         }
         
-        console.log('🎰 Starting new Keno round...');
+        // User has another agent
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        const currentAgentName = currentAgent ? 
+            `${currentAgent.name} (@${currentAgent.username})` : 'another agent';
         
-        self.isKenoRoundActive = true;
-        self.isDrawing = false;
-        self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
-        
-        // Create new active game
-        const gameId = Date.now();
-        const activeGame = {
-            id: gameId,
-            roundNumber: self.kenoRoundNumber,
-            startTime: new Date(),
-            endTime: null,
-            status: 'betting',
-            players: [],
-            bets: {},
-            drawnNumbers: [],
-            drawnNumbersOriginalOrder: [], // Store original random order
-            winners: [],
-            totalBets: 0,
-            totalBetAmount: 0,
-            totalPayout: 0,
-            commissionCollected: 0,
-            drawComplete: false,
-            processedResults: false
-        };
-        
-        self.activeKenoGames.set('current', activeGame);
-        
-        // Broadcast round start
-        self.io.to('keno').emit('keno:round_start', {
-            round: activeGame.roundNumber,
-            duration: self.CONFIG.KENO_GAME_TIMER,
-            message: `Round ${activeGame.roundNumber} started! Place your bets!`,
-            minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
-            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
-            drawCount: self.CONFIG.KENO_DRAW_COUNT,
-            willBeRandomOrder: true
+        socket.emit('agent:error', {
+            message: `"${user.userName || user.userId}" is already assigned to ${currentAgentName}`,
+            currentAgent: currentAgent ? {
+                name: currentAgent.name,
+                username: currentAgent.username
+            } : null
         });
-        
-        // Reset all players' bet status (but keep pre-selected numbers)
-        for (const [userId, player] of self.kenoPlayers) {
-            // Only reset bet status for online players
-            if (player.isOnline) {
-                player.hasPlacedBet = false;
-                player.currentBet = null;
-                
-                // Clear any pending selections (new round starts fresh)
-                player.pendingSelections = [];
-                player.pendingBet = null;
-                
-                // Auto-apply pre-selected numbers if player is ready
-                if (player.isReadyForNextRound && 
-                    player.preSelectedNumbers.length >= self.CONFIG.KENO_MIN_SELECTIONS &&
-                    player.preSelectedNumbers.length <= self.CONFIG.KENO_MAX_SELECTIONS) {
-                    player.selectedNumbers = [...player.preSelectedNumbers];
-                    // Notify player that pre-selected numbers were applied
-                    const playerSocket = self.getKenoSocketByUserId(userId);
-                    if (playerSocket) {
-                        playerSocket.emit('keno:autoSelect', {
-                            numbers: player.selectedNumbers,
-                            selectionCount: player.selectedNumbers.length,
-                            message: 'Your pre-selected numbers have been applied!'
-                        });
-                    }
-                } else {
-                    // Don't clear selected numbers - let players keep their selection
-                    if (self.CONFIG.ALLOW_PRE_SELECTION) {
-                        // Keep existing selectedNumbers if they have 1-5 numbers
-                        if (player.selectedNumbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
-                            player.selectedNumbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                            player.selectedNumbers = [];
-                        }
-                    } else {
-                        player.selectedNumbers = [];
-                    }
-                }
-                
-                // Reset new player flag for this round
-                player.isNewInCurrentRound = false;
-                
-                self.kenoPlayers.set(userId, player);
-            }
-        }
-        
-        // Start countdown
-        self.startKenoCountdown();
-    },
-    
-    // Start game if ready
-    startGameIfReady: function() {
-        const self = this;
-        
-        const activeGame = self.getActiveKenoGame();
-        const gameStatus = activeGame.status || 'waiting';
-        
-        console.log('🎰 startGameIfReady called. Current state:');
-        console.log('  isKenoRoundActive:', self.isKenoRoundActive);
-        console.log('  isDrawing:', self.isDrawing);
-        console.log('  gameStatus:', gameStatus);
-        console.log('  isRoundScheduled:', self.isRoundScheduled);
-        console.log('  onlinePlayers:', self.getOnlinePlayersCount());
-        console.log('  minimumPlayers:', self.minimumPlayers);
-        console.log('  disconnectedPlayers:', self.disconnectedPlayers.size);
-        
-        // Only start a new round if:
-        // 1. No round is active
-        // 2. Not currently drawing
-        // 3. Game status is 'waiting' (not 'betting', 'drawing', or 'completed')
-        // 4. No round is already scheduled
-        // 5. We have minimum players
-        if (!self.isKenoRoundActive && 
-            !self.isDrawing &&
-            gameStatus === 'waiting' && 
-            !self.isRoundScheduled &&
-            self.getOnlinePlayersCount() >= self.minimumPlayers) {
-            
-            console.log('🎰 Starting new round from startGameIfReady...');
-            self.isRoundScheduled = true;
-            
-            // Clear any existing timeout
-            if (self.roundTransitionTimeout) {
-                clearTimeout(self.roundTransitionTimeout);
-                self.roundTransitionTimeout = null;
-            }
-            
-            // Start round after 3 seconds
-            self.roundTransitionTimeout = setTimeout(() => {
-                self.startKenoRound();
-            }, 3000);
-        } else if (self.isKenoRoundActive) {
-            console.log('🎰 Game already active, continuing...');
-        } else if (self.isDrawing) {
-            console.log('🎰 Currently drawing, cannot start new round');
-        } else if (self.isRoundScheduled) {
-            console.log('🎰 Round already scheduled, waiting...');
-        } else {
-            console.log('🎰 Waiting for players to start game... Status:', gameStatus);
-        }
-    },
-    
-    // Pause Keno game when no players
-    pauseKenoGame: function() {
-        const self = this;
-        
-        if (self.kenoCountdownInterval) {
-            clearInterval(self.kenoCountdownInterval);
-            self.kenoCountdownInterval = null;
-        }
-        
-        // Clear any existing timeout
-        if (self.roundTransitionTimeout) {
-            clearTimeout(self.roundTransitionTimeout);
-            self.roundTransitionTimeout = null;
-        }
-        
-        self.isKenoRoundActive = false;
-        self.isDrawing = false;
-        self.isRoundScheduled = false;
-        
-        // Broadcast game paused
-        self.io.to('keno').emit('keno:game_paused', {
-            message: 'Game paused. Waiting for players...'
-        });
-        
-        console.log('🎰 Game paused due to no players');
-    },
-    
-    // Start Keno countdown
-    startKenoCountdown: function() {
-        const self = this;
-        
-        // Clear any existing interval
-        if (self.kenoCountdownInterval) {
-            clearInterval(self.kenoCountdownInterval);
-            self.kenoCountdownInterval = null;
-        }
-        
-        self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
-        
-        // Broadcast initial countdown
-        self.io.to('keno').emit('keno:countdown_update', {
-            countdown: self.kenoCountdown
-        });
-        
-        self.kenoCountdownInterval = setInterval(() => {
-            // Check if round is still active
-            if (!self.isKenoRoundActive) {
-                clearInterval(self.kenoCountdownInterval);
-                self.kenoCountdownInterval = null;
-                return;
-            }
-            
-            // FIX: Check if we lost all players during countdown
-            const onlinePlayers = self.getOnlinePlayersCount();
-            if (onlinePlayers === 0) {
-                clearInterval(self.kenoCountdownInterval);
-                self.kenoCountdownInterval = null;
-                console.log('🎰 All players left during countdown, cancelling round...');
-                self.resetStuckKenoGame();
-                return;
-            }
-            
-            self.kenoCountdown--;
-            
-            // Broadcast countdown update
-            self.io.to('keno').emit('keno:countdown_update', {
-                countdown: self.kenoCountdown
-            });
-            
-            // Last 10 seconds warning
-            if (self.kenoCountdown === 10) {
-                self.io.to('keno').emit('keno:warning', {
-                    message: '10 seconds remaining to place bets!',
-                    type: 'warning'
-                });
-            }
-            
-            // Last 5 seconds warning
-            if (self.kenoCountdown <= 5 && self.kenoCountdown > 0) {
-                self.io.to('keno').emit('keno:countdown_warning', {
-                    countdown: self.kenoCountdown,
-                    message: `${self.kenoCountdown}...`
-                });
-            }
-            
-            if (self.kenoCountdown <= 0) {
-                clearInterval(self.kenoCountdownInterval);
-                self.kenoCountdownInterval = null;
-                self.drawKenoNumbers();
-            }
-        }, 1000);
-    },
-    
-    // Draw Keno numbers - UPDATED with ball counter and random order drawing
-    drawKenoNumbers: async function() {
-        const self = this;
-        const activeGame = self.getActiveKenoGame();
-        
-        if (!activeGame || activeGame.status !== 'betting') return;
-        
-        console.log('🎰 Drawing Keno numbers...');
-        
-        // IMPORTANT: Set game status to drawing
-        activeGame.status = 'drawing';
-        self.isKenoRoundActive = false;
-        self.isDrawing = true;
-        
-        // Broadcast draw start
-        self.io.to('keno').emit('keno:draw_start', {
-            round: activeGame.roundNumber,
-            message: 'Drawing numbers...',
-            popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
-            totalBalls: self.CONFIG.KENO_DRAW_COUNT,
-            willBeRandomOrder: true // Inform clients numbers will come in random order
-        });
-        
-        // Wait 2 seconds for dramatic effect
-        setTimeout(async () => {
-            // Generate 20 random unique numbers - DO NOT SORT THEM
-            const drawnNumbers = [];
-            while (drawnNumbers.length < self.CONFIG.KENO_DRAW_COUNT) {
-                const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
-                if (!drawnNumbers.includes(num)) {
-                    drawnNumbers.push(num);
-                }
-            }
-            
-            // Store in original random order
-            activeGame.drawnNumbersOriginalOrder = [...drawnNumbers];
-            activeGame.drawnNumbers = drawnNumbers;
-            
-            console.log(`🎰 Numbers to draw (random order): ${drawnNumbers.join(', ')}`);
-            
-            // Draw numbers one by one in RANDOM ORDER (as they were generated)
-            for (let i = 0; i < drawnNumbers.length; i++) {
-                setTimeout(() => {
-                    self.io.to('keno').emit('keno:number_drawn', {
-                        number: drawnNumbers[i], // This is the random number at position i
-                        index: i,
-                        total: drawnNumbers.length,
-                        drawnCount: i + 1, // Current ball number (1/20, 2/20, etc.)
-                        round: activeGame.roundNumber,
-                        isRandomOrder: true
-                    });
-                }, i * self.CONFIG.NUMBER_POP_INTERVAL);
-            }
-            
-            // After all numbers are drawn, send complete results IN SORTED ORDER for display
-            setTimeout(() => {
-                // For the final display, we sort them for better readability
-                const sortedForDisplay = [...drawnNumbers].sort((a, b) => a - b);
-                
-                self.io.to('keno').emit('keno:round_results', {
-                    round: activeGame.roundNumber,
-                    drawnNumbers: sortedForDisplay, // Send sorted for final display
-                    originalOrder: drawnNumbers, // Keep original random order too
-                    playersCount: activeGame.players.length,
-                    totalBets: activeGame.totalBets,
-                    popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
-                    message: `Round ${activeGame.roundNumber} results!`,
-                    totalDrawn: drawnNumbers.length,
-                    isDrawComplete: true,
-                    wasRandomOrder: true
-                });
-                
-                // Mark draw as complete
-                activeGame.drawComplete = true;
-                activeGame.status = 'completed';
-                self.isDrawing = false;
-                
-                // Process results after numbers are shown
-                setTimeout(async () => {
-                    await self.processKenoResults(activeGame);
-                }, 1000);
-                
-            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
-            
-        }, 2000);
-    },
-    
-    // Send player round result
-    sendPlayerRoundResult: function(socket, userId, activeGame) {
-        const self = this;
-        const bet = activeGame.bets[userId];
-        
-        if (!bet) return;
-        
-        // Count matches
-        const matches = bet.numbers.filter(num => 
-            activeGame.drawnNumbers.includes(num)
-        ).length;
-        
-        // Calculate winnings
-        let winnings = 0;
-        const selectionCount = bet.selectionCount || bet.numbers.length;
-        
-        if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-            const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
-            if (payout !== undefined && payout > 0) {
-                winnings = bet.amount * payout;
-            }
-        }
-        
-        // Send result
-        socket.emit('keno:round_result', {
-            round: activeGame.roundNumber,
-            drawnNumbers: activeGame.drawnNumbers,
-            yourNumbers: bet.numbers,
-            selectionCount: selectionCount,
-            matches: matches,
-            winnings: winnings,
-            bet: bet.amount,
-            message: winnings > 0 ? 
-                `You won ${winnings} ETB! Matched ${matches} of ${selectionCount} numbers.` :
-                `Matched ${matches} of ${selectionCount} numbers. Better luck next round!`
-        });
-    },
-    
-    // Process Keno results - UPDATED for 1-5 numbers with new payout table
-    processKenoResults: async function(activeGame) {
-        const self = this;
-        
-        console.log('🎰 Processing Keno results...');
-        
-        // Calculate winnings for each player
-        for (const [playerId, bet] of Object.entries(activeGame.bets)) {
-            try {
-                // Count matches
-                const matches = bet.numbers.filter(num => 
-                    activeGame.drawnNumbers.includes(num)
-                ).length;
-                
-                // Calculate winnings based on number of selections
-                let winnings = 0;
-                const selectionCount = bet.selectionCount || bet.numbers.length;
-                
-                if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-                    const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
-                    if (payout !== undefined && payout > 0) {
-                        winnings = bet.amount * payout;
-                        console.log(`   ${bet.userName}: ${selectionCount} numbers, ${matches} matches, ${payout}x, ${bet.amount} ETB bet = ${winnings} ETB win`);
-                    }
-                }
-                
-                if (winnings > 0) {
-                    // Update user balance
-                    const user = await self.User.findOne({ userId: playerId });
-                    if (user) {
-                        user.balance += winnings;
-                        user.totalWins += winnings;
-                        user.kenoWins = (user.kenoWins || 0) + 1;
-                        await user.save();
-                        
-                        // Create win transaction
-                        const transaction = new self.Transaction({
-                            type: 'KENO_WIN',
-                            userId: playerId,
-                            userName: user.userName,
-                            amount: winnings,
-                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB on ${selectionCount} numbers, matched ${matches})`,
-                            game: 'keno',
-                            status: 'completed',
-                            details: {
-                                numbers: bet.numbers,
-                                drawnNumbers: activeGame.drawnNumbers,
-                                matches: matches,
-                                selectionCount: selectionCount,
-                                round: activeGame.roundNumber,
-                                payoutMultiplier: winnings / bet.amount
-                            }
-                        });
-                        await transaction.save();
-                        
-                        // Add to winners list
-                        activeGame.winners.push({
-                            playerId: playerId,
-                            playerName: user.userName,
-                            betAmount: bet.amount,
-                            numbers: bet.numbers,
-                            selectionCount: selectionCount,
-                            matches: matches,
-                            winnings: winnings,
-                            payoutMultiplier: winnings / bet.amount
-                        });
-                        
-                        activeGame.totalPayout += winnings;
-                        
-                        // Update player state
-                        const player = self.kenoPlayers.get(playerId);
-                        if (player) {
-                            player.balance = user.balance;
-                            player.totalWins += winnings;
-                            player.hasPlacedBet = false;
-                            player.currentBet = null;
-                            // Keep selected numbers if player wants to use them again
-                            // Only clear if they're not pre-selected
-                            if (!player.isReadyForNextRound) {
-                                player.selectedNumbers = [];
-                            }
-                            // Clear pending selections
-                            player.pendingSelections = [];
-                            player.pendingBet = null;
-                            self.kenoPlayers.set(playerId, player);
-                        }
-                        
-                        // Send personal result
-                        const playerSocket = self.getKenoSocketByUserId(playerId);
-                        if (playerSocket) {
-                            playerSocket.emit('keno:round_result', {
-                                round: activeGame.roundNumber,
-                                drawnNumbers: activeGame.drawnNumbers,
-                                yourNumbers: bet.numbers,
-                                selectionCount: selectionCount,
-                                matches: matches,
-                                winnings: winnings,
-                                newBalance: user.balance,
-                                bet: bet.amount,
-                                message: `You won ${winnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
-                            });
-                        }
-                        
-                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (matched ${matches}/${selectionCount} numbers, ${winnings/bet.amount}x)`);
-                    }
-                } else {
-                    // Send loss result
-                    const playerSocket = self.getKenoSocketByUserId(playerId);
-                    if (playerSocket) {
-                        playerSocket.emit('keno:round_result', {
-                            round: activeGame.roundNumber,
-                            drawnNumbers: activeGame.drawnNumbers,
-                            yourNumbers: bet.numbers,
-                            selectionCount: selectionCount,
-                            matches: matches,
-                            winnings: 0,
-                            newBalance: await self.getUserBalance(playerId),
-                            bet: bet.amount,
-                            message: `Matched ${matches} of ${selectionCount} numbers. Better luck next round!`
-                        });
-                    }
-                    
-                    // Update player state
-                    const player = self.kenoPlayers.get(playerId);
-                    if (player) {
-                        player.hasPlacedBet = false;
-                        player.currentBet = null;
-                        // Keep selected numbers if player wants to use them again
-                        // Only clear if they're not pre-selected
-                        if (!player.isReadyForNextRound) {
-                            player.selectedNumbers = [];
-                        }
-                        // Clear pending selections
-                        player.pendingSelections = [];
-                        player.pendingBet = null;
-                        self.kenoPlayers.set(playerId, player);
-                    }
-                }
-            } catch (error) {
-                console.error(`Error processing result for player ${playerId}:`, error);
-            }
-        }
-        
-        // Mark results as processed
-        activeGame.processedResults = true;
-        
-        // Calculate house commission
-        const totalWagered = activeGame.totalBetAmount;
-        const commission = (totalWagered * self.CONFIG.COMMISSION_PERCENTAGE) / 100;
-        activeGame.commissionCollected = commission;
-        self.totalKenoEarnings += commission;
-        
-        // Update game stats
-        activeGame.endTime = new Date();
-        activeGame.status = 'completed';
-        
-        // Add to history
-        self.kenoRoundHistory.unshift({
-            round: activeGame.roundNumber,
-            drawnNumbers: activeGame.drawnNumbers,
-            players: activeGame.players.length,
-            totalBets: activeGame.totalBets,
-            totalBetAmount: totalWagered,
-            totalPayout: activeGame.totalPayout,
-            commission: commission,
-            winners: activeGame.winners.length,
-            timestamp: new Date(),
-            averageSelectionCount: activeGame.players.length > 0 ? 
-                Object.values(activeGame.bets).reduce((sum, bet) => sum + (bet.selectionCount || bet.numbers.length), 0) / activeGame.players.length : 0
-        });
-        
-        // Keep only last 20 rounds in history
-        if (self.kenoRoundHistory.length > 20) {
-            self.kenoRoundHistory = self.kenoRoundHistory.slice(0, 20);
-        }
-        
-        // Update database stats
-        await self.updateKenoStats(totalWagered, activeGame.totalPayout, 0, 0, 1);
-        
-        // Increment round number
-        self.kenoRoundNumber++;
-        
-        console.log(`🎰 Round ${activeGame.roundNumber} completed. Preparing for next round...`);
-        
-        // Clear all disconnected players and pending states after round completion
-        self.disconnectedPlayers.clear();
-        self.playerReconnectAttempts.clear();
-        
-        // Reset the current game to waiting state after a delay
-        setTimeout(() => {
-            // IMPORTANT: Set game back to waiting state for next round
-            activeGame.status = 'waiting';
-            activeGame.bets = {};
-            activeGame.players = [];
-            activeGame.drawnNumbers = [];
-            activeGame.drawnNumbersOriginalOrder = [];
-            activeGame.winners = [];
-            activeGame.totalBets = 0;
-            activeGame.totalBetAmount = 0;
-            activeGame.totalPayout = 0;
-            activeGame.commissionCollected = 0;
-            activeGame.drawComplete = false;
-            activeGame.processedResults = false;
-            
-            // Check if we have players for next round
-            const onlinePlayers = self.getOnlinePlayersCount();
-            
-            console.log(`🎰 Players online after round: ${onlinePlayers}`);
-            
-            if (onlinePlayers >= self.minimumPlayers) {
-                // Start next round after 5 seconds
-                console.log('🎰 Scheduling next round in 5 seconds...');
-                
-                // Clear any existing timeout
-                if (self.roundTransitionTimeout) {
-                    clearTimeout(self.roundTransitionTimeout);
-                    self.roundTransitionTimeout = null;
-                }
-                
-                self.roundTransitionTimeout = setTimeout(() => {
-                    console.log('🎰 Starting next round now...');
-                    self.startGameIfReady();
-                }, 5000);
-            } else {
-                console.log('🎰 No players online. Game will wait for players.');
-                // Broadcast waiting message
-                self.io.to('keno').emit('keno:waiting', {
-                    message: 'Waiting for players to start next round...',
-                    playersNeeded: self.minimumPlayers
-                });
-            }
-        }, 3000);
-    },
-    
-    // Update Keno stats in database - UPDATED for wallet
-    updateKenoStats: async function(wagered, payout, depositAmount, withdrawalAmount, games) {
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            
-            const updateData = {
-                $inc: {
-                    totalWagered: wagered || 0,
-                    totalEarnings: wagered - payout || 0,
-                    totalGames: games || 0,
-                    totalUsers: 0,
-                    totalKenoWagered: wagered || 0,
-                    totalKenoEarnings: wagered - payout || 0,
-                    totalKenoGames: games || 0,
-                    totalKenoWins: payout > 0 ? 1 : 0,
-                    totalDeposits: depositAmount || 0,
-                    totalWithdrawals: withdrawalAmount || 0,
-                    totalWalletTransactions: (depositAmount > 0 || withdrawalAmount > 0) ? 1 : 0
-                }
-            };
-            
-            await this.Stats.findOneAndUpdate(
-                { date: today },
-                updateData,
-                { upsert: true, new: true }
-            );
-            
-        } catch (error) {
-            console.error('Error updating Keno stats:', error);
-        }
-    },
-    
-    // Helper methods
-    getActiveKenoGame: function() {
-        let game = this.activeKenoGames.get('current');
-        if (!game) {
-            game = {
-                id: Date.now(),
-                roundNumber: this.kenoRoundNumber,
-                startTime: new Date(),
-                endTime: null,
-                status: 'waiting',
-                players: [],
-                bets: {},
-                drawnNumbers: [],
-                drawnNumbersOriginalOrder: [],
-                winners: [],
-                totalBets: 0,
-                totalBetAmount: 0,
-                totalPayout: 0,
-                commissionCollected: 0,
-                drawComplete: false,
-                processedResults: false
-            };
-            this.activeKenoGames.set('current', game);
-        }
-        return game;
-    },
-    
-    getKenoSocketByUserId: function(userId) {
-        const player = this.kenoPlayers.get(userId);
-        if (player && player.isOnline) {
-            const socket = this.kenoSockets.get(player.socketId);
-            if (socket && socket.connected) {
-                return socket;
-            }
-        }
-        return null;
-    },
-    
-    broadcastKenoPlayersUpdate: function() {
-        const activeGame = this.getActiveKenoGame();
-        const onlinePlayers = this.getOnlinePlayersCount();
-        
-        this.io.to('keno').emit('keno:players_update', {
-            count: onlinePlayers,
-            totalBets: activeGame.totalBets,
-            totalBetAmount: activeGame.totalBetAmount,
-            disconnectedPlayers: this.disconnectedPlayers.size
-        });
-    },
-    
-    getUserBalance: async function(userId) {
-        const user = await this.User.findOne({ userId: userId });
-        return user ? user.balance : 0;
-    },
-    
-    // Start Keno server
-    startKenoServer: function() {
-        const self = this;
-        
-        console.log('🎰 Starting Keno game server...');
-        
-        // Start first round if we have players
-        const onlinePlayers = self.getOnlinePlayersCount();
-        
-        if (onlinePlayers >= self.minimumPlayers) {
-            setTimeout(() => {
-                self.startGameIfReady();
-            }, 5000);
-        } else {
-            console.log('🎰 Waiting for players to start first round...');
-        }
-    },
-    
-    // Get Keno players count
-    getKenoPlayersCount: function() {
-        return this.kenoPlayers.size;
-    },
-    
-    // Get online players count
-    getOnlinePlayersCount: function() {
-        return Array.from(this.kenoPlayers.values()).filter(p => p.isOnline).length;
-    },
-    
-    // Get all Keno players
-    getAllKenoPlayers: function() {
-        return Array.from(this.kenoPlayers.values());
-    },
-    
-    // Force start Keno round (admin)
-    forceStartKenoRound: function() {
-        const onlinePlayers = this.getOnlinePlayersCount();
-        if (onlinePlayers >= this.minimumPlayers) {
-            this.startKenoRound();
-            return true;
-        }
-        return false;
-    },
-    
-    // Get Keno game stats
-    getKenoGameStats: function() {
-        const activeGame = this.getActiveKenoGame();
-        const onlinePlayers = this.getOnlinePlayersCount();
-        
-        // Calculate average selection count
-        let avgSelectionCount = 0;
-        if (activeGame && activeGame.bets) {
-            const bets = Object.values(activeGame.bets);
-            if (bets.length > 0) {
-                const totalSelections = bets.reduce((sum, bet) => sum + (bet.selectionCount || bet.numbers.length), 0);
-                avgSelectionCount = totalSelections / bets.length;
-            }
-        }
-        
-        return {
-            roundNumber: this.kenoRoundNumber,
-            isRoundActive: this.isKenoRoundActive,
-            isDrawing: this.isDrawing,
-            countdown: this.kenoCountdown,
-            playersCount: this.kenoPlayers.size,
-            onlinePlayers: onlinePlayers,
-            totalEarnings: this.totalKenoEarnings,
-            activeGame: activeGame ? {
-                players: activeGame.players.length,
-                totalBets: activeGame.totalBets,
-                totalBetAmount: activeGame.totalBetAmount,
-                status: activeGame.status,
-                drawnNumbers: activeGame.drawnNumbers,
-                drawnNumbersOriginalOrder: activeGame.drawnNumbersOriginalOrder,
-                drawComplete: activeGame.drawComplete,
-                averageSelectionCount: avgSelectionCount.toFixed(2)
-            } : null,
-            historyCount: this.kenoRoundHistory.length,
-            minimumPlayers: this.minimumPlayers,
-            allowPreSelection: this.CONFIG.ALLOW_PRE_SELECTION,
-            disconnectedPlayers: this.disconnectedPlayers.size,
-            reconnectAttempts: this.playerReconnectAttempts.size,
-            config: {
-                minSelections: this.CONFIG.KENO_MIN_SELECTIONS,
-                maxSelections: this.CONFIG.KENO_MAX_SELECTIONS,
-                allowedBets: this.CONFIG.ALLOWED_BETS,
-                reconnectTimeout: this.CONFIG.RECONNECT_TIMEOUT
-            }
-        };
-    },
-    
-    // Get detailed Keno stats for admin
-    getKenoDetailedStats: function() {
-        const stats = this.getKenoGameStats();
-        const recentHistory = this.kenoRoundHistory.slice(0, 5);
-        
-        // Count ready players
-        const readyPlayers = Array.from(this.kenoPlayers.values()).filter(p => p.isReadyForNextRound).length;
-        
-        // Calculate wallet stats
-        const totalDeposits = Array.from(this.kenoPlayers.values()).reduce((sum, p) => sum + (p.totalDeposits || 0), 0);
-        const totalWithdrawals = Array.from(this.kenoPlayers.values()).reduce((sum, p) => sum + (p.totalWithdrawals || 0), 0);
-        
-        // Get disconnected players info
-        const disconnectedPlayers = Array.from(this.disconnectedPlayers.entries()).map(([userId, time]) => {
-            const player = this.kenoPlayers.get(userId);
-            return {
-                userId,
-                userName: player?.userName || 'Unknown',
-                disconnectTime: new Date(time).toISOString(),
-                timeAgo: Math.floor((Date.now() - time) / 1000) + ' seconds',
-                reconnectAttempts: this.playerReconnectAttempts.get(userId) || 0,
-                hasPendingSelections: player?.pendingSelections?.length > 0 || false
-            };
-        });
-        
-        return {
-            ...stats,
-            recentHistory: recentHistory,
-            totalPlayers: this.kenoPlayers.size,
-            connectedSockets: this.kenoSockets.size,
-            readyPlayers: readyPlayers,
-            totalDeposits: totalDeposits,
-            totalWithdrawals: totalWithdrawals,
-            netWalletFlow: totalDeposits - totalWithdrawals,
-            disconnectedPlayers: disconnectedPlayers,
-            reconnectTokens: this.playerReconnectTokens.size,
-            config: this.CONFIG
-        };
-    },
-    
-    // Admin: Reset Keno earnings
-    resetKenoEarnings: async function() {
-        try {
-            const previousAmount = this.totalKenoEarnings;
-            this.totalKenoEarnings = 0;
-            
-            // Create reset transaction
-            const transaction = new this.Transaction({
-                type: 'KENO_EARNINGS_RESET',
-                userId: 'system',
-                userName: 'System',
-                amount: -previousAmount,
-                description: `Keno earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`,
-                admin: true,
-                status: 'completed'
-            });
-            await transaction.save();
-            
-            console.log(`🔄 Keno earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
-            return { success: true, previousAmount, newAmount: 0 };
-            
-        } catch (error) {
-            console.error('Error resetting Keno earnings:', error);
-            return { success: false, error: error.message };
-        }
-    },
-    
-    // Admin: Get Keno player list
-    getKenoPlayerList: function() {
-        const players = [];
-        for (const [userId, player] of this.kenoPlayers) {
-            players.push({
-                userId: player.userId,
-                userName: player.userName,
-                balance: player.balance,
-                isOnline: player.isOnline,
-                lastSeen: player.lastSeen,
-                totalWagered: player.totalWagered,
-                totalWins: player.totalWins,
-                hasPlacedBet: player.hasPlacedBet,
-                selectedNumbers: player.selectedNumbers,
-                selectionCount: player.selectedNumbers.length,
-                preSelectedNumbers: player.preSelectedNumbers,
-                preSelectionCount: player.preSelectedNumbers.length,
-                isReadyForNextRound: player.isReadyForNextRound,
-                isNewInCurrentRound: player.isNewInCurrentRound || false,
-                totalDeposits: player.totalDeposits || 0,
-                totalWithdrawals: player.totalWithdrawals || 0,
-                sessionStart: player.sessionStart,
-                // Reconnection info
-                pendingSelections: player.pendingSelections || [],
-                pendingBet: player.pendingBet,
-                disconnectTime: player.disconnectTime,
-                reconnectedAt: player.reconnectedAt,
-                socketId: player.socketId
-            });
-        }
-        return players;
-    },
-    
-    // Clean up old data
-    cleanupOldKenoData: function() {
-        // Remove players who haven't been online for more than 24 hours
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        let removedCount = 0;
-        
-        for (const [userId, player] of this.kenoPlayers) {
-            if (player.lastSeen < twentyFourHoursAgo && !player.isOnline) {
-                this.kenoPlayers.delete(userId);
-                this.disconnectedPlayers.delete(userId);
-                this.playerReconnectTokens.delete(userId);
-                this.playerReconnectAttempts.delete(userId);
-                removedCount++;
-            }
-        }
-        
-        // Clean up expired reconnect tokens
-        const now = Date.now();
-        for (const [userId, tokenData] of this.playerReconnectTokens) {
-            if (now > tokenData.expires) {
-                this.playerReconnectTokens.delete(userId);
-                this.playerReconnectAttempts.delete(userId);
-            }
-        }
-        
-        if (removedCount > 0) {
-            console.log(`🧹 Cleaned up ${removedCount} inactive Keno players`);
-        }
-        
-        // Clean up old active games
-        const currentGame = this.getActiveKenoGame();
-        if (currentGame.status === 'completed' && currentGame.endTime) {
-            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-            if (currentGame.endTime < oneHourAgo) {
-                this.activeKenoGames.delete('current');
-                console.log('🧹 Cleaned up old completed game');
-            }
-        }
-    },
-    
-    // Check if game should be active
-    checkGameStatus: function() {
-        const onlinePlayers = this.getOnlinePlayersCount();
-        const activeGame = this.getActiveKenoGame();
-        const gameStatus = activeGame.status || 'waiting';
-        
-        // FIX: Detect if game is stuck in active state with no players
-        if (this.isKenoRoundActive && onlinePlayers === 0) {
-            console.log('🎰 Stuck game detected: Round active but no players online');
-            const hasBets = activeGame && activeGame.totalBets > 0;
-            
-            if (!hasBets) {
-                console.log('🎰 No bets placed, resetting game...');
-                this.resetStuckKenoGame();
-                return;
-            }
-        }
-        
-        // FIX: Detect if countdown is stuck
-        if (this.kenoCountdown <= 0 && !this.isDrawing && !this.isKenoRoundActive) {
-            console.log('🎰 Stuck countdown detected, resetting...');
-            this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
-        }
-        
-        if (onlinePlayers === 0 && this.isKenoRoundActive) {
-            console.log('🎰 No players online, pausing game...');
-            this.pauseKenoGame();
-        } else if (onlinePlayers >= this.minimumPlayers && 
-                   !this.isKenoRoundActive && 
-                   !this.isDrawing &&
-                   gameStatus === 'waiting' && 
-                   !this.isRoundScheduled) {
-            // Check if no active game, start one
-            console.log('🎰 Auto-starting game from checkGameStatus...');
-            this.startGameIfReady();
-        }
-    },
-    
-    // Get player's ready status
-    getPlayerReadyStatus: function(userId) {
-        const player = this.kenoPlayers.get(userId);
-        if (player) {
-            return {
-                isReadyForNextRound: player.isReadyForNextRound,
-                preSelectedNumbers: player.preSelectedNumbers,
-                selectedNumbers: player.selectedNumbers,
-                selectionCount: player.selectedNumbers.length,
-                preSelectionCount: player.preSelectedNumbers.length,
-                isNewInCurrentRound: player.isNewInCurrentRound || false,
-                hasPendingSelections: (player.pendingSelections && player.pendingSelections.length > 0) || false,
-                isOnline: player.isOnline
-            };
-        }
-        return null;
-    },
-    
-    // Force player ready status (admin)
-    forcePlayerReady: function(userId, numbers) {
-        const player = this.kenoPlayers.get(userId);
-        if (player) {
-            player.preSelectedNumbers = numbers || player.selectedNumbers;
-            player.isReadyForNextRound = true;
-            this.kenoPlayers.set(userId, player);
-            
-            // Notify player
-            const playerSocket = this.getKenoSocketByUserId(userId);
-            if (playerSocket) {
-                playerSocket.emit('keno:forceReady', {
-                    numbers: player.preSelectedNumbers,
-                    message: 'Admin has marked you as ready for next round'
-                });
-            }
-            
-            return { success: true, message: `Player ${player.userName} marked as ready` };
-        }
-        return { success: false, message: 'Player not found' };
-    },
-    
-    // Toggle pre-selection feature
-    togglePreSelectionFeature: function(enabled) {
-        this.CONFIG.ALLOW_PRE_SELECTION = enabled;
-        
-        // Broadcast to all players
-        this.io.to('keno').emit('keno:featureUpdate', {
-            feature: 'preSelection',
-            enabled: enabled,
-            message: enabled ? 
-                'Number pre-selection is now enabled!' : 
-                'Number pre-selection is now disabled.'
-        });
-        
-        return { success: true, enabled: enabled };
-    },
-    
-    // Get pending wallet transactions for admin
-    getPendingWalletTransactions: async function() {
-        try {
-            const pendingDeposits = await this.WalletTransaction.find({
-                type: 'DEPOSIT_REQUEST',
-                status: 'pending'
-            }).sort({ timestamp: -1 }).limit(50);
-            
-            const pendingWithdrawals = await this.WalletTransaction.find({
-                type: 'WITHDRAWAL_REQUEST',
-                status: 'pending'
-            }).sort({ timestamp: -1 }).limit(50);
-            
-            return {
-                deposits: pendingDeposits,
-                withdrawals: pendingWithdrawals,
-                total: pendingDeposits.length + pendingWithdrawals.length
-            };
-        } catch (error) {
-            console.error('Error getting pending transactions:', error);
-            return { deposits: [], withdrawals: [], total: 0 };
-        }
-    },
-    
-    // Get wallet stats
-    getWalletStats: async function() {
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            
-            // Today's transactions
-            const todayTransactions = await this.WalletTransaction.find({
-                timestamp: { $gte: new Date(today) },
-                status: 'completed'
-            });
-            
-            const todayDeposits = todayTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-            const todayWithdrawals = todayTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
-            
-            // Total transactions
-            const totalDeposits = await this.WalletTransaction.aggregate([
-                { $match: { type: 'DEPOSIT', status: 'completed' } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]);
-            
-            const totalWithdrawals = await this.WalletTransaction.aggregate([
-                { $match: { type: 'WITHDRAWAL', status: 'completed' } },
-                { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
-            ]);
-            
-            return {
-                today: {
-                    deposits: todayDeposits,
-                    withdrawals: todayWithdrawals,
-                    transactions: todayTransactions.length
-                },
-                total: {
-                    deposits: totalDeposits[0]?.total || 0,
-                    withdrawals: totalWithdrawals[0]?.total || 0,
-                    netFlow: (totalDeposits[0]?.total || 0) - (totalWithdrawals[0]?.total || 0)
-                }
-            };
-        } catch (error) {
-            console.error('Error getting wallet stats:', error);
-            return { today: { deposits: 0, withdrawals: 0, transactions: 0 }, total: { deposits: 0, withdrawals: 0, netFlow: 0 } };
-        }
-    },
-    
-    // Manual balance adjustment (admin)
-    adjustUserBalance: async function(userId, amount, reason, adminId) {
-        try {
-            const user = await this.User.findOne({ userId: userId });
-            if (!user) {
-                return { success: false, message: 'User not found' };
-            }
-            
-            const oldBalance = user.balance;
-            user.balance += amount;
-            
-            if (amount > 0) {
-                user.totalDeposits = (user.totalDeposits || 0) + amount;
-            } else {
-                user.totalWithdrawals = (user.totalWithdrawals || 0) + Math.abs(amount);
-            }
-            
-            await user.save();
-            
-            // Create transaction record
-            const transaction = new this.WalletTransaction({
-                type: amount > 0 ? 'MANUAL_DEPOSIT' : 'MANUAL_WITHDRAWAL',
-                userId: userId,
-                userName: user.userName,
-                amount: amount,
-                status: 'completed',
-                description: reason || `Manual balance adjustment by admin ${adminId || 'system'}`,
-                details: {
-                    oldBalance: oldBalance,
-                    newBalance: user.balance,
-                    adjustment: amount,
-                    adminId: adminId,
-                    reason: reason
-                }
-            });
-            await transaction.save();
-            
-            // Update player state if online
-            const player = this.kenoPlayers.get(userId);
-            if (player) {
-                player.balance = user.balance;
-                if (amount > 0) {
-                    player.totalDeposits = (player.totalDeposits || 0) + amount;
-                } else {
-                    player.totalWithdrawals = (player.totalWithdrawals || 0) + Math.abs(amount);
-                }
-                this.kenoPlayers.set(userId, player);
-                
-                // Notify player
-                const playerSocket = this.getKenoSocketByUserId(userId);
-                if (playerSocket) {
-                    playerSocket.emit('wallet:balanceUpdated', {
-                        balance: user.balance,
-                        amount: amount,
-                        type: amount > 0 ? 'manual_deposit' : 'manual_withdrawal',
-                        message: `Balance adjusted by admin: ${amount > 0 ? '+' : ''}${amount} ETB`
-                    });
-                }
-            }
-            
-            // Update stats
-            await this.updateKenoStats(0, 0, amount > 0 ? amount : 0, amount < 0 ? Math.abs(amount) : 0, 0);
-            
-            console.log(`💰 Manual balance adjustment: ${user.userName} ${amount > 0 ? '+' : ''}${amount} ETB (${oldBalance} → ${user.balance})`);
-            
-            return { 
-                success: true, 
-                oldBalance, 
-                newBalance: user.balance,
-                adjustment: amount,
-                userName: user.userName 
-            };
-            
-        } catch (error) {
-            console.error('Error adjusting user balance:', error);
-            return { success: false, error: error.message };
-        }
-    },
-    
-    // Admin: Force player reconnection
-    forcePlayerReconnect: function(userId) {
-        const player = this.kenoPlayers.get(userId);
-        if (!player) {
-            return { success: false, message: 'Player not found' };
-        }
-        
-        // Remove from disconnected players
-        this.disconnectedPlayers.delete(userId);
-        
-        // Clear reconnect token and attempts
-        this.playerReconnectTokens.delete(userId);
-        this.playerReconnectAttempts.delete(userId);
-        
-        console.log(`🔄 Admin forced reconnection cleanup for player ${player.userName}`);
-        
-        return { success: true, message: `Reconnection state cleared for ${player.userName}` };
-    },
-    
-    // Get disconnected players for admin
-    getDisconnectedPlayers: function() {
-        const disconnected = [];
-        for (const [userId, disconnectTime] of this.disconnectedPlayers) {
-            const player = this.kenoPlayers.get(userId);
-            if (player) {
-                disconnected.push({
-                    userId: player.userId,
-                    userName: player.userName,
-                    disconnectTime: new Date(disconnectTime).toISOString(),
-                    timeAgo: Math.floor((Date.now() - disconnectTime) / 1000) + ' seconds',
-                    balance: player.balance,
-                    hasPendingSelections: (player.pendingSelections && player.pendingSelections.length > 0) || false,
-                    pendingSelectionsCount: player.pendingSelections?.length || 0,
-                    reconnectAttempts: this.playerReconnectAttempts.get(userId) || 0
-                });
-            }
-        }
-        
-        return disconnected;
-    },
-    
-    // Clear all reconnection data for a player
-    clearPlayerReconnectionData: function(userId) {
-        this.disconnectedPlayers.delete(userId);
-        this.playerReconnectTokens.delete(userId);
-        this.playerReconnectAttempts.delete(userId);
-        
-        const player = this.kenoPlayers.get(userId);
-        if (player) {
-            player.pendingSelections = [];
-            player.pendingBet = null;
-            this.kenoPlayers.set(userId, player);
-        }
-        
-        return { success: true, message: `Reconnection data cleared for ${userId}` };
+        return;
+      }
+
+      // Check if user has played at least once (optional requirement)
+      if (user.totalWins === 0 && user.totalWagered === 0) {
+        console.log(`⚠️ User ${user.userId} has no game activity yet`);
+        // We'll still allow adding them, but log it
+      }
+
+      // Assign user to agent
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      user.referredBy = 'manual';
+      await user.save();
+
+      // Update agent's referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      if (user.isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      }
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      // Create referral record
+      const referralRecord = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        referralMethod: 'manual',
+        referralCode: agent.referralCode,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await referralRecord.save();
+
+      // Update cache
+      if (agent.referralCode) {
+        this.referralCache.set(agent.referralCode, agent._id.toString());
+      }
+
+      // Get updated user stats
+      const userWithStats = await this.models.User.findById(user._id)
+        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen');
+
+      const successData = {
+        success: true,
+        message: `✅ Successfully added ${user.userName || user.userId} as your referral!`,
+        user: {
+          userId: userWithStats.userId,
+          userName: userWithStats.userName || 'No Name',
+          balance: userWithStats.balance || 0,
+          totalWins: userWithStats.totalWins || 0,
+          totalBingos: userWithStats.totalBingos || 0,
+          totalWagered: userWithStats.totalWagered || 0,
+          isOnline: userWithStats.isOnline || false,
+          joinedAt: userWithStats.joinedAt,
+          lastSeen: userWithStats.lastSeen,
+          referralMethod: 'manual',
+          referredAt: new Date()
+        },
+        agent: {
+          totalReferrals: agent.totalReferrals,
+          activeReferrals: agent.activeReferrals,
+          name: agent.name,
+          username: agent.username
+        },
+        referralCode: agent.referralCode
+      };
+
+      socket.emit('agent:manualReferralSuccess', successData);
+
+      // Send real-time notification to agent
+      this.sendAgentNotification(agent._id, 
+        `✅ New manual referral: ${user.userName || user.userId}`, 
+        'success'
+      );
+
+      // Also update dashboard immediately
+      this.sendUpdatedDashboard(socket, agent._id);
+
+      console.log(`✅ Manual referral added: ${user.userId} (${user.userName || 'No Name'}) -> Agent ${agent.username} (${agent.referralCode})`);
+
+    } catch (error) {
+      console.error('❌ Manual referral error:', error);
+      socket.emit('agent:error', 
+        error.code === 11000 ? 
+        'User already exists in system' : 
+        `Failed to add referral: ${error.message || 'Internal error'}`
+      );
     }
-};
+  }
+
+  // NEW: Get user suggestions for similar usernames
+  async getUserSuggestions(query, limit = 5) {
+    try {
+      if (!query || query.trim().length < 2) return [];
+      
+      const cleanQuery = query.trim().toLowerCase();
+      const searchRegex = new RegExp(cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      
+      return await this.models.User.find({
+        $or: [
+          { userName: searchRegex },
+          { userId: searchRegex }
+        ],
+        agentId: { $exists: false } // Only suggest users without agents
+      })
+      .select('userId userName isOnline totalWins lastSeen')
+      .limit(limit)
+      .sort({ isOnline: -1, totalWins: -1 });
+    } catch (error) {
+      console.error('Get user suggestions error:', error);
+      return [];
+    }
+  }
+
+  // NEW: Send updated dashboard data to agent
+  async sendUpdatedDashboard(socket, agentId) {
+    try {
+      if (!socket.connected) return;
+      
+      const agent = await this.models.Agent.findById(agentId);
+      if (!agent) return;
+
+      // Get quick stats update
+      const totalReferrals = await this.models.User.countDocuments({ agentId: agent._id });
+      const activeReferrals = await this.models.User.countDocuments({ 
+        agentId: agent._id, 
+        isOnline: true 
+      });
+
+      // Get recent referral
+      const recentReferral = await this.models.User.findOne({ agentId: agent._id })
+        .sort({ agentReferredAt: -1 })
+        .select('userId userName referredBy agentReferredAt')
+        .limit(1);
+
+      socket.emit('agent:dashboardUpdate', {
+        stats: {
+          totalReferrals: totalReferrals,
+          activeReferrals: activeReferrals,
+          totalEarnings: agent.totalEarnings
+        },
+        recentReferral: recentReferral ? {
+          userId: recentReferral.userId,
+          userName: recentReferral.userName,
+          referredBy: recentReferral.referredBy,
+          referredAt: recentReferral.agentReferredAt
+        } : null
+      });
+    } catch (error) {
+      console.error('Send updated dashboard error:', error);
+    }
+  }
+
+  // Helper function to find user by any identifier - KEPT for backward compatibility
+  async findUserByIdentifier(identifier) {
+    try {
+      const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
+      
+      console.log(`🔍 Legacy search for: "${cleanIdentifier}"`);
+      
+      // Try all possible matches
+      const queries = [
+        // Exact userId match
+        { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userId match
+        { userId: { $regex: cleanIdentifier, $options: 'i' } },
+        // Exact userName match
+        { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userName match
+        { userName: { $regex: cleanIdentifier, $options: 'i' } },
+        // Telegram ID format
+        { userId: { $regex: 'tg_' + cleanIdentifier.replace('tg_', ''), $options: 'i' } },
+        // Numeric only (telegram ID)
+        { userId: { $regex: 'tg_' + cleanIdentifier, $options: 'i' } },
+        // Phone number
+        { phoneNumber: { $regex: cleanIdentifier, $options: 'i' } }
+      ];
+
+      for (const query of queries) {
+        const user = await this.models.User.findOne(query);
+        if (user) {
+          console.log(`✅ Found user with query:`, query);
+          return user;
+        }
+      }
+      
+      console.log(`❌ No user found for: "${cleanIdentifier}"`);
+      return null;
+    } catch (error) {
+      console.error('Find user by identifier error:', error);
+      return null;
+    }
+  }
+
+  // Bulk manual referral assignment - UPDATED to use enhanced search
+  async handleBulkManualReferral(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { userIdentifiers } = data; // Array of usernames/user IDs
+      if (!Array.isArray(userIdentifiers) || userIdentifiers.length === 0) {
+        socket.emit('agent:error', 'Please provide at least one user identifier');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Limit bulk operations
+      const maxBulkSize = 20;
+      const identifiersToProcess = userIdentifiers.slice(0, maxBulkSize);
+
+      const results = {
+        totalProcessed: identifiersToProcess.length,
+        success: 0,
+        failed: 0,
+        alreadyAssigned: 0,
+        notFound: 0,
+        details: []
+      };
+
+      for (const identifier of identifiersToProcess) {
+        try {
+          if (!identifier || typeof identifier !== 'string' || identifier.trim() === '') {
+            results.failed++;
+            results.details.push({
+              identifier,
+              status: 'invalid',
+              message: 'Empty identifier'
+            });
+            continue;
+          }
+
+          const cleanIdentifier = identifier.trim();
+          
+          // Use enhanced search
+          let user = null;
+          const searchPatterns = [
+            { userId: new RegExp('^' + cleanIdentifier + '$', 'i') },
+            { userName: new RegExp('^' + cleanIdentifier + '$', 'i') },
+            { userId: { $regex: cleanIdentifier, $options: 'i' } },
+            { userName: { $regex: cleanIdentifier, $options: 'i' } }
+          ];
+
+          for (const pattern of searchPatterns) {
+            user = await this.models.User.findOne(pattern);
+            if (user) break;
+          }
+
+          if (!user) {
+            results.notFound++;
+            results.details.push({
+              identifier,
+              status: 'not_found',
+              message: 'User not found'
+            });
+            continue;
+          }
+
+          // Check if already assigned
+          if (user.agentId) {
+            if (user.agentId.toString() === agent._id.toString()) {
+              results.alreadyAssigned++;
+              results.details.push({
+                identifier,
+                userId: user.userId,
+                userName: user.userName,
+                status: 'already_yours',
+                message: 'Already your referral'
+              });
+            } else {
+              results.alreadyAssigned++;
+              results.details.push({
+                identifier,
+                userId: user.userId,
+                userName: user.userName,
+                status: 'assigned_to_other',
+                message: 'Assigned to another agent'
+              });
+            }
+            continue;
+          }
+
+          // Assign user
+          user.agentId = agent._id;
+          user.agentReferredAt = new Date();
+          user.referredBy = 'bulk_manual';
+          await user.save();
+
+          // Create referral record
+          const referralRecord = new this.models.Referral({
+            agentId: agent._id,
+            userId: user.userId,
+            userName: user.userName,
+            referralMethod: 'bulk_manual',
+            referralCode: agent.referralCode,
+            status: 'active',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          await referralRecord.save();
+
+          results.success++;
+          results.details.push({
+            identifier,
+            userId: user.userId,
+            userName: user.userName,
+            status: 'success',
+            message: 'Successfully added',
+            referralMethod: 'bulk_manual'
+          });
+
+        } catch (err) {
+          results.failed++;
+          results.details.push({
+            identifier,
+            status: 'error',
+            message: err.message
+          });
+        }
+      }
+
+      // Update agent stats
+      if (results.success > 0) {
+        agent.totalReferrals = (agent.totalReferrals || 0) + results.success;
+        agent.updatedAt = new Date();
+        await agent.save();
+      }
+
+      socket.emit('agent:bulkManualReferralResult', {
+        success: true,
+        summary: results,
+        agentStats: {
+          totalReferrals: agent.totalReferrals,
+          activeReferrals: agent.activeReferrals
+        }
+      });
+
+      if (results.success > 0) {
+        this.sendAgentNotification(agent._id, 
+          `✅ Bulk referrals: Added ${results.success} new referrals`, 
+          'success'
+        );
+      }
+
+      console.log(`✅ Bulk manual referrals: ${results.success} added, ${results.failed} failed`);
+
+    } catch (error) {
+      console.error('Bulk manual referral error:', error);
+      socket.emit('agent:error', 'Failed to process bulk referrals');
+    }
+  }
+
+  // Search users for manual assignment - UPDATED
+  async handleSearchUsers(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { query, limit = 20 } = data;
+      if (!query || query.trim().length < 1) {
+        socket.emit('agent:searchUsersResult', { users: [], query });
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      const cleanQuery = query.trim();
+      
+      // Build enhanced search query
+      const searchRegex = new RegExp(cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      
+      const searchQuery = {
+        $or: [
+          { userId: searchRegex },
+          { userName: searchRegex },
+          { phoneNumber: searchRegex }
+        ]
+      };
+
+      // Only show users that can be added (no agent or not this agent)
+      searchQuery.$or = [
+        { agentId: { $exists: false } },
+        { agentId: null },
+        { agentId: { $ne: agent._id } }
+      ];
+
+      const users = await this.models.User.find(searchQuery)
+        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentId referredBy')
+        .limit(parseInt(limit))
+        .sort({ 
+          isOnline: -1, 
+          totalWins: -1, 
+          joinedAt: -1 
+        });
+
+      console.log(`🔍 Search results for "${query}": ${users.length} users found`);
+
+      socket.emit('agent:searchUsersResult', {
+        query,
+        users: users.map(user => ({
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          balance: user.balance || 0,
+          totalWins: user.totalWins || 0,
+          totalBingos: user.totalBingos || 0,
+          totalWagered: user.totalWagered || 0,
+          isOnline: user.isOnline || false,
+          joinedAt: user.joinedAt,
+          lastSeen: user.lastSeen,
+          hasAgent: !!user.agentId,
+          canAdd: !user.agentId || user.agentId.toString() !== agent._id.toString(),
+          currentAgentId: user.agentId ? user.agentId.toString() : null,
+          referredBy: user.referredBy || null
+        }))
+      });
+
+    } catch (error) {
+      console.error('Search users error:', error);
+      socket.emit('agent:error', 'Search failed: ' + error.message);
+    }
+  }
+
+  // Get user suggestions for manual referral - UPDATED
+  async handleGetUserSuggestions(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      
+      // Get users without agents (potential referrals)
+      const potentialUsers = await this.models.User.find({
+        $or: [
+          { agentId: { $exists: false } },
+          { agentId: null }
+        ],
+        totalWins: { $gt: 0 } // Only suggest users who have won something
+      })
+      .select('userId userName balance totalWins totalBingos isOnline totalWagered lastSeen referredBy')
+      .limit(20)
+      .sort({ totalWins: -1, joinedAt: -1 });
+
+      // Get recent active users
+      const recentUsers = await this.models.User.find({
+        isOnline: true,
+        $or: [
+          { agentId: { $exists: false } },
+          { agentId: null }
+        ]
+      })
+      .select('userId userName isOnline lastSeen totalWins referredBy')
+      .limit(10)
+      .sort({ lastSeen: -1 });
+
+      // Get high wagering users without agents
+      const highRollers = await this.models.User.find({
+        $or: [
+          { agentId: { $exists: false } },
+          { agentId: null }
+        ],
+        totalWagered: { $gt: 1000 } // Users who wagered more than 1000 ETB
+      })
+      .select('userId userName totalWagered totalWins isOnline referredBy')
+      .limit(10)
+      .sort({ totalWagered: -1 });
+
+      socket.emit('agent:userSuggestions', {
+        potentialUsers: potentialUsers.map(user => ({
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          balance: user.balance || 0,
+          totalWins: user.totalWins || 0,
+          totalWagered: user.totalWagered || 0,
+          isOnline: user.isOnline || false,
+          lastSeen: user.lastSeen,
+          suggestionReason: 'High activity player',
+          referredBy: user.referredBy || null
+        })),
+        recentUsers: recentUsers.map(user => ({
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          isOnline: user.isOnline || false,
+          totalWins: user.totalWins || 0,
+          lastSeen: user.lastSeen,
+          suggestionReason: 'Recently active',
+          referredBy: user.referredBy || null
+        })),
+        highRollers: highRollers.map(user => ({
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          totalWagered: user.totalWagered || 0,
+          totalWins: user.totalWins || 0,
+          isOnline: user.isOnline || false,
+          suggestionReason: 'High roller',
+          referredBy: user.referredBy || null
+        })),
+        totalPotential: await this.models.User.countDocuments({ 
+          $or: [
+            { agentId: { $exists: false } },
+            { agentId: null }
+          ],
+          totalWins: { $gt: 0 }
+        })
+      });
+
+    } catch (error) {
+      console.error('Get user suggestions error:', error);
+      socket.emit('agent:error', 'Failed to get suggestions');
+    }
+  }
+
+  // Manual referral assignment by admin - UPDATED
+  async handleManualReferralAssignment(socket, data) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      const { userId, referralCode } = data;
+      
+      if (!userId || !referralCode) {
+        socket.emit('agent:error', 'User ID and Referral Code are required');
+        return;
+      }
+
+      const result = await this.assignUserToAgent(userId, referralCode, 'admin_assigned');
+      
+      if (result.success) {
+        socket.emit('agent:manualAssignmentSuccess', {
+          message: result.message,
+          userId: result.userId,
+          agentId: result.agentId,
+          agentName: result.agentName
+        });
+        
+        // Notify the agent if online
+        const agentSocket = this.agentSockets.get(result.agentId);
+        if (agentSocket) {
+          agentSocket.emit('agent:newReferral', {
+            userId: userId,
+            userName: result.userName,
+            timestamp: new Date(),
+            referralCode: referralCode,
+            assignedBy: socket.agentData?.username || 'Admin',
+            referralMethod: 'admin_assigned'
+          });
+        }
+      } else {
+        socket.emit('agent:error', result.message);
+      }
+    } catch (error) {
+      console.error('Manual referral assignment error:', error);
+      socket.emit('agent:error', 'Failed to assign user to agent');
+    }
+  }
+
+  // Assign user to agent (utility method) - UPDATED
+  async assignUserToAgent(userId, referralCode, referralMethod = 'admin_assigned') {
+    try {
+      // Find agent by referral code
+      const agent = await this.models.Agent.findOne({ referralCode });
+      if (!agent) {
+        return { success: false, message: 'Agent not found with this referral code' };
+      }
+
+      if (!agent.isActive) {
+        return { success: false, message: 'Agent is inactive' };
+      }
+
+      // Find user using enhanced search
+      let user = null;
+      const searchPatterns = [
+        { userId: new RegExp('^' + userId + '$', 'i') },
+        { userName: new RegExp('^' + userId + '$', 'i') },
+        { userId: { $regex: userId, $options: 'i' } },
+        { userName: { $regex: userId, $options: 'i' } }
+      ];
+
+      for (const pattern of searchPatterns) {
+        user = await this.models.User.findOne(pattern);
+        if (user) break;
+      }
+
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
+      // Check if user already has an agent
+      if (user.agentId) {
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        return { 
+          success: false, 
+          message: `User already assigned to agent: ${currentAgent?.name || currentAgent?.username || 'Unknown'}`
+        };
+      }
+
+      // Assign agent to user
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      user.referredBy = referralMethod;
+      await user.save();
+
+      // Update agent referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      if (user.isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      }
+      await agent.save();
+
+      // Create referral record
+      const referralRecord = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        referralMethod: referralMethod,
+        referralCode: referralCode,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await referralRecord.save();
+
+      // Update cache
+      this.referralCache.set(agent.referralCode, agent._id.toString());
+
+      console.log(`✅ Manual assignment: ${userId} -> Agent ${agent.username} (${referralCode}) via ${referralMethod}`);
+      
+      return {
+        success: true,
+        message: 'User assigned to agent successfully',
+        userId: userId,
+        userName: user.userName,
+        agentId: agent._id,
+        agentName: agent.name,
+        agentUsername: agent.username,
+        referralCode: referralCode,
+        referralMethod: referralMethod
+      };
+    } catch (error) {
+      console.error('Assign user to agent error:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  // Record commission for agent - UPDATED to include referral method
+  async recordCommission(agentId, userId, gameType, stake, winningAmount) {
+    try {
+      const agent = await this.models.Agent.findById(agentId);
+      if (!agent) {
+        console.log(`Agent not found: ${agentId}`);
+        return 0;
+      }
+
+      if (!agent.isActive) {
+        console.log(`⚠️ Agent ${agent.username} is inactive, no commission recorded`);
+        return 0;
+      }
+
+      let commissionRate, commissionAmount;
+      
+      if (gameType === 'BINGO') {
+        commissionRate = agent.commissionRateBingo;
+        commissionAmount = (winningAmount * commissionRate) / 100;
+      } else if (gameType === 'KENO') {
+        commissionRate = agent.commissionRateKeno;
+        commissionAmount = (winningAmount * commissionRate) / 100;
+      } else {
+        console.log(`⚠️ Unknown game type: ${gameType}`);
+        return 0;
+      }
+
+      // Minimum commission 0.01 ETB
+      if (commissionAmount < 0.01) {
+        commissionAmount = 0.01;
+      }
+
+      // Get user info for the commission record
+      const user = await this.models.User.findOne({ userId });
+      if (!user) {
+        console.log(`User not found for commission: ${userId}`);
+        return 0;
+      }
+
+      // Get referral method
+      const referralRecord = await this.models.Referral.findOne({
+        agentId: agent._id,
+        userId: userId
+      }).sort({ createdAt: -1 });
+
+      const referralMethod = referralRecord ? referralRecord.referralMethod : (user.referredBy || 'unknown');
+
+      // Update user's agent commission earned
+      user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
+      await user.save();
+
+      // Create commission record
+      const commission = new this.models.AgentCommission({
+        agentId: agent._id,
+        userId: userId,
+        gameType: gameType,
+        stake: stake,
+        winningAmount: winningAmount,
+        commissionRate: commissionRate,
+        commissionAmount: commissionAmount,
+        referralMethod: referralMethod,
+        status: 'completed',
+        createdAt: new Date()
+      });
+
+      await commission.save();
+
+      // Update agent earnings
+      agent.totalEarnings = (agent.totalEarnings || 0) + commissionAmount;
+      agent.lastCommissionDate = new Date();
+      await agent.save();
+
+      // Create transaction record for agent
+      const agentTransaction = new this.models.AgentTransaction({
+        agentId: agent._id,
+        type: 'COMMISSION',
+        amount: commissionAmount,
+        description: `${gameType} commission from referral ${userId.substring(0, 8)}... via ${referralMethod}`,
+        status: 'completed',
+        createdAt: new Date()
+      });
+      await agentTransaction.save();
+
+      // Update game transaction with agent commission
+      const gameTransaction = await this.models.Transaction.findOne({
+        userId: userId,
+        type: gameType === 'BINGO' ? 'BINGO_WIN' : 'KENO_WIN',
+        amount: winningAmount,
+        createdAt: { $gte: new Date(Date.now() - 60000) } // Within last minute
+      }).sort({ createdAt: -1 });
+
+      if (gameTransaction) {
+        gameTransaction.agentId = agent._id;
+        gameTransaction.agentCommission = commissionAmount;
+        gameTransaction.commissionProcessed = true;
+        await gameTransaction.save();
+      }
+
+      // Notify agent in real-time if online
+      const agentSocket = this.agentSockets.get(agentId.toString());
+      if (agentSocket) {
+        agentSocket.emit('agent:newCommission', {
+          commissionId: commission._id,
+          userId: userId,
+          userName: user.userName,
+          gameType: gameType,
+          winningAmount: winningAmount,
+          commissionAmount: commissionAmount,
+          commissionRate: commissionRate,
+          referralMethod: referralMethod,
+          timestamp: new Date()
+        });
+      }
+
+      // Update daily stats
+      await this.updateDailyAgentStats(agentId, commissionAmount);
+
+      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (User: ${userId}, Method: ${referralMethod})`);
+      return commissionAmount;
+    } catch (error) {
+      console.error('Record commission error:', error);
+      return 0;
+    }
+  }
+
+  // Update daily agent stats
+  async updateDailyAgentStats(agentId, commissionAmount) {
+    try {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      await this.models.Stats.findOneAndUpdate(
+        { date: today },
+        {
+          $inc: {
+            agentCommissions: commissionAmount,
+            agentReferrals: 0 // Only increment when new referrals are added
+          }
+        },
+        { upsert: true, new: true }
+      );
+
+      // Update active agents count
+      const activeAgents = await this.models.Agent.countDocuments({ isActive: true });
+      await this.models.Stats.findOneAndUpdate(
+        { date: today },
+        { $set: { activeAgents: activeAgents } },
+        { upsert: true }
+      );
+    } catch (error) {
+      console.error('Update daily agent stats error:', error);
+    }
+  }
+
+  // Calculate pending commissions for all agents (run periodically)
+  async calculatePendingCommissions() {
+    try {
+      console.log('🔄 Calculating pending commissions...');
+      
+      // Get all users with agentId
+      const usersWithAgents = await this.models.User.find({ 
+        agentId: { $exists: true, $ne: null },
+        totalWins: { $gt: 0 }
+      });
+
+      for (const user of usersWithAgents) {
+        // Get user's win transactions that haven't been processed for commissions
+        const winTransactions = await this.models.Transaction.find({
+          userId: user.userId,
+          type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
+          commissionProcessed: { $ne: true }
+        });
+
+        for (const transaction of winTransactions) {
+          // Determine game type from transaction description
+          let gameType = '';
+          if (transaction.type === 'BINGO_WIN') {
+            gameType = 'BINGO';
+          } else if (transaction.type === 'KENO_WIN') {
+            gameType = 'KENO';
+          } else {
+            continue;
+          }
+
+          // Record commission
+          const stake = transaction.room ? transaction.room * 2 : 10; // Approximate stake
+          await this.recordCommission(
+            user.agentId,
+            user.userId,
+            gameType,
+            stake,
+            transaction.amount
+          );
+
+          // Mark as processed
+          transaction.commissionProcessed = true;
+          await transaction.save();
+        }
+      }
+
+      console.log('✅ Pending commissions calculation completed');
+    } catch (error) {
+      console.error('Calculate pending commissions error:', error);
+    }
+  }
+
+  // Super Admin: Get all agents - UPDATED to include referral stats
+  async handleGetAllAgents(socket) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      const agents = await this.models.Agent.find()
+        .sort({ createdAt: -1 })
+        .select('-password');
+
+      const agentsWithStats = await Promise.all(
+        agents.map(async (agent) => {
+          // Get total commissions
+          const totalCommissions = await this.models.AgentCommission.aggregate([
+            { $match: { agentId: agent._id, status: 'completed' } },
+            { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+          ]);
+
+          // Get total referrals from User model
+          const totalReferrals = await this.models.User.countDocuments({ agentId: agent._id });
+
+          // Get active referrals
+          const activeReferrals = await this.models.User.countDocuments({ 
+            agentId: agent._id,
+            isOnline: true 
+          });
+
+          // Get today's earnings
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todaysEarnings = await this.models.AgentCommission.aggregate([
+            {
+              $match: { 
+                agentId: agent._id,
+                status: 'completed',
+                createdAt: { $gte: today }
+              }
+            },
+            { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+          ]);
+
+          // Get pending withdrawals
+          const pendingWithdrawals = await this.models.AgentTransaction.aggregate([
+            {
+              $match: { 
+                agentId: agent._id,
+                type: 'WITHDRAWAL',
+                status: 'pending'
+              }
+            },
+            { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+          ]);
+
+          // Get referral methods breakdown
+          const telegramReferrals = await this.models.Referral.countDocuments({
+            agentId: agent._id,
+            referralMethod: 'telegram_link'
+          });
+          
+          const manualReferrals = await this.models.Referral.countDocuments({
+            agentId: agent._id,
+            referralMethod: { $in: ['manual', 'bulk_manual'] }
+          });
+
+          const adminReferrals = await this.models.Referral.countDocuments({
+            agentId: agent._id,
+            referralMethod: 'admin_assigned'
+          });
+
+          return {
+            ...agent.toObject(),
+            totalCommissions: totalCommissions[0]?.total || 0,
+            totalReferrals: totalReferrals,
+            activeReferrals: activeReferrals,
+            todaysEarnings: todaysEarnings[0]?.total || 0,
+            pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
+            telegramReferrals: telegramReferrals,
+            manualReferrals: manualReferrals,
+            adminReferrals: adminReferrals
+          };
+        })
+      );
+
+      socket.emit('agent:allAgents', agentsWithStats);
+    } catch (error) {
+      console.error('Get all agents error:', error);
+      socket.emit('agent:error', 'Failed to get agents');
+    }
+  }
+
+  // Super Admin: Create new agent
+  async handleCreateAgent(socket, data) {
+    try {
+      console.log('🔧 handleCreateAgent called:', {
+        hasAdminProp: !!socket.admin,
+        agentData: socket.agentData,
+        isSuperAdmin: socket.agentData?.isSuperAdmin,
+        data: data
+      });
+
+      // Check for admin authorization
+      const isAdmin = socket.admin || (socket.agentData && socket.agentData.isSuperAdmin);
+      if (!isAdmin) {
+        console.log('❌ Unauthorized access attempt');
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      const { username, password, name, commissionRateBingo, commissionRateKeno, phoneNumber } = data;
+
+      // Validate input
+      if (!username || !password || !name) {
+        socket.emit('agent:error', 'Username, password and name are required');
+        return;
+      }
+
+      if (username.length < 4) {
+        socket.emit('agent:error', 'Username must be at least 4 characters');
+        return;
+      }
+
+      if (password.length < 6) {
+        socket.emit('agent:error', 'Password must be at least 6 characters');
+        return;
+      }
+
+      // Check if agent exists
+      const existingAgent = await this.models.Agent.findOne({ 
+        username: username.toLowerCase().trim() 
+      });
+      
+      if (existingAgent) {
+        socket.emit('agent:error', 'Username already exists');
+        return;
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Generate unique referral code
+      let referralCode;
+      let isUnique = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (!isUnique && attempts < maxAttempts) {
+        referralCode = `AGENT${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        const existing = await this.models.Agent.findOne({ referralCode });
+        if (!existing) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+
+      if (!isUnique) {
+        socket.emit('agent:error', 'Failed to generate unique referral code. Please try again.');
+        return;
+      }
+
+      // Create agent
+      const agent = new this.models.Agent({
+        username: username.toLowerCase().trim(),
+        password: hashedPassword,
+        name: name.trim(),
+        commissionRateBingo: commissionRateBingo || 40,
+        commissionRateKeno: commissionRateKeno || 10,
+        totalEarnings: 0,
+        totalReferrals: 0,
+        activeReferrals: 0,
+        referralCode,
+        phoneNumber: phoneNumber ? phoneNumber.trim() : '',
+        isActive: true,
+        isSuperAdmin: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      await agent.save();
+
+      // Add to cache
+      this.referralCache.set(referralCode, agent._id.toString());
+
+      socket.emit('agent:agentCreated', {
+        success: true,
+        message: 'Agent created successfully',
+        agent: {
+          id: agent._id,
+          username: agent.username,
+          name: agent.name,
+          referralCode: agent.referralCode,
+          commissionRateBingo: agent.commissionRateBingo,
+          commissionRateKeno: agent.commissionRateKeno,
+          phoneNumber: agent.phoneNumber,
+          isActive: agent.isActive
+        }
+      });
+
+      // Notify all admin agents
+      this.broadcastToAdmins('agent:newAgentCreated', {
+        agentId: agent._id,
+        username: agent.username,
+        name: agent.name,
+        referralCode: agent.referralCode,
+        createdAt: new Date(),
+        createdBy: socket.agentData?.username || 'Admin'
+      });
+
+      console.log(`👤 New agent created: ${agent.username} by ${socket.agentData?.username || socket.adminId || 'Admin'}`);
+      
+    } catch (error) {
+      console.error('Create agent error:', error);
+      socket.emit('agent:error', `Failed to create agent: ${error.message}`);
+    }
+  }
+
+  // Super Admin: Update agent
+  async handleUpdateAgent(socket, data) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      const { agentId, updates } = data;
+      
+      if (!agentId) {
+        socket.emit('agent:error', 'Agent ID is required');
+        return;
+      }
+
+      // Don't allow updating admin's own super admin status
+      if (updates.isSuperAdmin && agentId.toString() === socket.agentId) {
+        socket.emit('agent:error', 'Cannot modify your own admin status');
+        return;
+      }
+
+      // Check if agent exists
+      const agent = await this.models.Agent.findById(agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // If updating username, check if it's available
+      if (updates.username && updates.username !== agent.username) {
+        const existing = await this.models.Agent.findOne({ username: updates.username.toLowerCase() });
+        if (existing && existing._id.toString() !== agentId.toString()) {
+          socket.emit('agent:error', 'Username already taken');
+          return;
+        }
+        updates.username = updates.username.toLowerCase();
+      }
+
+      // If updating password, hash it
+      if (updates.password) {
+        if (updates.password.length < 6) {
+          socket.emit('agent:error', 'Password must be at least 6 characters');
+          return;
+        }
+        updates.password = await bcrypt.hash(updates.password, 10);
+      }
+
+      // If updating referral code, check if it's available
+      if (updates.referralCode && updates.referralCode !== agent.referralCode) {
+        const existing = await this.models.Agent.findOne({ referralCode: updates.referralCode });
+        if (existing) {
+          socket.emit('agent:error', 'Referral code already in use');
+          return;
+        }
+        
+        // Update cache
+        this.referralCache.delete(agent.referralCode);
+        this.referralCache.set(updates.referralCode, agentId.toString());
+      }
+
+      updates.updatedAt = new Date();
+      const updatedAgent = await this.models.Agent.findByIdAndUpdate(
+        agentId,
+        { $set: updates },
+        { new: true }
+      ).select('-password');
+
+      if (!updatedAgent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      socket.emit('agent:agentUpdated', {
+        message: 'Agent updated successfully',
+        agent: updatedAgent
+      });
+
+      // Notify the agent if they're online
+      const agentSocket = this.agentSockets.get(agentId.toString());
+      if (agentSocket) {
+        agentSocket.emit('agent:profileUpdated', {
+          message: 'Your profile has been updated by admin',
+          updates: updates
+        });
+      }
+
+      console.log(`👤 Agent updated: ${updatedAgent.username} by ${socket.agentData?.username || 'Admin'}`);
+    } catch (error) {
+      console.error('Update agent error:', error);
+      socket.emit('agent:error', 'Failed to update agent');
+    }
+  }
+
+  // Super Admin: Delete agent
+  async handleDeleteAgent(socket, agentId) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      if (!agentId) {
+        socket.emit('agent:error', 'Agent ID is required');
+        return;
+      }
+
+      // Don't allow deleting yourself
+      if (agentId.toString() === socket.agentId) {
+        socket.emit('agent:error', 'Cannot delete your own account');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Check if agent has active referrals
+      const activeReferrals = await this.models.User.countDocuments({
+        agentId: agentId,
+        isOnline: true
+      });
+
+      if (activeReferrals > 0) {
+        socket.emit('agent:error', `Cannot delete agent with ${activeReferrals} active referrals. Deactivate instead.`);
+        return;
+      }
+
+      // Remove from cache
+      if (agent.referralCode) {
+        this.referralCache.delete(agent.referralCode);
+      }
+
+      // Mark agent as inactive instead of deleting (soft delete)
+      agent.isActive = false;
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      // Remove agent from online sockets
+      this.agentSockets.delete(agentId.toString());
+
+      socket.emit('agent:agentDeleted', {
+        message: 'Agent deactivated successfully',
+        agentId: agentId,
+        agentName: agent.name
+      });
+
+      // Remove agent from user records
+      await this.models.User.updateMany(
+        { agentId: agent._id },
+        { 
+          $unset: { 
+            agentId: "",
+            agentReferredAt: "",
+            agentCommissionEarned: "",
+            referredBy: ""
+          } 
+        }
+      );
+
+      // Mark referral records as inactive
+      await this.models.Referral.updateMany(
+        { agentId: agent._id },
+        { 
+          $set: { 
+            status: 'inactive',
+            updatedAt: new Date()
+          } 
+        }
+      );
+
+      console.log(`👤 Agent deactivated: ${agent.username} by ${socket.agentData?.username || 'Admin'}`);
+    } catch (error) {
+      console.error('Delete agent error:', error);
+      socket.emit('agent:error', 'Failed to delete agent');
+    }
+  }
+
+  // Agent withdraw request
+  async handleAgentWithdrawRequest(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { amount, phoneNumber } = data;
+      const agent = await this.models.Agent.findById(socket.agentId);
+      
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Validate amount
+      const amountNum = parseFloat(amount);
+      if (isNaN(amountNum) || amountNum <= 0) {
+        socket.emit('agent:error', 'Invalid amount');
+        return;
+      }
+
+      if (amountNum > agent.totalEarnings) {
+        socket.emit('agent:error', 'Insufficient earnings');
+        return;
+      }
+
+      // Validate phone number (Ethiopian format)
+      if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+        socket.emit('agent:error', 'Invalid phone number. Must be Ethiopian format (09xxxxxxxx)');
+        return;
+      }
+
+      // Create withdrawal transaction
+      const transaction = new this.models.AgentTransaction({
+        agentId: agent._id,
+        type: 'WITHDRAWAL',
+        amount: -amountNum,
+        description: `Agent withdrawal request - Phone: ${phoneNumber}`,
+        status: 'pending',
+        createdAt: new Date()
+      });
+
+      await transaction.save();
+
+      // Update agent earnings (subtract pending withdrawal)
+      agent.totalEarnings -= amountNum;
+      agent.updatedAt = new Date();
+      await agent.save();
+
+      socket.emit('agent:withdrawRequested', {
+        message: 'Withdrawal request submitted',
+        transactionId: transaction._id,
+        amount: amountNum,
+        phoneNumber: phoneNumber,
+        status: 'pending',
+        timestamp: new Date()
+      });
+
+      // Notify admin agents
+      this.broadcastToAdmins('agent:newWithdrawalRequest', {
+        agentId: agent._id,
+        agentName: agent.name,
+        agentUsername: agent.username,
+        amount: amountNum,
+        phoneNumber: phoneNumber,
+        transactionId: transaction._id,
+        timestamp: new Date()
+      });
+
+      console.log(`💰 Agent withdrawal requested: ${agent.name} - ${amountNum} ETB to ${phoneNumber}`);
+    } catch (error) {
+      console.error('Withdraw request error:', error);
+      socket.emit('agent:error', 'Failed to process withdrawal request');
+    }
+  }
+
+  // Get agent's withdrawal history
+  async handleGetWithdrawalHistory(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const withdrawals = await this.models.AgentTransaction.find({
+        agentId: socket.agentId,
+        type: 'WITHDRAWAL'
+      }).sort({ createdAt: -1 }).limit(50);
+
+      socket.emit('agent:withdrawalHistory', withdrawals.map(w => ({
+        id: w._id,
+        amount: -w.amount,
+        description: w.description,
+        status: w.status,
+        createdAt: w.createdAt
+      })));
+    } catch (error) {
+      console.error('Get withdrawal history error:', error);
+      socket.emit('agent:error', 'Failed to get withdrawal history');
+    }
+  }
+
+  // Get agent performance report - UPDATED to include referral methods
+  async handleAgentReport(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { startDate, endDate, agentId } = data;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      let targetAgentId = socket.agentId;
+      
+      // If super admin viewing another agent's report
+      if (agentId && (socket.agentData?.isSuperAdmin || socket.admin)) {
+        targetAgentId = agentId;
+      }
+
+      const matchQuery = { 
+        agentId: targetAgentId,
+        createdAt: { $gte: start, $lte: end },
+        status: 'completed'
+      };
+
+      // Get commissions grouped by date and game type
+      const dailyCommissions = await this.models.AgentCommission.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+              gameType: "$gameType",
+              referralMethod: "$referralMethod"
+            },
+            totalCommission: { $sum: "$commissionAmount" },
+            totalGames: { $sum: 1 },
+            totalWinnings: { $sum: "$winningAmount" },
+            averageCommission: { $avg: "$commissionAmount" }
+          }
+        },
+        { $sort: { "_id.date": 1, "_id.gameType": 1 } }
+      ]);
+
+      // Get total summary
+      const summary = await this.models.AgentCommission.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: null,
+            totalCommission: { $sum: "$commissionAmount" },
+            totalGames: { $sum: 1 },
+            totalWinnings: { $sum: "$winningAmount" },
+            averageCommission: { $avg: "$commissionAmount" },
+            minCommission: { $min: "$commissionAmount" },
+            maxCommission: { $max: "$commissionAmount" }
+          }
+        }
+      ]);
+
+      // Get agent info
+      const agent = await this.models.Agent.findById(targetAgentId).select('name username referralCode');
+
+      // Get referral stats for the period
+      const referralStats = await this.models.Referral.aggregate([
+        {
+          $match: {
+            agentId: targetAgentId,
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: "$referralMethod",
+            count: { $sum: 1 },
+            totalCommission: {
+              $sum: {
+                $let: {
+                  vars: {
+                    commissions: {
+                      $filter: {
+                        input: "$commissions",
+                        as: "comm",
+                        cond: { $gte: ["$$comm.createdAt", start] }
+                      }
+                    }
+                  },
+                  in: { $sum: "$$commissions.amount" }
+                }
+              }
+            }
+          }
+        }
+      ]);
+
+      socket.emit('agent:reportData', {
+        agent: agent ? {
+          name: agent.name,
+          username: agent.username,
+          referralCode: agent.referralCode
+        } : null,
+        period: {
+          startDate: start,
+          endDate: end,
+          days: Math.ceil((end - start) / (1000 * 60 * 60 * 24))
+        },
+        dailyCommissions: dailyCommissions,
+        summary: summary[0] || { 
+          totalCommission: 0, 
+          totalGames: 0, 
+          totalWinnings: 0,
+          averageCommission: 0,
+          minCommission: 0,
+          maxCommission: 0
+        },
+        referralStats: referralStats
+      });
+    } catch (error) {
+      console.error('Report error:', error);
+      socket.emit('agent:error', 'Failed to generate report');
+    }
+  }
+
+  // Send notification to agent
+  async sendAgentNotification(agentId, message, type = 'info') {
+    try {
+      const agentSocket = this.agentSockets.get(agentId.toString());
+      if (agentSocket) {
+        agentSocket.emit('agent:notification', {
+          message,
+          type,
+          timestamp: new Date()
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Send agent notification error:', error);
+      return false;
+    }
+  }
+
+  // Broadcast to all admin agents
+  broadcastToAdmins(event, data) {
+    this.agentSockets.forEach((socket, agentId) => {
+      if (socket.agentData?.isSuperAdmin) {
+        socket.emit(event, data);
+      }
+    });
+  }
+
+  // Agent disconnect
+  handleAgentDisconnect(socket) {
+    if (socket.agentId) {
+      this.agentSockets.delete(socket.agentId);
+      console.log(`👤 Agent disconnected: ${socket.agentData?.username}`);
+    }
+  }
+
+  // Start commission calculation job (runs every 5 minutes)
+  startCommissionCalculationJob() {
+    setInterval(async () => {
+      try {
+        await this.calculatePendingCommissions();
+      } catch (error) {
+        console.error('Commission calculation job error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
+  // Cleanup stale processing claims (runs every minute)
+  startCleanupJob() {
+    setInterval(() => {
+      const now = Date.now();
+      for (const [key, timestamp] of this.processingClaims.entries()) {
+        // Remove claims older than 10 minutes
+        if (now - timestamp > 10 * 60 * 1000) {
+          this.processingClaims.delete(key);
+        }
+      }
+      
+      // Clean room winners older than 1 hour
+      for (const [key, timestamp] of this.roomWinners.entries()) {
+        if (now - timestamp > 60 * 60 * 1000) {
+          this.roomWinners.delete(key);
+        }
+      }
+    }, 60 * 1000); // 1 minute
+  }
+
+  // Get agent by referral code (utility method)
+  async getAgentByReferralCode(referralCode) {
+    try {
+      // Check cache first
+      const agentId = this.referralCache.get(referralCode);
+      if (agentId) {
+        return await this.models.Agent.findById(agentId);
+      }
+
+      // Check database
+      const agent = await this.models.Agent.findOne({ referralCode });
+      if (agent) {
+        this.referralCache.set(referralCode, agent._id.toString());
+        return agent;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Get agent by referral code error:', error);
+      return null;
+    }
+  }
+
+  // Process Bingo win for agent commission
+  async processBingoWin(userId, room, winningAmount) {
+    try {
+      const user = await this.models.User.findOne({ userId });
+      if (!user || !user.agentId) {
+        console.log(`No agent for user ${userId} or user not found`);
+        return 0;
+      }
+
+      const stake = room.stake || 10; // Default stake if not available
+      const commissionAmount = await this.recordCommission(
+        user.agentId,
+        userId,
+        'BINGO',
+        stake,
+        winningAmount
+      );
+
+      // Update room history with agent commission
+      if (room && room._id) {
+        await this.models.Room.findByIdAndUpdate(room._id, {
+          $push: {
+            gameHistory: {
+              $each: [{
+                agentCommission: commissionAmount
+              }],
+              $position: -1
+            }
+          }
+        });
+      }
+
+      return commissionAmount;
+    } catch (error) {
+      console.error('Process Bingo win error:', error);
+      return 0;
+    }
+  }
+
+  // Process Keno win for agent commission
+  async processKenoWin(userId, stake, winningAmount) {
+    try {
+      const user = await this.models.User.findOne({ userId });
+      if (!user || !user.agentId) {
+        console.log(`No agent for user ${userId} or user not found`);
+        return 0;
+      }
+
+      const commissionAmount = await this.recordCommission(
+        user.agentId,
+        userId,
+        'KENO',
+        stake,
+        winningAmount
+      );
+
+      return commissionAmount;
+    } catch (error) {
+      console.error('Process Keno win error:', error);
+      return 0;
+    }
+  }
+
+  // Get total agent earnings (for display in admin panel)
+  async getTotalAgentEarnings() {
+    try {
+      const result = await this.models.Agent.aggregate([
+        { $match: { isActive: true } },
+        { $group: { _id: null, total: { $sum: '$totalEarnings' } } }
+      ]);
+      
+      return result[0]?.total || 0;
+    } catch (error) {
+      console.error('Get total agent earnings error:', error);
+      return 0;
+    }
+  }
+
+  // Update agent's active referrals (called when user goes online/offline)
+  async updateAgentActiveReferrals(userId, isOnline) {
+    try {
+      const user = await this.models.User.findOne({ userId });
+      if (!user || !user.agentId) {
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(user.agentId);
+      if (!agent) {
+        return;
+      }
+
+      if (isOnline) {
+        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      } else {
+        agent.activeReferrals = Math.max(0, (agent.activeReferrals || 0) - 1);
+      }
+      
+      agent.updatedAt = new Date();
+      await agent.save();
+    } catch (error) {
+      console.error('Update agent active referrals error:', error);
+    }
+  }
+
+  // Validate agent credentials (for API calls)
+  async validateAgentCredentials(username, password) {
+    try {
+      const agent = await this.models.Agent.findOne({ username: username.toLowerCase() });
+      if (!agent || !agent.isActive) {
+        return null;
+      }
+
+      const isValid = await bcrypt.compare(password, agent.password);
+      if (!isValid) {
+        return null;
+      }
+
+      return {
+        id: agent._id,
+        username: agent.username,
+        name: agent.name,
+        isSuperAdmin: agent.isSuperAdmin
+      };
+    } catch (error) {
+      console.error('Validate agent credentials error:', error);
+      return null;
+    }
+  }
+
+  // Check if agent exists by referral code
+  async checkAgentByReferralCode(referralCode) {
+    try {
+      const agent = await this.models.Agent.findOne({ 
+        referralCode: referralCode,
+        isActive: true 
+      });
+      
+      return agent ? {
+        exists: true,
+        agentId: agent._id,
+        name: agent.name,
+        referralCode: agent.referralCode
+      } : { exists: false };
+    } catch (error) {
+      console.error('Check agent by referral code error:', error);
+      return { exists: false };
+    }
+  }
+
+  // Debug function to find user by any identifier
+  async debugFindUser(identifier) {
+    try {
+      const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
+      
+      console.log(`🔍 Debug search for: "${cleanIdentifier}"`);
+      
+      // Try all possible matches
+      const queries = [
+        // Exact userId match
+        { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userId match
+        { userId: { $regex: cleanIdentifier, $options: 'i' } },
+        // Exact userName match
+        { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userName match
+        { userName: { $regex: cleanIdentifier, $options: 'i' } },
+        // Telegram ID format
+        { userId: { $regex: 'tg_' + cleanIdentifier.replace('tg_', ''), $options: 'i' } },
+        // Numeric only (telegram ID)
+        { userId: { $regex: 'tg_' + cleanIdentifier, $options: 'i' } },
+        // Phone number
+        { phoneNumber: { $regex: cleanIdentifier, $options: 'i' } }
+      ];
+
+      for (const query of queries) {
+        const user = await this.models.User.findOne(query);
+        if (user) {
+          console.log(`✅ Found user with query:`, query);
+          console.log(`   User ID: ${user.userId}`);
+          console.log(`   User Name: ${user.userName || 'No Name'}`);
+          console.log(`   Agent ID: ${user.agentId}`);
+          console.log(`   Referred By: ${user.referredBy}`);
+          console.log(`   Is Online: ${user.isOnline}`);
+          console.log(`   Total Wins: ${user.totalWins}`);
+          return user;
+        }
+      }
+      
+      console.log(`❌ No user found for: "${cleanIdentifier}"`);
+      
+      // List all users in database for debugging
+      const allUsers = await this.models.User.find({})
+        .select('userId userName agentId referredBy isOnline totalWins joinedAt')
+        .limit(50)
+        .sort({ joinedAt: -1 });
+      
+      console.log(`📋 Sample users in database (${allUsers.length} total):`);
+      allUsers.forEach(u => {
+        console.log(`   ${u.userId} - ${u.userName || 'No Name'} - Agent: ${u.agentId || 'None'} - Referred By: ${u.referredBy || 'None'} - Wins: ${u.totalWins} - Online: ${u.isOnline}`);
+      });
+      
+      return null;
+    } catch (error) {
+      console.error('Debug find user error:', error);
+      return null;
+    }
+  }
+
+  // Test function to check user database
+  async testUserDatabase(socket) {
+    try {
+      const users = await this.models.User.find({})
+        .select('userId userName agentId referredBy totalWins joinedAt isOnline')
+        .limit(20)
+        .sort({ joinedAt: -1 });
+      
+      console.log('📋 Recent users in database:');
+      users.forEach(user => {
+        console.log(`   ${user.userId} - ${user.userName || 'No Name'} - Agent: ${user.agentId || 'None'} - Referred By: ${user.referredBy || 'None'} - Wins: ${user.totalWins} - Online: ${user.isOnline}`);
+      });
+      
+      const totalUsers = await this.models.User.countDocuments();
+      const usersWithoutAgents = await this.models.User.countDocuments({
+        $or: [
+          { agentId: { $exists: false } },
+          { agentId: null }
+        ]
+      });
+      
+      socket.emit('agent:testResult', {
+        totalUsers,
+        usersWithoutAgents,
+        sampleUsers: users
+      });
+    } catch (error) {
+      console.error('Test error:', error);
+    }
+  }
+
+  // Cleanup agent system
+  async cleanup() {
+    try {
+      console.log('🧹 Cleaning up agent system...');
+      
+      // Clear caches
+      this.agentSockets.clear();
+      this.referralCache.clear();
+      this.processingClaims.clear();
+      this.roomWinners.clear();
+      
+      console.log('✅ Agent system cleanup completed');
+    } catch (error) {
+      console.error('Agent system cleanup error:', error);
+    }
+  }
+
+  // Get agent system status
+  getSystemStatus() {
+    return {
+      totalAgents: this.agentSockets.size,
+      totalReferralCodes: this.referralCache.size,
+      processingClaims: this.processingClaims.size,
+      roomWinners: this.roomWinners.size,
+      commissionRates: this.commissionRates,
+      botUsername: this.botUsername,
+      isInitialized: true
+    };
+  }
+
+  // Get agent leaderboard (top earning agents)
+  async getAgentLeaderboard(limit = 10, period = 'month') {
+    try {
+      const now = new Date();
+      let startDate;
+      
+      switch (period) {
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          startDate = new Date(now.setDate(now.getDate() - 7));
+          break;
+        case 'month':
+          startDate = new Date(now.setMonth(now.getMonth() - 1));
+          break;
+        default:
+          startDate = new Date(now.setMonth(now.getMonth() - 1));
+      }
+
+      const leaderboard = await this.models.AgentCommission.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate },
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: "$agentId",
+            totalCommission: { $sum: "$commissionAmount" },
+            bingoCommission: {
+              $sum: {
+                $cond: [{ $eq: ["$gameType", "BINGO"] }, "$commissionAmount", 0]
+              }
+            },
+            kenoCommission: {
+              $sum: {
+                $cond: [{ $eq: ["$gameType", "KENO"] }, "$commissionAmount", 0]
+              }
+            },
+            totalGames: { $sum: 1 },
+            bingoGames: {
+              $sum: {
+                $cond: [{ $eq: ["$gameType", "BINGO"] }, 1, 0]
+              }
+            },
+            kenoGames: {
+              $sum: {
+                $cond: [{ $eq: ["$gameType", "KENO"] }, 1, 0]
+              }
+            }
+          }
+        },
+        {
+          $lookup: {
+            from: 'agents',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'agent'
+          }
+        },
+        { $unwind: "$agent" },
+        { $match: { "agent.isActive": true } },
+        {
+          $project: {
+            _id: 1,
+            agentId: "$_id",
+            name: "$agent.name",
+            username: "$agent.username",
+            referralCode: "$agent.referralCode",
+            totalCommission: 1,
+            bingoCommission: 1,
+            kenoCommission: 1,
+            totalGames: 1,
+            bingoGames: 1,
+            kenoGames: 1,
+            commissionRateBingo: "$agent.commissionRateBingo",
+            commissionRateKeno: "$agent.commissionRateKeno"
+          }
+        },
+        { $sort: { totalCommission: -1 } },
+        { $limit: limit }
+      ]);
+
+      return leaderboard;
+    } catch (error) {
+      console.error('Get agent leaderboard error:', error);
+      return [];
+    }
+  }
+
+  // Get agent's referral tree - UPDATED to include referral methods
+  async getAgentReferralTree(agentId, depth = 2) {
+    try {
+      const agent = await this.models.Agent.findById(agentId);
+      if (!agent) {
+        return null;
+      }
+
+      // Get direct referrals with referral method
+      const directReferrals = await this.models.User.find({ agentId: agent._id })
+        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen referredBy agentReferredAt')
+        .sort({ agentReferredAt: -1 })
+        .limit(100);
+
+      // Get referral records
+      const referralRecords = await this.models.Referral.find({ agentId: agent._id })
+        .sort({ createdAt: -1 })
+        .limit(100);
+
+      // Create a map for quick lookup
+      const referralRecordMap = {};
+      referralRecords.forEach(record => {
+        if (!referralRecordMap[record.userId]) {
+          referralRecordMap[record.userId] = record;
+        }
+      });
+
+      // Combine user data with referral method
+      const enhancedReferrals = directReferrals.map(user => {
+        const referralRecord = referralRecordMap[user.userId];
+        return {
+          userId: user.userId,
+          userName: user.userName || 'No Name',
+          balance: user.balance || 0,
+          totalWagered: user.totalWagered || 0,
+          totalWins: user.totalWins || 0,
+          totalBingos: user.totalBingos || 0,
+          isOnline: user.isOnline || false,
+          joinedAt: user.joinedAt,
+          lastSeen: user.lastSeen,
+          referralMethod: user.referredBy || (referralRecord ? referralRecord.referralMethod : 'unknown'),
+          referredAt: user.agentReferredAt || (referralRecord ? referralRecord.createdAt : null),
+          referralCode: referralRecord ? referralRecord.referralCode : 'N/A'
+        };
+      });
+
+      // Get referral methods breakdown
+      const telegramReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: 'telegram_link'
+      });
+      
+      const manualReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: { $in: ['manual', 'bulk_manual'] }
+      });
+
+      const adminReferrals = await this.models.Referral.countDocuments({
+        agentId: agent._id,
+        referralMethod: 'admin_assigned'
+      });
+
+      return {
+        agent: {
+          id: agent._id,
+          name: agent.name,
+          username: agent.username,
+          referralCode: agent.referralCode,
+          totalEarnings: agent.totalEarnings
+        },
+        directReferrals: enhancedReferrals,
+        stats: {
+          totalDirectReferrals: directReferrals.length,
+          activeDirectReferrals: directReferrals.filter(r => r.isOnline).length,
+          totalCommission: agent.totalEarnings,
+          telegramReferrals: telegramReferrals,
+          manualReferrals: manualReferrals,
+          adminReferrals: adminReferrals
+        }
+      };
+    } catch (error) {
+      console.error('Get agent referral tree error:', error);
+      return null;
+    }
+  }
+
+  // Get agent statistics (for admin dashboard) - UPDATED to include referral stats
+  async getAgentStatistics() {
+    try {
+      const totalAgents = await this.models.Agent.countDocuments();
+      const activeAgents = await this.models.Agent.countDocuments({ isActive: true });
+      const totalCommissions = await this.models.AgentCommission.aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+      ]);
+      const todayCommissions = await this.models.AgentCommission.aggregate([
+        { 
+          $match: { 
+            status: 'completed',
+            createdAt: { $gte: new Date().setHours(0, 0, 0, 0) }
+          } 
+        },
+        { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+      ]);
+
+      // Get pending withdrawals
+      const pendingWithdrawals = await this.models.AgentTransaction.aggregate([
+        { 
+          $match: { 
+            type: 'WITHDRAWAL',
+            status: 'pending'
+          } 
+        },
+        { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+      ]);
+
+      // Get total referrals from User model
+      const totalReferrals = await this.models.User.countDocuments({ agentId: { $exists: true, $ne: null } });
+
+      // Get referral methods breakdown
+      const telegramReferrals = await this.models.Referral.countDocuments({ referralMethod: 'telegram_link' });
+      const manualReferrals = await this.models.Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
+      const adminReferrals = await this.models.Referral.countDocuments({ referralMethod: 'admin_assigned' });
+
+      return {
+        totalAgents,
+        activeAgents,
+        totalCommissions: totalCommissions[0]?.total || 0,
+        todayCommissions: todayCommissions[0]?.total || 0,
+        pendingWithdrawals: pendingWithdrawals[0]?.total || 0,
+        totalReferrals,
+        telegramReferrals,
+        manualReferrals,
+        adminReferrals: adminReferrals || 0
+      };
+    } catch (error) {
+      console.error('Get agent statistics error:', error);
+      return null;
+    }
+  }
+
+  // Get agent's performance metrics - UPDATED to include referral methods
+  async getAgentPerformanceMetrics(agentId) {
+    try {
+      const now = new Date();
+      const today = new Date(now.setHours(0, 0, 0, 0));
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      const [todayCommissions, weekCommissions, monthCommissions, allCommissions] = await Promise.all([
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: today } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: weekAgo } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed', createdAt: { $gte: monthAgo } } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ]),
+        this.models.AgentCommission.aggregate([
+          { $match: { agentId: agentId, status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' }, count: { $sum: 1 } } }
+        ])
+      ]);
+
+      const agent = await this.models.Agent.findById(agentId);
+      const activeReferrals = await this.models.User.countDocuments({
+        agentId: agentId,
+        isOnline: true
+      });
+
+      // Get referral method stats
+      const telegramReferrals = await this.models.Referral.countDocuments({
+        agentId: agentId,
+        referralMethod: 'telegram_link'
+      });
+      
+      const manualReferrals = await this.models.Referral.countDocuments({
+        agentId: agentId,
+        referralMethod: { $in: ['manual', 'bulk_manual'] }
+      });
+
+      const adminReferrals = await this.models.Referral.countDocuments({
+        agentId: agentId,
+        referralMethod: 'admin_assigned'
+      });
+
+      return {
+        today: {
+          commission: todayCommissions[0]?.total || 0,
+          games: todayCommissions[0]?.count || 0
+        },
+        week: {
+          commission: weekCommissions[0]?.total || 0,
+          games: weekCommissions[0]?.count || 0
+        },
+        month: {
+          commission: monthCommissions[0]?.total || 0,
+          games: monthCommissions[0]?.count || 0
+        },
+        allTime: {
+          commission: allCommissions[0]?.total || 0,
+          games: allCommissions[0]?.count || 0
+        },
+        agent: {
+          name: agent?.name || 'Unknown',
+          totalEarnings: agent?.totalEarnings || 0,
+          totalReferrals: agent?.totalReferrals || 0,
+          activeReferrals: activeReferrals,
+          telegramReferrals: telegramReferrals,
+          manualReferrals: manualReferrals,
+          adminReferrals: adminReferrals,
+          commissionRateBingo: agent?.commissionRateBingo || 40,
+          commissionRateKeno: agent?.commissionRateKeno || 10
+        }
+      };
+    } catch (error) {
+      console.error('Get agent performance metrics error:', error);
+      return null;
+    }
+  }
+
+  // Fix missing referral records for existing users
+  async fixMissingReferralRecords(socket) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Get all users assigned to this agent without referral records
+      const users = await this.models.User.find({ 
+        agentId: agent._id 
+      }).select('userId userName referredBy agentReferredAt');
+
+      let fixedCount = 0;
+      let alreadyExistCount = 0;
+
+      for (const user of users) {
+        // Check if referral record already exists
+        const existingReferral = await this.models.Referral.findOne({
+          agentId: agent._id,
+          userId: user.userId
+        });
+
+        if (!existingReferral) {
+          // Create missing referral record
+          const referralRecord = new this.models.Referral({
+            agentId: agent._id,
+            userId: user.userId,
+            userName: user.userName,
+            referralMethod: user.referredBy || 'unknown',
+            referralCode: agent.referralCode,
+            status: 'active',
+            createdAt: user.agentReferredAt || new Date(),
+            updatedAt: new Date()
+          });
+          await referralRecord.save();
+          fixedCount++;
+        } else {
+          alreadyExistCount++;
+        }
+      }
+
+      socket.emit('agent:fixResult', {
+        success: true,
+        message: `Fixed ${fixedCount} missing referral records. ${alreadyExistCount} already existed.`,
+        fixedCount,
+        alreadyExistCount,
+        totalUsers: users.length
+      });
+
+      console.log(`🔧 Fixed ${fixedCount} missing referral records for agent ${agent.username}`);
+    } catch (error) {
+      console.error('Fix missing referral records error:', error);
+      socket.emit('agent:error', 'Failed to fix referral records');
+    }
+  }
+
+  // Migrate old referrals to new system
+  async migrateOldReferrals(socket) {
+    try {
+      if (!this.checkAdminAccess(socket)) {
+        socket.emit('agent:error', 'Unauthorized - Admin access required');
+        return;
+      }
+
+      // Get all users with agentId but without referredBy
+      const usersWithoutMethod = await this.models.User.find({
+        agentId: { $exists: true, $ne: null },
+        $or: [
+          { referredBy: { $exists: false } },
+          { referredBy: null }
+        ]
+      }).limit(100);
+
+      let migratedCount = 0;
+
+      for (const user of usersWithoutMethod) {
+        // Set default referral method
+        user.referredBy = 'legacy';
+        await user.save();
+
+        // Check if referral record exists
+        const existingReferral = await this.models.Referral.findOne({
+          agentId: user.agentId,
+          userId: user.userId
+        });
+
+        if (!existingReferral) {
+          const agent = await this.models.Agent.findById(user.agentId);
+          if (agent) {
+            const referralRecord = new this.models.Referral({
+              agentId: user.agentId,
+              userId: user.userId,
+              userName: user.userName,
+              referralMethod: 'legacy',
+              referralCode: agent.referralCode || 'UNKNOWN',
+              status: 'active',
+              createdAt: user.agentReferredAt || new Date(),
+              updatedAt: new Date()
+            });
+            await referralRecord.save();
+          }
+        }
+
+        migratedCount++;
+      }
+
+      socket.emit('agent:migrationResult', {
+        success: true,
+        message: `Migrated ${migratedCount} old referrals to new system`,
+        migratedCount,
+        totalFound: usersWithoutMethod.length
+      });
+
+      console.log(`🔄 Migrated ${migratedCount} old referrals to new system`);
+    } catch (error) {
+      console.error('Migrate old referrals error:', error);
+      socket.emit('agent:error', 'Migration failed');
+    }
+  }
+
+  // NEW: Get referral statistics by method
+  async getReferralStatsByMethod(agentId) {
+    try {
+      const stats = await this.models.Referral.aggregate([
+        {
+          $match: {
+            agentId: agentId,
+            status: 'active'
+          }
+        },
+        {
+          $group: {
+            _id: "$referralMethod",
+            count: { $sum: 1 },
+            totalCommission: {
+              $sum: {
+                $ifNull: ["$totalCommission", 0]
+              }
+            }
+          }
+        }
+      ]);
+
+      return stats.reduce((acc, stat) => {
+        acc[stat._id] = {
+          count: stat.count,
+          totalCommission: stat.totalCommission
+        };
+        return acc;
+      }, {});
+    } catch (error) {
+      console.error('Get referral stats by method error:', error);
+      return {};
+    }
+  }
+}
+
+module.exports = AgentSystem;
