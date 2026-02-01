@@ -1455,30 +1455,6 @@
         .transaction-withdrawal { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
         .transaction-win { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
         .transaction-agent { background: rgba(139, 92, 246, 0.15); color: var(--agent-color); }
-
-        /* Flash animation for new transactions */
-        .flash-row {
-            animation: flashAnimation 1s ease-in-out;
-        }
-
-        @keyframes flashAnimation {
-            0%, 100% { background-color: transparent; }
-            50% { background-color: rgba(59, 130, 246, 0.2); }
-        }
-
-        /* Notification alert */
-        .notification-alert {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            z-index: 2500;
-            animation: slideInRight 0.3s ease;
-        }
-
-        @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
     </style>
 </head>
 <body>
@@ -1493,7 +1469,7 @@
                     <div class="login-logo-text">Bingo Elite</div>
                 </div>
                 
-                <p class="login-subtitle">Admin Dashboard v4.0 - Enhanced Wallet Notifications</p>
+                <p class="login-subtitle">Admin Dashboard v4.0 - Agent System</p>
                 
                 <div class="input-group">
                     <i class="fas fa-key"></i>
@@ -1954,7 +1930,7 @@
             <div id="walletApprovalsSection" class="content-section">
                 <div class="table-card">
                     <div class="table-header">
-                        <h3>Wallet Approvals <span id="pendingAlert" class="badge warning blink" style="display: none;">NEW!</span></h3>
+                        <h3>Wallet Approvals</h3>
                         <div class="table-controls">
                             <button class="btn btn-primary" onclick="refreshPendingTransactions()">
                                 <i class="fas fa-sync"></i> Refresh
@@ -1962,8 +1938,8 @@
                             <button class="btn btn-secondary" onclick="showTransactionHistory()">
                                 <i class="fas fa-history"></i> View History
                             </button>
-                            <button class="btn btn-warning" onclick="enableAutoRefresh()" id="autoRefreshBtn">
-                                <i class="fas fa-play-circle"></i> Auto-Refresh
+                            <button class="btn btn-success" onclick="approveAllDeposits()">
+                                <i class="fas fa-check-double"></i> Approve All Deposits
                             </button>
                         </div>
                     </div>
@@ -1987,13 +1963,6 @@
                                     <option value="amount_low">Amount (Low to High)</option>
                                 </select>
                             </div>
-                            <div class="filter-group">
-                                <label>Sound Alerts</label>
-                                <select class="filter-select" id="soundAlertToggle" onchange="toggleSoundAlerts()">
-                                    <option value="on">On</option>
-                                    <option value="off">Off</option>
-                                </select>
-                            </div>
                         </div>
                     </div>
                     
@@ -2006,6 +1975,7 @@
                                     <th>Amount</th>
                                     <th>Details</th>
                                     <th>Request Time</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -2573,10 +2543,10 @@
     <script>
         // Configuration
         const CONFIG = {
-            SERVER_URL: "https://bingo-telegram-game.onrender.com",
-            AUTO_REFRESH_INTERVAL: 3000,
-            WALLET_REFRESH_INTERVAL: 5000, // Check wallet every 5 seconds
-            MAX_ACTIVITY_ITEMS: 15
+            SERVER_URL: window.location.origin,
+            AUTO_REFRESH_INTERVAL: 5000,
+            MAX_ACTIVITY_ITEMS: 15,
+            NOTIFICATION_SOUND_ENABLED: true
         };
 
         // State
@@ -2586,7 +2556,6 @@
             filteredUsers: [],
             agents: [],
             filteredAgents: [],
-            agentWithdrawals: [],
             rooms: {},
             transactions: [],
             pendingTransactions: [],
@@ -2595,7 +2564,6 @@
             charts: {},
             lastUpdate: new Date(),
             socket: null,
-            showUserDetails: false,
             telebirrNumber: "0962577855",
             editingAgentId: null,
             agentStatistics: {
@@ -2603,18 +2571,11 @@
                 activeAgents: 0,
                 totalCommissions: 0,
                 referralUsers: 0
-            },
-            pendingTransactionIds: new Set(),
-            autoRefreshEnabled: true,
-            soundAlertsEnabled: true,
-            notificationAudio: null
+            }
         };
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize notification sound
-            initNotificationSound();
-            
             // Check for saved session
             const savedSession = localStorage.getItem('bingo_admin_session');
             if (savedSession) {
@@ -2623,54 +2584,19 @@
                     if (session.expires > Date.now()) {
                         document.getElementById('adminPassword').value = session.password;
                         adminLogin();
+                    } else {
+                        localStorage.removeItem('bingo_admin_session');
                     }
                 } catch (e) {
                     localStorage.removeItem('bingo_admin_session');
                 }
             }
             
-            addSystemLog('Admin panel initialized - Enhanced wallet approvals', 'info');
+            addSystemLog('Admin panel initialized', 'info');
             attachNavListeners();
             setupKeyboardShortcuts();
-            
-            // Request notification permission
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
-            }
+            initNotificationSound();
         });
-        
-        function initNotificationSound() {
-            // Create a notification sound using Web Audio API
-            try {
-                state.notificationAudio = new Audio();
-                state.notificationAudio.autoplay = false;
-                // Create a simple beep sound
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
-                oscillator.type = 'sine';
-                
-                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.5);
-                
-                // Store for reuse
-                state.notificationAudio.context = audioContext;
-                state.notificationAudio.oscillator = oscillator;
-                state.notificationAudio.gainNode = gainNode;
-            } catch (e) {
-                console.log("Web Audio API not supported, using fallback");
-                // Fallback: Use a data URI for a simple beep
-                state.notificationAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ");
-            }
-        }
         
         function attachNavListeners() {
             document.querySelectorAll('.nav-item').forEach(item => {
@@ -2707,9 +2633,6 @@
                     // Load data for specific sections
                     if (section === 'wallet-approvals') {
                         refreshPendingTransactions();
-                        loadTransactionHistory();
-                        // Hide the alert when viewing wallet approvals
-                        document.getElementById('pendingAlert').style.display = 'none';
                     } else if (section === 'agents') {
                         refreshAgents();
                     } else if (section === 'controls') {
@@ -2723,21 +2646,20 @@
             document.addEventListener('keydown', function(e) {
                 if (!state.isAdmin) return;
                 
-                // Refresh data
+                // Refresh data - Ctrl + R
                 if (e.ctrlKey && e.key === 'r') {
                     e.preventDefault();
                     forceRefreshData();
                 }
                 
-                // Focus search
+                // Focus search - Ctrl + F
                 if (e.ctrlKey && e.key === 'f') {
                     e.preventDefault();
                     const activeSection = document.querySelector('.content-section.active').id;
                     const searchMap = {
                         'usersSection': 'userSearch',
                         'agentsSection': 'agentSearch',
-                        'transactionsSection': 'transactionSearch',
-                        'walletApprovalsSection': 'walletSearch'
+                        'transactionsSection': 'transactionSearch'
                     };
                     const searchId = searchMap[activeSection];
                     if (searchId) {
@@ -2749,16 +2671,10 @@
                     }
                 }
                 
-                // Open add funds modal
+                // Open add funds modal - Ctrl + A
                 if (e.ctrlKey && e.key === 'a') {
                     e.preventDefault();
                     showAddFundsModal();
-                }
-                
-                // Open assign agent modal
-                if (e.ctrlKey && e.key === 'g') {
-                    e.preventDefault();
-                    showAssignAgentModal();
                 }
                 
                 // Close modals with Escape
@@ -2766,20 +2682,14 @@
                     hideAllModals();
                 }
                 
-                // Telebirr number focus
+                // Telebirr number focus - Ctrl + T
                 if (e.ctrlKey && e.key === 't') {
                     e.preventDefault();
                     focusTelebirrNumber();
                 }
                 
-                // Reset house earnings
-                if (e.ctrlKey && e.shiftKey && e.key === 'R') {
-                    e.preventDefault();
-                    resetHouseEarnings();
-                }
-                
-                // Approve transaction (when in wallet approvals)
-                if (e.key === 'a' && e.ctrlKey && e.shiftKey) {
+                // Approve transaction - Ctrl + Shift + A
+                if (e.ctrlKey && e.shiftKey && e.key === 'A') {
                     e.preventDefault();
                     const activeSection = document.querySelector('.content-section.active').id;
                     if (activeSection === 'walletApprovalsSection') {
@@ -2788,8 +2698,8 @@
                     }
                 }
                 
-                // Reject transaction (when in wallet approvals)
-                if (e.key === 'r' && e.ctrlKey && e.shiftKey) {
+                // Reject transaction - Ctrl + Shift + R
+                if (e.ctrlKey && e.shiftKey && e.key === 'R') {
                     e.preventDefault();
                     const activeSection = document.querySelector('.content-section.active').id;
                     if (activeSection === 'walletApprovalsSection') {
@@ -2800,6 +2710,16 @@
             });
         }
 
+        function initNotificationSound() {
+            // Create audio context for notifications
+            try {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.log('Web Audio API not supported');
+            }
+        }
+
         function hideAllModals() {
             document.querySelectorAll('.modal').forEach(modal => {
                 modal.classList.remove('active');
@@ -2808,375 +2728,230 @@
 
         // Socket Functions
         function connectSocket() {
-            state.socket = io(CONFIG.SERVER_URL, {
-                reconnection: true,
-                reconnectionAttempts: 5,
-                reconnectionDelay: 1000,
-                transports: ['websocket', 'polling']
-            });
-
-            state.socket.on('connect', () => {
-                showToast('Connected to server', 'success');
-                updateServerStatus('Connected', true);
-                addSystemLog('Connected to server');
-                
-                // Start auto-refresh for pending transactions
-                startWalletAutoRefresh();
-            });
-
-            state.socket.on('disconnect', () => {
-                showToast('Disconnected from server', 'error');
-                updateServerStatus('Disconnected', false);
-                addSystemLog('Disconnected from server', 'error');
-            });
-
-            state.socket.on('admin:authSuccess', () => {
-                state.isAdmin = true;
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                showToast('Login successful!', 'success');
-                addSystemLog('Admin login successful');
-                
-                // Save session
-                const password = document.getElementById('adminPassword').value;
-                const session = {
-                    password: password,
-                    expires: Date.now() + (24 * 60 * 60 * 1000)
-                };
-                localStorage.setItem('bingo_admin_session', JSON.stringify(session));
-                
-                // Request initial data
-                state.socket.emit('admin:getData');
-                state.socket.emit('admin:getTelebirrNumber');
-                state.socket.emit('agent:getAgentStatistics');
-                state.socket.emit('admin:getTransactionHistory');
-                state.socket.emit('admin:getPendingTransactions');
-                
-                // Start auto-refresh
-                startAutoRefresh();
-                
-                // Initialize charts
-                setTimeout(initCharts, 1000);
-            });
-
-            state.socket.on('admin:authError', (message) => {
-                showToast('Login failed: ' + message, 'error');
-                addSystemLog('Login failed: ' + message, 'error');
-            });
-
-            state.socket.on('admin:update', (data) => {
-                updateStats(data);
-                state.lastUpdate = new Date();
-                updateLastUpdateTime();
-                updateServerStatus(`Connected - ${data.totalPlayers || 0} players online`, true);
-                document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
-            });
-
-            state.socket.on('admin:players', (data) => {
-                state.users = data;
-                updateUserDatalist(data);
-                applyFilters();
-                updateUsersTable();
-                
-                // Update online count
-                const onlineCount = data.filter(user => user.isOnline).length;
-                updateUserCountBadge(onlineCount);
-                
-                // Update referral users count
-                const referralUsers = data.filter(user => user.agentId).length;
-                state.agentStatistics.referralUsers = referralUsers;
-                document.getElementById('referralUsers').textContent = referralUsers;
-                
-                // Update display
-                document.getElementById('userCountDisplay').textContent = `Showing ${state.filteredUsers.length} of ${state.users.length} users`;
-            });
-
-            // Agent events
-            state.socket.on('agent:allAgents', (data) => {
-                state.agents = data;
-                state.filteredAgents = [...data];
-                updateAgentsTable();
-                updateAgentCountBadge();
-                updateAgentStats(data);
-            });
-
-            state.socket.on('agent:agentCreated', (data) => {
-                showToast('Agent created successfully: ' + data.agent.username, 'success');
-                addSystemLog(`Agent created: ${data.agent.username}`, 'agent');
-                refreshAgents();
-            });
-
-            state.socket.on('agent:agentUpdated', (data) => {
-                showToast('Agent updated successfully', 'success');
-                addSystemLog(`Agent updated: ${data.agent.username}`, 'agent');
-                refreshAgents();
-            });
-
-            state.socket.on('agent:manualAssignmentSuccess', (data) => {
-                showToast(`User assigned to agent: ${data.agentName}`, 'success');
-                addSystemLog(`User ${data.userId} assigned to agent ${data.agentName}`, 'agent');
-                state.socket.emit('admin:getData');
-            });
-
-            state.socket.on('agent:agentStatistics', (data) => {
-                state.agentStatistics = data;
-                updateAgentStatistics(data);
-            });
-
-            // Telebirr events
-            state.socket.on('admin:telebirrNumber', (number) => {
-                state.telebirrNumber = number;
-                document.getElementById('telebirrNumber').value = number;
-                const statusEl = document.getElementById('telebirrNumberStatus');
-                statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check"></i> Current: ${number}</span>`;
-            });
-
-            state.socket.on('admin:telebirrNumberUpdated', (data) => {
-                state.telebirrNumber = data.telebirrNumber;
-                document.getElementById('telebirrNumber').value = data.telebirrNumber;
-                const statusEl = document.getElementById('telebirrNumberStatus');
-                statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check"></i> Updated to: ${data.telebirrNumber}</span>`;
-                showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
-                addSystemLog(`Telebirr number updated to ${data.telebirrNumber}`);
-            });
-
-            // Enhanced Wallet Approval Events with Automatic Notifications
-            state.socket.on('admin:pendingTransactions', (data) => {
-                const previousCount = state.pendingTransactions.length;
-                const previousIds = new Set(state.pendingTransactionIds);
-                
-                state.pendingTransactions = data;
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                
-                // Check for new transactions
-                const newTransactions = [];
-                data.forEach(transaction => {
-                    state.pendingTransactionIds.add(transaction._id);
-                    if (!previousIds.has(transaction._id)) {
-                        newTransactions.push(transaction);
-                    }
-                });
-                
-                // Show alert for new transactions
-                if (newTransactions.length > 0) {
-                    handleNewTransactions(newTransactions);
-                }
-            });
-
-            // Enhanced real-time notification events
-            state.socket.on('admin:newDepositRequest', (transaction) => {
-                handleNewTransactionRequest(transaction, 'deposit');
-            });
-
-            state.socket.on('admin:newWithdrawRequest', (transaction) => {
-                handleNewTransactionRequest(transaction, 'withdrawal');
-            });
-
-            // Transaction approval/rejection events
-            state.socket.on('admin:transactionApproved', (data) => {
-                showToast(`${data.type} approved for ${data.userName}`, 'success');
-                addSystemLog(`${data.type} approved: ${data.userName} - ${data.amount} ETB`, 'wallet');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                state.pendingTransactionIds.delete(data.transactionId);
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                
-                // Add to transaction history
-                state.transactionHistory.unshift({
-                    ...data,
-                    status: 'completed',
-                    processedAt: new Date().toISOString(),
-                    processedBy: 'Admin'
-                });
-            });
-
-            state.socket.on('admin:transactionRejected', (data) => {
-                showToast(`${data.type} rejected for ${data.userName}`, 'warning');
-                addSystemLog(`${data.type} rejected: ${data.userName} - ${data.amount} ETB`, 'wallet');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                state.pendingTransactionIds.delete(data.transactionId);
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                
-                // Add to transaction history
-                state.transactionHistory.unshift({
-                    ...data,
-                    status: 'rejected',
-                    processedAt: new Date().toISOString(),
-                    processedBy: 'Admin'
-                });
-            });
-
-            // Transaction history
-            state.socket.on('admin:transactionHistory', (data) => {
-                state.transactionHistory = data;
-                updateTransactionHistoryTable();
-            });
-
-            // Success/Error events
-            state.socket.on('admin:success', (message) => {
-                showToast(message, 'success');
-                state.socket.emit('admin:getData');
-                refreshPendingTransactions();
-                addSystemLog('Success: ' + message);
-            });
-
-            state.socket.on('admin:error', (message) => {
-                showToast('Error: ' + message, 'error');
-                addSystemLog('Error: ' + message, 'error');
-            });
-
-            // House earnings reset
-            state.socket.on('admin:houseEarningsReset', (data) => {
-                showToast(`House earnings reset from ${data.previousAmount} to 0 ETB`, 'success');
-                addSystemLog(`House earnings reset: Was ${data.previousAmount} ETB`);
-            });
-
-            state.socket.on('admin:houseEarningsResetError', (message) => {
-                showToast('Failed to reset house earnings: ' + message, 'error');
-                addSystemLog('House earnings reset failed: ' + message, 'error');
-            });
-        }
-
-        // Enhanced notification handler
-        function handleNewTransactionRequest(transaction, type) {
-            // Add to pending transactions
-            const transactionData = {
-                _id: transaction.transactionId,
-                type: type === 'deposit' ? 'DEPOSIT_REQUEST' : 'WITHDRAW_REQUEST',
-                userId: transaction.userId,
-                userName: transaction.userName,
-                amount: transaction.amount,
-                receiptNumber: transaction.receiptNumber,
-                phoneNumber: transaction.phoneNumber,
-                createdAt: transaction.timestamp,
-                status: 'pending',
-                userBalance: transaction.userBalance
-            };
-            
-            state.pendingTransactions.unshift(transactionData);
-            state.pendingTransactionIds.add(transaction.transactionId);
-            
-            updateWalletApprovalsTable();
-            updatePendingTransactionsBadge();
-            
-            // Enhanced notification
-            const message = `New ${type} request from ${transaction.userName} for ${transaction.amount} ETB`;
-            
-            // Show immediate alert
-            showImmediateAlert(message, type);
-            
-            // Play notification sound
-            playNotificationSound();
-            
-            // Add to system log
-            addSystemLog(`${type} request: ${transaction.userName} - ${transaction.amount} ETB`, 'wallet');
-            
-            // Show browser notification
-            if (Notification.permission === 'granted') {
-                new Notification(`Bingo Elite - New ${type.charAt(0).toUpperCase() + type.slice(1)} Request`, {
-                    body: `${transaction.userName} requested ${transaction.amount} ETB`,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/2176/2176860.png',
-                    tag: 'new-transaction'
-                });
-            }
-        }
-
-        function handleNewTransactions(newTransactions) {
-            if (newTransactions.length === 0) return;
-            
-            const type = newTransactions[0].type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
-            const message = `${newTransactions.length} new ${type} request${newTransactions.length > 1 ? 's' : ''} waiting for approval`;
-            
-            // Show alert in UI
-            const pendingAlert = document.getElementById('pendingAlert');
-            if (pendingAlert) {
-                pendingAlert.style.display = 'inline-block';
-                pendingAlert.textContent = `${newTransactions.length} NEW!`;
-                
-                // Add blinking animation
-                pendingAlert.style.animation = 'flashAnimation 1s infinite';
-            }
-            
-            // Only show popup if not on wallet approvals page
-            const walletSection = document.getElementById('walletApprovalsSection');
-            if (!walletSection.classList.contains('active')) {
-                showImmediateAlert(message, 'info');
-                playNotificationSound();
-            }
-            
-            // Update document title
-            document.title = `(${state.pendingTransactions.length}) Bingo Elite - Admin Dashboard`;
-        }
-
-        function showImmediateAlert(message, type = 'info') {
-            // Create a more prominent alert
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `toast ${type}`;
-            alertDiv.style.position = 'fixed';
-            alertDiv.style.top = '80px';
-            alertDiv.style.right = '20px';
-            alertDiv.style.zIndex = '2500';
-            alertDiv.style.animation = 'slideInRight 0.3s ease';
-            
-            const icon = type === 'deposit' ? 'fa-arrow-down' : 
-                         type === 'withdrawal' ? 'fa-arrow-up' : 'fa-bell';
-            
-            alertDiv.innerHTML = `
-                <div class="toast-icon">
-                    <i class="fas ${icon}"></i>
-                </div>
-                <div class="toast-content">
-                    <h4>New Transaction Alert</h4>
-                    <p>${message}</p>
-                    <button class="btn btn-sm btn-primary mt-8" onclick="this.closest('.toast').remove()">
-                        <i class="fas fa-eye"></i> View Now
-                    </button>
-                </div>
-            `;
-            
-            document.body.appendChild(alertDiv);
-            
-            // Auto-remove after 10 seconds
-            setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.remove();
-                }
-            }, 10000);
-        }
-
-        function playNotificationSound() {
-            if (!state.soundAlertsEnabled) return;
-            
             try {
-                if (state.notificationAudio && state.notificationAudio.context) {
-                    // Recreate the sound using Web Audio API
-                    const audioContext = state.notificationAudio.context;
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
+                state.socket = io(CONFIG.SERVER_URL, {
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 20000,
+                    transports: ['websocket', 'polling']
+                });
+
+                state.socket.on('connect', () => {
+                    showToast('Connected to server', 'success');
+                    updateServerStatus('Connected', true);
+                    addSystemLog('Connected to server');
+                });
+
+                state.socket.on('disconnect', (reason) => {
+                    showToast('Disconnected from server: ' + reason, 'error');
+                    updateServerStatus('Disconnected', false);
+                    addSystemLog('Disconnected from server: ' + reason, 'error');
+                });
+
+                state.socket.on('connect_error', (error) => {
+                    console.error('Connection error:', error);
+                    addSystemLog('Connection error: ' + error.message, 'error');
+                });
+
+                state.socket.on('admin:authSuccess', () => {
+                    state.isAdmin = true;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('dashboard').style.display = 'block';
+                    showToast('Login successful!', 'success');
+                    addSystemLog('Admin login successful');
                     
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
+                    // Save session
+                    const password = document.getElementById('adminPassword').value;
+                    const session = {
+                        password: password,
+                        expires: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+                    };
+                    localStorage.setItem('bingo_admin_session', JSON.stringify(session));
                     
-                    oscillator.frequency.value = 800;
-                    oscillator.type = 'sine';
+                    // Request initial data
+                    state.socket.emit('admin:getData');
+                    state.socket.emit('admin:getTelebirrNumber');
+                    state.socket.emit('agent:getAllAgents');
+                    state.socket.emit('agent:getAgentStatistics');
+                    state.socket.emit('admin:getPendingTransactions');
+                    state.socket.emit('admin:getTransactionHistory');
                     
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    // Join admin room for notifications
+                    state.socket.emit('admin:joinRoom');
                     
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 0.5);
-                } else if (state.notificationAudio instanceof Audio) {
-                    state.notificationAudio.currentTime = 0;
-                    state.notificationAudio.play().catch(e => console.log("Audio play failed"));
-                }
-            } catch (e) {
-                console.log("Could not play notification sound");
+                    // Start auto-refresh
+                    startAutoRefresh();
+                    
+                    // Initialize charts
+                    setTimeout(initCharts, 1000);
+                });
+
+                state.socket.on('admin:authError', (message) => {
+                    showToast('Login failed: ' + message, 'error');
+                    addSystemLog('Login failed: ' + message, 'error');
+                });
+
+                state.socket.on('admin:update', (data) => {
+                    updateStats(data);
+                    state.lastUpdate = new Date();
+                    updateLastUpdateTime();
+                    updateServerStatus(`Connected - ${data.totalPlayers || 0} players online`, true);
+                    document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
+                });
+
+                state.socket.on('admin:players', (data) => {
+                    state.users = data;
+                    updateUserDatalist(data);
+                    applyFilters();
+                    updateUsersTable();
+                    
+                    // Update online count
+                    const onlineCount = data.filter(user => user.isOnline).length;
+                    updateUserCountBadge(onlineCount);
+                });
+
+                // Agent events
+                state.socket.on('agent:allAgents', (data) => {
+                    state.agents = data;
+                    state.filteredAgents = [...data];
+                    updateAgentsTable();
+                    updateAgentCountBadge();
+                    updateAgentStats(data);
+                });
+
+                state.socket.on('agent:agentCreated', (data) => {
+                    showToast('Agent created successfully: ' + data.agent.username, 'success');
+                    addSystemLog(`Agent created: ${data.agent.username}`, 'agent');
+                    refreshAgents();
+                });
+
+                state.socket.on('agent:agentUpdated', (data) => {
+                    showToast('Agent updated successfully', 'success');
+                    addSystemLog(`Agent updated: ${data.agent.username}`, 'agent');
+                    refreshAgents();
+                });
+
+                state.socket.on('agent:agentStatistics', (data) => {
+                    state.agentStatistics = data;
+                    updateAgentStatistics(data);
+                });
+
+                // Telebirr events
+                state.socket.on('admin:telebirrNumber', (number) => {
+                    state.telebirrNumber = number;
+                    document.getElementById('telebirrNumber').value = number;
+                    const statusEl = document.getElementById('telebirrNumberStatus');
+                    statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check"></i> Current: ${number}</span>`;
+                });
+
+                state.socket.on('admin:telebirrNumberUpdated', (data) => {
+                    state.telebirrNumber = data.telebirrNumber;
+                    document.getElementById('telebirrNumber').value = data.telebirrNumber;
+                    const statusEl = document.getElementById('telebirrNumberStatus');
+                    statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check"></i> Updated to: ${data.telebirrNumber}</span>`;
+                    showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
+                    addSystemLog(`Telebirr number updated to ${data.telebirrNumber}`);
+                });
+
+                // Wallet approval events - ENHANCED
+                state.socket.on('admin:pendingTransactions', (data) => {
+                    state.pendingTransactions = data;
+                    updateWalletApprovalsTable();
+                    updatePendingTransactionsBadge();
+                });
+
+                state.socket.on('admin:newTransactionRequest', (transaction) => {
+                    // Add to pending transactions
+                    state.pendingTransactions.unshift({
+                        _id: transaction.transactionId || transaction._id,
+                        type: transaction.type,
+                        userId: transaction.userId,
+                        userName: transaction.userName,
+                        amount: transaction.amount,
+                        receiptNumber: transaction.receiptNumber,
+                        phoneNumber: transaction.phoneNumber,
+                        createdAt: transaction.timestamp || transaction.createdAt,
+                        status: 'pending',
+                        userBalance: transaction.userBalance
+                    });
+                    
+                    updateWalletApprovalsTable();
+                    updatePendingTransactionsBadge();
+                    
+                    // Show notification
+                    const transactionType = transaction.type === 'DEPOSIT_REQUEST' ? 'Deposit' : 'Withdrawal';
+                    showToast(`New ${transactionType} request from ${transaction.userName}`, 'info');
+                    addSystemLog(`New ${transactionType} request: ${transaction.userName} - ${transaction.amount} ETB`, 'wallet');
+                    
+                    // Play notification sound
+                    playNotificationSound('new');
+                });
+
+                // Transaction approval/rejection events
+                state.socket.on('admin:transactionApproved', (data) => {
+                    showToast(`${data.type} approved for ${data.userName}`, 'success');
+                    addSystemLog(`${data.type} approved: ${data.userName} - ${data.amount} ETB`, 'wallet');
+                    
+                    // Remove from pending transactions
+                    state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                    updateWalletApprovalsTable();
+                    updatePendingTransactionsBadge();
+                    
+                    // Play success sound
+                    playNotificationSound('success');
+                });
+
+                state.socket.on('admin:transactionRejected', (data) => {
+                    showToast(`${data.type} rejected for ${data.userName}`, 'warning');
+                    addSystemLog(`${data.type} rejected: ${data.userName} - ${data.amount} ETB`, 'wallet');
+                    
+                    // Remove from pending transactions
+                    state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                    updateWalletApprovalsTable();
+                    updatePendingTransactionsBadge();
+                    
+                    // Play error sound
+                    playNotificationSound('error');
+                });
+
+                // Transaction history
+                state.socket.on('admin:transactionHistory', (data) => {
+                    state.transactionHistory = data;
+                    updateTransactionHistoryTable();
+                });
+
+                // Success/Error events
+                state.socket.on('admin:success', (message) => {
+                    showToast(message, 'success');
+                    addSystemLog('Success: ' + message);
+                    
+                    // Refresh relevant data
+                    state.socket.emit('admin:getData');
+                    refreshPendingTransactions();
+                });
+
+                state.socket.on('admin:error', (message) => {
+                    showToast('Error: ' + message, 'error');
+                    addSystemLog('Error: ' + message, 'error');
+                });
+
+                // House earnings reset
+                state.socket.on('admin:houseEarningsReset', (data) => {
+                    showToast(`House earnings reset from ${data.previousAmount} to 0 ETB`, 'success');
+                    addSystemLog(`House earnings reset: Was ${data.previousAmount} ETB`);
+                });
+
+                // Real-time activity updates
+                state.socket.on('admin:activity', (activity) => {
+                    addActivityItem(activity);
+                });
+
+            } catch (error) {
+                console.error('Socket connection error:', error);
+                showToast('Failed to connect to server', 'error');
+                addSystemLog('Socket connection failed: ' + error.message, 'error');
             }
         }
 
@@ -3188,11 +2963,20 @@
                 return;
             }
             
-            if (!state.socket) {
+            if (!state.socket || !state.socket.connected) {
                 connectSocket();
+                
+                // Wait for connection before sending auth
+                setTimeout(() => {
+                    if (state.socket && state.socket.connected) {
+                        state.socket.emit('admin:auth', password);
+                    } else {
+                        showToast('Failed to connect to server', 'error');
+                    }
+                }, 1000);
+            } else {
+                state.socket.emit('admin:auth', password);
             }
-            
-            state.socket.emit('admin:auth', password);
         }
 
         // UI Functions
@@ -3227,9 +3011,11 @@
             setTimeout(() => {
                 toast.classList.remove('show');
                 setTimeout(() => {
-                    toastContainer.removeChild(toast);
+                    if (toastContainer.contains(toast)) {
+                        toastContainer.removeChild(toast);
+                    }
                 }, 300);
-            }, 3000);
+            }, 5000);
         }
 
         function showModal(modalId) {
@@ -3327,7 +3113,7 @@
             if (searchTerm) {
                 filtered = filtered.filter(user => 
                     user.userName.toLowerCase().includes(searchTerm) ||
-                    user.userId.toLowerCase().includes(searchTerm)
+                    (user.userId && user.userId.toLowerCase().includes(searchTerm))
                 );
             }
             
@@ -3422,16 +3208,16 @@
                     <td>
                         <div class="d-flex align-center gap-12">
                             <div class="user-avatar">
-                                ${user.userName.charAt(0).toUpperCase()}
+                                ${user.userName ? user.userName.charAt(0).toUpperCase() : 'U'}
                             </div>
                             <div>
-                                <div class="font-semibold">${user.userName}</div>
-                                <div class="text-xs text-muted">ID: ${user.userId.substring(0, 8)}...</div>
+                                <div class="font-semibold">${user.userName || 'Unknown'}</div>
+                                <div class="text-xs text-muted">ID: ${user.userId ? user.userId.substring(0, 8) + '...' : 'N/A'}</div>
                             </div>
                         </div>
                     </td>
                     <td class="font-bold ${user.balance >= 0 ? 'text-success' : 'text-danger'}">
-                        ${user.balance.toFixed(2)} ETB
+                        ${user.balance ? user.balance.toFixed(2) : '0.00'} ETB
                     </td>
                     <td>${agentInfo}</td>
                     <td>${statusBadge}</td>
@@ -3639,8 +3425,8 @@
             
             if (searchTerm) {
                 filtered = filtered.filter(a => 
-                    a.username.toLowerCase().includes(searchTerm) ||
-                    a.name.toLowerCase().includes(searchTerm) ||
+                    (a.username && a.username.toLowerCase().includes(searchTerm)) ||
+                    (a.name && a.name.toLowerCase().includes(searchTerm)) ||
                     (a.referralCode && a.referralCode.toLowerCase().includes(searchTerm))
                 );
             }
@@ -3690,11 +3476,11 @@
                     <td>
                         <div class="d-flex align-center gap-12">
                             <div class="user-avatar">
-                                ${agent.name.charAt(0).toUpperCase()}
+                                ${agent.name ? agent.name.charAt(0).toUpperCase() : 'A'}
                             </div>
                             <div>
-                                <div class="font-semibold">${agent.name}</div>
-                                <div class="text-xs text-muted">@${agent.username}</div>
+                                <div class="font-semibold">${agent.name || 'Unknown'}</div>
+                                <div class="text-xs text-muted">@${agent.username || 'N/A'}</div>
                             </div>
                         </div>
                     </td>
@@ -3780,39 +3566,8 @@
         function refreshPendingTransactions() {
             if (state.socket && state.isAdmin) {
                 state.socket.emit('admin:getPendingTransactions');
-                showToast('Refreshing pending transactions...', 'info');
                 addSystemLog('Refreshed pending transactions', 'wallet');
             }
-        }
-
-        function startWalletAutoRefresh() {
-            // Refresh wallet every 5 seconds
-            setInterval(() => {
-                if (state.isAdmin && state.socket && state.autoRefreshEnabled) {
-                    state.socket.emit('admin:getPendingTransactions');
-                }
-            }, CONFIG.WALLET_REFRESH_INTERVAL);
-        }
-
-        function enableAutoRefresh() {
-            const btn = document.getElementById('autoRefreshBtn');
-            if (state.autoRefreshEnabled) {
-                state.autoRefreshEnabled = false;
-                btn.innerHTML = '<i class="fas fa-pause-circle"></i> Auto-Refresh';
-                btn.className = 'btn btn-warning';
-                showToast('Auto-refresh disabled', 'warning');
-            } else {
-                state.autoRefreshEnabled = true;
-                btn.innerHTML = '<i class="fas fa-play-circle"></i> Auto-Refresh';
-                btn.className = 'btn btn-success';
-                showToast('Auto-refresh enabled', 'success');
-            }
-        }
-
-        function toggleSoundAlerts() {
-            const select = document.getElementById('soundAlertToggle');
-            state.soundAlertsEnabled = select.value === 'on';
-            showToast(`Sound alerts ${state.soundAlertsEnabled ? 'enabled' : 'disabled'}`, 'info');
         }
 
         function filterWalletTransactions() {
@@ -3847,7 +3602,7 @@
             if (filtered.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="text-center p-24">
+                        <td colspan="7" class="text-center p-24">
                             <div class="empty-state">
                                 <i class="fas fa-check-circle"></i>
                                 <h4>No pending transactions</h4>
@@ -3862,26 +3617,21 @@
             
             tbody.innerHTML = '';
             
-            filtered.forEach((transaction, index) => {
+            filtered.forEach(transaction => {
                 const row = document.createElement('tr');
                 const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const date = new Date(transaction.createdAt).toLocaleDateString();
-                
-                // Add flash animation for new transactions (first 3)
-                if (index < 3) {
-                    row.classList.add('flash-row');
-                }
                 
                 let details = '';
                 if (transaction.type === 'DEPOSIT_REQUEST') {
                     details = `
                         <div class="text-sm">Receipt: <strong>${transaction.receiptNumber || 'N/A'}</strong></div>
-                        <div class="text-xs text-muted">Current Balance: ${(transaction.userBalance || 0).toFixed(2)} ETB</div>
+                        <div class="text-xs text-muted">Balance: ${(transaction.userBalance || 0).toFixed(2)} ETB</div>
                     `;
                 } else if (transaction.type === 'WITHDRAW_REQUEST') {
                     details = `
                         <div class="text-sm">Phone: <strong>${transaction.phoneNumber || 'N/A'}</strong></div>
-                        <div class="text-xs text-muted">Current Balance: ${(transaction.userBalance || 0).toFixed(2)} ETB</div>
+                        <div class="text-xs text-muted">Balance: ${(transaction.userBalance || 0).toFixed(2)} ETB</div>
                     `;
                 }
                 
@@ -3899,15 +3649,18 @@
                     timeAgo = `${diffHours}h ago`;
                 }
                 
+                // Status indicator
+                let statusBadge = '<span class="status-badge status-pending"><i class="fas fa-clock"></i> Pending</span>';
+                
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-center gap-12">
                             <div class="user-avatar small">
-                                ${transaction.userName.charAt(0).toUpperCase()}
+                                ${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}
                             </div>
                             <div>
-                                <div class="font-semibold">${transaction.userName}</div>
-                                <div class="text-xs text-muted">${transaction.userId?.substring(0, 8) || 'N/A'}...</div>
+                                <div class="font-semibold">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-xs text-muted">${transaction.userId ? transaction.userId.substring(0, 8) + '...' : 'N/A'}</div>
                                 <div class="text-xs text-muted">${timeAgo}</div>
                             </div>
                         </div>
@@ -3926,6 +3679,7 @@
                         <div>${date}</div>
                         <div class="text-muted">${time}</div>
                     </td>
+                    <td>${statusBadge}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="action-btn approve" onclick="approveTransaction('${transaction._id}', '${transaction.type}', '${transaction.userName}', ${transaction.amount})" title="Approve">
@@ -3944,7 +3698,7 @@
                 tbody.appendChild(row);
             });
             
-            document.getElementById('walletCountDisplay').textContent = `Showing ${filtered.length} pending transaction${filtered.length !== 1 ? 's' : ''}`;
+            document.getElementById('walletCountDisplay').textContent = `Showing ${filtered.length} pending transactions`;
         }
 
         function approveTransaction(transactionId, type, userName, amount) {
@@ -3952,18 +3706,21 @@
             const action = type === 'DEPOSIT_REQUEST' ? 'approveDeposit' : 'approveWithdrawal';
             
             if (confirm(`Approve this ${transactionType} request from ${userName} for ${amount} ETB?\n\nThis will ${transactionType === 'deposit' ? 'add' : 'deduct'} ${amount} ETB ${transactionType === 'deposit' ? 'to' : 'from'} their account.`)) {
-                // Disable buttons immediately
-                const row = document.querySelector(`button[onclick*="${transactionId}"]`).closest('tr');
+                // Disable buttons and show loading
+                const row = document.querySelector(`button[onclick*="${transactionId}"]`)?.closest('tr');
                 if (row) {
                     const buttons = row.querySelectorAll('.action-btn');
-                    buttons.forEach(btn => btn.disabled = true);
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    });
+                    
+                    // Update status
+                    const statusCell = row.querySelector('td:nth-child(6)');
+                    if (statusCell) {
+                        statusCell.innerHTML = '<span class="status-badge status-pending"><i class="fas fa-spinner fa-spin"></i> Processing...</span>';
+                    }
                 }
-                
-                // Update UI immediately
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
-                state.pendingTransactionIds.delete(transactionId);
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
                 
                 // Show processing message
                 showToast(`Processing ${transactionType} approval...`, 'info');
@@ -3971,18 +3728,22 @@
                 // Send to server
                 state.socket.emit(`admin:${action}`, transactionId);
                 
-                // Add to transaction history
-                state.transactionHistory.unshift({
-                    transactionId,
-                    type: transactionType,
-                    userName,
-                    amount,
-                    status: 'completed',
-                    processedAt: new Date().toISOString(),
-                    processedBy: 'Admin'
+                addSystemLog(`${transactionType} approval requested: ${userName} - ${amount} ETB`, 'wallet');
+            }
+        }
+
+        function approveAllDeposits() {
+            const deposits = state.pendingTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
+            if (deposits.length === 0) {
+                showToast('No pending deposits to approve', 'info');
+                return;
+            }
+            
+            if (confirm(`Approve all ${deposits.length} pending deposits? Total amount: ${deposits.reduce((sum, t) => sum + t.amount, 0).toFixed(2)} ETB`)) {
+                deposits.forEach(deposit => {
+                    state.socket.emit('admin:approveDeposit', deposit._id);
                 });
-                
-                addSystemLog(`${transactionType} approved: ${userName} - ${amount} ETB`, 'wallet');
+                showToast(`Processing ${deposits.length} deposits...`, 'info');
             }
         }
 
@@ -3991,18 +3752,21 @@
             const reason = prompt(`Enter reason for rejecting ${transactionType} request from ${userName} (optional):`);
             
             if (reason !== null) { // User didn't cancel
-                // Disable buttons immediately
-                const row = document.querySelector(`button[onclick*="${transactionId}"]`).closest('tr');
+                // Disable buttons and show loading
+                const row = document.querySelector(`button[onclick*="${transactionId}"]`)?.closest('tr');
                 if (row) {
                     const buttons = row.querySelectorAll('.action-btn');
-                    buttons.forEach(btn => btn.disabled = true);
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    });
+                    
+                    // Update status
+                    const statusCell = row.querySelector('td:nth-child(6)');
+                    if (statusCell) {
+                        statusCell.innerHTML = '<span class="status-badge status-pending"><i class="fas fa-spinner fa-spin"></i> Processing...</span>';
+                    }
                 }
-                
-                // Update UI immediately
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
-                state.pendingTransactionIds.delete(transactionId);
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
                 
                 // Show processing message
                 showToast(`Rejecting ${transactionType} request...`, 'warning');
@@ -4010,19 +3774,7 @@
                 // Send to server with optional reason
                 state.socket.emit('admin:rejectTransaction', { transactionId, reason: reason || '' });
                 
-                // Add to transaction history
-                state.transactionHistory.unshift({
-                    transactionId,
-                    type: transactionType,
-                    userName,
-                    amount,
-                    status: 'rejected',
-                    reason: reason,
-                    processedAt: new Date().toISOString(),
-                    processedBy: 'Admin'
-                });
-                
-                addSystemLog(`${transactionType} rejected: ${userName} - ${amount} ETB ${reason ? `(Reason: ${reason})` : ''}`, 'wallet');
+                addSystemLog(`${transactionType} rejection requested: ${userName} - ${amount} ETB`, 'wallet');
             }
         }
 
@@ -4068,21 +3820,10 @@
                 
                 // Update browser tab title with count
                 document.title = `(${count}) Bingo Elite - Admin Dashboard`;
-                
-                // Show alert if not in wallet section
-                const walletSection = document.getElementById('walletApprovalsSection');
-                if (!walletSection.classList.contains('active')) {
-                    const pendingAlert = document.getElementById('pendingAlert');
-                    if (pendingAlert) {
-                        pendingAlert.style.display = 'inline-block';
-                        pendingAlert.textContent = `${count} PENDING`;
-                    }
-                }
             } else {
                 badge.className = 'badge';
                 walletBadge.className = 'badge';
                 document.title = 'Bingo Elite - Admin Dashboard';
-                document.getElementById('pendingAlert').style.display = 'none';
             }
         }
 
@@ -4171,25 +3912,25 @@
                     <td>
                         <div class="d-flex align-center gap-12">
                             <div class="user-avatar small">
-                                ${transaction.userName.charAt(0).toUpperCase()}
+                                ${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}
                             </div>
                             <div>
-                                <div class="font-semibold">${transaction.userName}</div>
-                                <div class="text-xs text-muted">${transaction.userId?.substring(0, 8) || 'N/A'}...</div>
+                                <div class="font-semibold">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-xs text-muted">${transaction.userId ? transaction.userId.substring(0, 8) + '...' : 'N/A'}</div>
                             </div>
                         </div>
                     </td>
                     <td>
                         <span class="transaction-type ${transaction.type === 'deposit' ? 'transaction-deposit' : 'transaction-withdrawal'}">
-                            ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                            ${transaction.type ? transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1) : 'Unknown'}
                         </span>
                     </td>
                     <td class="font-bold ${transaction.type === 'deposit' ? 'text-success' : 'text-danger'}">
-                        ${transaction.type === 'deposit' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
+                        ${transaction.type === 'deposit' ? '+' : '-'}${Math.abs(transaction.amount || 0).toFixed(2)} ETB
                     </td>
                     <td>
                         <span class="status-badge ${statusClass}">
-                            ${transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                            ${transaction.status ? transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1) : 'Pending'}
                         </span>
                     </td>
                     <td class="text-sm">
@@ -4377,12 +4118,73 @@
             }
         }
 
+        function addActivityItem(activity) {
+            const activityFeed = document.getElementById('activityFeed');
+            if (!activityFeed) return;
+            
+            const activityItem = document.createElement('div');
+            activityItem.className = 'd-flex align-center gap-12 mb-12';
+            
+            const time = new Date(activity.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            activityItem.innerHTML = `
+                <div class="text-xs text-muted" style="min-width: 60px;">${time}</div>
+                <div class="text-sm" style="flex: 1;">${activity.message}</div>
+            `;
+            
+            activityFeed.insertBefore(activityItem, activityFeed.firstChild);
+            
+            // Keep only last 20 items
+            while (activityFeed.children.length > 20) {
+                activityFeed.removeChild(activityFeed.lastChild);
+            }
+        }
+
         function startAutoRefresh() {
             setInterval(() => {
-                if (state.isAdmin && state.socket) {
+                if (state.isAdmin && state.socket && state.socket.connected) {
                     state.socket.emit('admin:getData');
                 }
             }, CONFIG.AUTO_REFRESH_INTERVAL);
+        }
+
+        function playNotificationSound(type = 'new') {
+            if (!CONFIG.NOTIFICATION_SOUND_ENABLED || !state.audioContext) return;
+            
+            try {
+                const oscillator = state.audioContext.createOscillator();
+                const gainNode = state.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(state.audioContext.destination);
+                
+                // Different sounds for different events
+                if (type === 'new') {
+                    oscillator.frequency.value = 800;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.3, state.audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, state.audioContext.currentTime + 0.5);
+                    oscillator.start(state.audioContext.currentTime);
+                    oscillator.stop(state.audioContext.currentTime + 0.5);
+                } else if (type === 'success') {
+                    oscillator.frequency.value = 1000;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.2, state.audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, state.audioContext.currentTime + 0.3);
+                    oscillator.start(state.audioContext.currentTime);
+                    oscillator.stop(state.audioContext.currentTime + 0.3);
+                } else if (type === 'error') {
+                    oscillator.frequency.value = 400;
+                    oscillator.type = 'sawtooth';
+                    gainNode.gain.setValueAtTime(0.2, state.audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, state.audioContext.currentTime + 0.4);
+                    oscillator.start(state.audioContext.currentTime);
+                    oscillator.stop(state.audioContext.currentTime + 0.4);
+                }
+            } catch (e) {
+                // Audio not supported or permission issue
+                console.log('Audio notification not available');
+            }
         }
 
         // Control Functions
@@ -4504,7 +4306,7 @@
                     shouldShow = true;
                 } else if (filterType === 'agent' && text.includes('agent')) {
                     shouldShow = true;
-                } else if (filterType === 'wallet' && text.includes('deposit') || text.includes('withdrawal') || text.includes('transaction')) {
+                } else if (filterType === 'wallet' && (text.includes('deposit') || text.includes('withdrawal') || text.includes('transaction'))) {
                     shouldShow = true;
                 }
                 
@@ -4521,7 +4323,17 @@
         }
 
         function exportLogs() {
-            showToast('Export feature coming soon', 'info');
+            const logs = document.getElementById('systemLogs').innerText;
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bingo-logs-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showToast('Logs exported successfully', 'success');
         }
 
         function restartServer() {
@@ -4533,6 +4345,7 @@
 
         function clearCache() {
             if (confirm('Clear all cache?')) {
+                localStorage.removeItem('bingo_admin_session');
                 showToast('Cache cleared', 'success');
                 addSystemLog('Cache cleared');
             }
@@ -4545,6 +4358,7 @@
 
         function emergencyStop() {
             if (confirm('EMERGENCY STOP: Stop all games immediately? This cannot be undone.')) {
+                state.socket.emit('admin:emergencyStop');
                 showToast('Emergency stop activated!', 'error');
                 addSystemLog('EMERGENCY STOP ACTIVATED');
             }
@@ -4552,6 +4366,7 @@
 
         function calculateAgentCommissions() {
             if (confirm('Calculate pending agent commissions?')) {
+                state.socket.emit('agent:calculateCommissions');
                 showToast('Commission calculation requested', 'info');
                 addSystemLog('Agent commission calculation requested');
             }
@@ -4559,6 +4374,7 @@
 
         function forceStartAllGames() {
             if (confirm('Force start all waiting games?')) {
+                state.socket.emit('admin:forceStartGames');
                 showToast('Starting all games...', 'success');
                 addSystemLog('Force started all waiting games');
             }
@@ -4574,8 +4390,11 @@
         // Chart Functions
         function initCharts() {
             // Revenue Chart
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            state.charts.revenue = new Chart(revenueCtx, {
+            const revenueCtx = document.getElementById('revenueChart');
+            if (!revenueCtx) return;
+            
+            const ctx = revenueCtx.getContext('2d');
+            state.charts.revenue = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
@@ -4621,7 +4440,15 @@
             });
         }
 
-        // Initialize
+        // Refresh activity feed
+        function refreshActivity() {
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getRecentActivity');
+                showToast('Refreshing activity...', 'info');
+            }
+        }
+
+        // Initialize on window load
         window.addEventListener('resize', function() {
             if (window.innerWidth >= 992) {
                 document.getElementById('sidebar').classList.remove('active');
