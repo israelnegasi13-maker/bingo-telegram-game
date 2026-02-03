@@ -1045,6 +1045,82 @@
             color: var(--text-secondary);
         }
 
+        /* Enhanced User Row Styles */
+        .user-row {
+            transition: all var(--transition-fast);
+            border-left: 4px solid transparent;
+        }
+        
+        .user-row:hover {
+            border-left-color: var(--primary);
+            background: rgba(58, 86, 212, 0.05);
+        }
+        
+        .user-row.online {
+            border-left-color: var(--success);
+        }
+        
+        .user-row.offline {
+            border-left-color: var(--text-muted);
+        }
+        
+        .user-row.playing {
+            border-left-color: var(--warning);
+        }
+        
+        /* Enhanced Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-sm);
+            flex-wrap: wrap;
+        }
+        
+        .btn-action {
+            padding: 6px 12px;
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-semibold);
+            cursor: pointer;
+            border: none;
+            transition: all var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .btn-action.add-funds {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-action.add-funds:hover {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-action.deposit {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--primary-light);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-action.deposit:hover {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-action.withdraw {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-action.withdraw:hover {
+            background: var(--danger);
+            color: white;
+        }
+
         /* Responsive Design */
         @media (max-width: 1200px) {
             .stats-grid {
@@ -1095,6 +1171,10 @@
             
             .select {
                 min-width: 100%;
+            }
+            
+            .action-buttons {
+                flex-wrap: wrap;
             }
         }
 
@@ -1209,7 +1289,7 @@
                         </div>
                         <div class="login-logo-text">Bingo Elite</div>
                     </div>
-                    <p class="login-subtitle">Admin Dashboard v4.0</p>
+                    <p class="login-subtitle">Admin Dashboard v4.1</p>
                 </div>
                 
                 <div class="form-group">
@@ -1250,7 +1330,7 @@
                         </div>
                         <div>
                             <div class="sidebar-logo-text">Bingo Elite</div>
-                            <div class="sidebar-version">Admin v4.0</div>
+                            <div class="sidebar-version">Admin v4.1</div>
                         </div>
                     </div>
                 </div>
@@ -1292,6 +1372,16 @@
                             <i class="fas fa-wallet"></i>
                             <span>Wallet Approvals</span>
                             <span id="walletApprovalBadge" class="nav-badge">0</span>
+                        </div>
+                        <div class="nav-item" data-section="deposit-requests">
+                            <i class="fas fa-money-bill-wave"></i>
+                            <span>Deposit Requests</span>
+                            <span id="depositRequestBadge" class="nav-badge">0</span>
+                        </div>
+                        <div class="nav-item" data-section="withdrawal-requests">
+                            <i class="fas fa-money-check-alt"></i>
+                            <span>Withdrawal Requests</span>
+                            <span id="withdrawalRequestBadge" class="nav-badge">0</span>
                         </div>
                     </div>
                     
@@ -1425,20 +1515,20 @@
                             </div>
                         </div>
                         
-                        <!-- Active Agents -->
+                        <!-- Pending Transactions -->
                         <div class="stat-card">
                             <div class="stat-header">
                                 <div class="stat-icon agents">
-                                    <i class="fas fa-user-tie"></i>
+                                    <i class="fas fa-clock"></i>
                                 </div>
                                 <div class="stat-title">
-                                    <h3>Active Agents</h3>
-                                    <div class="stat-value" id="totalAgents">0</div>
+                                    <h3>Pending Requests</h3>
+                                    <div class="stat-value" id="pendingRequests">0</div>
                                 </div>
                             </div>
                             <div class="stat-change">
-                                <i class="fas fa-handshake"></i>
-                                <span>Total commission: <span id="totalAgentCommissions">0 ETB</span></span>
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span>Need approval</span>
                             </div>
                         </div>
                     </div>
@@ -1482,29 +1572,51 @@
                                 <div class="quick-action-desc">Add new agent account</div>
                             </div>
                             
-                            <div class="quick-action-card" onclick="showEmergencyModal()">
-                                <div class="quick-action-icon">
-                                    <i class="fas fa-exclamation-triangle"></i>
+                            <div class="quick-action-card" onclick="showPendingRequests()">
+                                <div class="quick-action-icon" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);">
+                                    <i class="fas fa-clock"></i>
                                 </div>
-                                <div class="quick-action-title">Emergency</div>
-                                <div class="quick-action-desc">System controls</div>
+                                <div class="quick-action-title">Pending Requests</div>
+                                <div class="quick-action-desc">View pending approvals</div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Charts -->
+                    <!-- Recent Deposit/Withdrawal Requests -->
                     <div class="mb-5">
                         <div class="card">
-                            <div class="card-header">
-                                <h2 class="card-title">Revenue Overview</h2>
-                                <select class="select" style="min-width: 150px;">
-                                    <option>Last 7 days</option>
-                                    <option>Last 30 days</option>
-                                    <option>Last 90 days</option>
-                                </select>
+                            <div class="card-header d-flex align-center justify-between">
+                                <div>
+                                    <h2 class="card-title">Recent Requests</h2>
+                                    <p class="card-subtitle">Latest deposit/withdrawal requests</p>
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="refreshPendingTransactions()">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
                             </div>
-                            <div class="chart-container">
-                                <canvas id="revenueChart"></canvas>
+                            <div class="table-responsive">
+                                <table class="table" id="recentRequestsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>User</th>
+                                            <th>Type</th>
+                                            <th>Amount</th>
+                                            <th>Details</th>
+                                            <th>Time</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentRequestsTableBody">
+                                        <!-- Recent requests will be inserted here -->
+                                        <tr>
+                                            <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                                <i class="fas fa-inbox"></i>
+                                                <div class="mt-2">No recent requests</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -1618,6 +1730,88 @@
                             </thead>
                             <tbody id="agentsTableBody">
                                 <!-- Agents will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Deposit Requests Section -->
+                <section id="depositRequestsSection" class="content-section">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <div class="table-title">Deposit Requests</div>
+                            <div class="table-controls">
+                                <div class="filters">
+                                    <div class="filter-group">
+                                        <label class="filter-label">Status</label>
+                                        <select class="select" id="depositStatusFilter" onchange="filterDepositRequests()">
+                                            <option value="pending">Pending</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                            <option value="all">All</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="refreshDepositRequests()">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <table class="table" id="depositRequestsTable">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Amount</th>
+                                    <th>Receipt Number</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="depositRequestsTableBody">
+                                <!-- Deposit requests will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Withdrawal Requests Section -->
+                <section id="withdrawalRequestsSection" class="content-section">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <div class="table-title">Withdrawal Requests</div>
+                            <div class="table-controls">
+                                <div class="filters">
+                                    <div class="filter-group">
+                                        <label class="filter-label">Status</label>
+                                        <select class="select" id="withdrawalStatusFilter" onchange="filterWithdrawalRequests()">
+                                            <option value="pending">Pending</option>
+                                            <option value="approved">Approved</option>
+                                            <option value="rejected">Rejected</option>
+                                            <option value="all">All</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" onclick="refreshWithdrawalRequests()">
+                                    <i class="fas fa-sync"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <table class="table" id="withdrawalRequestsTable">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Amount</th>
+                                    <th>Phone Number</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdrawalRequestsTableBody">
+                                <!-- Withdrawal requests will be inserted here -->
                             </tbody>
                         </table>
                     </div>
@@ -1996,7 +2190,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Select User</label>
-                    <input list="fundsUserList" id="fundsUserId" class="form-input" placeholder="Type user ID to search..." autocomplete="off">
+                    <input list="fundsUserList" id="fundsUserId" class="form-input" placeholder="Type user ID or name to search..." autocomplete="off">
                     <datalist id="fundsUserList"></datalist>
                     <div class="text-muted mt-1">
                         Search by name or user ID. Online users are marked with 🟢
@@ -2013,6 +2207,18 @@
                     <button class="btn btn-primary btn-sm" onclick="setAmount(50)">+50</button>
                     <button class="btn btn-primary btn-sm" onclick="setAmount(100)">+100</button>
                     <button class="btn btn-primary btn-sm" onclick="setAmount(500)">+500</button>
+                    <button class="btn btn-primary btn-sm" onclick="setAmount(1000)">+1000</button>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Reason (Optional)</label>
+                    <select id="fundsReason" class="form-input">
+                        <option value="manual">Manual Addition</option>
+                        <option value="deposit_approval">Deposit Approval</option>
+                        <option value="bonus">Bonus</option>
+                        <option value="refund">Refund</option>
+                        <option value="correction">Balance Correction</option>
+                    </select>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2172,6 +2378,57 @@
             </div>
         </div>
     </div>
+    
+    <!-- Quick Add Funds Modal -->
+    <div id="quickAddFundsModal" class="modal-overlay">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-money-bill-wave"></i> Quick Add Funds</h2>
+                <button class="modal-close" onclick="hideModal('quickAddFundsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">User</label>
+                    <div class="d-flex align-center gap-2 p-2 bg-dark-3 rounded">
+                        <div class="user-avatar" id="quickAddUserAvatar">U</div>
+                        <div>
+                            <div style="font-weight: 600;" id="quickAddUserName">Loading...</div>
+                            <div class="text-muted" style="font-size: 0.75rem;" id="quickAddUserId">...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Current Balance</label>
+                    <div class="p-2 bg-dark-3 rounded text-center">
+                        <span style="font-weight: 700; font-size: 1.5rem;" id="quickAddCurrentBalance">0 ETB</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Amount to Add (ETB)</label>
+                    <input type="number" id="quickAddAmount" class="form-input" placeholder="Enter amount" step="0.01" min="0.01" value="100">
+                </div>
+                
+                <div class="filters mb-4 d-flex flex-wrap gap-2">
+                    <button class="btn btn-primary btn-sm" onclick="setQuickAmount(50)">+50</button>
+                    <button class="btn btn-primary btn-sm" onclick="setQuickAmount(100)">+100</button>
+                    <button class="btn btn-primary btn-sm" onclick="setQuickAmount(200)">+200</button>
+                    <button class="btn btn-primary btn-sm" onclick="setQuickAmount(500)">+500</button>
+                    <button class="btn btn-primary btn-sm" onclick="setQuickAmount(1000)">+1000</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideModal('quickAddFundsModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="quickAddFunds()">
+                    <i class="fas fa-check"></i>
+                    Add Funds
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
@@ -2195,6 +2452,8 @@
             rooms: {},
             transactions: [],
             pendingTransactions: [],
+            depositRequests: [],
+            withdrawalRequests: [],
             activityLog: [],
             charts: {},
             lastUpdate: new Date(),
@@ -2205,6 +2464,9 @@
             multiSocketUsers: 0,
             telebirrNumber: "0962577855",
             editingAgentId: null,
+            quickAddUserId: null,
+            quickAddUserName: null,
+            quickAddUserBalance: 0,
             agentStatistics: {
                 totalAgents: 0,
                 activeAgents: 0,
@@ -2249,6 +2511,8 @@
                         'agents': 'Agent Management',
                         'transactions': 'Transactions',
                         'wallet-approvals': 'Wallet Approvals',
+                        'deposit-requests': 'Deposit Requests',
+                        'withdrawal-requests': 'Withdrawal Requests',
                         'rooms': 'Game Rooms',
                         'analytics': 'Analytics',
                         'controls': 'System Controls',
@@ -2261,10 +2525,17 @@
                         toggleSidebar();
                     }
                     
+                    // Refresh specific data when switching sections
                     if (section === 'wallet-approvals') {
                         refreshPendingTransactions();
+                    } else if (section === 'deposit-requests') {
+                        refreshDepositRequests();
+                    } else if (section === 'withdrawal-requests') {
+                        refreshWithdrawalRequests();
                     } else if (section === 'agents') {
                         refreshAgents();
+                    } else if (section === 'users') {
+                        applyFilters();
                     }
                 });
             });
@@ -2308,9 +2579,11 @@
                 startAutoRefresh();
                 initCharts();
                 
-                // Request pending transactions
+                // Request initial data
                 refreshPendingTransactions();
                 refreshAgents();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
             });
 
             state.socket.on('admin:authError', (message) => {
@@ -2329,6 +2602,7 @@
                 state.users = data;
                 applyFilters();
                 updateUsersTable();
+                updateRecentRequestsTable();
                 
                 const onlineCount = data.filter(user => {
                     if (user.isOnline) return true;
@@ -2346,6 +2620,9 @@
                 const multiSocketCount = data.filter(user => (user.socketCount || 0) > 1).length;
                 state.multiSocketUsers = multiSocketCount;
                 document.getElementById('debugMultiSocketUsers').textContent = multiSocketCount;
+                
+                // Update user list for add funds modal
+                updateFundsUserList();
             });
 
             // Agent-related socket events
@@ -2376,10 +2653,11 @@
                 showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
             });
 
+            // Deposit request events - FIXED: Removed duplicate array updates
             state.socket.on('admin:newDepositRequest', (transaction) => {
                 const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
                 if (!exists) {
-                    state.pendingTransactions.unshift({
+                    const depositRequest = {
                         _id: transaction.transactionId,
                         type: 'DEPOSIT_REQUEST',
                         userId: transaction.userId,
@@ -2388,17 +2666,27 @@
                         receiptNumber: transaction.receiptNumber,
                         createdAt: transaction.timestamp,
                         status: 'pending'
-                    });
+                    };
+                    
+                    state.pendingTransactions.unshift(depositRequest);
+                    
+                    // Only update the necessary tables
                     updateWalletApprovalsTable();
+                    updateRecentRequestsTable();
                     updatePendingTransactionsBadge();
+                    
                     showToast('New deposit request from ' + transaction.userName, 'info');
+                    
+                    // Play notification sound
+                    playNotificationSound();
                 }
             });
 
+            // Withdrawal request events - FIXED: Removed duplicate array updates
             state.socket.on('admin:newWithdrawRequest', (transaction) => {
                 const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
                 if (!exists) {
-                    state.pendingTransactions.unshift({
+                    const withdrawalRequest = {
                         _id: transaction.transactionId,
                         type: 'WITHDRAW_REQUEST',
                         userId: transaction.userId,
@@ -2407,10 +2695,19 @@
                         phoneNumber: transaction.phoneNumber,
                         createdAt: transaction.timestamp,
                         status: 'pending'
-                    });
+                    };
+                    
+                    state.pendingTransactions.unshift(withdrawalRequest);
+                    
+                    // Only update the necessary tables
                     updateWalletApprovalsTable();
+                    updateRecentRequestsTable();
                     updatePendingTransactionsBadge();
+                    
                     showToast('New withdrawal request from ' + transaction.userName, 'info');
+                    
+                    // Play notification sound
+                    playNotificationSound();
                 }
             });
 
@@ -2432,21 +2729,29 @@
             state.socket.on('wallet:depositApproved', (data) => {
                 showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
                 refreshPendingTransactions();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
             });
 
             state.socket.on('wallet:withdrawalApproved', (data) => {
                 showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
                 refreshPendingTransactions();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
             });
 
             state.socket.on('wallet:depositRejected', (data) => {
                 showToast(`Deposit rejected: ${data.message}`, 'error');
                 refreshPendingTransactions();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
             });
 
             state.socket.on('wallet:withdrawalRejected', (data) => {
                 showToast(`Withdrawal rejected: ${data.message}`, 'error');
                 refreshPendingTransactions();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
             });
 
             // House earnings reset
@@ -2515,12 +2820,39 @@
             document.getElementById('sidebar').classList.toggle('active');
         }
 
+        function playNotificationSound() {
+            // Create a simple notification sound
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                // Audio context not supported
+            }
+        }
+
         // Data Update Functions
         function updateStats(data) {
             document.getElementById('totalUsers').textContent = data.totalUsers || 0;
             document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
             document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
             document.getElementById('houseEarningsAnalytics').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
+            
+            // Update pending requests count
+            const pendingCount = state.pendingTransactions.length;
+            document.getElementById('pendingRequests').textContent = pendingCount;
             
             if (data.totalWagered !== undefined) {
                 document.getElementById('totalWagered').textContent = (data.totalWagered || 0).toFixed(2) + ' ETB';
@@ -2566,8 +2898,8 @@
             
             if (searchTerm) {
                 filtered = filtered.filter(user => 
-                    user.userName.toLowerCase().includes(searchTerm) ||
-                    user.userId.toLowerCase().includes(searchTerm)
+                    (user.userName && user.userName.toLowerCase().includes(searchTerm)) ||
+                    (user.userId && user.userId.toLowerCase().includes(searchTerm))
                 );
             }
             
@@ -2597,6 +2929,7 @@
             
             state.filteredUsers.forEach(user => {
                 const row = document.createElement('tr');
+                row.className = 'user-row ' + (user.isOnline ? 'online' : 'offline') + (user.currentRoom ? ' playing' : '');
                 
                 let statusBadge = '';
                 if (user.isOnline) {
@@ -2630,15 +2963,15 @@
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-center gap-2">
-                            <div class="user-avatar">${user.userName.charAt(0).toUpperCase()}</div>
+                            <div class="user-avatar">${user.userName ? user.userName.charAt(0).toUpperCase() : 'U'}</div>
                             <div>
-                                <div style="font-weight: 600;">${user.userName}</div>
-                                <div class="text-muted" style="font-size: 0.75rem;">${user.userId.substring(0, 12)}...</div>
+                                <div style="font-weight: 600;">${user.userName || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${user.userId ? user.userId.substring(0, 12) + '...' : 'No ID'}</div>
                             </div>
                         </div>
                     </td>
-                    <td style="font-weight: 700; color: ${user.balance >= 0 ? 'var(--success)' : 'var(--danger)'}">
-                        ${user.balance.toFixed(2)} ETB
+                    <td style="font-weight: 700; color: ${(user.balance || 0) >= 0 ? 'var(--success)' : 'var(--danger)'}">
+                        ${(user.balance || 0).toFixed(2)} ETB
                     </td>
                     <td>${agentInfo}</td>
                     <td>${statusBadge}</td>
@@ -2651,10 +2984,10 @@
                     </td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-primary btn-sm" onclick="addFundsToUser('${user.userId}', '${user.userName}')" title="Add Funds">
-                                <i class="fas fa-coins"></i>
+                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${user.userId}', '${user.userName || 'Unknown'}', ${user.balance || 0})" title="Add Funds">
+                                <i class="fas fa-money-bill-wave"></i>
                             </button>
-                            <button class="btn btn-agent btn-sm" onclick="showAssignAgentToUser('${user.userId}', '${user.userName}')" title="Assign Agent">
+                            <button class="btn btn-agent btn-sm" onclick="showAssignAgentToUser('${user.userId}', '${user.userName || 'Unknown'}')" title="Assign Agent">
                                 <i class="fas fa-user-tie"></i>
                             </button>
                             <button class="btn btn-danger btn-sm" onclick="kickUser('${user.userId}')" title="Kick User">
@@ -2668,15 +3001,51 @@
             });
         }
 
+        // Update funds user list for datalist
+        function updateFundsUserList() {
+            const datalist = document.getElementById('fundsUserList');
+            datalist.innerHTML = '';
+            
+            state.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = `${user.userName} (${user.userId})`;
+                option.setAttribute('data-userid', user.userId);
+                datalist.appendChild(option);
+            });
+        }
+
         // Wallet Approvals Functions
         function refreshPendingTransactions() {
             if (state.socket && state.isAdmin) {
                 state.socket.emit('admin:getPendingTransactions');
+                showToast('Refreshing pending transactions...', 'info');
             }
+        }
+
+        // FIXED: Only filter from pendingTransactions
+        function refreshDepositRequests() {
+            state.depositRequests = state.pendingTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
+            updateDepositRequestsTable();
+            updateDepositRequestBadge();
+        }
+
+        // FIXED: Only filter from pendingTransactions
+        function refreshWithdrawalRequests() {
+            state.withdrawalRequests = state.pendingTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
+            updateWithdrawalRequestsTable();
+            updateWithdrawalRequestBadge();
         }
 
         function filterWalletTransactions() {
             updateWalletApprovalsTable();
+        }
+
+        function filterDepositRequests() {
+            updateDepositRequestsTable();
+        }
+
+        function filterWithdrawalRequests() {
+            updateWithdrawalRequestsTable();
         }
 
         function updateWalletApprovalsTable() {
@@ -2706,6 +3075,7 @@
             
             filtered.forEach(transaction => {
                 const row = document.createElement('tr');
+                row.className = 'user-row';
                 
                 const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const date = new Date(transaction.createdAt).toLocaleDateString();
@@ -2719,15 +3089,20 @@
                 
                 let details = '';
                 if (transaction.type === 'DEPOSIT_REQUEST') {
-                    details = `Receipt: ${transaction.receiptNumber}`;
+                    details = `Receipt: ${transaction.receiptNumber || 'N/A'}`;
                 } else if (transaction.type === 'WITHDRAW_REQUEST') {
-                    details = `Phone: ${transaction.phoneNumber}`;
+                    details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
                 }
                 
                 row.innerHTML = `
                     <td>
-                        <div style="font-weight: 600;">${transaction.userName}</div>
-                        <div class="text-muted" style="font-size: 0.75rem;">${transaction.userId.substring(0, 12)}...</div>
+                        <div class="d-flex align-center gap-2">
+                            <div class="user-avatar">${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}</div>
+                            <div>
+                                <div style="font-weight: 600;">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${transaction.userId ? transaction.userId.substring(0, 12) + '...' : 'No ID'}</div>
+                            </div>
+                        </div>
                     </td>
                     <td>${typeBadge}</td>
                     <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
@@ -2748,6 +3123,246 @@
                             <button class="btn btn-danger btn-sm" onclick="rejectTransaction('${transaction._id}', '${transaction.type}')" title="Reject">
                                 <i class="fas fa-times"></i>
                             </button>
+                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateDepositRequestsTable() {
+            const tbody = document.getElementById('depositRequestsTableBody');
+            tbody.innerHTML = '';
+            
+            const statusFilter = document.getElementById('depositStatusFilter').value;
+            
+            let filtered = state.depositRequests;
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(t => t.status === statusFilter);
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-inbox"></i>
+                            <div class="mt-2">No deposit requests</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            filtered.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.className = 'user-row';
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                let statusBadge = '';
+                if (transaction.status === 'pending') {
+                    statusBadge = '<span class="badge badge-warning">Pending</span>';
+                } else if (transaction.status === 'approved') {
+                    statusBadge = '<span class="badge badge-success">Approved</span>';
+                } else if (transaction.status === 'rejected') {
+                    statusBadge = '<span class="badge badge-danger">Rejected</span>';
+                }
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="d-flex align-center gap-2">
+                            <div class="user-avatar">${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}</div>
+                            <div>
+                                <div style="font-weight: 600;">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${transaction.userId ? transaction.userId.substring(0, 12) + '...' : 'No ID'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="font-weight: 700; color: var(--success)">
+                        +${Math.abs(transaction.amount).toFixed(2)} ETB
+                    </td>
+                    <td>
+                        <div style="font-family: monospace; font-weight: 600;">${transaction.receiptNumber || 'N/A'}</div>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div>${date}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            ${transaction.status === 'pending' ? `
+                                <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', 'DEPOSIT_REQUEST')" title="Approve">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="rejectTransaction('${transaction._id}', 'DEPOSIT_REQUEST')" title="Reject">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateWithdrawalRequestsTable() {
+            const tbody = document.getElementById('withdrawalRequestsTableBody');
+            tbody.innerHTML = '';
+            
+            const statusFilter = document.getElementById('withdrawalStatusFilter').value;
+            
+            let filtered = state.withdrawalRequests;
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(t => t.status === statusFilter);
+            }
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-inbox"></i>
+                            <div class="mt-2">No withdrawal requests</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            filtered.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.className = 'user-row';
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                let statusBadge = '';
+                if (transaction.status === 'pending') {
+                    statusBadge = '<span class="badge badge-warning">Pending</span>';
+                } else if (transaction.status === 'approved') {
+                    statusBadge = '<span class="badge badge-success">Approved</span>';
+                } else if (transaction.status === 'rejected') {
+                    statusBadge = '<span class="badge badge-danger">Rejected</span>';
+                }
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="d-flex align-center gap-2">
+                            <div class="user-avatar">${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}</div>
+                            <div>
+                                <div style="font-weight: 600;">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${transaction.userId ? transaction.userId.substring(0, 12) + '...' : 'No ID'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="font-weight: 700; color: var(--danger)">
+                        -${Math.abs(transaction.amount).toFixed(2)} ETB
+                    </td>
+                    <td>
+                        <div style="font-family: monospace; font-weight: 600;">${transaction.phoneNumber || 'N/A'}</div>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div>${date}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            ${transaction.status === 'pending' ? `
+                                <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', 'WITHDRAW_REQUEST')" title="Approve">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="rejectTransaction('${transaction._id}', 'WITHDRAW_REQUEST')" title="Reject">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function updateRecentRequestsTable() {
+            const tbody = document.getElementById('recentRequestsTableBody');
+            tbody.innerHTML = '';
+            
+            // Get recent 5 requests
+            const recentRequests = state.pendingTransactions.slice(0, 5);
+            
+            if (recentRequests.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-inbox"></i>
+                            <div class="mt-2">No recent requests</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            recentRequests.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.className = 'user-row';
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                let typeBadge = '';
+                if (transaction.type === 'DEPOSIT_REQUEST') {
+                    typeBadge = '<span class="badge badge-success">Deposit</span>';
+                } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                    typeBadge = '<span class="badge badge-danger">Withdrawal</span>';
+                }
+                
+                let details = '';
+                if (transaction.type === 'DEPOSIT_REQUEST') {
+                    details = `Receipt: ${transaction.receiptNumber?.substring(0, 10) || 'N/A'}`;
+                } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                    details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
+                }
+                
+                row.innerHTML = `
+                    <td>
+                        <div class="d-flex align-center gap-2">
+                            <div class="user-avatar">${transaction.userName ? transaction.userName.charAt(0).toUpperCase() : 'U'}</div>
+                            <div>
+                                <div style="font-weight: 600;">${transaction.userName || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">${transaction.userId ? transaction.userId.substring(0, 8) + '...' : 'No ID'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${typeBadge}</td>
+                    <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
+                        ${transaction.type === 'DEPOSIT_REQUEST' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
+                    </td>
+                    <td>
+                        <div style="font-size: 0.85rem;">${details}</div>
+                    </td>
+                    <td>
+                        <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </button>
                         </div>
                     </td>
                 `;
@@ -2757,7 +3372,12 @@
         }
 
         function approveTransaction(transactionId, type) {
-            if (!confirm(`Approve this ${type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal'} request?`)) {
+            const transaction = state.pendingTransactions.find(t => t._id === transactionId);
+            if (!transaction) return;
+            
+            const action = type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
+            
+            if (!confirm(`Approve this ${action} request of ${transaction.amount} ETB for ${transaction.userName}?`)) {
                 return;
             }
             
@@ -2767,16 +3387,21 @@
                 state.socket.emit('admin:approveWithdrawal', transactionId);
             }
             
-            showToast(`${type === 'DEPOSIT_REQUEST' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
+            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
         }
 
         function rejectTransaction(transactionId, type) {
-            if (!confirm(`Reject this ${type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal'} request?`)) {
+            const transaction = state.pendingTransactions.find(t => t._id === transactionId);
+            if (!transaction) return;
+            
+            const action = type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
+            
+            if (!confirm(`Reject this ${action} request of ${transaction.amount} ETB for ${transaction.userName}?`)) {
                 return;
             }
             
             state.socket.emit('admin:rejectTransaction', transactionId);
-            showToast(`${type === 'DEPOSIT_REQUEST' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
+            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
         }
 
         function updatePendingTransactionsBadge() {
@@ -2787,6 +3412,35 @@
             
             if (count > 0) {
                 badge.style.background = 'var(--warning)';
+            } else {
+                badge.style.background = 'var(--text-muted)';
+            }
+            
+            // Also update the pending requests stat
+            document.getElementById('pendingRequests').textContent = count;
+        }
+
+        function updateDepositRequestBadge() {
+            const badge = document.getElementById('depositRequestBadge');
+            const count = state.depositRequests.filter(r => r.status === 'pending').length;
+            
+            badge.textContent = count;
+            
+            if (count > 0) {
+                badge.style.background = 'var(--success)';
+            } else {
+                badge.style.background = 'var(--text-muted)';
+            }
+        }
+
+        function updateWithdrawalRequestBadge() {
+            const badge = document.getElementById('withdrawalRequestBadge');
+            const count = state.withdrawalRequests.filter(r => r.status === 'pending').length;
+            
+            badge.textContent = count;
+            
+            if (count > 0) {
+                badge.style.background = 'var(--danger)';
             } else {
                 badge.style.background = 'var(--text-muted)';
             }
@@ -2817,6 +3471,7 @@
             
             state.agents.forEach(agent => {
                 const row = document.createElement('tr');
+                row.className = 'user-row';
                 
                 const statusBadge = agent.isActive ? 
                     '<span class="badge badge-success">Active</span>' : 
@@ -2825,10 +3480,10 @@
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-center gap-2">
-                            <div class="user-avatar" style="background: var(--agent);">${agent.name.charAt(0).toUpperCase()}</div>
+                            <div class="user-avatar" style="background: var(--agent);">${agent.name ? agent.name.charAt(0).toUpperCase() : 'A'}</div>
                             <div>
-                                <div style="font-weight: 600;">${agent.name}</div>
-                                <div class="text-muted" style="font-size: 0.75rem;">@${agent.username}</div>
+                                <div style="font-weight: 600;">${agent.name || 'Unknown'}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">@${agent.username || 'N/A'}</div>
                             </div>
                         </div>
                     </td>
@@ -3048,30 +3703,79 @@
 
         // Action Functions
         function addFunds() {
-            const userId = document.getElementById('fundsUserId').value;
+            const userIdInput = document.getElementById('fundsUserId').value;
             const amount = document.getElementById('fundsAmount').value;
+            
+            // Extract user ID from input (format: "Username (userId)")
+            let userId = userIdInput;
+            const match = userIdInput.match(/\((.*?)\)/);
+            if (match && match[1]) {
+                userId = match[1].trim();
+            }
             
             if (!userId || !amount) {
                 showToast('Please enter user ID and amount', 'error');
                 return;
             }
             
-            state.socket.emit('admin:addFunds', { userId, amount: parseFloat(amount) });
+            const reason = document.getElementById('fundsReason').value;
+            const data = { 
+                userId, 
+                amount: parseFloat(amount),
+                reason: reason
+            };
+            
+            state.socket.emit('admin:addFunds', data);
             hideModal('addFundsModal');
+            showToast(`Adding ${amount} ETB to user...`, 'info');
         }
 
-        function addFundsToUser(userId, userName = '') {
-            document.getElementById('fundsUserId').value = userId;
-            document.getElementById('fundsAmount').value = '';
-            showModal('addFundsModal');
+        function quickAddFundsToUser(userId, userName, currentBalance) {
+            state.quickAddUserId = userId;
+            state.quickAddUserName = userName;
+            state.quickAddUserBalance = currentBalance;
             
-            if (userName) {
-                showToast(`Selected user: ${userName}`, 'info');
+            document.getElementById('quickAddUserName').textContent = userName || 'Unknown';
+            document.getElementById('quickAddUserId').textContent = userId || 'No ID';
+            document.getElementById('quickAddUserAvatar').textContent = userName ? userName.charAt(0).toUpperCase() : 'U';
+            document.getElementById('quickAddCurrentBalance').textContent = currentBalance.toFixed(2) + ' ETB';
+            document.getElementById('quickAddAmount').value = '100';
+            
+            showModal('quickAddFundsModal');
+        }
+
+        function quickAddFunds() {
+            const amount = document.getElementById('quickAddAmount').value;
+            
+            if (!state.quickAddUserId || !amount) {
+                showToast('Please enter amount', 'error');
+                return;
             }
+            
+            const data = { 
+                userId: state.quickAddUserId, 
+                amount: parseFloat(amount),
+                reason: 'quick_add'
+            };
+            
+            state.socket.emit('admin:addFunds', data);
+            hideModal('quickAddFundsModal');
+            showToast(`Adding ${amount} ETB to ${state.quickAddUserName}...`, 'success');
         }
 
         function setAmount(amount) {
             document.getElementById('fundsAmount').value = amount;
+        }
+
+        function setQuickAmount(amount) {
+            document.getElementById('quickAddAmount').value = amount;
+        }
+
+        function showAddFundsModal() {
+            document.getElementById('fundsUserId').value = '';
+            document.getElementById('fundsAmount').value = '';
+            document.getElementById('fundsReason').value = 'manual';
+            showModal('addFundsModal');
         }
 
         function kickUser(userId) {
@@ -3100,10 +3804,16 @@
             showToast('Broadcast sent to all players', 'success');
         }
 
-        function showEmergencyModal() {
-            if (confirm('Access emergency controls? This is for critical situations only.')) {
-                showToast('Emergency controls coming soon', 'warning');
-            }
+        function showPendingRequests() {
+            // Navigate to wallet approvals section
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            document.querySelector('.nav-item[data-section="wallet-approvals"]').classList.add('active');
+            
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.getElementById('walletApprovalsSection').classList.add('active');
+            document.getElementById('pageTitle').textContent = 'Wallet Approvals';
+            
+            refreshPendingTransactions();
         }
 
         function forceRefreshData() {
@@ -3111,6 +3821,8 @@
                 state.socket.emit('admin:getData');
                 refreshAgents();
                 refreshPendingTransactions();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
                 showToast('Refreshing data...', 'success');
             }
         }
@@ -3157,6 +3869,12 @@
             } else if (activity.type === 'AGENT_COMMISSION') {
                 icon = 'fa-user-tie';
                 color = 'var(--agent)';
+            } else if (activity.type === 'DEPOSIT') {
+                icon = 'fa-money-bill-wave';
+                color = 'var(--primary)';
+            } else if (activity.type === 'WITHDRAWAL') {
+                icon = 'fa-money-check-alt';
+                color = 'var(--warning)';
             }
             
             activityItem.innerHTML = `
@@ -3194,54 +3912,56 @@
         // Chart Functions
         function initCharts() {
             // Revenue Chart
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            new Chart(revenueCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                    datasets: [{
-                        label: 'Revenue (ETB)',
-                        data: [1200, 1900, 1500, 2500, 2200, 3000, 2800],
-                        borderColor: 'var(--primary)',
-                        backgroundColor: 'rgba(58, 86, 212, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: 'var(--text-primary)'
-                            }
-                        }
+            const revenueCtx = document.getElementById('revenueChart');
+            if (revenueCtx) {
+                new Chart(revenueCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                        datasets: [{
+                            label: 'Revenue (ETB)',
+                            data: [1200, 1900, 1500, 2500, 2200, 3000, 2800],
+                            borderColor: 'var(--primary)',
+                            backgroundColor: 'rgba(58, 86, 212, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4
+                        }]
                     },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: 'rgba(255,255,255,0.05)'
-                            },
-                            ticks: {
-                                color: 'var(--text-secondary)'
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: 'var(--text-primary)'
+                                }
                             }
                         },
-                        y: {
-                            grid: {
-                                color: 'rgba(255,255,255,0.05)'
+                        scales: {
+                            x: {
+                                grid: {
+                                    color: 'rgba(255,255,255,0.05)'
+                                },
+                                ticks: {
+                                    color: 'var(--text-secondary)'
+                                }
                             },
-                            ticks: {
-                                color: 'var(--text-secondary)',
-                                callback: function(value) {
-                                    return value + ' ETB';
+                            y: {
+                                grid: {
+                                    color: 'rgba(255,255,255,0.05)'
+                                },
+                                ticks: {
+                                    color: 'var(--text-secondary)',
+                                    callback: function(value) {
+                                        return value + ' ETB';
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         // System Functions
@@ -3342,14 +4062,17 @@
 
         function searchTransactions() {
             // Implement search functionality
+            showToast('Searching transactions...', 'info');
         }
 
         function applyTransactionFilters() {
             // Implement filter functionality
+            showToast('Applying filters...', 'info');
         }
 
         function filterLogs() {
             // Implement log filter functionality
+            showToast('Filtering logs...', 'info');
         }
 
         function logout() {
@@ -3365,8 +4088,9 @@
         // Add sample activity on load
         setTimeout(() => {
             if (state.isAdmin) {
-                addActivityItem({details: 'System initialized successfully'});
-                addActivityItem({details: 'Welcome to Bingo Elite Admin Dashboard'});
+                addActivityItem({details: 'System initialized successfully', type: 'INFO'});
+                addActivityItem({details: 'Welcome to Bingo Elite Admin Dashboard v4.1', type: 'INFO'});
+                addActivityItem({details: 'Enhanced deposit/withdrawal tracking enabled', type: 'INFO'});
             }
         }, 2000);
     </script>
