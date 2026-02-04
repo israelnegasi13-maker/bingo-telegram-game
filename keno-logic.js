@@ -1730,17 +1730,23 @@ module.exports = {
         }
     },
     
-    // Start Keno game round
+    // Start Keno game round - FIXED TIMER ISSUES
     startKenoRound: function() {
         const self = this;
         
         // Clear any scheduled flag
         self.isRoundScheduled = false;
         
-        // Clear any existing timeout
+        // Clear any existing timeout and intervals FIRST
         if (self.roundTransitionTimeout) {
             clearTimeout(self.roundTransitionTimeout);
             self.roundTransitionTimeout = null;
+        }
+        
+        // Clear countdown interval if exists
+        if (self.kenoCountdownInterval) {
+            clearInterval(self.kenoCountdownInterval);
+            self.kenoCountdownInterval = null;
         }
         
         // FIX: Check if we actually have online players
@@ -1755,11 +1761,15 @@ module.exports = {
                 message: 'Waiting for players...',
                 playersNeeded: self.minimumPlayers
             });
+            
+            // Reset countdown
+            self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
             return;
         }
         
         console.log('🎰 Starting new Keno round...');
         
+        // Set states BEFORE creating any timers
         self.isKenoRoundActive = true;
         self.isDrawing = false;
         self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
@@ -1787,10 +1797,11 @@ module.exports = {
         
         self.activeKenoGames.set('current', activeGame);
         
-        // Broadcast round start
+        // Broadcast round start with updated countdown
         self.io.to('keno').emit('keno:round_start', {
             round: activeGame.roundNumber,
             duration: self.CONFIG.KENO_GAME_TIMER,
+            countdown: self.kenoCountdown,
             message: `Round ${activeGame.roundNumber} started! Place your bets!`,
             minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
             maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
@@ -1843,11 +1854,13 @@ module.exports = {
             }
         }
         
-        // Start countdown
-        self.startKenoCountdown();
+        // Start countdown with fresh interval after a small delay
+        setTimeout(() => {
+            self.startKenoCountdown();
+        }, 100);
     },
     
-    // Start game if ready
+    // Start game if ready - FIXED DUPLICATE SCHEDULING
     startGameIfReady: function() {
         const self = this;
         
@@ -1882,6 +1895,12 @@ module.exports = {
             if (self.roundTransitionTimeout) {
                 clearTimeout(self.roundTransitionTimeout);
                 self.roundTransitionTimeout = null;
+            }
+            
+            // Clear any existing countdown interval
+            if (self.kenoCountdownInterval) {
+                clearInterval(self.kenoCountdownInterval);
+                self.kenoCountdownInterval = null;
             }
             
             // Start round after 3 seconds
@@ -1926,11 +1945,11 @@ module.exports = {
         console.log('🎰 Game paused due to no players');
     },
     
-    // Start Keno countdown
+    // Start Keno countdown - FIXED TIMER CLEANUP
     startKenoCountdown: function() {
         const self = this;
         
-        // Clear any existing interval
+        // Clear any existing interval FIRST
         if (self.kenoCountdownInterval) {
             clearInterval(self.kenoCountdownInterval);
             self.kenoCountdownInterval = null;
@@ -1943,6 +1962,7 @@ module.exports = {
             countdown: self.kenoCountdown
         });
         
+        // Create new interval
         self.kenoCountdownInterval = setInterval(() => {
             // Check if round is still active
             if (!self.isKenoRoundActive) {
@@ -2000,6 +2020,17 @@ module.exports = {
         if (!activeGame || activeGame.status !== 'betting') return;
         
         console.log('🎰 Drawing Keno numbers...');
+        
+        // IMPORTANT: Clear all intervals and timeouts first
+        if (self.kenoCountdownInterval) {
+            clearInterval(self.kenoCountdownInterval);
+            self.kenoCountdownInterval = null;
+        }
+        
+        if (self.roundTransitionTimeout) {
+            clearTimeout(self.roundTransitionTimeout);
+            self.roundTransitionTimeout = null;
+        }
         
         // IMPORTANT: Set game status to drawing
         activeGame.status = 'drawing';
@@ -2122,6 +2153,12 @@ module.exports = {
         const self = this;
         
         console.log('🎰 Processing Keno results...');
+        
+        // Clear any existing timeout to prevent conflicts
+        if (self.roundTransitionTimeout) {
+            clearTimeout(self.roundTransitionTimeout);
+            self.roundTransitionTimeout = null;
+        }
         
         // Calculate winnings for each player
         for (const [playerId, bet] of Object.entries(activeGame.bets)) {
@@ -2306,7 +2343,7 @@ module.exports = {
         self.playerReconnectAttempts.clear();
         
         // Reset the current game to waiting state after a delay
-        setTimeout(() => {
+        self.roundTransitionTimeout = setTimeout(() => {
             // IMPORTANT: Set game back to waiting state for next round
             activeGame.status = 'waiting';
             activeGame.bets = {};
@@ -2668,11 +2705,20 @@ module.exports = {
         }
     },
     
-    // Check if game should be active
+    // Check if game should be active - FIXED STUCK DETECTION
     checkGameStatus: function() {
         const onlinePlayers = this.getOnlinePlayersCount();
         const activeGame = this.getActiveKenoGame();
         const gameStatus = activeGame.status || 'waiting';
+        
+        // FIX: Detect if countdown is stuck (not changing)
+        if (this.kenoCountdownInterval && this.kenoCountdown <= 0 && !this.isDrawing && this.isKenoRoundActive) {
+            console.log('🎰 Stuck countdown detected, forcing draw...');
+            clearInterval(this.kenoCountdownInterval);
+            this.kenoCountdownInterval = null;
+            this.drawKenoNumbers();
+            return;
+        }
         
         // FIX: Detect if game is stuck in active state with no players
         if (this.isKenoRoundActive && onlinePlayers === 0) {
@@ -2686,7 +2732,7 @@ module.exports = {
             }
         }
         
-        // FIX: Detect if countdown is stuck
+        // FIX: Detect if countdown is stuck at zero but not progressing
         if (this.kenoCountdown <= 0 && !this.isDrawing && !this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, resetting...');
             this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
