@@ -1,4 +1,4 @@
-// keno-logic.js - KENO GAME LOGIC MODULE
+// keno-logic.js - KENO GAME LOGIC MODULE WITH PROFIT CONTROL SYSTEM
 module.exports = {
     // Game configuration - UPDATED for 1-5 numbers
     CONFIG: {
@@ -30,7 +30,35 @@ module.exports = {
         RECONNECT_TIMEOUT: 30000, // 30 seconds to allow reconnection
         AUTO_RECONNECT: true,
         MAX_RECONNECT_ATTEMPTS: 3,
-        RECONNECT_BACKOFF: 2000 // Start with 2 seconds
+        RECONNECT_BACKOFF: 2000, // Start with 2 seconds
+    },
+
+    // ==================== PROFIT CONTROL SYSTEM ====================
+    PROFIT_CONTROL: {
+        ENABLED: true, // Enable/disable profit control
+        SIMULATION_COUNT: 1000, // Number of draws to simulate
+        TARGET_HOUSE_KEEP_PERCENTAGE: 60, // House keeps 60% of all bets (pays out 40%)
+        MIN_HOUSE_KEEP_PERCENTAGE: 50, // Minimum house keep percentage
+        MAX_HOUSE_KEEP_PERCENTAGE: 80, // Maximum house keep percentage
+        VARIANCE_PERCENTAGE: 10, // Allow 10% variance in target
+        RANDOMNESS_CHANCE: 0.05, // 5% chance to pick truly random draw (for unpredictability)
+        // Complex patterns to avoid detection
+        PATTERN_AVOIDANCE: {
+            ENABLED: true,
+            MAX_CONSECUTIVE_HIGH_PROFIT: 2, // Max 2 consecutive rounds with >70% house keep
+            AVOID_REPEATING_NUMBERS: true, // Avoid repeating same numbers too often
+            NUMBER_COOLDOWN: 3, // Numbers can't appear again for 3 rounds
+            NUMBER_FREQUENCY_CAP: 0.25, // No number should appear in more than 25% of draws
+            DIVERSITY_REQUIREMENT: 15, // At least 15 unique numbers in last 20 draws
+        },
+        // Dynamic adjustment based on game conditions
+        DYNAMIC_ADJUSTMENT: {
+            ENABLED: true,
+            LOW_PLAYER_ADJUSTMENT: 1.1, // 10% more profit when <3 players
+            HIGH_BET_ADJUSTMENT: 0.9, // 10% less profit when big bets detected
+            JACKPOT_PROTECTION: true, // Reduce chance of huge wins
+            BALANCE_PROTECTION: true, // Protect house balance
+        }
     },
 
     // Initialize Keno logic
@@ -59,6 +87,12 @@ module.exports = {
         this.playerReconnectTokens = new Map(); // Store reconnect tokens
         this.playerReconnectAttempts = new Map(); // Track reconnect attempts per player
         
+        // Profit Control System Tracking
+        this.profitControlHistory = [];
+        this.consecutiveHighProfitRounds = 0;
+        this.recentNumbersFrequency = new Map(); // Track frequency of numbers
+        this.lastSelectedNumbers = [];
+        
         console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
         console.log('🎰 NEW payout table loaded:');
         console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 15x, 2 hits = 1x');
@@ -68,6 +102,7 @@ module.exports = {
         console.log('   1 Number:  1 hit = 3x');
         console.log('💰 Wallet system integrated');
         console.log('🔄 Reconnection system enabled');
+        console.log('🎯 PROFIT CONTROL SYSTEM ACTIVE: House target = 60% keep, Pay out = 40%');
         
         // Load existing stats
         this.loadKenoStats();
@@ -90,6 +125,30 @@ module.exports = {
         
         // Start reconnection cleanup
         this.startReconnectionCleanup();
+        
+        // Initialize profit control tracking
+        this.initializeProfitControl();
+    },
+
+    // Initialize Profit Control System
+    initializeProfitControl: function() {
+        const self = this;
+        
+        // Reset tracking
+        this.profitControlHistory = [];
+        this.consecutiveHighProfitRounds = 0;
+        this.recentNumbersFrequency.clear();
+        this.lastSelectedNumbers = [];
+        
+        console.log('🎯 Profit Control System initialized');
+        
+        // Clean up old profit history every hour
+        setInterval(() => {
+            const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+            self.profitControlHistory = self.profitControlHistory.filter(
+                h => h.timestamp > twentyFourHoursAgo
+            );
+        }, 3600000);
     },
 
     // Start reconnection cleanup
@@ -762,7 +821,8 @@ module.exports = {
                     placedAt: new Date(),
                     userName: player.userName,
                     potentialWinnings: potentialWinnings,
-                    playerSocketId: socket.id
+                    playerSocketId: socket.id,
+                    playerId: socket.userId // Store playerId for profit control
                 };
                 activeGame.totalBets++;
                 activeGame.totalBetAmount += bet;
@@ -2012,14 +2072,377 @@ module.exports = {
         }, 1000);
     },
     
-    // Draw Keno numbers - UPDATED with ball counter and random order drawing
+    // ==================== PROFIT CONTROL SYSTEM FUNCTIONS ====================
+    
+    // Generate a random draw (for simulations)
+    generateRandomDraw: function() {
+        const draw = [];
+        while (draw.length < this.CONFIG.KENO_DRAW_COUNT) {
+            const num = Math.floor(Math.random() * this.CONFIG.KENO_TOTAL_NUMBERS) + 1;
+            if (!draw.includes(num)) {
+                draw.push(num);
+            }
+        }
+        return draw;
+    },
+    
+    // Check if draw is valid considering pattern avoidance
+    isDrawValid: function(draw, recentDraws, recentNumbers) {
+        const pc = this.PROFIT_CONTROL.PATTERN_AVOIDANCE;
+        
+        if (!pc.ENABLED) return true;
+        
+        // Check if any number is in cooldown (appeared in last N rounds)
+        if (pc.AVOID_REPEATING_NUMBERS && recentDraws.length > 0) {
+            const lastDraws = recentDraws.slice(0, pc.NUMBER_COOLDOWN);
+            const numbersInCooldown = new Set();
+            lastDraws.forEach(d => d.forEach(n => numbersInCooldown.add(n)));
+            
+            const overlappingNumbers = draw.filter(n => numbersInCooldown.has(n));
+            if (overlappingNumbers.length > 5) { // Allow some overlap but not too much
+                return false;
+            }
+        }
+        
+        // Check number frequency cap
+        if (pc.NUMBER_FREQUENCY_CAP && recentNumbers.length > 0) {
+            const numberCounts = new Map();
+            recentNumbers.forEach(n => {
+                numberCounts.set(n, (numberCounts.get(n) || 0) + 1);
+            });
+            
+            const maxAllowed = Math.ceil(recentDraws.length * pc.NUMBER_FREQUENCY_CAP);
+            for (const num of draw) {
+                const count = numberCounts.get(num) || 0;
+                if (count >= maxAllowed) {
+                    return false;
+                }
+            }
+        }
+        
+        // Check diversity requirement
+        if (pc.DIVERSITY_REQUIREMENT && recentDraws.length >= 20) {
+            const last20Draws = recentDraws.slice(0, 20);
+            const uniqueNumbers = new Set();
+            last20Draws.forEach(d => d.forEach(n => uniqueNumbers.add(n)));
+            
+            // If we already have too many unique numbers, new draw must add diversity
+            if (uniqueNumbers.size >= 70) { // Almost all numbers have appeared
+                // Allow this draw since we've covered most numbers already
+                return true;
+            }
+        }
+        
+        return true;
+    },
+    
+    // Calculate pattern score for a draw (lower is better)
+    calculatePatternScore: function(draw, recentDraws, recentNumbers) {
+        const pc = this.PROFIT_CONTROL.PATTERN_AVOIDANCE;
+        let score = 0;
+        
+        if (!pc.ENABLED) return score;
+        
+        // Penalize for numbers that appeared recently
+        if (recentDraws.length > 0) {
+            const lastDraw = recentDraws[0] || [];
+            const overlap = draw.filter(n => lastDraw.includes(n)).length;
+            score += overlap * 10; // Penalize for repeating numbers from last draw
+        }
+        
+        // Check for consecutive high numbers or low numbers patterns
+        const sortedDraw = [...draw].sort((a, b) => a - b);
+        let consecutiveCount = 0;
+        for (let i = 1; i < sortedDraw.length; i++) {
+            if (sortedDraw[i] === sortedDraw[i-1] + 1) {
+                consecutiveCount++;
+            }
+        }
+        if (consecutiveCount > 3) {
+            score += consecutiveCount * 5; // Penalize for too many consecutive numbers
+        }
+        
+        // Check if draw is too evenly distributed (looks artificial)
+        const average = draw.reduce((a, b) => a + b, 0) / draw.length;
+        if (Math.abs(average - 40.5) < 5) { // Close to perfect average (40.5)
+            score += 20; // Penalize for too perfect distribution
+        }
+        
+        return score;
+    },
+    
+    // Update draw history for pattern tracking
+    updateDrawHistory: function(draw) {
+        const self = this;
+        
+        // Add to recent numbers frequency
+        draw.forEach(num => {
+            const count = self.recentNumbersFrequency.get(num) || 0;
+            self.recentNumbersFrequency.set(num, count + 1);
+        });
+        
+        // Keep only last 100 numbers in frequency tracking
+        if (self.recentNumbersFrequency.size > 100) {
+            const entries = Array.from(self.recentNumbersFrequency.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 100);
+            self.recentNumbersFrequency = new Map(entries);
+        }
+        
+        // Update last selected numbers
+        self.lastSelectedNumbers = draw;
+    },
+    
+    // Count matches between player numbers and drawn numbers
+    countMatches: function(playerNumbers, drawnNumbers) {
+        return playerNumbers.filter(num => drawnNumbers.includes(num)).length;
+    },
+    
+    // Log profit control results
+    logProfitControlResults: function(selected, totalWagered, type) {
+        const houseKeepPercentage = ((totalWagered - selected.totalPayout) / totalWagered) * 100;
+        const payoutPercentage = 100 - houseKeepPercentage;
+        
+        console.log(`🎯 PROFIT CONTROL (${type}):`);
+        console.log(`   Total Wagered: ${totalWagered} ETB`);
+        console.log(`   Total Payout: ${selected.totalPayout.toFixed(2)} ETB`);
+        console.log(`   House Keep: ${(totalWagered - selected.totalPayout).toFixed(2)} ETB`);
+        console.log(`   House Keep %: ${houseKeepPercentage.toFixed(2)}%`);
+        console.log(`   Payout %: ${payoutPercentage.toFixed(2)}%`);
+        console.log(`   Winners: ${selected.winnerCount} players`);
+        console.log(`   Big Wins: ${selected.bigWinsCount}`);
+        console.log(`   Max Individual Win: ${selected.maxIndividualWin} ETB`);
+        console.log(`   Draw: ${selected.draw.join(', ')}`);
+        
+        // Add to history
+        this.profitControlHistory.push({
+            timestamp: Date.now(),
+            type: type,
+            totalWagered: totalWagered,
+            totalPayout: selected.totalPayout,
+            houseKeepPercentage: houseKeepPercentage,
+            winnerCount: selected.winnerCount,
+            bigWinsCount: selected.bigWinsCount,
+            round: this.kenoRoundNumber
+        });
+        
+        // Track consecutive high profit rounds
+        if (houseKeepPercentage > 70) {
+            this.consecutiveHighProfitRounds++;
+            console.log(`⚠️  Consecutive High Profit Rounds: ${this.consecutiveHighProfitRounds}`);
+            
+            // If too many consecutive high profits, force a lower profit round next time
+            if (this.consecutiveHighProfitRounds >= this.PROFIT_CONTROL.PATTERN_AVOIDANCE.MAX_CONSECUTIVE_HIGH_PROFIT) {
+                console.log('⚠️  Too many consecutive high profit rounds, will adjust next round');
+            }
+        } else {
+            this.consecutiveHighProfitRounds = 0;
+        }
+    },
+    
+    // Simulate multiple draws and select optimal one using profit control
+    simulateAndSelectDraw: function(bets, totalBetAmount) {
+        const self = this;
+        const pc = self.PROFIT_CONTROL;
+        
+        if (!pc.ENABLED || Object.keys(bets).length === 0) {
+            // Fallback to random draw if profit control disabled or no bets
+            return self.generateRandomDraw();
+        }
+        
+        console.log('🎯 Profit Control: Simulating draws...');
+        
+        // Convert bets to array for easier processing
+        const betsArray = Object.values(bets).map(bet => ({
+            numbers: bet.numbers,
+            amount: bet.amount,
+            selectionCount: bet.selectionCount || bet.numbers.length,
+            playerId: bet.playerId || null
+        }));
+        
+        const totalPlayers = betsArray.length;
+        const totalWagered = totalBetAmount;
+        
+        // Dynamic target adjustment based on game conditions
+        let targetHouseKeep = pc.TARGET_HOUSE_KEEP_PERCENTAGE;
+        
+        // Adjust based on number of players
+        if (pc.DYNAMIC_ADJUSTMENT.ENABLED) {
+            if (totalPlayers < 3) {
+                targetHouseKeep *= pc.DYNAMIC_ADJUSTMENT.LOW_PLAYER_ADJUSTMENT;
+                console.log(`🎯 Low player count (${totalPlayers}), increasing house keep to ${targetHouseKeep.toFixed(1)}%`);
+            }
+            
+            // Check for big bets (risk management)
+            const averageBet = totalWagered / totalPlayers;
+            const bigBetThreshold = 50; // 50 ETB
+            const hasBigBets = betsArray.some(bet => bet.amount >= bigBetThreshold);
+            
+            if (hasBigBets && pc.DYNAMIC_ADJUSTMENT.JACKPOT_PROTECTION) {
+                targetHouseKeep *= pc.DYNAMIC_ADJUSTMENT.HIGH_BET_ADJUSTMENT;
+                console.log(`🎯 Big bets detected, reducing risk, house keep: ${targetHouseKeep.toFixed(1)}%`);
+            }
+            
+            // If we've had too many consecutive high profit rounds, adjust down
+            if (self.consecutiveHighProfitRounds >= pc.PATTERN_AVOIDANCE.MAX_CONSECUTIVE_HIGH_PROFIT) {
+                targetHouseKeep *= 0.8; // Reduce by 20%
+                console.log(`🎯 Too many consecutive high profits, reducing target to ${targetHouseKeep.toFixed(1)}%`);
+            }
+        }
+        
+        // Clamp target between min and max
+        targetHouseKeep = Math.max(pc.MIN_HOUSE_KEEP_PERCENTAGE, 
+                                  Math.min(pc.MAX_HOUSE_KEEP_PERCENTAGE, targetHouseKeep));
+        
+        // Calculate target payout (what we want to pay out)
+        const targetPayout = totalWagered * ((100 - targetHouseKeep) / 100);
+        const variance = totalWagered * (pc.VARIANCE_PERCENTAGE / 100);
+        
+        console.log(`🎯 Profit Control: Total wagered: ${totalWagered} ETB, Target payout: ${targetPayout.toFixed(2)} ETB (${(100-targetHouseKeep).toFixed(1)}%)`);
+        
+        // Get recent draw history for pattern avoidance
+        const recentDraws = self.kenoRoundHistory.slice(0, 20).map(r => r.drawnNumbers);
+        const recentNumbers = recentDraws.flat();
+        
+        // Simulate multiple draws
+        const simulations = [];
+        const startTime = Date.now();
+        
+        for (let i = 0; i < pc.SIMULATION_COUNT; i++) {
+            // Generate random draw
+            let candidateDraw;
+            let isValid = false;
+            let attempts = 0;
+            
+            // Try to generate a draw that meets pattern avoidance rules
+            while (!isValid && attempts < 100) {
+                candidateDraw = self.generateRandomDraw();
+                isValid = self.isDrawValid(candidateDraw, recentDraws, recentNumbers);
+                attempts++;
+            }
+            
+            // If still not valid after attempts, use it anyway
+            if (!isValid) {
+                candidateDraw = self.generateRandomDraw();
+            }
+            
+            // Calculate total payout for this draw
+            let totalPayout = 0;
+            let playerPayouts = [];
+            let maxIndividualWin = 0;
+            let bigWinsCount = 0;
+            
+            for (const bet of betsArray) {
+                const matches = self.countMatches(bet.numbers, candidateDraw);
+                const payoutMultiplier = self.CONFIG.PAYOUT_TABLE[bet.selectionCount]?.[matches] || 0;
+                const winAmount = bet.amount * payoutMultiplier;
+                
+                totalPayout += winAmount;
+                
+                if (winAmount > 0) {
+                    playerPayouts.push({
+                        playerId: bet.playerId,
+                        winAmount,
+                        betAmount: bet.amount,
+                        matches,
+                        selectionCount: bet.selectionCount
+                    });
+                    
+                    // Track big wins
+                    if (winAmount > bet.amount * 10) { // 10x or more
+                        bigWinsCount++;
+                    }
+                    
+                    if (winAmount > maxIndividualWin) {
+                        maxIndividualWin = winAmount;
+                    }
+                }
+            }
+            
+            // Calculate house profit percentage
+            const houseKeep = totalWagered - totalPayout;
+            const houseKeepPercentage = (houseKeep / totalWagered) * 100;
+            
+            // Score this simulation (lower is better for matching target)
+            // We want payout close to targetPayout but not over too much
+            let score = Math.abs(totalPayout - targetPayout);
+            
+            // Penalize if payout is too high (house loses money)
+            if (totalPayout > totalWagered) {
+                score += (totalPayout - totalWagered) * 10; // Heavy penalty
+            }
+            
+            // Penalize if too many big wins in one round
+            if (bigWinsCount > 2) {
+                score += bigWinsCount * 1000;
+            }
+            
+            // Bonus for being within variance range
+            if (Math.abs(totalPayout - targetPayout) <= variance) {
+                score *= 0.5; // Prefer draws within variance
+            }
+            
+            // Slight preference for draws that have SOME winners (keeps players engaged)
+            if (playerPayouts.length === 0) {
+                score += 100; // Penalize no winners at all
+            } else if (playerPayouts.length > 0 && playerPayouts.length < totalPlayers * 0.3) {
+                score *= 0.8; // Prefer some but not too many winners
+            }
+            
+            // Pattern avoidance scoring
+            if (pc.PATTERN_AVOIDANCE.ENABLED) {
+                score += self.calculatePatternScore(candidateDraw, recentDraws, recentNumbers);
+            }
+            
+            simulations.push({
+                draw: candidateDraw,
+                totalPayout,
+                houseKeep,
+                houseKeepPercentage,
+                score,
+                playerPayouts,
+                bigWinsCount,
+                maxIndividualWin,
+                winnerCount: playerPayouts.length
+            });
+        }
+        
+        const simulationTime = Date.now() - startTime;
+        console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
+        
+        // 5% chance to pick truly random draw (for unpredictability)
+        if (Math.random() < pc.RANDOMNESS_CHANCE) {
+            console.log('🎯 RANDOM MODE: Picking truly random draw (5% chance)');
+            const randomIndex = Math.floor(Math.random() * simulations.length);
+            const selected = simulations[randomIndex];
+            self.logProfitControlResults(selected, totalWagered, 'RANDOM');
+            return selected.draw;
+        }
+        
+        // Sort by score (lower is better)
+        simulations.sort((a, b) => a.score - b.score);
+        
+        // Take top 10 candidates and pick randomly from them (adds unpredictability)
+        const topCandidates = simulations.slice(0, 10);
+        const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
+        
+        // Log results
+        self.logProfitControlResults(selected, totalWagered, 'OPTIMIZED');
+        
+        // Update recent draws tracking
+        self.updateDrawHistory(selected.draw);
+        
+        return selected.draw;
+    },
+    
+    // Draw Keno numbers - UPDATED with Profit Control System
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
         
         if (!activeGame || activeGame.status !== 'betting') return;
         
-        console.log('🎰 Drawing Keno numbers...');
+        console.log('🎰 Drawing Keno numbers with Profit Control...');
         
         // IMPORTANT: Clear all intervals and timeouts first
         if (self.kenoCountdownInterval) {
@@ -2048,13 +2471,12 @@ module.exports = {
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate 20 random unique numbers - DO NOT SORT THEM
-            const drawnNumbers = [];
-            while (drawnNumbers.length < self.CONFIG.KENO_DRAW_COUNT) {
-                const num = Math.floor(Math.random() * self.CONFIG.KENO_TOTAL_NUMBERS) + 1;
-                if (!drawnNumbers.includes(num)) {
-                    drawnNumbers.push(num);
-                }
+            // Generate the draw using PROFIT CONTROL SYSTEM if there are bets
+            let drawnNumbers;
+            if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
+                drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
+            } else {
+                drawnNumbers = self.generateRandomDraw();
             }
             
             // Store in original random order
@@ -2605,6 +3027,25 @@ module.exports = {
         };
     },
     
+    // Get Profit Control System stats
+    getProfitControlStats: function() {
+        const recentHistory = this.profitControlHistory.slice(0, 10);
+        const averageHouseKeep = recentHistory.length > 0 ? 
+            recentHistory.reduce((sum, h) => sum + h.houseKeepPercentage, 0) / recentHistory.length : 0;
+        
+        return {
+            enabled: this.PROFIT_CONTROL.ENABLED,
+            targetHouseKeep: this.PROFIT_CONTROL.TARGET_HOUSE_KEEP_PERCENTAGE,
+            consecutiveHighProfitRounds: this.consecutiveHighProfitRounds,
+            recentHistory: recentHistory,
+            averageHouseKeep: averageHouseKeep.toFixed(2),
+            simulationCount: this.PROFIT_CONTROL.SIMULATION_COUNT,
+            recentNumbersFrequency: Array.from(this.recentNumbersFrequency.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+        };
+    },
+    
     // Admin: Reset Keno earnings
     resetKenoEarnings: async function() {
         try {
@@ -2806,6 +3247,36 @@ module.exports = {
         });
         
         return { success: true, enabled: enabled };
+    },
+    
+    // Toggle Profit Control System (admin)
+    toggleProfitControl: function(enabled) {
+        this.PROFIT_CONTROL.ENABLED = enabled;
+        
+        console.log(`🎯 Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        
+        return { 
+            success: true, 
+            enabled: enabled,
+            message: `Profit Control System ${enabled ? 'enabled' : 'disabled'}`
+        };
+    },
+    
+    // Adjust Profit Control settings (admin)
+    adjustProfitControlSettings: function(settings) {
+        Object.keys(settings).forEach(key => {
+            if (this.PROFIT_CONTROL[key] !== undefined) {
+                this.PROFIT_CONTROL[key] = settings[key];
+            }
+        });
+        
+        console.log('🎯 Profit Control settings updated:', settings);
+        
+        return { 
+            success: true, 
+            settings: this.PROFIT_CONTROL,
+            message: 'Profit Control settings updated'
+        };
     },
     
     // Get pending wallet transactions for admin
