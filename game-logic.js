@@ -38,6 +38,7 @@ let roomSubscriptions = new Map();
 let processingClaims = new Map(); // For preventing double prize bug
 let roomWinners = new Map(); // Track room winners
 let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+let playerHeartbeats = new Map(); // Track player heartbeats
 
 // ========== PERFORMANCE CACHES ==========
 let roomsCache = new Map();
@@ -63,6 +64,80 @@ async function initialize(socketIo, dbModels) {
   
   // Start periodic tasks
   startPeriodicTasks();
+  
+  // Start heartbeat monitoring
+  startHeartbeatMonitoring();
+}
+
+// ========== HEARTBEAT MONITORING ==========
+function startHeartbeatMonitoring() {
+  setInterval(() => {
+    const now = Date.now();
+    const thirtySecondsAgo = now - 30000;
+    
+    // Clean up old heartbeats
+    playerHeartbeats.forEach((timestamp, userId) => {
+      if (timestamp < thirtySecondsAgo) {
+        playerHeartbeats.delete(userId);
+        console.log(`💓 Removed stale heartbeat for user ${userId}`);
+      }
+    });
+    
+    // Check for players who might need re-sync
+    socketToUser.forEach((userId, socketId) => {
+      const lastHeartbeat = playerHeartbeats.get(userId) || 0;
+      if (now - lastHeartbeat > 15000) { // 15 seconds without heartbeat
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          // Send a ping to check connection
+          socket.emit('heartbeatCheck', { timestamp: now });
+        }
+      }
+    });
+  }, 5000); // Check every 5 seconds
+}
+
+// ========== PLAYER RE-SYNC FUNCTION ==========
+async function resyncPlayer(socket, userId) {
+  try {
+    const user = await models.User.findOne({ userId: userId });
+    if (!user) return;
+    
+    // If player is in a game room, send current game state
+    if (user.currentRoom && user.box) {
+      const room = await getRoomWithCache(user.currentRoom);
+      if (room && room.status === 'playing') {
+        console.log(`🔄 Re-syncing player ${user.userName} to room ${room.stake}`);
+        
+        // Send all called numbers so far
+        socket.emit('gameResync', {
+          room: room.stake,
+          calledNumbers: room.calledNumbers || [],
+          currentBall: room.currentBall,
+          ballsDrawn: room.ballsDrawn,
+          box: user.box,
+          gameInProgress: true,
+          timestamp: Date.now()
+        });
+        
+        // If there's a current ball, send it
+        if (room.currentBall) {
+          setTimeout(() => {
+            socket.emit('ballDrawn', {
+              room: room.stake,
+              num: room.currentBall,
+              letter: getBingoLetter(room.currentBall),
+              ballsDrawn: room.ballsDrawn
+            });
+          }, 100);
+        }
+        
+        console.log(`✅ Player ${user.userName} re-synced to game in room ${room.stake}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error re-syncing player:', error);
+  }
 }
 
 // ========== TELEBIRR NUMBER FUNCTIONS ==========
@@ -272,93 +347,6 @@ function generateReferralCode(userId) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code + userId.slice(-4);
-}
-
-// ========== NEW: SYNC PLAYER GAME STATE ON RECONNECT ==========
-async function syncPlayerGameState(socket, userId, userName) {
-  try {
-    const user = await models.User.findOne({ userId: userId });
-    if (!user || !user.currentRoom) return;
-
-    const roomStake = user.currentRoom;
-    const room = await getRoomWithCache(roomStake);
-    if (!room) return;
-
-    console.log(`🔄 Syncing game state for ${userName} in room ${roomStake}`);
-
-    // Re-subscribe to room
-    if (!roomSubscriptions.has(roomStake)) {
-      roomSubscriptions.set(roomStake, new Set());
-    }
-    roomSubscriptions.get(roomStake).add(socket.id);
-
-    // Send current taken boxes
-    socket.emit('boxesTakenUpdate', {
-      room: roomStake,
-      takenBoxes: room.takenBoxes || [],
-      playerCount: room.players.length,
-      timestamp: Date.now(),
-      personalBox: user.box
-    });
-
-    // If game is playing, send current game state
-    if (room.status === 'playing') {
-      // Send all called numbers so far
-      socket.emit('gameStateSync', {
-        room: roomStake,
-        calledNumbers: room.calledNumbers || [],
-        currentBall: room.currentBall,
-        ballsDrawn: room.ballsDrawn,
-        status: 'playing',
-        startTime: room.startTime,
-        gameTimer: CONFIG.GAME_TIMER
-      });
-
-      // Send the most recent ball
-      if (room.currentBall) {
-        socket.emit('ballDrawn', {
-          room: roomStake,
-          num: room.currentBall,
-          letter: getBingoLetter(room.currentBall),
-          ballsDrawn: room.ballsDrawn,
-          timestamp: Date.now()
-        });
-      }
-
-      // Re-enable bingo button
-      socket.emit('enableBingo');
-      
-      console.log(`✅ ${userName} re-synced to playing game in room ${roomStake}, balls drawn: ${room.ballsDrawn}`);
-    } else if (room.status === 'starting') {
-      // Sync countdown
-      const elapsed = Date.now() - room.countdownStartTime;
-      const secondsRemaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor(elapsed / 1000));
-      const onlinePlayers = await getOnlinePlayersInRoomWithCache(roomStake);
-      
-      socket.emit('gameCountdown', {
-        room: roomStake,
-        timer: secondsRemaining,
-        onlinePlayers: onlinePlayers.length,
-        resync: true
-      });
-      
-      console.log(`✅ ${userName} re-synced to countdown in room ${roomStake}, ${secondsRemaining}s remaining`);
-    }
-
-    // Send lobby update
-    const onlinePlayers = await getOnlinePlayersInRoomWithCache(roomStake);
-    socket.emit('lobbyUpdate', {
-      room: roomStake,
-      count: onlinePlayers.length,
-      resync: true
-    });
-
-    console.log(`✅ Game state synced for ${userName} in room ${roomStake}`);
-    return true;
-  } catch (error) {
-    console.error('❌ Error syncing game state:', error);
-    return false;
-  }
 }
 
 async function getUser(userId, userName) {
@@ -800,7 +788,7 @@ async function cleanupLongRunningGames() {
   }
 }
 
-// ========== UPDATED GAME TIMER FUNCTION WITH RECONNECTION SUPPORT ==========
+// ========== UPDATED GAME TIMER FUNCTION (FIXED FOR RECONNECTIONS) ==========
 async function startGameTimer(room) {
   console.log(`🎲 STARTING OPTIMIZED GAME TIMER for room ${room.stake} with ${room.players.length} players`);
   
@@ -878,34 +866,47 @@ async function startGameTimer(room) {
         room: currentRoom.stake,
         num: ball,
         letter: letter,
-        ballsDrawn: currentRoom.ballsDrawn,
-        timestamp: Date.now()
+        ballsDrawn: currentRoom.ballsDrawn
       };
       
-      // ✅ FIXED: Send to ALL connected players in room (including reconnected)
+      // FIXED: Dynamic socket lookup for ALL players in room
+      // This ensures reconnected players get ball updates
+      const playerSockets = new Map();
+      
+      // Build real-time socket list
       currentRoom.players.forEach(userId => {
-        // Find all sockets for this user
         for (const [socketId, uId] of socketToUser.entries()) {
           if (uId === userId) {
             const socket = io.sockets.sockets.get(socketId);
             if (socket && socket.connected) {
-              socket.emit('ballDrawn', ballData);
-              
-              // Also send the called numbers for synchronization (every 5 balls)
-              if (currentRoom.calledNumbers && currentRoom.calledNumbers.length > 0 && currentRoom.ballsDrawn % 5 === 0) {
-                socket.emit('calledNumbers', {
-                  room: currentRoom.stake,
-                  calledNumbers: currentRoom.calledNumbers,
-                  ballsDrawn: currentRoom.ballsDrawn
-                });
+              if (!playerSockets.has(userId)) {
+                playerSockets.set(userId, []);
               }
-              
-              // Only send enableBingo every 3 balls for performance
-              if (currentRoom.ballsDrawn % 3 === 0) {
-                socket.emit('enableBingo');
-              }
+              playerSockets.get(userId).push(socket);
             }
           }
+        }
+      });
+      
+      // Send ball to all connected sockets
+      playerSockets.forEach((sockets, userId) => {
+        sockets.forEach(socket => {
+          if (socket.connected) {
+            socket.emit('ballDrawn', ballData);
+            // Only send enableBingo every 3 balls for performance
+            if (currentRoom.ballsDrawn % 3 === 0) {
+              socket.emit('enableBingo');
+            }
+          }
+        });
+      });
+      
+      // Also send to room subscribers (for discovery overlay)
+      const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
+      subscribedSockets.forEach(socketId => {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          socket.emit('ballDrawn', ballData);
         }
       });
       
@@ -1584,7 +1585,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       roomWinners.set(roomStake, Date.now());
       
       // 11. CLEAR GAME TIMER
-      cleanupRoomTimer(roomStake);
+      cleanupRoomTimer(room.stake);
       
       // 12. PREPARE GAME OVER DATA
       const gameOverData = {
@@ -2001,7 +2002,7 @@ async function disconnectUser(userId, adminSocketId) {
   }
 }
 
-// ========== UPDATED SOCKET.IO EVENT HANDLERS WITH RECONNECTION SUPPORT ==========
+// ========== SOCKET.IO EVENT HANDLERS ==========
 function setupSocketHandlers() {
   io.on('connection', (socket) => {
     console.log(`✅ Socket.IO Connected: ${socket.id} - User: ${socket.handshake.query?.userId || 'Unknown'}`);
@@ -2022,39 +2023,21 @@ function setupSocketHandlers() {
       userId: query.userId || 'unknown'
     });
     
-    // ========== HEARTBEAT SYSTEM ==========
-    let heartbeatInterval;
-    
-    // Heartbeat for connection monitoring
-    socket.on('heartbeat', (data) => {
+    // ========== HEARTBEAT HANDLERS ==========
+    socket.on('heartbeat', () => {
       const userId = socketToUser.get(socket.id) || socket.userId;
       if (userId) {
-        // Update last seen
-        models.User.findOneAndUpdate(
-          { userId: userId },
-          { lastSeen: new Date() }
-        ).catch(console.error);
+        playerHeartbeats.set(userId, Date.now());
+        socket.emit('heartbeatAck', { timestamp: Date.now() });
       }
-      
-      // Clear existing interval
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
-      
-      // Set up new heartbeat
-      heartbeatInterval = setInterval(() => {
-        if (socket.connected) {
-          socket.emit('heartbeat', { timestamp: Date.now() });
-        } else {
-          clearInterval(heartbeatInterval);
-        }
-      }, 10000); // Every 10 seconds
     });
     
-    socket.on('connectionCheck', () => {
-      socket.emit('connectionStatus', {
-        connected: true,
-        serverTime: Date.now(),
-        latency: Date.now() - socket.handshake.time
-      });
+    socket.on('heartbeatResponse', () => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (userId) {
+        playerHeartbeats.set(userId, Date.now());
+        console.log(`💓 Heartbeat response from ${userId}`);
+      }
     });
     
     // ========== ADMIN AUTHENTICATION ==========
@@ -2653,7 +2636,7 @@ function setupSocketHandlers() {
       await room.save();
       
       // Update cache
-      updateRoomCache(room.stake, room);
+      updateRoomCache(roomStake, room);
       
       // Broadcast cleared boxes
       broadcastTakenBoxes(roomStake, []);
@@ -2810,12 +2793,12 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== UPDATED PLAYER EVENTS WITH RECONNECTION SUPPORT ==========
+    // Player events
     socket.on('init', async (data, callback) => {
       try {
         const { userId, userName } = data;
         
-        console.log(`📱 User init/reconnect: ${userName} (${userId}) via socket ${socket.id}`);
+        console.log(`📱 User init: ${userName} (${userId}) via socket ${socket.id}`);
         
         // Store userId on socket for tracking
         socket.userId = userId;
@@ -2826,7 +2809,10 @@ function setupSocketHandlers() {
           // Store in socketToUser map
           socketToUser.set(socket.id, userId);
           
-          // Update user's connection status
+          // Update heartbeat
+          playerHeartbeats.set(userId, Date.now());
+          
+          // Also update user's lastSeen immediately
           await models.User.findOneAndUpdate(
             { userId: userId },
             { 
@@ -2848,29 +2834,24 @@ function setupSocketHandlers() {
           // Send Telebirr number to player
           socket.emit('telebirrNumber', telebirrNumber);
           
-          socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
+          // Re-sync player if they were in a game
+          await resyncPlayer(socket, userId);
           
-          // ✅ CRITICAL: Sync game state if player was in a game
-          if (user.currentRoom) {
-            await syncPlayerGameState(socket, userId, user.userName);
-          }
+          socket.emit('connected', { message: 'Successfully connected to Bingo Elite' });
           
           // Send callback response
           if (callback) {
-            callback({ 
-              success: true, 
-              message: 'User initialized successfully',
-              inGame: !!user.currentRoom 
-            });
+            callback({ success: true, message: 'User initialized successfully' });
           }
           
-          console.log(`✅ User ${userName} connected successfully${user.currentRoom ? ` (in room ${user.currentRoom})` : ''}`);
+          // Log the successful connection
+          console.log(`✅ User connected successfully: ${userName} (${userId})`);
           
-          // Update admin panel
+          // Update admin panel with new connection IN REAL-TIME
           updateAdminPanel();
           broadcastRoomStatus();
           
-          logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id, inGame: !!user.currentRoom });
+          logActivity('USER_CONNECTED', { userId, userName, socketId: socket.id });
         } else {
           if (callback) {
             callback({ success: false, message: 'Failed to initialize user' });
@@ -2880,39 +2861,6 @@ function setupSocketHandlers() {
         console.error('Error in init:', error);
         if (callback) {
           callback({ success: false, message: 'Server error during initialization' });
-        }
-      }
-    });
-    
-    // ========== NEW: RECONNECT GAME EVENT ==========
-    socket.on('reconnectGame', async (data, callback) => {
-      try {
-        const userId = socketToUser.get(socket.id) || socket.userId;
-        if (!userId) {
-          if (callback) callback({ success: false, message: 'User not identified' });
-          return;
-        }
-        
-        const user = await models.User.findOne({ userId: userId });
-        if (!user) {
-          if (callback) callback({ success: false, message: 'User not found' });
-          return;
-        }
-        
-        // Resync game state
-        const synced = await syncPlayerGameState(socket, userId, user.userName);
-        
-        if (callback) {
-          callback({ 
-            success: true, 
-            message: synced ? 'Game state resynced successfully' : 'No active game to reconnect to',
-            inGame: !!user.currentRoom 
-          });
-        }
-      } catch (error) {
-        console.error('Error in reconnectGame:', error);
-        if (callback) {
-          callback({ success: false, message: 'Error reconnecting to game' });
         }
       }
     });
@@ -3062,6 +3010,7 @@ function setupSocketHandlers() {
             takenBoxes: [],
             status: 'waiting',
             lastBoxUpdate = new Date();
+            lastBoxUpdate: new Date()
           });
           await roomData.save();
           updateRoomCache(room, roomData);
@@ -3484,7 +3433,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== FIXED: disconnect event - Proper cleanup on disconnect ==========
+    // ========== FIXED: disconnect event - Improved reconnection support ==========
     socket.on('disconnect', async () => {
       console.log(`❌ Socket disconnected: ${socket.id}`);
       connectedSockets.delete(socket.id);
@@ -3497,7 +3446,7 @@ function setupSocketHandlers() {
       
       const userId = socketToUser.get(socket.id) || socket.userId;
       if (userId) {
-        console.log(`👤 User ${userId} disconnected`);
+        console.log(`👤 User ${userId} disconnected from socket ${socket.id}`);
         
         try {
           // Find user
@@ -3507,9 +3456,13 @@ function setupSocketHandlers() {
             const room = await getRoomWithCache(roomStake);
             
             if (room) {
-              // 🚨 IMPORTANT: DO NOT remove from room if game is playing
-              // Only remove if room is waiting or starting
-              if (room.status === 'waiting' || room.status === 'starting') {
+              // Only remove from room if game is NOT playing AND user has no other connected sockets
+              const hasOtherConnections = Array.from(socketToUser.entries()).some(
+                ([sId, uId]) => uId === userId && sId !== socket.id && io.sockets.sockets.get(sId)?.connected
+              );
+              
+              if (room.status !== 'playing' && !hasOtherConnections) {
+                // User has no other connections and game isn't playing
                 const playerIndex = room.players.indexOf(userId);
                 const boxIndex = room.takenBoxes.indexOf(user.box);
                 
@@ -3533,18 +3486,30 @@ function setupSocketHandlers() {
                 // Broadcast updated boxes
                 broadcastTakenBoxes(roomStake, room.takenBoxes);
                 
-                console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect (room was ${room.status})`);
+                console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect (no other connections)`);
                 
-                // Reset user's room info
-                user.currentRoom = null;
-                user.box = null;
+                // Update user
+                user.isOnline = false;
+                user.lastSeen = new Date();
                 await user.save();
               } else {
-                console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, keeping in game`);
-                // Keep user in game but mark as offline
-                user.isOnline = false;
-                await user.save();
+                // User has other connections OR game is playing
+                console.log(`⚠️ User ${user.userName} disconnected but has other connections or game is playing, keeping in room`);
+                
+                // Just update last seen
+                await models.User.findOneAndUpdate(
+                  { userId: userId },
+                  { 
+                    isOnline: hasOtherConnections,
+                    lastSeen: new Date() 
+                  }
+                );
               }
+            } else {
+              // No room found, just update user status
+              user.isOnline = false;
+              user.lastSeen = new Date();
+              await user.save();
             }
           } else {
             // Just update last seen
@@ -3562,11 +3527,6 @@ function setupSocketHandlers() {
         
         // Remove from socketToUser map
         socketToUser.delete(socket.id);
-      }
-      
-      // Clear heartbeat interval
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
       }
       
       // Update admin panel
@@ -3687,8 +3647,5 @@ module.exports = {
   startGameTimer,
   cleanupRoomTimer,
   cleanupLongRunningGames,
-  endGameWithNoWinner,
-  
-  // NEW: Reconnection support
-  syncPlayerGameState
+  endGameWithNoWinner
 };
