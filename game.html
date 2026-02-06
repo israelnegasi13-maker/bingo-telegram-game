@@ -279,7 +279,7 @@
             line-height: 1.4;
         }
 
-        /* UPDATED: Smaller rooms grid */
+        /* UPDATED: Cleaner rooms grid */
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -287,7 +287,7 @@
             margin-bottom: 20px;
         }
 
-        /* UPDATED: Smaller room cards */
+        /* UPDATED: Cleaner room cards without Bronze/Silver labels */
         .room-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -299,7 +299,7 @@
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 130px; /* Reduced from 160px */
+            min-height: 130px;
         }
 
         .room-card:hover {
@@ -319,104 +319,111 @@
             border-color: var(--card-border);
         }
 
+        /* REMOVED: Room badges (Bronze, Silver, etc.) */
         .room-badge {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            padding: 3px 6px;
-            border-radius: 12px;
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
+            display: none;
         }
 
-        .badge-bronze {
-            background: linear-gradient(135deg, #92400e, #b45309);
-            color: #fef3c7;
-        }
-
-        .badge-silver {
-            background: linear-gradient(135deg, #374151, #6b7280);
-            color: #f9fafb;
-        }
-
-        .badge-gold {
-            background: linear-gradient(135deg, #b45309, #d97706);
-            color: #fef3c7;
-        }
-
-        .badge-elite {
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6);
-            color: #f5f3ff;
-        }
-
-        /* UPDATED: Smaller stake amount with ETB moved higher */
+        /* UPDATED: Cleaner stake amount */
         .room-stake {
-            font-size: 18px; /* Reduced from 24px */
+            font-size: 24px;
             font-weight: 800;
-            margin-bottom: 0; /* Removed bottom margin */
             color: white;
-            display: flex;
-            align-items: flex-end;
+            margin-bottom: 4px;
+            text-align: center;
+            letter-spacing: 0.5px;
         }
 
         .room-stake-currency {
-            font-size: 12px;
+            font-size: 14px;
             color: var(--gray-light);
             font-weight: 600;
-            margin-left: 2px;
-            margin-bottom: 2px; /* Moved ETB up by reducing bottom margin */
+            margin-left: 3px;
         }
 
+        /* REMOVED: Room name (Bronze Arena, etc.) */
         .room-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--gray);
-            margin-bottom: 8px;
-            margin-top: 2px; /* Added top margin to separate from stake */
+            display: none;
         }
 
+        /* UPDATED: Simplified room info */
         .room-info {
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: center;
             margin-top: auto;
-            padding-top: 8px; /* Increased from 5px to push status down */
+            padding-top: 15px;
+            border-top: 1px solid var(--card-border);
         }
 
         .room-players {
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 11px;
+            gap: 6px;
+            font-size: 12px;
             color: var(--gray);
         }
 
         .player-icon {
             color: var(--success);
-            font-size: 10px;
+            font-size: 11px;
         }
 
         .room-prize {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             color: var(--secondary);
+            text-align: right;
         }
 
-        /* FIXED: Status moved MUCH higher to avoid overlap */
+        /* UPDATED: Status position */
         .room-status {
             position: absolute;
-            top: 35px; /* Moved from bottom: 6px to top: 35px (about 3x higher) */
-            right: 6px;
+            top: 10px;
+            right: 10px;
             font-size: 9px;
-            padding: 2px 6px;
-            border-radius: 8px;
+            padding: 3px 8px;
+            border-radius: 12px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
         }
 
+        /* Color coding based on stake amount */
+        .room-card:nth-child(1) .room-stake { /* 10 ETB */
+            color: #d97706; /* Bronze color */
+        }
+
+        .room-card:nth-child(2) .room-stake { /* 20 ETB */
+            color: #9ca3af; /* Silver color */
+        }
+
+        .room-card:nth-child(3) .room-stake { /* 50 ETB */
+            color: #fbbf24; /* Gold color */
+        }
+
+        .room-card:nth-child(4) .room-stake { /* 100 ETB */
+            color: #8b5cf6; /* Elite color */
+        }
+
+        /* Add subtle border effect based on stake */
+        .room-card:nth-child(1) {
+            border-left: 3px solid #d97706;
+        }
+
+        .room-card:nth-child(2) {
+            border-left: 3px solid #9ca3af;
+        }
+
+        .room-card:nth-child(3) {
+            border-left: 3px solid #fbbf24;
+        }
+
+        .room-card:nth-child(4) {
+            border-left: 3px solid #8b5cf6;
+        }
+
+        /* Status colors */
         .status-waiting {
             background: rgba(16, 185, 129, 0.2);
             color: var(--success);
@@ -433,6 +440,34 @@
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
             border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Add a subtle indicator for each room */
+        .room-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-dark), var(--primary-light));
+            opacity: 0.3;
+        }
+
+        .room-card:nth-child(1)::before {
+            background: linear-gradient(90deg, #92400e, #b45309);
+        }
+
+        .room-card:nth-child(2)::before {
+            background: linear-gradient(90deg, #374151, #6b7280);
+        }
+
+        .room-card:nth-child(3)::before {
+            background: linear-gradient(90deg, #b45309, #d97706);
+        }
+
+        .room-card:nth-child(4)::before {
+            background: linear-gradient(90deg, #7c3aed, #8b5cf6);
         }
 
         .wallet-section {
@@ -1548,17 +1583,17 @@
             }
             
             .room-card {
-                min-height: 110px;
+                min-height: 120px;
                 padding: 12px 10px;
             }
             
             .room-stake {
-                font-size: 16px;
+                font-size: 22px;
             }
             
-            /* Adjust status position for smaller screens */
             .room-status {
-                top: 30px; /* Adjusted for smaller room card */
+                top: 8px;
+                right: 8px;
             }
             
             .ball {
@@ -1627,17 +1662,19 @@
             }
             
             .room-stake {
-                font-size: 15px;
+                font-size: 20px;
             }
             
             .room-card {
-                min-height: 100px;
+                min-height: 110px;
                 padding: 10px 8px;
             }
             
-            /* Adjust status position for even smaller screens */
             .room-status {
-                top: 25px; /* Further adjusted for smallest room card */
+                top: 6px;
+                right: 6px;
+                font-size: 8px;
+                padding: 2px 6px;
             }
             
             .boxes-grid {
@@ -2619,10 +2656,10 @@
             roomsGrid.innerHTML = '';
             
             const rooms = [
-                { stake: 10, name: 'Bronze', badge: 'badge-bronze' },
-                { stake: 20, name: 'Silver', badge: 'badge-silver' },
-                { stake: 50, name: 'Gold', badge: 'badge-gold' },
-                { stake: 100, name: 'Elite', badge: 'badge-elite' }
+                { stake: 10, color: '#d97706' },
+                { stake: 20, color: '#9ca3af' },
+                { stake: 50, color: '#fbbf24' },
+                { stake: 100, color: '#8b5cf6' }
             ];
             
             rooms.forEach(room => {
@@ -2654,10 +2691,9 @@
                     statusText = 'PLAYING';
                 }
                 
+                // Cleaner HTML without "Bronze Arena" etc.
                 roomCard.innerHTML = `
-                    <div class="room-badge ${room.badge}">${room.name}</div>
                     <div class="room-stake">${room.stake}<span class="room-stake-currency">ETB</span></div>
-                    <div class="room-name">${room.name} Arena</div>
                     <div class="room-info">
                         <div class="room-players">
                             <div class="player-icon"><i class="fas fa-user"></i></div>
