@@ -1,63 +1,68 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH PROFIT CONTROL SYSTEM
+// keno-logic.js - KENO GAME LOGIC MODULE WITH BALANCED PROFIT CONTROL
 module.exports = {
-    // Game configuration - UPDATED for 1-5 numbers
+    // Game configuration - UPDATED for better player experience
     CONFIG: {
         KENO_GAME_TIMER: 30, // seconds between rounds
         KENO_MIN_BET: 5,     // Minimum bet amount
         KENO_MAX_BET: 100,   // Maximum bet amount
-        KENO_MIN_SELECTIONS: 1,  // Minimum numbers to select (CHANGED from 5)
+        KENO_MIN_SELECTIONS: 1,  // Minimum numbers to select
         KENO_MAX_SELECTIONS: 5,  // Maximum numbers to select
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
         NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
-        // UPDATED PAYOUT TABLE:
+        // UPDATED PAYOUT TABLE - More player-friendly:
         PAYOUT_TABLE: {
-            1: {1: 3, 0: 0},                    // Pick 1: Match 1 = 3x
-            2: {2: 10, 1: 0, 0: 0},            // Pick 2: Match 2 = 10x
-            3: {3: 15, 2: 1, 1: 0, 0: 0},      // Pick 3: Match 3 = 15x, Match 2 = 1x
-            4: {4: 50, 3: 0, 2: 0, 1: 0, 0: 0}, // Pick 4: Match 4 = 50x
-            5: {5: 200, 4: 50, 3: 15, 2: 1, 1: 0, 0: 0} // Pick 5: Match 5 = 200x, Match 4 = 50x, Match 3 = 15x, Match 2 = 1x
+            1: {1: 3, 0: 0},                     // Pick 1: Match 1 = 3x
+            2: {2: 10, 1: 0, 0: 0},             // Pick 2: Match 2 = 10x
+            3: {3: 20, 2: 2, 1: 0, 0: 0},       // Pick 3: Match 3 = 20x (↑), Match 2 = 2x (↑)
+            4: {4: 60, 3: 2, 2: 1, 1: 0, 0: 0}, // Pick 4: Match 4 = 60x (↑), Match 3 = 2x, Match 2 = 1x
+            5: {5: 200, 4: 50, 3: 20, 2: 1, 1: 0, 0: 0} // Pick 5: Match 5 = 200x, Match 4 = 50x, Match 3 = 20x (↑), Match 2 = 1x
         },
-        COMMISSION_PERCENTAGE: 5, // 5% house commission
+        COMMISSION_PERCENTAGE: 0, // Reduced from 5% to 0% - profit is built into odds
         ALLOW_PRE_SELECTION: true,
         // Wallet settings
         MIN_DEPOSIT: 100,
         MAX_DEPOSIT: 10000,
         MIN_WITHDRAWAL: 100,
         WITHDRAWAL_FEE_PERCENTAGE: 5,
-        ALLOWED_BETS: [5, 10, 20, 50, 100], // Only these bet amounts allowed
+        ALLOWED_BETS: [5, 10, 20, 50, 100],
         // Reconnection settings
-        RECONNECT_TIMEOUT: 30000, // 30 seconds to allow reconnection
+        RECONNECT_TIMEOUT: 30000,
         AUTO_RECONNECT: true,
         MAX_RECONNECT_ATTEMPTS: 3,
-        RECONNECT_BACKOFF: 2000, // Start with 2 seconds
+        RECONNECT_BACKOFF: 2000,
     },
 
-    // ==================== PROFIT CONTROL SYSTEM ====================
+    // ==================== BALANCED PROFIT CONTROL SYSTEM ====================
     PROFIT_CONTROL: {
-        ENABLED: true, // Enable/disable profit control
-        SIMULATION_COUNT: 1000, // Number of draws to simulate
-        TARGET_HOUSE_KEEP_PERCENTAGE: 60, // House keeps 60% of all bets (pays out 40%)
-        MIN_HOUSE_KEEP_PERCENTAGE: 50, // Minimum house keep percentage
-        MAX_HOUSE_KEEP_PERCENTAGE: 80, // Maximum house keep percentage
-        VARIANCE_PERCENTAGE: 10, // Allow 10% variance in target
-        RANDOMNESS_CHANCE: 0.05, // 5% chance to pick truly random draw (for unpredictability)
-        // Complex patterns to avoid detection
+        ENABLED: true,
+        SIMULATION_COUNT: 1000,
+        TARGET_HOUSE_KEEP_PERCENTAGE: 25, // House keeps 25% of all bets (pays out 75%)
+        MIN_HOUSE_KEEP_PERCENTAGE: 15,    // Minimum house keep percentage
+        MAX_HOUSE_KEEP_PERCENTAGE: 35,    // Maximum house keep percentage
+        VARIANCE_PERCENTAGE: 15,          // Allow 15% variance in target
+        RANDOMNESS_CHANCE: 0.20,          // 20% chance to pick truly random draw (more fair)
+        // Player-friendly patterns
         PATTERN_AVOIDANCE: {
             ENABLED: true,
-            MAX_CONSECUTIVE_HIGH_PROFIT: 2, // Max 2 consecutive rounds with >70% house keep
-            AVOID_REPEATING_NUMBERS: true, // Avoid repeating same numbers too often
-            NUMBER_COOLDOWN: 3, // Numbers can't appear again for 3 rounds
-            NUMBER_FREQUENCY_CAP: 0.25, // No number should appear in more than 25% of draws
-            DIVERSITY_REQUIREMENT: 15, // At least 15 unique numbers in last 20 draws
+            MAX_CONSECUTIVE_HIGH_PROFIT: 2,
+            AVOID_REPEATING_NUMBERS: true,
+            NUMBER_COOLDOWN: 2,           // Reduced from 3 to 2 (more number variety)
+            NUMBER_FREQUENCY_CAP: 0.30,   // Increased from 0.25 to 0.30
+            DIVERSITY_REQUIREMENT: 12,    // Reduced from 15 to 12
         },
         // Dynamic adjustment based on game conditions
         DYNAMIC_ADJUSTMENT: {
             ENABLED: true,
-            LOW_PLAYER_ADJUSTMENT: 1.1, // 10% more profit when <3 players
-            HIGH_BET_ADJUSTMENT: 0.9, // 10% less profit when big bets detected
-            JACKPOT_PROTECTION: true, // Reduce chance of huge wins
-            BALANCE_PROTECTION: true, // Protect house balance
+            LOW_PLAYER_ADJUSTMENT: 1.05,  // Reduced from 1.1 to 1.05 (only 5% more profit when <3 players)
+            HIGH_BET_ADJUSTMENT: 0.95,    // 5% less profit when big bets detected
+            JACKPOT_PROTECTION: true,
+            BALANCE_PROTECTION: true,
+            // NEW: Player retention features
+            NEW_PLAYER_BONUS: 0.90,       // New players get 10% better odds for first 5 rounds
+            LOSING_STREAK_BOOST: 0.85,    // Players on losing streak get 15% better odds
+            MINIMUM_WIN_RATE: 0.40,       // At least 40% of players should win something each round
+            MINIMUM_WIN_FREQUENCY: 0.70,  // At least 70% of rounds should have winners
         }
     },
 
@@ -79,30 +84,38 @@ module.exports = {
         this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
         this.kenoCountdownInterval = null;
         this.totalKenoEarnings = 0;
-        this.minimumPlayers = 1; // Game stops if no players
-        this.isRoundScheduled = false; // Prevent multiple round scheduling
-        this.isDrawing = false; // Track if we're currently in draw phase
-        this.roundTransitionTimeout = null; // Track round transition timeout
-        this.disconnectedPlayers = new Map(); // Track recently disconnected players for reconnection
-        this.playerReconnectTokens = new Map(); // Store reconnect tokens
-        this.playerReconnectAttempts = new Map(); // Track reconnect attempts per player
+        this.minimumPlayers = 1;
+        this.isRoundScheduled = false;
+        this.isDrawing = false;
+        this.roundTransitionTimeout = null;
+        this.disconnectedPlayers = new Map();
+        this.playerReconnectTokens = new Map();
+        this.playerReconnectAttempts = new Map();
+        
+        // Player tracking for dynamic adjustments
+        this.playerSessionData = new Map(); // Stores player-specific data
+        this.roundWinStatistics = {
+            totalRounds: 0,
+            roundsWithWinners: 0,
+            playerWins: 0,
+            playerBets: 0
+        };
         
         // Profit Control System Tracking
         this.profitControlHistory = [];
         this.consecutiveHighProfitRounds = 0;
-        this.recentNumbersFrequency = new Map(); // Track frequency of numbers
+        this.recentNumbersFrequency = new Map();
         this.lastSelectedNumbers = [];
         
-        console.log('✅ Keno game logic initialized - 1-5 numbers allowed, bets: 5,10,20,50,100');
-        console.log('🎰 NEW payout table loaded:');
-        console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 15x, 2 hits = 1x');
-        console.log('   4 Numbers: 4 hits = 50x');
-        console.log('   3 Numbers: 3 hits = 15x, 2 hits = 1x');
+        console.log('✅ Keno game logic initialized - Balanced Profit Control');
+        console.log('🎰 UPDATED payout table loaded:');
+        console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 20x, 2 hits = 1x');
+        console.log('   4 Numbers: 4 hits = 60x, 3 hits = 2x, 2 hits = 1x');
+        console.log('   3 Numbers: 3 hits = 20x, 2 hits = 2x');
         console.log('   2 Numbers: 2 hits = 10x');
         console.log('   1 Number:  1 hit = 3x');
-        console.log('💰 Wallet system integrated');
-        console.log('🔄 Reconnection system enabled');
-        console.log('🎯 PROFIT CONTROL SYSTEM ACTIVE: House target = 60% keep, Pay out = 40%');
+        console.log('💰 House target: 25% profit (balanced for player retention)');
+        console.log('🎯 RANDOMNESS: 20% truly random draws');
         
         // Load existing stats
         this.loadKenoStats();
@@ -110,7 +123,7 @@ module.exports = {
         // Clean up old data periodically
         setInterval(() => {
             this.cleanupOldKenoData();
-        }, 3600000); // Every hour
+        }, 3600000);
         
         // Check game status periodically
         setInterval(() => {
@@ -128,6 +141,30 @@ module.exports = {
         
         // Initialize profit control tracking
         this.initializeProfitControl();
+        
+        // Initialize player session tracking
+        this.initializePlayerTracking();
+    },
+
+    // Initialize Player Tracking System
+    initializePlayerTracking: function() {
+        const self = this;
+        
+        // Reset player session data every hour
+        setInterval(() => {
+            const now = Date.now();
+            const oneHourAgo = now - 3600000;
+            
+            for (const [userId, data] of self.playerSessionData) {
+                if (data.sessionStart < oneHourAgo) {
+                    // Archive old session data
+                    if (data.totalBets > 0) {
+                        console.log(`📊 Session ended for ${userId}: ${data.totalBets} bets, ${data.totalWins} wins, RTP: ${((data.totalWins / data.totalWagered) * 100).toFixed(1)}%`);
+                    }
+                    self.playerSessionData.delete(userId);
+                }
+            }
+        }, 300000); // Check every 5 minutes
     },
 
     // Initialize Profit Control System
@@ -140,7 +177,7 @@ module.exports = {
         this.recentNumbersFrequency.clear();
         this.lastSelectedNumbers = [];
         
-        console.log('🎯 Profit Control System initialized');
+        console.log('🎯 Balanced Profit Control System initialized');
         
         // Clean up old profit history every hour
         setInterval(() => {
@@ -176,7 +213,7 @@ module.exports = {
                     }
                 }
             }
-        }, 60000); // Every minute
+        }, 60000);
     },
 
     // Start game health check system
@@ -202,9 +239,8 @@ module.exports = {
             if (self.isKenoRoundActive && onlinePlayers === 0 && activeGame.totalBets === 0) {
                 const now = new Date();
                 const gameStartTime = activeGame.startTime || now;
-                const timeElapsed = (now - gameStartTime) / 1000; // in seconds
+                const timeElapsed = (now - gameStartTime) / 1000;
                 
-                // If round has been active for more than 60 seconds with no players
                 if (timeElapsed > 60) {
                     console.log('🩺 Health Check: Detected stuck round, resetting...');
                     self.resetStuckKenoGame();
@@ -222,7 +258,7 @@ module.exports = {
                 console.log('🩺 Health Check: Detected stuck countdown, resetting...');
                 self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
             }
-        }, 30000); // Check every 30 seconds
+        }, 30000);
     },
 
     // Reset stuck Keno game
@@ -325,7 +361,7 @@ module.exports = {
         }
     },
 
-    // Handle Keno socket connection - IMPROVED RECONNECTION LOGIC
+    // Handle Keno socket connection
     handleKenoConnection: function(socket) {
         const self = this;
         
@@ -339,7 +375,7 @@ module.exports = {
             socket.emit('pong', { timestamp: data?.timestamp || Date.now() });
         });
         
-        // Keno authentication with reconnection support - SIMPLIFIED
+        // Keno authentication with reconnection support
         socket.on('keno:auth', async (data) => {
             try {
                 const { userId, userName, reconnectToken, isReconnect } = data;
@@ -431,6 +467,13 @@ module.exports = {
                         sessionStart: new Date(),
                         totalDeposits: user.totalDeposits || 0,
                         totalWithdrawals: user.totalWithdrawals || 0,
+                        // Player tracking for dynamic adjustments
+                        sessionBets: 0,
+                        sessionWins: 0,
+                        sessionWagered: 0,
+                        consecutiveLosses: 0,
+                        lastWinRound: 0,
+                        isNewPlayer: true,
                         // Reconnection fields
                         pendingSelections: [],
                         pendingBet: null,
@@ -440,6 +483,24 @@ module.exports = {
                         isNewInCurrentRound: !playerHasBetInCurrentRound && currentDrawnNumbers.length > 0
                     };
                     console.log(`🎰 New player connected: ${userName} (${userId})`);
+                }
+                
+                // Initialize player session data if not exists
+                if (!self.playerSessionData.has(userId)) {
+                    self.playerSessionData.set(userId, {
+                        userId: userId,
+                        userName: userName,
+                        sessionStart: new Date(),
+                        totalBets: 0,
+                        totalWins: 0,
+                        totalWagered: 0,
+                        firstDeposit: user.firstDeposit || null,
+                        isNewPlayer: true,
+                        roundsPlayed: 0,
+                        winStreak: 0,
+                        loseStreak: 0,
+                        lastWinAmount: 0
+                    });
                 }
                 
                 // Update player in map
@@ -473,7 +534,7 @@ module.exports = {
                     }
                 }
                 
-                // Prepare welcome data - SIMPLIFIED
+                // Prepare welcome data
                 const welcomeData = {
                     playerId: userId,
                     userName: userName,
@@ -707,7 +768,7 @@ module.exports = {
             }
         });
         
-        // Place bet in Keno - UPDATED for 1-5 numbers
+        // Place bet in Keno
         socket.on('keno:placeBet', async (data) => {
             try {
                 const { numbers, betAmount } = data;
@@ -742,7 +803,7 @@ module.exports = {
                     return;
                 }
                 
-                // Validate numbers - CAN be 1-5 numbers (CHANGED from exactly 5)
+                // Validate numbers - CAN be 1-5 numbers
                 if (!Array.isArray(numbers) || 
                     numbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
                     numbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
@@ -802,9 +863,21 @@ module.exports = {
                 player.hasPlacedBet = true;
                 player.totalWagered += bet;
                 player.isReadyForNextRound = false;
-                player.isNewInCurrentRound = false; // Now they're participating
-                player.pendingSelections = []; // Clear pending selections
+                player.isNewInCurrentRound = false;
+                player.pendingSelections = [];
                 player.pendingBet = null;
+                
+                // Update session tracking
+                const sessionData = self.playerSessionData.get(socket.userId);
+                if (sessionData) {
+                    sessionData.totalBets++;
+                    sessionData.totalWagered += bet;
+                    sessionData.roundsPlayed++;
+                    if (sessionData.isNewPlayer && sessionData.totalBets <= 5) {
+                        console.log(`🎁 New player bonus active for ${player.userName} (bet ${sessionData.totalBets}/5)`);
+                    }
+                }
+                
                 self.kenoPlayers.set(socket.userId, player);
                 
                 // Add to active game
@@ -817,12 +890,16 @@ module.exports = {
                 activeGame.bets[socket.userId] = {
                     numbers: sortedNumbers,
                     amount: bet,
-                    selectionCount: sortedNumbers.length, // Store how many numbers selected
+                    selectionCount: sortedNumbers.length,
                     placedAt: new Date(),
                     userName: player.userName,
                     potentialWinnings: potentialWinnings,
                     playerSocketId: socket.id,
-                    playerId: socket.userId // Store playerId for profit control
+                    playerId: socket.userId,
+                    // Add player session info for dynamic adjustments
+                    isNewPlayer: sessionData?.isNewPlayer || false,
+                    consecutiveLosses: player.consecutiveLosses || 0,
+                    sessionWagered: sessionData?.totalWagered || 0
                 };
                 activeGame.totalBets++;
                 activeGame.totalBetAmount += bet;
@@ -848,6 +925,7 @@ module.exports = {
                 
                 // Update stats
                 await self.updateKenoStats(bet, 0, 0, 0, 1);
+                self.roundWinStatistics.playerBets++;
                 
                 // Emit confirmation with potential winnings
                 socket.emit('keno:betConfirmed', {
@@ -956,7 +1034,7 @@ module.exports = {
                 }
                 
                 // Determine how many numbers to generate
-                let count = self.CONFIG.KENO_MAX_SELECTIONS; // Default to max
+                let count = self.CONFIG.KENO_MAX_SELECTIONS;
                 if (data && data.count) {
                     count = Math.min(Math.max(data.count, self.CONFIG.KENO_MIN_SELECTIONS), self.CONFIG.KENO_MAX_SELECTIONS);
                 }
@@ -1479,12 +1557,9 @@ module.exports = {
             }
         });
         
-        // Process deposit (Admin only - triggered via separate admin interface)
+        // Process deposit (Admin only)
         socket.on('wallet:processDeposit', async (data) => {
             try {
-                // Admin authentication would go here
-                // For now, we'll implement the logic
-                
                 const { transactionId, action, adminNotes } = data;
                 
                 const transaction = await self.WalletTransaction.findById(transactionId);
@@ -1607,7 +1682,7 @@ module.exports = {
                     // Get user
                     const user = await self.User.findOne({ userId: transaction.userId });
                     if (!user) {
-                    socket.emit('wallet:error', 'User not found');
+                        socket.emit('wallet:error', 'User not found');
                         return;
                     }
                     
@@ -1618,7 +1693,7 @@ module.exports = {
                     }
                     
                     // Update user balance
-                    user.balance += transaction.amount; // Amount is negative
+                    user.balance += transaction.amount;
                     user.totalWithdrawals = (user.totalWithdrawals || 0) + Math.abs(transaction.amount);
                     user.lastWithdrawal = new Date();
                     await user.save();
@@ -1713,7 +1788,7 @@ module.exports = {
         });
     },
     
-    // Handle Keno disconnection - IMPROVED
+    // Handle Keno disconnection
     handleKenoDisconnect: function(socket) {
         const self = this;
         
@@ -1729,7 +1804,6 @@ module.exports = {
                 player.disconnectTime = Date.now();
                 
                 // Save pending selections for reconnection
-                // ONLY if round is active, player hasn't placed bet, and has selections
                 if (self.isKenoRoundActive && 
                     !player.hasPlacedBet && 
                     player.selectedNumbers.length > 0) {
@@ -1741,7 +1815,6 @@ module.exports = {
                 self.kenoPlayers.set(socket.userId, player);
                 
                 // Add to disconnected players map for reconnection tracking
-                // Only if they were online and actively playing
                 if (player.socketId && player.isOnline) {
                     self.disconnectedPlayers.set(socket.userId, Date.now());
                     console.log(`📝 Added ${player.userName} to disconnected players`);
@@ -1777,7 +1850,7 @@ module.exports = {
         // Check if we need to pause the game (no players left)
         const onlinePlayers = self.getOnlinePlayersCount();
         
-        // FIX: Check if round is active but no players with bets
+        // Check if round is active but no players with bets
         const activeGame = self.getActiveKenoGame();
         const hasActiveBets = activeGame && activeGame.totalBets > 0;
         
@@ -1790,7 +1863,7 @@ module.exports = {
         }
     },
     
-    // Start Keno game round - FIXED TIMER ISSUES
+    // Start Keno game round
     startKenoRound: function() {
         const self = this;
         
@@ -1809,7 +1882,7 @@ module.exports = {
             self.kenoCountdownInterval = null;
         }
         
-        // FIX: Check if we actually have online players
+        // Check if we actually have online players
         const onlinePlayers = self.getOnlinePlayersCount();
         if (onlinePlayers < self.minimumPlayers) {
             console.log('🎰 Not enough players to start round. Cancelling...');
@@ -1845,7 +1918,7 @@ module.exports = {
             players: [],
             bets: {},
             drawnNumbers: [],
-            drawnNumbersOriginalOrder: [], // Store original random order
+            drawnNumbersOriginalOrder: [],
             winners: [],
             totalBets: 0,
             totalBetAmount: 0,
@@ -1920,7 +1993,7 @@ module.exports = {
         }, 100);
     },
     
-    // Start game if ready - FIXED DUPLICATE SCHEDULING
+    // Start game if ready
     startGameIfReady: function() {
         const self = this;
         
@@ -1937,11 +2010,6 @@ module.exports = {
         console.log('  disconnectedPlayers:', self.disconnectedPlayers.size);
         
         // Only start a new round if:
-        // 1. No round is active
-        // 2. Not currently drawing
-        // 3. Game status is 'waiting' (not 'betting', 'drawing', or 'completed')
-        // 4. No round is already scheduled
-        // 5. We have minimum players
         if (!self.isKenoRoundActive && 
             !self.isDrawing &&
             gameStatus === 'waiting' && 
@@ -2005,7 +2073,7 @@ module.exports = {
         console.log('🎰 Game paused due to no players');
     },
     
-    // Start Keno countdown - FIXED TIMER CLEANUP
+    // Start Keno countdown
     startKenoCountdown: function() {
         const self = this;
         
@@ -2031,7 +2099,7 @@ module.exports = {
                 return;
             }
             
-            // FIX: Check if we lost all players during countdown
+            // Check if we lost all players during countdown
             const onlinePlayers = self.getOnlinePlayersCount();
             if (onlinePlayers === 0) {
                 clearInterval(self.kenoCountdownInterval);
@@ -2072,9 +2140,9 @@ module.exports = {
         }, 1000);
     },
     
-    // ==================== PROFIT CONTROL SYSTEM FUNCTIONS ====================
+    // ==================== BALANCED PROFIT CONTROL FUNCTIONS ====================
     
-    // Generate a random draw (for simulations)
+    // Generate a random draw
     generateRandomDraw: function() {
         const draw = [];
         while (draw.length < this.CONFIG.KENO_DRAW_COUNT) {
@@ -2099,7 +2167,7 @@ module.exports = {
             lastDraws.forEach(d => d.forEach(n => numbersInCooldown.add(n)));
             
             const overlappingNumbers = draw.filter(n => numbersInCooldown.has(n));
-            if (overlappingNumbers.length > 5) { // Allow some overlap but not too much
+            if (overlappingNumbers.length > 6) {
                 return false;
             }
         }
@@ -2120,20 +2188,131 @@ module.exports = {
             }
         }
         
-        // Check diversity requirement
-        if (pc.DIVERSITY_REQUIREMENT && recentDraws.length >= 20) {
-            const last20Draws = recentDraws.slice(0, 20);
-            const uniqueNumbers = new Set();
-            last20Draws.forEach(d => d.forEach(n => uniqueNumbers.add(n)));
+        return true;
+    },
+    
+    // Calculate dynamic odds adjustment for a player
+    calculatePlayerOddsAdjustment: function(playerId, sessionData) {
+        const self = this;
+        const pc = self.PROFIT_CONTROL.DYNAMIC_ADJUSTMENT;
+        let adjustment = 1.0;
+        
+        if (!pc.ENABLED) return adjustment;
+        
+        const player = self.kenoPlayers.get(playerId);
+        if (!player) return adjustment;
+        
+        // New player bonus (first 5 bets)
+        if (sessionData?.isNewPlayer && sessionData.totalBets <= 5) {
+            adjustment *= pc.NEW_PLAYER_BONUS; // 10% better odds
+            console.log(`🎁 Applying new player bonus for ${player.userName}: ${adjustment.toFixed(2)}x odds`);
+        }
+        
+        // Losing streak boost
+        if (player.consecutiveLosses >= 3) {
+            adjustment *= pc.LOSING_STREAK_BOOST; // 15% better odds
+            console.log(`🎁 Applying losing streak boost for ${player.userName} (${player.consecutiveLosses} losses): ${adjustment.toFixed(2)}x odds`);
+        }
+        
+        // High wager bonus (wagered a lot recently)
+        if (sessionData?.totalWagered > 1000) {
+            adjustment *= 0.95; // 5% better odds for high rollers
+        }
+        
+        return Math.max(0.7, Math.min(1.3, adjustment)); // Clamp between 0.7x and 1.3x
+    },
+    
+    // Update player session data after round
+    updatePlayerSessionData: function(userId, won, winAmount, betAmount) {
+        const self = this;
+        const sessionData = self.playerSessionData.get(userId);
+        
+        if (!sessionData) return;
+        
+        if (won) {
+            sessionData.totalWins++;
+            sessionData.lastWinAmount = winAmount;
+            sessionData.winStreak++;
+            sessionData.loseStreak = 0;
             
-            // If we already have too many unique numbers, new draw must add diversity
-            if (uniqueNumbers.size >= 70) { // Almost all numbers have appeared
-                // Allow this draw since we've covered most numbers already
+            // Mark player as no longer "new" after first win
+            if (sessionData.isNewPlayer) {
+                sessionData.isNewPlayer = false;
+                console.log(`🎉 Player ${sessionData.userName} is no longer a new player (got first win)`);
+            }
+        } else {
+            sessionData.winStreak = 0;
+            sessionData.loseStreak++;
+        }
+        
+        // Update consecutive losses in player object
+        const player = self.kenoPlayers.get(userId);
+        if (player) {
+            player.consecutiveLosses = won ? 0 : (player.consecutiveLosses || 0) + 1;
+            if (won) {
+                player.lastWinRound = self.kenoRoundNumber;
+                player.sessionWins = (player.sessionWins || 0) + 1;
+            }
+            player.sessionWagered += betAmount;
+            self.kenoPlayers.set(userId, player);
+        }
+        
+        self.playerSessionData.set(userId, sessionData);
+    },
+    
+    // Check if round needs to have winners (based on minimum win rate)
+    needsWinnersThisRound: function() {
+        const self = this;
+        const pc = self.PROFIT_CONTROL.DYNAMIC_ADJUSTMENT;
+        
+        if (!pc.ENABLED) return false;
+        
+        // Check if we're below minimum win frequency
+        if (self.roundWinStatistics.totalRounds > 0) {
+            const winRate = self.roundWinStatistics.roundsWithWinners / self.roundWinStatistics.totalRounds;
+            if (winRate < pc.MINIMUM_WIN_FREQUENCY) {
+                console.log(`🎯 Need winners this round (win frequency ${winRate.toFixed(2)} < ${pc.MINIMUM_WIN_FREQUENCY})`);
                 return true;
             }
         }
         
-        return true;
+        // Check if we're below minimum player win rate
+        if (self.roundWinStatistics.playerBets > 0) {
+            const playerWinRate = self.roundWinStatistics.playerWins / self.roundWinStatistics.playerBets;
+            if (playerWinRate < pc.MINIMUM_WIN_RATE) {
+                console.log(`🎯 Need winners this round (player win rate ${playerWinRate.toFixed(2)} < ${pc.MINIMUM_WIN_RATE})`);
+                return true;
+            }
+        }
+        
+        return false;
+    },
+    
+    // Update round win statistics
+    updateRoundWinStatistics: function(hadWinners, playerWinsCount) {
+        const self = this;
+        
+        self.roundWinStatistics.totalRounds++;
+        if (hadWinners) {
+            self.roundWinStatistics.roundsWithWinners++;
+        }
+        self.roundWinStatistics.playerWins += playerWinsCount || 0;
+        
+        // Reset counters every 100 rounds
+        if (self.roundWinStatistics.totalRounds >= 100) {
+            const winRate = self.roundWinStatistics.roundsWithWinners / self.roundWinStatistics.totalRounds;
+            const playerWinRate = self.roundWinStatistics.playerWins / Math.max(1, self.roundWinStatistics.playerBets);
+            
+            console.log(`📊 100-round stats: Round win rate: ${(winRate * 100).toFixed(1)}%, Player win rate: ${(playerWinRate * 100).toFixed(1)}%`);
+            
+            // Reset for next 100 rounds
+            self.roundWinStatistics = {
+                totalRounds: 0,
+                roundsWithWinners: 0,
+                playerWins: 0,
+                playerBets: 0
+            };
+        }
     },
     
     // Calculate pattern score for a draw (lower is better)
@@ -2143,11 +2322,11 @@ module.exports = {
         
         if (!pc.ENABLED) return score;
         
-        // Penalize for numbers that appeared recently
+        // Penalize for numbers that appeared recently (but less penalty than before)
         if (recentDraws.length > 0) {
             const lastDraw = recentDraws[0] || [];
             const overlap = draw.filter(n => lastDraw.includes(n)).length;
-            score += overlap * 10; // Penalize for repeating numbers from last draw
+            score += overlap * 5; // Reduced penalty (was 10)
         }
         
         // Check for consecutive high numbers or low numbers patterns
@@ -2158,14 +2337,8 @@ module.exports = {
                 consecutiveCount++;
             }
         }
-        if (consecutiveCount > 3) {
-            score += consecutiveCount * 5; // Penalize for too many consecutive numbers
-        }
-        
-        // Check if draw is too evenly distributed (looks artificial)
-        const average = draw.reduce((a, b) => a + b, 0) / draw.length;
-        if (Math.abs(average - 40.5) < 5) { // Close to perfect average (40.5)
-            score += 20; // Penalize for too perfect distribution
+        if (consecutiveCount > 4) {
+            score += consecutiveCount * 3; // Reduced penalty (was 5)
         }
         
         return score;
@@ -2212,7 +2385,6 @@ module.exports = {
         console.log(`   Winners: ${selected.winnerCount} players`);
         console.log(`   Big Wins: ${selected.bigWinsCount}`);
         console.log(`   Max Individual Win: ${selected.maxIndividualWin} ETB`);
-        console.log(`   Draw: ${selected.draw.join(', ')}`);
         
         // Add to history
         this.profitControlHistory.push({
@@ -2227,7 +2399,7 @@ module.exports = {
         });
         
         // Track consecutive high profit rounds
-        if (houseKeepPercentage > 70) {
+        if (houseKeepPercentage > 35) {
             this.consecutiveHighProfitRounds++;
             console.log(`⚠️  Consecutive High Profit Rounds: ${this.consecutiveHighProfitRounds}`);
             
@@ -2240,24 +2412,26 @@ module.exports = {
         }
     },
     
-    // Simulate multiple draws and select optimal one using profit control
+    // Simulate multiple draws and select optimal one using balanced profit control
     simulateAndSelectDraw: function(bets, totalBetAmount) {
         const self = this;
         const pc = self.PROFIT_CONTROL;
         
         if (!pc.ENABLED || Object.keys(bets).length === 0) {
-            // Fallback to random draw if profit control disabled or no bets
             return self.generateRandomDraw();
         }
         
-        console.log('🎯 Profit Control: Simulating draws...');
+        console.log('🎯 Balanced Profit Control: Simulating draws...');
         
         // Convert bets to array for easier processing
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
             amount: bet.amount,
             selectionCount: bet.selectionCount || bet.numbers.length,
-            playerId: bet.playerId || null
+            playerId: bet.playerId || null,
+            isNewPlayer: bet.isNewPlayer || false,
+            consecutiveLosses: bet.consecutiveLosses || 0,
+            sessionWagered: bet.sessionWagered || 0
         }));
         
         const totalPlayers = betsArray.length;
@@ -2275,7 +2449,7 @@ module.exports = {
             
             // Check for big bets (risk management)
             const averageBet = totalWagered / totalPlayers;
-            const bigBetThreshold = 50; // 50 ETB
+            const bigBetThreshold = 50;
             const hasBigBets = betsArray.some(bet => bet.amount >= bigBetThreshold);
             
             if (hasBigBets && pc.DYNAMIC_ADJUSTMENT.JACKPOT_PROTECTION) {
@@ -2285,8 +2459,15 @@ module.exports = {
             
             // If we've had too many consecutive high profit rounds, adjust down
             if (self.consecutiveHighProfitRounds >= pc.PATTERN_AVOIDANCE.MAX_CONSECUTIVE_HIGH_PROFIT) {
-                targetHouseKeep *= 0.8; // Reduce by 20%
+                targetHouseKeep *= 0.8;
                 console.log(`🎯 Too many consecutive high profits, reducing target to ${targetHouseKeep.toFixed(1)}%`);
+            }
+            
+            // Check if we need winners this round
+            const needsWinners = self.needsWinnersThisRound();
+            if (needsWinners) {
+                targetHouseKeep *= 0.7; // Reduce house keep to increase chance of winners
+                console.log(`🎯 Need winners this round, reducing target to ${targetHouseKeep.toFixed(1)}%`);
             }
         }
         
@@ -2294,7 +2475,7 @@ module.exports = {
         targetHouseKeep = Math.max(pc.MIN_HOUSE_KEEP_PERCENTAGE, 
                                   Math.min(pc.MAX_HOUSE_KEEP_PERCENTAGE, targetHouseKeep));
         
-        // Calculate target payout (what we want to pay out)
+        // Calculate target payout
         const targetPayout = totalWagered * ((100 - targetHouseKeep) / 100);
         const variance = totalWagered * (pc.VARIANCE_PERCENTAGE / 100);
         
@@ -2314,42 +2495,49 @@ module.exports = {
             let isValid = false;
             let attempts = 0;
             
-            // Try to generate a draw that meets pattern avoidance rules
             while (!isValid && attempts < 100) {
                 candidateDraw = self.generateRandomDraw();
                 isValid = self.isDrawValid(candidateDraw, recentDraws, recentNumbers);
                 attempts++;
             }
             
-            // If still not valid after attempts, use it anyway
             if (!isValid) {
                 candidateDraw = self.generateRandomDraw();
             }
             
-            // Calculate total payout for this draw
+            // Calculate total payout for this draw with player adjustments
             let totalPayout = 0;
             let playerPayouts = [];
             let maxIndividualWin = 0;
             let bigWinsCount = 0;
+            let winnerCount = 0;
             
             for (const bet of betsArray) {
                 const matches = self.countMatches(bet.numbers, candidateDraw);
                 const payoutMultiplier = self.CONFIG.PAYOUT_TABLE[bet.selectionCount]?.[matches] || 0;
-                const winAmount = bet.amount * payoutMultiplier;
+                
+                // Apply player-specific odds adjustment
+                const sessionData = self.playerSessionData.get(bet.playerId);
+                const oddsAdjustment = self.calculatePlayerOddsAdjustment(bet.playerId, sessionData);
+                const adjustedMultiplier = payoutMultiplier * oddsAdjustment;
+                
+                const winAmount = bet.amount * adjustedMultiplier;
                 
                 totalPayout += winAmount;
                 
                 if (winAmount > 0) {
+                    winnerCount++;
                     playerPayouts.push({
                         playerId: bet.playerId,
                         winAmount,
                         betAmount: bet.amount,
                         matches,
-                        selectionCount: bet.selectionCount
+                        selectionCount: bet.selectionCount,
+                        oddsAdjustment: oddsAdjustment.toFixed(2)
                     });
                     
                     // Track big wins
-                    if (winAmount > bet.amount * 10) { // 10x or more
+                    if (winAmount > bet.amount * 10) {
                         bigWinsCount++;
                     }
                     
@@ -2364,29 +2552,28 @@ module.exports = {
             const houseKeepPercentage = (houseKeep / totalWagered) * 100;
             
             // Score this simulation (lower is better for matching target)
-            // We want payout close to targetPayout but not over too much
             let score = Math.abs(totalPayout - targetPayout);
             
             // Penalize if payout is too high (house loses money)
             if (totalPayout > totalWagered) {
-                score += (totalPayout - totalWagered) * 10; // Heavy penalty
+                score += (totalPayout - totalWagered) * 5; // Reduced penalty (was 10)
             }
             
             // Penalize if too many big wins in one round
-            if (bigWinsCount > 2) {
-                score += bigWinsCount * 1000;
+            if (bigWinsCount > 3) {
+                score += bigWinsCount * 500; // Reduced penalty (was 1000)
             }
             
             // Bonus for being within variance range
             if (Math.abs(totalPayout - targetPayout) <= variance) {
-                score *= 0.5; // Prefer draws within variance
+                score *= 0.5;
             }
             
-            // Slight preference for draws that have SOME winners (keeps players engaged)
-            if (playerPayouts.length === 0) {
-                score += 100; // Penalize no winners at all
-            } else if (playerPayouts.length > 0 && playerPayouts.length < totalPlayers * 0.3) {
-                score *= 0.8; // Prefer some but not too many winners
+            // Bonus for having some winners (keeps players engaged)
+            if (winnerCount === 0) {
+                score += 200; // Penalize no winners (but less than before)
+            } else if (winnerCount > 0 && winnerCount < totalPlayers * 0.4) {
+                score *= 0.7; // Prefer some but not too many winners
             }
             
             // Pattern avoidance scoring
@@ -2403,16 +2590,16 @@ module.exports = {
                 playerPayouts,
                 bigWinsCount,
                 maxIndividualWin,
-                winnerCount: playerPayouts.length
+                winnerCount
             });
         }
         
         const simulationTime = Date.now() - startTime;
         console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
         
-        // 5% chance to pick truly random draw (for unpredictability)
+        // 20% chance to pick truly random draw
         if (Math.random() < pc.RANDOMNESS_CHANCE) {
-            console.log('🎯 RANDOM MODE: Picking truly random draw (5% chance)');
+            console.log('🎯 RANDOM MODE: Picking truly random draw (20% chance)');
             const randomIndex = Math.floor(Math.random() * simulations.length);
             const selected = simulations[randomIndex];
             self.logProfitControlResults(selected, totalWagered, 'RANDOM');
@@ -2422,29 +2609,32 @@ module.exports = {
         // Sort by score (lower is better)
         simulations.sort((a, b) => a.score - b.score);
         
-        // Take top 10 candidates and pick randomly from them (adds unpredictability)
-        const topCandidates = simulations.slice(0, 10);
+        // Take top 15 candidates and pick randomly from them
+        const topCandidates = simulations.slice(0, 15);
         const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
         
         // Log results
-        self.logProfitControlResults(selected, totalWagered, 'OPTIMIZED');
+        self.logProfitControlResults(selected, totalWagered, 'BALANCED');
         
         // Update recent draws tracking
         self.updateDrawHistory(selected.draw);
         
+        // Update round win statistics
+        self.updateRoundWinStatistics(selected.winnerCount > 0, selected.winnerCount);
+        
         return selected.draw;
     },
     
-    // Draw Keno numbers - UPDATED with Profit Control System
+    // Draw Keno numbers - UPDATED with Balanced Profit Control
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
         
         if (!activeGame || activeGame.status !== 'betting') return;
         
-        console.log('🎰 Drawing Keno numbers with Profit Control...');
+        console.log('🎰 Drawing Keno numbers with Balanced Profit Control...');
         
-        // IMPORTANT: Clear all intervals and timeouts first
+        // Clear all intervals and timeouts first
         if (self.kenoCountdownInterval) {
             clearInterval(self.kenoCountdownInterval);
             self.kenoCountdownInterval = null;
@@ -2455,7 +2645,7 @@ module.exports = {
             self.roundTransitionTimeout = null;
         }
         
-        // IMPORTANT: Set game status to drawing
+        // Set game status to drawing
         activeGame.status = 'drawing';
         self.isKenoRoundActive = false;
         self.isDrawing = true;
@@ -2466,12 +2656,12 @@ module.exports = {
             message: 'Drawing numbers...',
             popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
             totalBalls: self.CONFIG.KENO_DRAW_COUNT,
-            willBeRandomOrder: true // Inform clients numbers will come in random order
+            willBeRandomOrder: true
         });
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate the draw using PROFIT CONTROL SYSTEM if there are bets
+            // Generate the draw using BALANCED PROFIT CONTROL
             let drawnNumbers;
             if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
                 drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
@@ -2485,14 +2675,14 @@ module.exports = {
             
             console.log(`🎰 Numbers to draw (random order): ${drawnNumbers.join(', ')}`);
             
-            // Draw numbers one by one in RANDOM ORDER (as they were generated)
+            // Draw numbers one by one in RANDOM ORDER
             for (let i = 0; i < drawnNumbers.length; i++) {
                 setTimeout(() => {
                     self.io.to('keno').emit('keno:number_drawn', {
-                        number: drawnNumbers[i], // This is the random number at position i
+                        number: drawnNumbers[i],
                         index: i,
                         total: drawnNumbers.length,
-                        drawnCount: i + 1, // Current ball number (1/20, 2/20, etc.)
+                        drawnCount: i + 1,
                         round: activeGame.roundNumber,
                         isRandomOrder: true
                     });
@@ -2501,13 +2691,12 @@ module.exports = {
             
             // After all numbers are drawn, send complete results IN SORTED ORDER for display
             setTimeout(() => {
-                // For the final display, we sort them for better readability
                 const sortedForDisplay = [...drawnNumbers].sort((a, b) => a - b);
                 
                 self.io.to('keno').emit('keno:round_results', {
                     round: activeGame.roundNumber,
-                    drawnNumbers: sortedForDisplay, // Send sorted for final display
-                    originalOrder: drawnNumbers, // Keep original random order too
+                    drawnNumbers: sortedForDisplay,
+                    originalOrder: drawnNumbers,
                     playersCount: activeGame.players.length,
                     totalBets: activeGame.totalBets,
                     popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
@@ -2570,7 +2759,7 @@ module.exports = {
         });
     },
     
-    // Process Keno results - UPDATED for 1-5 numbers with new payout table
+    // Process Keno results with balanced profit control
     processKenoResults: async function(activeGame) {
         const self = this;
         
@@ -2581,6 +2770,8 @@ module.exports = {
             clearTimeout(self.roundTransitionTimeout);
             self.roundTransitionTimeout = null;
         }
+        
+        let totalWinners = 0;
         
         // Calculate winnings for each player
         for (const [playerId, bet] of Object.entries(activeGame.bets)) {
@@ -2603,6 +2794,8 @@ module.exports = {
                 }
                 
                 if (winnings > 0) {
+                    totalWinners++;
+                    
                     // Update user balance
                     const user = await self.User.findOne({ userId: playerId });
                     if (user) {
@@ -2653,7 +2846,6 @@ module.exports = {
                             player.hasPlacedBet = false;
                             player.currentBet = null;
                             // Keep selected numbers if player wants to use them again
-                            // Only clear if they're not pre-selected
                             if (!player.isReadyForNextRound) {
                                 player.selectedNumbers = [];
                             }
@@ -2662,6 +2854,9 @@ module.exports = {
                             player.pendingBet = null;
                             self.kenoPlayers.set(playerId, player);
                         }
+                        
+                        // Update player session data
+                        self.updatePlayerSessionData(playerId, true, winnings, bet.amount);
                         
                         // Send personal result
                         const playerSocket = self.getKenoSocketByUserId(playerId);
@@ -2704,7 +2899,6 @@ module.exports = {
                         player.hasPlacedBet = false;
                         player.currentBet = null;
                         // Keep selected numbers if player wants to use them again
-                        // Only clear if they're not pre-selected
                         if (!player.isReadyForNextRound) {
                             player.selectedNumbers = [];
                         }
@@ -2713,6 +2907,9 @@ module.exports = {
                         player.pendingBet = null;
                         self.kenoPlayers.set(playerId, player);
                     }
+                    
+                    // Update player session data
+                    self.updatePlayerSessionData(playerId, false, 0, bet.amount);
                 }
             } catch (error) {
                 console.error(`Error processing result for player ${playerId}:`, error);
@@ -2722,11 +2919,11 @@ module.exports = {
         // Mark results as processed
         activeGame.processedResults = true;
         
-        // Calculate house commission
+        // Calculate house commission (0% now, profit built into odds)
         const totalWagered = activeGame.totalBetAmount;
         const commission = (totalWagered * self.CONFIG.COMMISSION_PERCENTAGE) / 100;
         activeGame.commissionCollected = commission;
-        self.totalKenoEarnings += commission;
+        self.totalKenoEarnings += (totalWagered - activeGame.totalPayout); // Total profit, not just commission
         
         // Update game stats
         activeGame.endTime = new Date();
@@ -2741,10 +2938,11 @@ module.exports = {
             totalBetAmount: totalWagered,
             totalPayout: activeGame.totalPayout,
             commission: commission,
-            winners: activeGame.winners.length,
+            winners: totalWinners,
             timestamp: new Date(),
             averageSelectionCount: activeGame.players.length > 0 ? 
-                Object.values(activeGame.bets).reduce((sum, bet) => sum + (bet.selectionCount || bet.numbers.length), 0) / activeGame.players.length : 0
+                Object.values(activeGame.bets).reduce((sum, bet) => sum + (bet.selectionCount || bet.numbers.length), 0) / activeGame.players.length : 0,
+            houseProfitPercentage: ((totalWagered - activeGame.totalPayout) / totalWagered) * 100
         });
         
         // Keep only last 20 rounds in history
@@ -2758,7 +2956,7 @@ module.exports = {
         // Increment round number
         self.kenoRoundNumber++;
         
-        console.log(`🎰 Round ${activeGame.roundNumber} completed. Preparing for next round...`);
+        console.log(`🎰 Round ${activeGame.roundNumber-1} completed. Total wagered: ${totalWagered} ETB, Total payout: ${activeGame.totalPayout} ETB, House profit: ${totalWagered - activeGame.totalPayout} ETB (${((totalWagered - activeGame.totalPayout) / totalWagered * 100).toFixed(1)}%)`);
         
         // Clear all disconnected players and pending states after round completion
         self.disconnectedPlayers.clear();
@@ -2766,7 +2964,7 @@ module.exports = {
         
         // Reset the current game to waiting state after a delay
         self.roundTransitionTimeout = setTimeout(() => {
-            // IMPORTANT: Set game back to waiting state for next round
+            // Set game back to waiting state for next round
             activeGame.status = 'waiting';
             activeGame.bets = {};
             activeGame.players = [];
@@ -2810,7 +3008,7 @@ module.exports = {
         }, 3000);
     },
     
-    // Update Keno stats in database - UPDATED for wallet
+    // Update Keno stats in database
     updateKenoStats: async function(wagered, payout, depositAmount, withdrawalAmount, games) {
         try {
             const today = new Date().toISOString().split('T')[0];
@@ -2955,6 +3153,13 @@ module.exports = {
             }
         }
         
+        // Calculate house profit percentage from last round
+        let lastRoundProfit = 0;
+        if (this.kenoRoundHistory.length > 0) {
+            const lastRound = this.kenoRoundHistory[0];
+            lastRoundProfit = lastRound.houseProfitPercentage || 0;
+        }
+        
         return {
             roundNumber: this.kenoRoundNumber,
             isRoundActive: this.isKenoRoundActive,
@@ -2963,6 +3168,7 @@ module.exports = {
             playersCount: this.kenoPlayers.size,
             onlinePlayers: onlinePlayers,
             totalEarnings: this.totalKenoEarnings,
+            lastRoundProfit: lastRoundProfit.toFixed(1),
             activeGame: activeGame ? {
                 players: activeGame.players.length,
                 totalBets: activeGame.totalBets,
@@ -2978,6 +3184,7 @@ module.exports = {
             allowPreSelection: this.CONFIG.ALLOW_PRE_SELECTION,
             disconnectedPlayers: this.disconnectedPlayers.size,
             reconnectAttempts: this.playerReconnectAttempts.size,
+            playerSessionData: this.playerSessionData.size,
             config: {
                 minSelections: this.CONFIG.KENO_MIN_SELECTIONS,
                 maxSelections: this.CONFIG.KENO_MAX_SELECTIONS,
@@ -3012,6 +3219,12 @@ module.exports = {
             };
         });
         
+        // Calculate average house profit from last 10 rounds
+        const last10Rounds = this.kenoRoundHistory.slice(0, 10);
+        const avgHouseProfit = last10Rounds.length > 0 
+            ? last10Rounds.reduce((sum, r) => sum + (r.houseProfitPercentage || 0), 0) / last10Rounds.length
+            : 0;
+        
         return {
             ...stats,
             recentHistory: recentHistory,
@@ -3023,6 +3236,8 @@ module.exports = {
             netWalletFlow: totalDeposits - totalWithdrawals,
             disconnectedPlayers: disconnectedPlayers,
             reconnectTokens: this.playerReconnectTokens.size,
+            avgHouseProfitLast10Rounds: avgHouseProfit.toFixed(1),
+            roundWinStatistics: this.roundWinStatistics,
             config: this.CONFIG
         };
     },
@@ -3033,12 +3248,20 @@ module.exports = {
         const averageHouseKeep = recentHistory.length > 0 ? 
             recentHistory.reduce((sum, h) => sum + h.houseKeepPercentage, 0) / recentHistory.length : 0;
         
+        // Calculate player win rates
+        const playerSessions = Array.from(this.playerSessionData.values());
+        const activePlayers = playerSessions.filter(p => p.totalBets > 0);
+        const avgPlayerWinRate = activePlayers.length > 0 
+            ? (activePlayers.reduce((sum, p) => sum + (p.totalWins / Math.max(1, p.totalWagered)), 0) / activePlayers.length) * 100
+            : 0;
+        
         return {
             enabled: this.PROFIT_CONTROL.ENABLED,
             targetHouseKeep: this.PROFIT_CONTROL.TARGET_HOUSE_KEEP_PERCENTAGE,
             consecutiveHighProfitRounds: this.consecutiveHighProfitRounds,
             recentHistory: recentHistory,
             averageHouseKeep: averageHouseKeep.toFixed(2),
+            averagePlayerWinRate: avgPlayerWinRate.toFixed(1),
             simulationCount: this.PROFIT_CONTROL.SIMULATION_COUNT,
             recentNumbersFrequency: Array.from(this.recentNumbersFrequency.entries())
                 .sort((a, b) => b[1] - a[1])
@@ -3077,6 +3300,7 @@ module.exports = {
     getKenoPlayerList: function() {
         const players = [];
         for (const [userId, player] of this.kenoPlayers) {
+            const sessionData = this.playerSessionData.get(userId) || {};
             players.push({
                 userId: player.userId,
                 userName: player.userName,
@@ -3095,6 +3319,15 @@ module.exports = {
                 totalDeposits: player.totalDeposits || 0,
                 totalWithdrawals: player.totalWithdrawals || 0,
                 sessionStart: player.sessionStart,
+                // Session tracking data
+                consecutiveLosses: player.consecutiveLosses || 0,
+                sessionWins: player.sessionWins || 0,
+                sessionWagered: player.sessionWagered || 0,
+                // Session data
+                totalSessionBets: sessionData.totalBets || 0,
+                totalSessionWins: sessionData.totalWins || 0,
+                winRate: sessionData.totalBets > 0 ? ((sessionData.totalWins || 0) / sessionData.totalBets * 100).toFixed(1) : '0.0',
+                isNewPlayer: sessionData.isNewPlayer || false,
                 // Reconnection info
                 pendingSelections: player.pendingSelections || [],
                 pendingBet: player.pendingBet,
@@ -3118,6 +3351,7 @@ module.exports = {
                 this.disconnectedPlayers.delete(userId);
                 this.playerReconnectTokens.delete(userId);
                 this.playerReconnectAttempts.delete(userId);
+                this.playerSessionData.delete(userId);
                 removedCount++;
             }
         }
@@ -3146,13 +3380,13 @@ module.exports = {
         }
     },
     
-    // Check if game should be active - FIXED STUCK DETECTION
+    // Check if game should be active
     checkGameStatus: function() {
         const onlinePlayers = this.getOnlinePlayersCount();
         const activeGame = this.getActiveKenoGame();
         const gameStatus = activeGame.status || 'waiting';
         
-        // FIX: Detect if countdown is stuck (not changing)
+        // Detect if countdown is stuck (not changing)
         if (this.kenoCountdownInterval && this.kenoCountdown <= 0 && !this.isDrawing && this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, forcing draw...');
             clearInterval(this.kenoCountdownInterval);
@@ -3161,7 +3395,7 @@ module.exports = {
             return;
         }
         
-        // FIX: Detect if game is stuck in active state with no players
+        // Detect if game is stuck in active state with no players
         if (this.isKenoRoundActive && onlinePlayers === 0) {
             console.log('🎰 Stuck game detected: Round active but no players online');
             const hasBets = activeGame && activeGame.totalBets > 0;
@@ -3173,7 +3407,7 @@ module.exports = {
             }
         }
         
-        // FIX: Detect if countdown is stuck at zero but not progressing
+        // Detect if countdown is stuck at zero but not progressing
         if (this.kenoCountdown <= 0 && !this.isDrawing && !this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, resetting...');
             this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
@@ -3205,7 +3439,10 @@ module.exports = {
                 preSelectionCount: player.preSelectedNumbers.length,
                 isNewInCurrentRound: player.isNewInCurrentRound || false,
                 hasPendingSelections: (player.pendingSelections && player.pendingSelections.length > 0) || false,
-                isOnline: player.isOnline
+                isOnline: player.isOnline,
+                consecutiveLosses: player.consecutiveLosses || 0,
+                sessionWins: player.sessionWins || 0,
+                sessionWagered: player.sessionWagered || 0
             };
         }
         return null;
@@ -3253,7 +3490,7 @@ module.exports = {
     toggleProfitControl: function(enabled) {
         this.PROFIT_CONTROL.ENABLED = enabled;
         
-        console.log(`🎯 Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`🎯 Balanced Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
         
         return { 
             success: true, 
