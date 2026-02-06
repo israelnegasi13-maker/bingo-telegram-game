@@ -1,4 +1,4 @@
-// game-logic.js - BINGO ELITE GAME LOGIC MODULE
+// game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -39,12 +39,24 @@ let processingClaims = new Map(); // For preventing double prize bug
 let roomWinners = new Map(); // Track room winners
 let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
 
+// ========== PERFORMANCE CACHES ==========
+let roomsCache = new Map();
+let onlinePlayersCache = new Map();
+let roomStatusCache = new Map();
+let lastRoomStatusBroadcast = 0;
+let lastAdminUpdate = 0;
+
+// ========== RATE LIMITING ==========
+let playerRateLimit = new Map();
+const RATE_LIMIT_WINDOW = 1000; // 1 second
+const MAX_EVENTS_PER_WINDOW = 10;
+
 // ========== INITIALIZATION FUNCTION ==========
 async function initialize(socketIo, dbModels) {
   io = socketIo;
   models = dbModels;
   
-  console.log('✅ Game logic initialized');
+  console.log('✅ Game logic initialized with performance optimizations');
   
   // Set up Socket.IO event handlers
   setupSocketHandlers();
@@ -68,7 +80,86 @@ function setTelebirrNumber(newNumber) {
   }
 }
 
-// ========== REAL-TIME BOX TRACKING FUNCTIONS ==========
+// ========== CACHE MANAGEMENT ==========
+async function getRoomWithCache(stake) {
+  const cacheKey = `room_${stake}`;
+  
+  if (roomsCache.has(cacheKey)) {
+    const cached = roomsCache.get(cacheKey);
+    // If cache is less than 2 seconds old, use it
+    if (Date.now() - cached.timestamp < 2000) {
+      return cached.data;
+    }
+  }
+  
+  // Fetch from database
+  const room = await models.Room.findOne({ stake: stake });
+  if (room) {
+    roomsCache.set(cacheKey, {
+      data: room,
+      timestamp: Date.now()
+    });
+  }
+  
+  return room;
+}
+
+function updateRoomCache(stake, roomData) {
+  const cacheKey = `room_${stake}`;
+  roomsCache.set(cacheKey, {
+    data: roomData,
+    timestamp: Date.now()
+  });
+}
+
+async function getOnlinePlayersInRoomWithCache(roomStake) {
+  const cacheKey = `online_${roomStake}`;
+  
+  if (onlinePlayersCache.has(cacheKey)) {
+    const cached = onlinePlayersCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < 2000) {
+      return cached.data;
+    }
+  }
+  
+  const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
+  onlinePlayersCache.set(cacheKey, {
+    data: onlinePlayers,
+    timestamp: Date.now()
+  });
+  
+  return onlinePlayers;
+}
+
+// ========== RATE LIMITING FUNCTIONS ==========
+function checkRateLimit(userId, eventType) {
+  const key = `${userId}_${eventType}`;
+  const now = Date.now();
+  
+  if (!playerRateLimit.has(key)) {
+    playerRateLimit.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  
+  const limit = playerRateLimit.get(key);
+  
+  if (now - limit.windowStart > RATE_LIMIT_WINDOW) {
+    // Reset window
+    limit.count = 1;
+    limit.windowStart = now;
+    return true;
+  }
+  
+  if (limit.count >= MAX_EVENTS_PER_WINDOW) {
+    console.log(`⚠️ Rate limit exceeded for ${userId} - ${eventType}`);
+    return false;
+  }
+  
+  limit.count++;
+  return true;
+}
+
+// ========== OPTIMIZED REAL-TIME BOX TRACKING ==========
 function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = null) {
   if (!io) return;
   
@@ -85,10 +176,34 @@ function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = 
     updateData.message = `${playerName} selected box ${newBox}!`;
   }
   
-  // Broadcast to all connected sockets
-  io.emit('boxesTakenUpdate', updateData);
+  // OPTIMIZATION: Get cached room data
+  const cacheKey = `room_${roomStake}`;
+  const roomData = roomsCache.get(cacheKey);
   
-  // Also update all admin panels
+  if (roomData) {
+    // Send only to players in this room
+    roomData.data.players.forEach(userId => {
+      for (const [socketId, uId] of socketToUser.entries()) {
+        if (uId === userId) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket && socket.connected) {
+            socket.emit('boxesTakenUpdate', updateData);
+          }
+        }
+      }
+    });
+  }
+  
+  // Also send to subscribed sockets (for discovery overlay)
+  const subscribedSockets = roomSubscriptions.get(roomStake) || new Set();
+  subscribedSockets.forEach(socketId => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected) {
+      socket.emit('boxesTakenUpdate', updateData);
+    }
+  });
+  
+  // Update admin panels
   adminSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
@@ -216,6 +331,9 @@ async function getRoom(stake) {
       await room.save();
     }
     
+    // Update cache
+    updateRoomCache(stake, room);
+    
     return room;
   } catch (error) {
     console.error('Error getting room:', error);
@@ -223,7 +341,7 @@ async function getRoom(stake) {
   }
 }
 
-// ========== FIXED: getConnectedUsers - PROPERLY TRACKS ALL CONNECTED USERS ==========
+// ========== OPTIMIZED: getConnectedUsers ==========
 function getConnectedUsers() {
   const connectedUsers = new Set();
   
@@ -235,31 +353,19 @@ function getConnectedUsers() {
     }
   });
   
-  // Also check ALL connected sockets
-  io.sockets.sockets.forEach((socket) => {
-    if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
-      connectedUsers.add(socket.userId);
-    }
-  });
-  
   return Array.from(connectedUsers);
 }
 
-// Function to get online players in a specific room
+// ========== OPTIMIZED: getOnlinePlayersInRoom ==========
 async function getOnlinePlayersInRoom(roomStake) {
   try {
-    const room = await models.Room.findOne({ stake: roomStake });
+    const room = await getRoomWithCache(roomStake);
     if (!room) return [];
     
-    const onlinePlayers = [];
-    const connectedUserIds = getConnectedUsers();
-    
-    // Check each player in the room
-    for (const playerId of room.players) {
-      if (connectedUserIds.includes(playerId)) {
-        onlinePlayers.push(playerId);
-      }
-    }
+    const connectedUserIds = new Set(getConnectedUsers());
+    const onlinePlayers = room.players.filter(playerId => 
+      connectedUserIds.has(playerId)
+    );
     
     return onlinePlayers;
   } catch (error) {
@@ -268,14 +374,22 @@ async function getOnlinePlayersInRoom(roomStake) {
   }
 }
 
-// ========== BROADCAST FUNCTIONS ==========
+// ========== OPTIMIZED BROADCAST FUNCTIONS ==========
 async function broadcastRoomStatus() {
   try {
+    // Throttle broadcasts: only every 2 seconds
+    const now = Date.now();
+    if (now - lastRoomStatusBroadcast < 2000) {
+      return;
+    }
+    lastRoomStatusBroadcast = now;
+    
     const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
     const roomStatus = {};
     
-    for (const room of rooms) {
-      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+    // Process rooms in parallel
+    await Promise.all(rooms.map(async (room) => {
+      const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * onlinePlayers.length;
@@ -302,13 +416,21 @@ async function broadcastRoomStatus() {
         minPlayers: CONFIG.MIN_PLAYERS_TO_START,
         fourCornersBonus: CONFIG.FOUR_CORNERS_BONUS
       };
-    }
+    }));
+    
+    // Cache room status
+    roomStatusCache.set('all', {
+      data: roomStatus,
+      timestamp: now
+    });
     
     // Broadcast to all connected sockets
     io.emit('roomStatus', roomStatus);
     
-    // Also update admin panel
-    updateAdminPanel();
+    // Update admin panel (throttled)
+    if (adminSockets.size > 0) {
+      updateAdminPanel();
+    }
     
   } catch (error) {
     console.error('Error broadcasting room status:', error);
@@ -317,14 +439,21 @@ async function broadcastRoomStatus() {
 
 async function updateAdminPanel() {
   try {
+    // Throttle admin updates: only every 3 seconds
+    const now = Date.now();
+    if (now - lastAdminUpdate < 3000) {
+      return;
+    }
+    lastAdminUpdate = now;
+    
     const connectedPlayers = getConnectedUsers().length;
     const activeGames = await models.Room.countDocuments({ status: 'playing' });
     
-    // Get all users
+    // Get all users (limited to 100 for performance)
     const users = await models.User.find({}).sort({ balance: -1 }).limit(100);
     
     // Get connected user IDs for real-time status
-    const connectedUserIds = getConnectedUsers();
+    const connectedUserIds = new Set(getConnectedUsers());
     
     // Count sockets per user
     const userSocketCount = {};
@@ -335,18 +464,10 @@ async function updateAdminPanel() {
       }
     });
     
-    // Also count from all connected sockets
-    io.sockets.sockets.forEach((socket) => {
-      if (socket && socket.connected && socket.userId && socket.userId !== 'pending') {
-        const userId = socket.userId;
-        userSocketCount[userId] = (userSocketCount[userId] || 0) + 1;
-      }
-    });
-    
     const userArray = users.map(user => {
       let isOnline = false;
       
-      if (connectedUserIds.includes(user.userId)) {
+      if (connectedUserIds.has(user.userId)) {
         isOnline = true;
       }
       else if (user.lastSeen) {
@@ -383,7 +504,7 @@ async function updateAdminPanel() {
     const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
     
     for (const room of rooms) {
-      const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+      const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
       const commissionPerPlayer = CONFIG.HOUSE_COMMISSION[room.stake] || 0;
       const contributionPerPlayer = room.stake - commissionPerPlayer;
       const potentialPrize = contributionPerPlayer * onlinePlayers.length;
@@ -415,7 +536,7 @@ async function updateAdminPanel() {
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(result => result[0]?.total || 0);
     
-    // Calculate total wagered (all negative transactions except ADMIN_ADD and HOUSE_EARNINGS)
+    // Calculate total wagered
     const totalWagered = await models.Transaction.aggregate([
       { $match: { 
         type: { $nin: ['NEW_USER', 'ADMIN_ADD', 'HOUSE_EARNINGS'] },
@@ -424,7 +545,7 @@ async function updateAdminPanel() {
       { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
     ]).then(result => result[0]?.total || 0);
     
-    // Calculate total wins (all positive transactions except ADMIN_ADD)
+    // Calculate total wins
     const totalWins = await models.Transaction.aggregate([
       { $match: { 
         type: { $nin: ['ADMIN_ADD', 'HOUSE_EARNINGS'] },
@@ -476,8 +597,6 @@ async function updateAdminPanel() {
           .catch(err => console.error('Error fetching transactions:', err));
       }
     });
-    
-    console.log(`📊 Admin Panel Updated: ${connectedPlayers} players online, ${activeGames} active games, House Earnings: ${houseEarnings} ETB, Telebirr: ${telebirrNumber}`);
     
   } catch (error) {
     console.error('Error updating admin panel:', error);
@@ -581,6 +700,9 @@ async function cleanupLongRunningGames() {
       room.lastBoxUpdate = new Date();
       await room.save();
       
+      // Update cache
+      updateRoomCache(room.stake, room);
+      
       // Broadcast empty boxes
       broadcastTakenBoxes(room.stake, []);
       
@@ -591,9 +713,9 @@ async function cleanupLongRunningGames() {
   }
 }
 
-// ========== FIXED GAME TIMER FUNCTION ==========
+// ========== OPTIMIZED GAME TIMER FUNCTION ==========
 async function startGameTimer(room) {
-  console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
+  console.log(`🎲 STARTING OPTIMIZED GAME TIMER for room ${room.stake} with ${room.players.length} players`);
   
   // Clear any existing timer first
   cleanupRoomTimer(room.stake);
@@ -605,12 +727,34 @@ async function startGameTimer(room) {
   room.startTime = new Date();
   await room.save();
   
+  // Update cache
+  updateRoomCache(room.stake, room);
+  
   console.log(`✅ Room ${room.stake} set to playing, starting ball timer...`);
+  
+  // Pre-cache player sockets for faster broadcasting
+  const playerSockets = new Map();
+  room.players.forEach(userId => {
+    const userSockets = [];
+    for (const [socketId, uId] of socketToUser.entries()) {
+      if (uId === userId) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket && socket.connected) {
+          userSockets.push(socket);
+        }
+      }
+    }
+    if (userSockets.length > 0) {
+      playerSockets.set(userId, userSockets);
+    }
+  });
+  
+  console.log(`📡 Pre-cached ${playerSockets.size} player connections for room ${room.stake}`);
   
   const timer = setInterval(async () => {
     try {
       // Get fresh room data
-      const currentRoom = await models.Room.findById(room._id);
+      const currentRoom = await getRoomWithCache(room.stake);
       if (!currentRoom || currentRoom.status !== 'playing') {
         console.log(`⚠️ Game timer stopped: Room ${room.stake} status is ${currentRoom?.status || 'not found'}`);
         clearInterval(timer);
@@ -637,7 +781,7 @@ async function startGameTimer(room) {
         letter = getBingoLetter(ball);
         attempts++;
         
-        if (attempts > 150) {
+        if (attempts > 100) {
           // If we can't find a unique ball, use the first available
           for (let i = 1; i <= 75; i++) {
             if (!currentRoom.calledNumbers.includes(i)) {
@@ -659,6 +803,9 @@ async function startGameTimer(room) {
       currentRoom.lastBoxUpdate = new Date();
       await currentRoom.save();
       
+      // Update cache
+      updateRoomCache(room.stake, currentRoom);
+      
       const ballData = {
         room: currentRoom.stake,
         num: ball,
@@ -666,23 +813,20 @@ async function startGameTimer(room) {
         ballsDrawn: currentRoom.ballsDrawn
       };
       
-      // Send to ALL players in the room
-      console.log(`📤 Broadcasting ball ${letter}-${ball} to ${currentRoom.players.length} players in room ${room.stake}`);
-      
-      // Send to all players in the room
-      currentRoom.players.forEach(userId => {
-        for (const [socketId, uId] of socketToUser.entries()) {
-          if (uId === userId) {
-            const socket = io.sockets.sockets.get(socketId);
-            if (socket && socket.connected) {
-              socket.emit('ballDrawn', ballData);
+      // OPTIMIZED: Send to pre-cached player sockets
+      playerSockets.forEach((sockets, userId) => {
+        sockets.forEach(socket => {
+          if (socket.connected) {
+            socket.emit('ballDrawn', ballData);
+            // Only send enableBingo every 3 balls for performance
+            if (currentRoom.ballsDrawn % 3 === 0) {
               socket.emit('enableBingo');
             }
           }
-        }
+        });
       });
       
-      // Also send to admin panels
+      // Send to admin panels
       adminSockets.forEach(socketId => {
         const socket = io.sockets.sockets.get(socketId);
         if (socket) {
@@ -839,6 +983,9 @@ async function endGameWithNoWinner(room) {
     room.lastBoxUpdate = new Date();
     await room.save();
     
+    // Update cache
+    updateRoomCache(room.stake, room);
+    
     // Broadcast empty boxes
     broadcastTakenBoxes(room.stake, []);
     io.emit('boxesCleared', { room: room.stake, reason: 'game_ended_no_winner' });
@@ -854,7 +1001,7 @@ async function endGameWithNoWinner(room) {
   }
 }
 
-// ========== FAST COUNTDOWN FUNCTION - AUTO STARTS GAME ==========
+// ========== OPTIMIZED COUNTDOWN FUNCTION ==========
 async function startCountdownForRoom(room) {
   try {
     console.log(`⏱️ STARTING COUNTDOWN for room ${room.stake} at ${new Date().toISOString()}`);
@@ -872,11 +1019,14 @@ async function startCountdownForRoom(room) {
     room.countdownStartedWith = room.players.length;
     await room.save();
     
+    // Update cache
+    updateRoomCache(room.stake, room);
+    
     let countdown = CONFIG.COUNTDOWN_TIMER;
     const countdownInterval = setInterval(async () => {
       try {
-        // Get fresh room data
-        const currentRoom = await models.Room.findById(room._id);
+        // Get fresh room data from cache
+        const currentRoom = await getRoomWithCache(room.stake);
         if (!currentRoom || currentRoom.status !== 'starting') {
           console.log(`⏹️ Countdown stopped: Room ${room.stake} status changed to ${currentRoom?.status || 'deleted'}`);
           clearInterval(countdownInterval);
@@ -885,12 +1035,12 @@ async function startCountdownForRoom(room) {
         }
         
         // Get online players
-        const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+        const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
         
         // Send countdown to ALL players in room AND subscribed sockets
         console.log(`⏱️ Room ${room.stake}: Countdown ${countdown}s, ${onlinePlayers.length} online players`);
         
-        // Send to ALL players in the room AND subscribed sockets
+        // Pre-cache sockets to notify
         const socketsToSend = new Set();
         
         // Add sockets of players in the room
@@ -913,14 +1063,16 @@ async function startCountdownForRoom(room) {
         });
         
         // Send to all collected sockets
+        const countdownData = {
+          room: room.stake,
+          timer: countdown,
+          onlinePlayers: onlinePlayers.length
+        };
+        
         socketsToSend.forEach(socketId => {
           const socket = io.sockets.sockets.get(socketId);
           if (socket && socket.connected) {
-            socket.emit('gameCountdown', {
-              room: room.stake,
-              timer: countdown,
-              onlinePlayers: onlinePlayers.length
-            });
+            socket.emit('gameCountdown', countdownData);
             socket.emit('lobbyUpdate', {
               room: room.stake,
               count: onlinePlayers.length
@@ -950,13 +1102,13 @@ async function startCountdownForRoom(room) {
           console.log(`🎮 Countdown finished for room ${room.stake} - AUTO STARTING GAME`);
           
           // Get final room data
-          const finalRoom = await models.Room.findById(room._id);
+          const finalRoom = await getRoomWithCache(room.stake);
           if (!finalRoom || finalRoom.status !== 'starting') {
             console.log(`⚠️ Countdown finished but room ${room.stake} is no longer in starting status`);
             return;
           }
           
-          const finalOnlinePlayers = await getOnlinePlayersInRoom(room.stake);
+          const finalOnlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
           
           // ✅ AUTO START GAME with any players remaining
           if (finalOnlinePlayers.length >= 1) {
@@ -969,7 +1121,10 @@ async function startCountdownForRoom(room) {
             finalRoom.countdownStartedWith = 0;
             await finalRoom.save();
             
-            // Notify ALL players in the room AND subscribed sockets
+            // Update cache
+            updateRoomCache(room.stake, finalRoom);
+            
+            // Pre-cache sockets to notify
             const finalSocketsToSend = new Set();
             
             // Add sockets of players in the room
@@ -1024,7 +1179,10 @@ async function startCountdownForRoom(room) {
             finalRoom.countdownStartedWith = 0;
             await finalRoom.save();
             
-            // Notify players about reset
+            // Update cache
+            updateRoomCache(room.stake, finalRoom);
+            
+            // Pre-cache sockets to notify
             const resetSocketsToSend = new Set();
             
             // Add sockets of players in the room
@@ -1142,6 +1300,10 @@ async function resetRoomForNextGame(roomStake) {
       room.lastBoxUpdate = new Date();
       await room.save();
       
+      // Update cache
+      updateRoomCache(roomStake, room);
+      onlinePlayersCache.delete(`online_${roomStake}`);
+      
       // Broadcast empty boxes
       broadcastTakenBoxes(roomStake, []);
       io.emit('boxesCleared', { room: roomStake, reason: 'game_ended_bingo_win' });
@@ -1211,14 +1373,14 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
     try {
       // 4. GET ROOM DATA (with timeout)
       const roomData = await Promise.race([
-        models.Room.findOne({ stake: roomStake, status: 'playing' }),
+        getRoomWithCache(roomStake),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Room timeout')), 2000)
         )
       ]);
       
       if (!roomData) {
-        console.log(`❌ Room ${roomStake} not found or not playing`);
+        console.log(`❌ Room ${roomStake} not found`);
         return { success: false, reason: 'room_not_found' };
       }
       
@@ -1283,6 +1445,9 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         console.log(`⚠️ Room ${roomStake} update failed - already ended?`);
         return { success: false, reason: 'update_failed' };
       }
+      
+      // Update cache
+      updateRoomCache(roomStake, updatedRoom);
       
       // 8. UPDATE USER BALANCE (FAST)
       const updatedUser = await models.User.findOneAndUpdate(
@@ -1441,7 +1606,10 @@ async function cleanupStuckCountdowns() {
           room.countdownStartedWith = 0;
           await room.save();
           
-          // Notify all subscribed sockets and players
+          // Update cache
+          updateRoomCache(room.stake, room);
+          
+          // Pre-cache sockets to notify
           const socketsToSend = new Set();
           
           // Add sockets of players in the room
@@ -1464,7 +1632,7 @@ async function cleanupStuckCountdowns() {
           });
           
           // Send notifications
-          const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+          const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
           socketsToSend.forEach(socketId => {
             const socket = io.sockets.sockets.get(socketId);
             if (socket) {
@@ -1510,6 +1678,10 @@ async function cleanupStaleRooms() {
         room.lastBoxUpdate = new Date();
         await room.save();
         
+        // Update cache
+        updateRoomCache(room.stake, room);
+        onlinePlayersCache.delete(`online_${room.stake}`);
+        
         // Broadcast that boxes are cleared
         broadcastTakenBoxes(room.stake, []);
         io.emit('boxesCleared', { room: room.stake, reason: 'stale_room_cleanup' });
@@ -1544,6 +1716,10 @@ async function cleanupStaleRooms() {
       room.lastBoxUpdate = new Date();
       await room.save();
       
+      // Update cache
+      updateRoomCache(room.stake, room);
+      onlinePlayersCache.delete(`online_${room.stake}`);
+      
       // Broadcast cleared boxes
       broadcastTakenBoxes(room.stake, []);
       io.emit('boxesCleared', { room: room.stake, reason: 'empty_room_cleanup' });
@@ -1552,6 +1728,41 @@ async function cleanupStaleRooms() {
   } catch (error) {
     console.error('Error in cleanupStaleRooms:', error);
   }
+}
+
+// ========== MEMORY CLEANUP FUNCTION ==========
+function cleanupMemory() {
+  console.log('🧹 Running memory cleanup...');
+  
+  // Clean up stale socket mappings
+  socketToUser.forEach((userId, socketId) => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket || !socket.connected) {
+      socketToUser.delete(socketId);
+    }
+  });
+  
+  // Clean up old cache entries (older than 30 seconds)
+  const now = Date.now();
+  roomsCache.forEach((value, key) => {
+    if (now - value.timestamp > 30000) {
+      roomsCache.delete(key);
+    }
+  });
+  
+  onlinePlayersCache.forEach((value, key) => {
+    if (now - value.timestamp > 30000) {
+      onlinePlayersCache.delete(key);
+    }
+  });
+  
+  // Clean up processing claims older than 10 seconds
+  cleanupProcessingClaims();
+  
+  // Clean up room winners older than 1 minute
+  cleanupRoomWinners();
+  
+  console.log(`🧹 Memory cleanup complete. Cache sizes: Rooms=${roomsCache.size}, Online=${onlinePlayersCache.size}`);
 }
 
 // ========== CONNECTION CLEANUP FUNCTION ==========
@@ -1578,7 +1789,6 @@ async function cleanupStaleConnections() {
       const socket = io.sockets.sockets.get(socketId);
       if (!socket || !socket.connected) {
         socketToUser.delete(socketId);
-        console.log(`🧹 Removed stale socket from socketToUser: ${socketId} (user: ${userId})`);
       }
     });
     
@@ -1675,7 +1885,6 @@ async function disconnectUser(userId, adminSocketId) {
         if (socket && socket.connected) {
           socket.disconnect();
           disconnectedCount++;
-          console.log(`🔌 Disconnected socket ${socketId} for user ${userId}`);
         }
       }
     });
@@ -1685,7 +1894,6 @@ async function disconnectUser(userId, adminSocketId) {
       if (socket && socket.connected && socket.userId === userId) {
         socket.disconnect();
         disconnectedCount++;
-        console.log(`🔌 Disconnected socket ${socket.id} for user ${userId}`);
       }
     });
     
@@ -1719,7 +1927,6 @@ function setupSocketHandlers() {
     // Enhanced connection tracking
     const query = socket.handshake.query;
     if (query.userId) {
-      console.log(`👤 User connected via query: ${query.userId}`);
       socket.userId = query.userId;
     }
     
@@ -1734,8 +1941,6 @@ function setupSocketHandlers() {
     
     // ========== ADMIN AUTHENTICATION ==========
     socket.on('admin:auth', (password) => {
-      console.log(`🔐 Admin authentication attempt from socket ${socket.id}`);
-      
       if (password === CONFIG.ADMIN_PASSWORD) {
         adminSockets.add(socket.id);
         socket.emit('admin:authSuccess');
@@ -2155,7 +2360,7 @@ function setupSocketHandlers() {
         // Start game timer
         await startGameTimer(room);
         
-        // Notify all players in room AND subscribed sockets
+        // Pre-cache sockets to notify
         const socketsToSend = new Set();
         
         // Add sockets of players in the room
@@ -2261,6 +2466,9 @@ function setupSocketHandlers() {
         room.lastBoxUpdate = new Date();
         await room.save();
         
+        // Update cache
+        updateRoomCache(roomStake, room);
+        
         // Broadcast empty boxes
         broadcastTakenBoxes(roomStake, []);
         
@@ -2326,6 +2534,9 @@ function setupSocketHandlers() {
       room.lastBoxUpdate = new Date();
       await room.save();
       
+      // Update cache
+      updateRoomCache(roomStake, room);
+      
       // Broadcast cleared boxes
       broadcastTakenBoxes(roomStake, []);
       socket.emit('admin:success', `Cleared all boxes in ${roomStake} ETB room`);
@@ -2342,7 +2553,7 @@ function setupSocketHandlers() {
       
       const room = await models.Room.findOne({ stake: parseInt(roomStake) });
       if (room) {
-        const onlinePlayers = await getOnlinePlayersInRoom(room.stake);
+        const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
         
         socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}`);
       }
@@ -2561,7 +2772,7 @@ function setupSocketHandlers() {
     // Get room countdown status for discovery overlay
     socket.on('getRoomCountdown', async ({ room }, callback) => {
       try {
-        const roomData = await models.Room.findOne({ stake: parseInt(room) });
+        const roomData = await getRoomWithCache(parseInt(room));
         
         if (!roomData) {
           if (callback) callback({ countdownActive: false });
@@ -2571,7 +2782,7 @@ function setupSocketHandlers() {
         if (roomData.status === 'starting' && roomData.countdownStartTime) {
           const elapsed = Date.now() - roomData.countdownStartTime;
           const secondsRemaining = Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor(elapsed / 1000));
-          const onlinePlayers = await getOnlinePlayersInRoom(room);
+          const onlinePlayers = await getOnlinePlayersInRoomWithCache(room);
           
           if (callback) {
             callback({
@@ -2593,9 +2804,7 @@ function setupSocketHandlers() {
     // FIXED: Get taken boxes from ALL rooms
     socket.on('getTakenBoxes', async ({ room }, callback) => {
       try {
-        const roomData = await models.Room.findOne({ 
-          stake: parseInt(room)
-        });
+        const roomData = await getRoomWithCache(parseInt(room));
         
         if (roomData) {
           console.log(`📦 Getting taken boxes for room ${room}: ${roomData.takenBoxes.length} boxes`);
@@ -2622,7 +2831,7 @@ function setupSocketHandlers() {
         roomSubscriptions.get(data.room).add(socket.id);
         
         // Send current taken boxes immediately
-        models.Room.findOne({ stake: data.room })
+        getRoomWithCache(data.room)
           .then(room => {
             if (room) {
               socket.emit('boxesTakenUpdate', {
@@ -2663,6 +2872,13 @@ function setupSocketHandlers() {
           return;
         }
         
+        // Rate limiting for room joins
+        if (!checkRateLimit(userId, 'joinRoom')) {
+          socket.emit('error', 'Too many join requests. Please wait.');
+          if (callback) callback({ success: false, message: 'Too many requests' });
+          return;
+        }
+        
         const user = await models.User.findOne({ userId: userId });
         if (!user) {
           socket.emit('error', 'User not found');
@@ -2677,10 +2893,7 @@ function setupSocketHandlers() {
         }
         
         // Get or create room
-        let roomData = await models.Room.findOne({ 
-          stake: room, 
-          status: { $in: ['waiting', 'starting', 'playing'] } 
-        });
+        let roomData = await getRoomWithCache(room);
         
         if (!roomData) {
           // Create a new active room if none exists
@@ -2692,6 +2905,7 @@ function setupSocketHandlers() {
             lastBoxUpdate: new Date()
           });
           await roomData.save();
+          updateRoomCache(room, roomData);
         }
         
         // Check if room is locked (game is playing)
@@ -2750,17 +2964,21 @@ function setupSocketHandlers() {
         roomData.takenBoxes.push(box);
         roomData.lastBoxUpdate = new Date();
         
-        const onlinePlayers = await getOnlinePlayersInRoom(room);
+        const onlinePlayers = await getOnlinePlayersInRoomWithCache(room);
         
         console.log(`🚀 joinRoom - Room ${room}:`);
         console.log(`   Players in room: ${roomData.players.length}`);
         console.log(`   Online players: ${onlinePlayers.length}`);
         console.log(`   Room status: ${roomData.status}`);
         
+        await roomData.save();
+        
+        // Update cache
+        updateRoomCache(room, roomData);
+        onlinePlayersCache.delete(`online_${room}`);
+        
         // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
         broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
-        
-        await roomData.save();
         
         // Send success to joining player
         socket.emit('joinedRoom');
@@ -2852,6 +3070,15 @@ function setupSocketHandlers() {
         return;
       }
       
+      // Rate limiting for bingo claims
+      if (!checkRateLimit(userId, 'claimBingo')) {
+        if (callback) callback({ 
+          success: false, 
+          message: 'Too many claims. Please wait.' 
+        });
+        return;
+      }
+      
       const user = await models.User.findOne({ userId: userId }).lean();
       if (!user) {
         if (callback) callback({ success: false, message: 'User not found' });
@@ -2896,9 +3123,6 @@ function setupSocketHandlers() {
             { userId: userId },
             { lastSeen: new Date() }
           );
-          
-          // Update admin panel with activity
-          updateAdminPanel();
         } catch (error) {
           console.error('Error updating player activity:', error);
         }
@@ -2923,7 +3147,7 @@ function setupSocketHandlers() {
         }
         
         const roomStake = user.currentRoom;
-        const room = await models.Room.findOne({ stake: roomStake });
+        const room = await getRoomWithCache(roomStake);
         
         if (!room) {
           // Clean up user if room doesn't exist
@@ -2956,10 +3180,14 @@ function setupSocketHandlers() {
         room.lastBoxUpdate = new Date();
         
         // Get online players after removal
-        const onlinePlayers = await getOnlinePlayersInRoom(roomStake);
+        const onlinePlayers = await getOnlinePlayersInRoomWithCache(roomStake);
         
         // 🚨 IMPORTANT: DO NOT stop countdown when player leaves
         await room.save();
+        
+        // Update cache
+        updateRoomCache(roomStake, room);
+        onlinePlayersCache.delete(`online_${roomStake}`);
         
         // Reset user
         user.currentRoom = null;
@@ -3057,9 +3285,9 @@ function setupSocketHandlers() {
         const { room } = data;
         const userId = socketToUser.get(socket.id) || socket.userId;
         
-        const roomData = await models.Room.findOne({ stake: parseInt(room) });
+        const roomData = await getRoomWithCache(parseInt(room));
         if (roomData) {
-          const onlinePlayers = await getOnlinePlayersInRoom(room);
+          const onlinePlayers = await getOnlinePlayersInRoomWithCache(room);
           
           socket.emit('lobbyUpdate', {
             room: room,
@@ -3117,7 +3345,7 @@ function setupSocketHandlers() {
           const user = await models.User.findOne({ userId: userId });
           if (user && user.currentRoom) {
             const roomStake = user.currentRoom;
-            const room = await models.Room.findOne({ stake: roomStake });
+            const room = await getRoomWithCache(roomStake);
             
             if (room) {
               // Only remove from room if game is NOT playing
@@ -3135,8 +3363,12 @@ function setupSocketHandlers() {
                 
                 room.lastBoxUpdate = new Date();
                 
-                // Countdown continues even if players disconnect
+                // Save room
                 await room.save();
+                
+                // Update cache
+                updateRoomCache(roomStake, room);
+                onlinePlayersCache.delete(`online_${roomStake}`);
                 
                 // Broadcast updated boxes
                 broadcastTakenBoxes(roomStake, room.takenBoxes);
@@ -3183,46 +3415,36 @@ function setupSocketHandlers() {
   });
 }
 
-// ========== PERIODIC TASKS ==========
+// ========== OPTIMIZED PERIODIC TASKS ==========
 function startPeriodicTasks() {
-  // Run cleanup every 10 seconds
-  setInterval(cleanupProcessingClaims, 10000);
+  console.log('🔄 Starting optimized periodic tasks');
   
-  // Cleanup room winners every 30 seconds
-  setInterval(cleanupRoomWinners, 30000);
+  // Room status updates (throttled)
+  setInterval(broadcastRoomStatus, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
   
-  // Room status updates
-  setInterval(() => {
-    broadcastRoomStatus();
-  }, CONFIG.ROOM_STATUS_UPDATE_INTERVAL);
+  // Admin panel updates (throttled)
+  setInterval(updateAdminPanel, 3000);
   
-  // Update admin panel every 2 seconds for real-time tracking
-  setInterval(() => {
-    updateAdminPanel();
-  }, 2000);
+  // Memory cleanup (every 30 seconds)
+  setInterval(cleanupMemory, 30000);
   
-  // Run 7-minute game timeout check every 30 seconds
+  // Game timeout check (every 30 seconds)
   setInterval(cleanupLongRunningGames, 30000);
   
-  // Clean up disconnected sockets periodically
-  setInterval(() => {
-    socketToUser.forEach((userId, socketId) => {
-      const socket = io.sockets.sockets.get(socketId);
-      if (!socket || !socket.connected) {
-        socketToUser.delete(socketId);
-        console.log(`🧹 Cleaned up disconnected socket: ${socketId} (user: ${userId})`);
-      }
-    });
-  }, 10000);
-  
-  // Run cleanup every 30 seconds
-  setInterval(cleanupStaleConnections, 30000);
-  
-  // Run every 10 seconds
+  // Countdown cleanup (every 10 seconds)
   setInterval(cleanupStuckCountdowns, 10000);
   
-  // Run every 5 minutes
+  // Stale connections cleanup (every 60 seconds)
+  setInterval(cleanupStaleConnections, 60000);
+  
+  // Stale rooms cleanup (every 5 minutes)
   setInterval(cleanupStaleRooms, 300000);
+  
+  // Rate limit cleanup (every minute)
+  setInterval(() => {
+    playerRateLimit.clear();
+    console.log('🧹 Cleared rate limit cache');
+  }, 60000);
   
   // Health check
   setInterval(async () => {
@@ -3243,23 +3465,12 @@ function startPeriodicTasks() {
         }
       );
       
-      // Clean up ONLY abandoned rooms with no players
-      const abandonedRooms = await models.Room.find({
-        status: 'playing',
-        players: { $size: 0 },
-        startTime: { $lt: fiveMinutesAgo }
-      });
-      
-      for (const room of abandonedRooms) {
-        console.log(`⚠️ Cleaning up abandoned room: ${room.stake} ETB`);
-        cleanupRoomTimer(room.stake);
-        await models.Room.deleteOne({ _id: room._id });
-      }
-      
     } catch (error) {
       console.error('Error in health check:', error);
     }
   }, 60000);
+  
+  console.log('✅ Optimized periodic tasks started');
 }
 
 // ========== EXPORT FUNCTIONS AND STATE ==========
@@ -3273,11 +3484,14 @@ module.exports = {
   // Helper functions
   getConnectedUsers,
   getOnlinePlayersInRoom,
+  getOnlinePlayersInRoomWithCache,
   broadcastRoomStatus,
   updateAdminPanel,
   broadcastTakenBoxes,
   getUser,
   getRoom,
+  getRoomWithCache,
+  updateRoomCache,
   
   // NEW FUNCTIONS FOR ADMIN PANEL
   resetHouseEarnings,
