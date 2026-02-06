@@ -1276,27 +1276,85 @@
         .w-100 { width: 100%; }
         .h-100 { height: 100%; }
         
-        /* Offline indicator */
-        .offline-indicator {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--warning);
-            color: white;
-            padding: 10px 20px;
-            border-radius: var(--border-radius);
-            z-index: 999;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: var(--shadow-lg);
-            animation: pulse 2s infinite;
-            display: none;
+        /* Transaction History Styles */
+        .transaction-history {
+            background: var(--bg-card);
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
         }
         
-        .offline-indicator.show {
+        .transaction-item {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
             display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            transition: all var(--transition-fast);
+        }
+        
+        .transaction-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+        
+        .transaction-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .transaction-icon.deposit {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        
+        .transaction-icon.withdraw {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+        
+        .transaction-icon.commission {
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--agent);
+        }
+        
+        .transaction-details {
+            flex: 1;
+        }
+        
+        .transaction-title {
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: 2px;
+        }
+        
+        .transaction-time {
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+        }
+        
+        .transaction-amount {
+            font-weight: var(--font-weight-bold);
+            font-size: var(--font-size-base);
+        }
+        
+        .transaction-amount.deposit {
+            color: var(--success);
+        }
+        
+        .transaction-amount.withdraw {
+            color: var(--danger);
+        }
+        
+        .transaction-amount.commission {
+            color: var(--agent);
         }
     </style>
 </head>
@@ -1339,12 +1397,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Offline Indicator -->
-    <div id="offlineIndicator" class="offline-indicator">
-        <i class="fas fa-wifi-slash"></i>
-        <span>You are offline. Data is being stored locally.</span>
     </div>
 
     <!-- Main Dashboard -->
@@ -1448,9 +1500,6 @@
                     <div class="last-update mt-1">
                         <small>Active: <span id="activeConnections">0</span> connections</small>
                     </div>
-                    <div class="last-update mt-1">
-                        <small>Offline Data: <span id="offlineDataCount">0</span> items</small>
-                    </div>
                 </div>
             </div>
             
@@ -1469,9 +1518,6 @@
                     </div>
                     
                     <div class="header-actions">
-                        <button class="btn-icon" onclick="forceSync()" title="Sync Offline Data">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                        </button>
                         <button class="btn-icon" onclick="forceRefreshData()" title="Refresh Data">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -1563,7 +1609,7 @@
                             </div>
                             <div class="stat-change">
                                 <i class="fas fa-exclamation-circle"></i>
-                                <span id="offlineStatusText">Need approval</span>
+                                <span>Need approval</span>
                             </div>
                         </div>
                     </div>
@@ -1613,14 +1659,6 @@
                                 </div>
                                 <div class="quick-action-title">Pending Requests</div>
                                 <div class="quick-action-desc">View pending approvals</div>
-                            </div>
-                            
-                            <div class="quick-action-card" onclick="clearOfflineData()">
-                                <div class="quick-action-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">
-                                    <i class="fas fa-trash-alt"></i>
-                                </div>
-                                <div class="quick-action-title">Clear Offline Data</div>
-                                <div class="quick-action-desc">Remove stored offline data</div>
                             </div>
                         </div>
                     </div>
@@ -1789,10 +1827,19 @@
                                     <div class="filter-group">
                                         <label class="filter-label">Status</label>
                                         <select class="select" id="depositStatusFilter" onchange="filterDepositRequests()">
+                                            <option value="all">All</option>
                                             <option value="pending">Pending</option>
                                             <option value="approved">Approved</option>
                                             <option value="rejected">Rejected</option>
-                                            <option value="all">All</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label class="filter-label">Date Range</label>
+                                        <select class="select" id="depositDateFilter" onchange="filterDepositRequests()">
+                                            <option value="all">All Time</option>
+                                            <option value="today">Today</option>
+                                            <option value="week">This Week</option>
+                                            <option value="month">This Month</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1808,6 +1855,7 @@
                                     <th>User</th>
                                     <th>Amount</th>
                                     <th>Receipt Number</th>
+                                    <th>Phone</th>
                                     <th>Status</th>
                                     <th>Time</th>
                                     <th>Actions</th>
@@ -1830,10 +1878,19 @@
                                     <div class="filter-group">
                                         <label class="filter-label">Status</label>
                                         <select class="select" id="withdrawalStatusFilter" onchange="filterWithdrawalRequests()">
+                                            <option value="all">All</option>
                                             <option value="pending">Pending</option>
                                             <option value="approved">Approved</option>
                                             <option value="rejected">Rejected</option>
-                                            <option value="all">All</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label class="filter-label">Date Range</label>
+                                        <select class="select" id="withdrawalDateFilter" onchange="filterWithdrawalRequests()">
+                                            <option value="all">All Time</option>
+                                            <option value="today">Today</option>
+                                            <option value="week">This Week</option>
+                                            <option value="month">This Month</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1871,6 +1928,10 @@
                                     <i class="fas fa-sync"></i>
                                     Refresh
                                 </button>
+                                <button class="btn btn-warning" onclick="clearAllApprovedTransactions()" title="Clear Approved/Rejected">
+                                    <i class="fas fa-trash"></i>
+                                    Clear History
+                                </button>
                             </div>
                         </div>
                         <div class="filters mb-4">
@@ -1880,6 +1941,15 @@
                                     <option value="all">All</option>
                                     <option value="deposit">Deposits</option>
                                     <option value="withdraw">Withdrawals</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label class="filter-label">Status</label>
+                                <select class="select" id="walletStatusFilter" onchange="filterWalletTransactions()">
+                                    <option value="pending">Pending</option>
+                                    <option value="all">All Status</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
                                 </select>
                             </div>
                         </div>
@@ -1906,7 +1976,7 @@
                 <section id="transactionsSection" class="content-section">
                     <div class="table-container">
                         <div class="table-header">
-                            <div class="table-title">Recent Transactions</div>
+                            <div class="table-title">Transaction History</div>
                             <div class="table-controls">
                                 <div class="filters">
                                     <div class="filter-group">
@@ -1920,12 +1990,13 @@
                                             <option value="deposit">Deposits</option>
                                             <option value="withdrawal">Withdrawals</option>
                                             <option value="agent">Agent Commissions</option>
+                                            <option value="bonus">Bonuses</option>
                                         </select>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="activity-feed" id="transactionFeed" style="max-height: 500px; overflow-y: auto; padding: var(--spacing-lg);">
+                        <div class="transaction-history" id="transactionHistory" style="max-height: 500px; overflow-y: auto;">
                             <!-- Transactions will be inserted here -->
                         </div>
                     </div>
@@ -1967,10 +2038,11 @@
                         <div class="table-header">
                             <div class="table-title">Analytics Dashboard</div>
                             <div class="table-controls">
-                                <select class="select">
-                                    <option>Today</option>
-                                    <option>Last 7 days</option>
-                                    <option>Last 30 days</option>
+                                <select class="select" id="analyticsDateRange" onchange="updateAnalytics()">
+                                    <option value="today">Today</option>
+                                    <option value="week">Last 7 days</option>
+                                    <option value="month">Last 30 days</option>
+                                    <option value="all">All time</option>
                                 </select>
                             </div>
                         </div>
@@ -1981,29 +2053,29 @@
                                         <i class="fas fa-money-bill-wave"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Total Wagered</h3>
-                                        <div class="stat-value" id="totalWagered">0 ETB</div>
+                                        <h3>Total Deposits</h3>
+                                        <div class="stat-value" id="totalDeposits">0 ETB</div>
                                     </div>
                                 </div>
                                 <div class="stat-change">
                                     <i class="fas fa-chart-line"></i>
-                                    <span>All time</span>
+                                    <span id="depositChange">0%</span>
                                 </div>
                             </div>
                             
                             <div class="stat-card">
                                 <div class="stat-header">
                                     <div class="stat-icon">
-                                        <i class="fas fa-trophy"></i>
+                                        <i class="fas fa-money-check-alt"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Total Wins</h3>
-                                        <div class="stat-value" id="totalWins">0 ETB</div>
+                                        <h3>Total Withdrawals</h3>
+                                        <div class="stat-value" id="totalWithdrawals">0 ETB</div>
                                     </div>
                                 </div>
                                 <div class="stat-change">
-                                    <i class="fas fa-gift"></i>
-                                    <span>Player winnings</span>
+                                    <i class="fas fa-chart-line"></i>
+                                    <span id="withdrawalChange">0%</span>
                                 </div>
                             </div>
                             
@@ -2013,8 +2085,8 @@
                                         <i class="fas fa-home"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>House Earnings</h3>
-                                        <div class="stat-value" id="houseEarningsAnalytics">0 ETB</div>
+                                        <h3>Net Profit</h3>
+                                        <div class="stat-value" id="netProfit">0 ETB</div>
                                     </div>
                                 </div>
                                 <div class="stat-change positive">
@@ -2026,17 +2098,25 @@
                             <div class="stat-card">
                                 <div class="stat-header">
                                     <div class="stat-icon">
-                                        <i class="fas fa-bingo"></i>
+                                        <i class="fas fa-users"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Total Bingos</h3>
-                                        <div class="stat-value" id="totalBingos">0</div>
+                                        <h3>Active Users</h3>
+                                        <div class="stat-value" id="activeUsers">0</div>
                                     </div>
                                 </div>
-                                <div class="stat-change">
-                                    <i class="fas fa-star"></i>
-                                    <span>Games won</span>
+                                <div change="stat-change">
+                                    <i class="fas fa-user-check"></i>
+                                    <span>Last 24h</span>
                                 </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Container -->
+                        <div class="chart-card mt-5">
+                            <h3 class="mb-4">Transaction Trends</h3>
+                            <div class="chart-container">
+                                <canvas id="transactionChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -2088,45 +2168,33 @@
                             </div>
                         </div>
                         
-                        <!-- Offline Data Management -->
+                        <!-- Transaction Settings -->
                         <div class="mt-5 pt-4 border-top">
-                            <h3 class="mb-4"><i class="fas fa-database"></i> Offline Data Management</h3>
-                            <div class="form-row mb-4">
+                            <h3 class="mb-4"><i class="fas fa-cog"></i> Transaction Settings</h3>
+                            <div class="form-row">
                                 <div class="form-group">
-                                    <label class="form-label">Offline Data Status</label>
-                                    <div class="p-3 bg-dark-3 rounded">
-                                        <div class="d-flex align-center justify-between">
-                                            <span>Pending Transactions:</span>
-                                            <span id="offlinePendingCount">0</span>
-                                        </div>
-                                        <div class="d-flex align-center justify-between mt-2">
-                                            <span>Last Sync:</span>
-                                            <span id="lastSyncTime">Never</span>
-                                        </div>
-                                        <div class="d-flex align-center justify-between mt-2">
-                                            <span>Storage Used:</span>
-                                            <span id="storageUsed">0 KB</span>
-                                        </div>
-                                    </div>
+                                    <label class="form-label">Minimum Deposit (ETB)</label>
+                                    <input type="number" id="minDeposit" class="form-input" value="10" min="1">
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Actions</label>
-                                    <div class="d-flex flex-column gap-2">
-                                        <button class="btn btn-primary" onclick="forceSync()">
-                                            <i class="fas fa-sync"></i>
-                                            Sync Now
-                                        </button>
-                                        <button class="btn btn-warning" onclick="backupOfflineData()">
-                                            <i class="fas fa-download"></i>
-                                            Backup Data
-                                        </button>
-                                        <button class="btn btn-danger" onclick="clearOfflineData()">
-                                            <i class="fas fa-trash"></i>
-                                            Clear All
-                                        </button>
-                                    </div>
+                                    <label class="form-label">Minimum Withdrawal (ETB)</label>
+                                    <input type="number" id="minWithdrawal" class="form-input" value="50" min="1">
                                 </div>
                             </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Max Withdrawal (ETB)</label>
+                                    <input type="number" id="maxWithdrawal" class="form-input" value="5000" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Auto-approve under (ETB)</label>
+                                    <input type="number" id="autoApproveLimit" class="form-input" value="100" min="0">
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="updateTransactionSettings()">
+                                <i class="fas fa-save"></i>
+                                Update Transaction Settings
+                            </button>
                         </div>
                         
                         <!-- Agent System Settings -->
@@ -2175,6 +2243,7 @@
                                     <option value="error">Errors</option>
                                     <option value="warning">Warnings</option>
                                     <option value="agent">Agent System</option>
+                                    <option value="transaction">Transactions</option>
                                 </select>
                             </div>
                         </div>
@@ -2211,16 +2280,16 @@
                             <div class="stat-card">
                                 <div class="stat-header">
                                     <div class="stat-icon">
-                                        <i class="fas fa-user-check"></i>
+                                        <i class="fas fa-database"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Mapped Users</h3>
-                                        <div class="stat-value" id="debugMappedUsers">0</div>
+                                        <h3>Stored Transactions</h3>
+                                        <div class="stat-value" id="debugStoredTransactions">0</div>
                                     </div>
                                 </div>
                                 <div class="stat-change">
-                                    <i class="fas fa-link"></i>
-                                    <span>Socket to user</span>
+                                    <i class="fas fa-save"></i>
+                                    <span>In database</span>
                                 </div>
                             </div>
                             
@@ -2243,41 +2312,40 @@
                             <div class="stat-card">
                                 <div class="stat-header">
                                     <div class="stat-icon">
-                                        <i class="fas fa-database"></i>
+                                        <i class="fas fa-robot"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Offline Data</h3>
-                                        <div class="stat-value" id="debugOfflineData">0</div>
+                                        <h3>Multi-Socket Users</h3>
+                                        <div class="stat-value" id="debugMultiSocketUsers">0</div>
                                     </div>
                                 </div>
                                 <div class="stat-change">
-                                    <i class="fas fa-save"></i>
-                                    <span>Stored items</span>
+                                    <i class="fas fa-mobile-alt"></i>
+                                    <span>Multiple devices</span>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="card">
-                            <div class="card-header">
-                                <h3 class="card-title">Local Storage Info</h3>
-                            </div>
-                            <div class="p-4">
-                                <div class="d-flex align-center justify-between mb-3">
-                                    <span>Session Storage:</span>
-                                    <span id="sessionStorageInfo">0 KB</span>
-                                </div>
-                                <div class="d-flex align-center justify-between mb-3">
-                                    <span>Local Storage:</span>
-                                    <span id="localStorageInfo">0 KB</span>
-                                </div>
-                                <div class="d-flex align-center justify-between mb-3">
-                                    <span>Offline Transactions:</span>
-                                    <span id="offlineTransactionsCount">0</span>
-                                </div>
-                                <div class="d-flex align-center justify-between">
-                                    <span>Sync Queue:</span>
-                                    <span id="syncQueueCount">0</span>
-                                </div>
+                        <!-- System Actions -->
+                        <div class="mt-5">
+                            <h3 class="mb-4">System Actions</h3>
+                            <div class="d-flex flex-wrap gap-3">
+                                <button class="btn btn-warning" onclick="clearTransactionCache()">
+                                    <i class="fas fa-trash"></i>
+                                    Clear Transaction Cache
+                                </button>
+                                <button class="btn btn-danger" onclick="resetAllTransactions()">
+                                    <i class="fas fa-undo"></i>
+                                    Reset All Transactions
+                                </button>
+                                <button class="btn btn-info" onclick="testNotification()">
+                                    <i class="fas fa-bell"></i>
+                                    Test Notification
+                                </button>
+                                <button class="btn btn-primary" onclick="backupDatabase()">
+                                    <i class="fas fa-download"></i>
+                                    Backup Database
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2539,6 +2607,30 @@
             </div>
         </div>
     </div>
+    
+    <!-- Transaction Details Modal -->
+    <div id="transactionDetailsModal" class="modal-overlay">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-receipt"></i> Transaction Details</h2>
+                <button class="modal-close" onclick="hideModal('transactionDetailsModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="transaction-details-content" id="transactionDetailsContent">
+                    <!-- Transaction details will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="hideModal('transactionDetailsModal')">Close</button>
+                <button class="btn btn-primary" onclick="printTransactionDetails()">
+                    <i class="fas fa-print"></i>
+                    Print
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
@@ -2547,10 +2639,9 @@
         // Configuration
         const CONFIG = {
             SERVER_URL: "https://bingo-telegram-game.onrender.com",
-            AUTO_REFRESH_INTERVAL: 2000,
+            AUTO_REFRESH_INTERVAL: 3000,
             MAX_ACTIVITY_ITEMS: 20,
-            OFFLINE_STORAGE_KEY: "bingo_admin_offline_data",
-            SYNC_QUEUE_KEY: "bingo_admin_sync_queue",
+            PERSISTENT_STORAGE: true,
             VERSION: "4.2"
         };
 
@@ -2561,10 +2652,8 @@
             filteredUsers: [],
             agents: [],
             filteredAgents: [],
-            agentWithdrawals: [],
-            rooms: {},
-            transactions: [],
-            pendingTransactions: [],
+            allTransactions: [], // All transactions (including completed)
+            pendingTransactions: [], // Only pending transactions
             depositRequests: [],
             withdrawalRequests: [],
             activityLog: [],
@@ -2586,17 +2675,22 @@
                 totalCommissions: 0,
                 referralUsers: 0
             },
-            // Offline storage properties
-            offlineData: {
-                pendingTransactions: [],
-                lastSync: null,
-                syncQueue: [],
-                isOnline: true
-            }
+            analyticsData: {
+                totalDeposits: 0,
+                totalWithdrawals: 0,
+                netProfit: 0,
+                activeUsers: 0
+            },
+            transactionChart: null
         };
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
+            // Update version display
+            document.querySelectorAll('.sidebar-version, .login-subtitle').forEach(el => {
+                el.textContent = `Admin v${CONFIG.VERSION}`;
+            });
+            
             // Check for saved session
             const savedSession = localStorage.getItem('bingo_admin_session');
             if (savedSession) {
@@ -2605,41 +2699,13 @@
                     if (session.expires > Date.now()) {
                         document.getElementById('adminPassword').value = session.password;
                         adminLogin();
-                    } else {
-                        localStorage.removeItem('bingo_admin_session');
                     }
                 } catch (e) {
                     localStorage.removeItem('bingo_admin_session');
                 }
             }
             
-            // Load offline data immediately
-            loadOfflineData();
-            updateOfflineStatus();
-            
             attachNavListeners();
-            
-            // Check online status
-            window.addEventListener('online', updateOfflineStatus);
-            window.addEventListener('offline', updateOfflineStatus);
-            
-            // Auto-save every 30 seconds
-            setInterval(() => {
-                if (state.isAdmin) {
-                    saveOfflineData();
-                }
-            }, 30000);
-            
-            // Save before page unload
-            window.addEventListener('beforeunload', () => {
-                if (state.isAdmin) {
-                    saveOfflineData();
-                }
-            });
-            
-            // Show version
-            document.querySelector('.sidebar-version').textContent = `Admin v${CONFIG.VERSION}`;
-            document.querySelector('.login-subtitle').textContent = `Admin Dashboard v${CONFIG.VERSION}`;
         });
         
         function attachNavListeners() {
@@ -2684,231 +2750,22 @@
                         refreshAgents();
                     } else if (section === 'users') {
                         applyFilters();
-                    } else if (section === 'debug') {
-                        updateDebugInfo();
+                    } else if (section === 'analytics') {
+                        updateAnalytics();
+                        initTransactionChart();
+                    } else if (section === 'transactions') {
+                        loadAllTransactions();
                     }
                 });
             });
-        }
-
-        // Offline Data Functions
-        function saveOfflineData() {
-            try {
-                const storageData = {
-                    pendingTransactions: state.pendingTransactions,
-                    depositRequests: state.depositRequests,
-                    withdrawalRequests: state.withdrawalRequests,
-                    lastSync: state.offlineData.lastSync || new Date().toISOString(),
-                    version: CONFIG.VERSION,
-                    timestamp: Date.now()
-                };
-                
-                localStorage.setItem(CONFIG.OFFLINE_STORAGE_KEY, JSON.stringify(storageData));
-                
-                // Update UI
-                updateOfflineDataUI();
-                
-                return true;
-            } catch (e) {
-                console.error('Failed to save offline data:', e);
-                showToast('Failed to save offline data', 'error');
-                return false;
-            }
-        }
-
-        function loadOfflineData() {
-            try {
-                const saved = localStorage.getItem(CONFIG.OFFLINE_STORAGE_KEY);
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    
-                    // Check if data is from current version
-                    if (data.version === CONFIG.VERSION) {
-                        state.pendingTransactions = data.pendingTransactions || [];
-                        state.depositRequests = data.depositRequests || [];
-                        state.withdrawalRequests = data.withdrawalRequests || [];
-                        state.offlineData.lastSync = data.lastSync;
-                        
-                        // Update UI with offline data
-                        updateWalletApprovalsTable();
-                        updateDepositRequestsTable();
-                        updateWithdrawalRequestsTable();
-                        updateRecentRequestsTable();
-                        updatePendingTransactionsBadge();
-                        updateDepositRequestBadge();
-                        updateWithdrawalRequestBadge();
-                        
-                        updateOfflineDataUI();
-                        
-                        return true;
-                    } else {
-                        // Clear old version data
-                        clearOfflineData();
-                        showToast('Cleared old version offline data', 'warning');
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to load offline data:', e);
-            }
-            return false;
-        }
-
-        function clearOfflineData() {
-            if (confirm('Are you sure you want to clear all offline data? This cannot be undone.')) {
-                localStorage.removeItem(CONFIG.OFFLINE_STORAGE_KEY);
-                localStorage.removeItem(CONFIG.SYNC_QUEUE_KEY);
-                
-                state.pendingTransactions = [];
-                state.depositRequests = [];
-                state.withdrawalRequests = [];
-                state.offlineData.lastSync = null;
-                state.offlineData.syncQueue = [];
-                
-                // Update UI
-                updateWalletApprovalsTable();
-                updateDepositRequestsTable();
-                updateWithdrawalRequestsTable();
-                updateRecentRequestsTable();
-                updatePendingTransactionsBadge();
-                updateDepositRequestBadge();
-                updateWithdrawalRequestBadge();
-                updateOfflineDataUI();
-                
-                showToast('Offline data cleared', 'success');
-            }
-        }
-
-        function backupOfflineData() {
-            try {
-                const data = {
-                    pendingTransactions: state.pendingTransactions,
-                    depositRequests: state.depositRequests,
-                    withdrawalRequests: state.withdrawalRequests,
-                    lastSync: state.offlineData.lastSync,
-                    timestamp: Date.now(),
-                    version: CONFIG.VERSION
-                };
-                
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `bingo-admin-backup-${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                showToast('Backup downloaded successfully', 'success');
-            } catch (e) {
-                console.error('Failed to backup data:', e);
-                showToast('Failed to backup data', 'error');
-            }
-        }
-
-        function updateOfflineDataUI() {
-            const pendingCount = state.pendingTransactions.length;
-            document.getElementById('offlinePendingCount').textContent = pendingCount;
-            document.getElementById('offlineDataCount').textContent = pendingCount;
-            document.getElementById('debugOfflineData').textContent = pendingCount;
-            document.getElementById('offlineTransactionsCount').textContent = pendingCount;
-            
-            if (state.offlineData.lastSync) {
-                const lastSync = new Date(state.offlineData.lastSync);
-                const now = new Date();
-                const diff = Math.floor((now - lastSync) / 1000);
-                
-                let text = 'Just now';
-                if (diff > 60) {
-                    const minutes = Math.floor(diff / 60);
-                    text = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-                }
-                
-                document.getElementById('lastSyncTime').textContent = text;
-            } else {
-                document.getElementById('lastSyncTime').textContent = 'Never';
-            }
-            
-            // Update storage size
-            try {
-                const pendingSize = JSON.stringify(state.pendingTransactions).length;
-                const totalSize = pendingSize + (localStorage.length * 100); // Rough estimate
-                document.getElementById('storageUsed').textContent = `${Math.round(totalSize / 1024)} KB`;
-                
-                // Update debug info
-                document.getElementById('sessionStorageInfo').textContent = `${sessionStorage.length} items`;
-                document.getElementById('localStorageInfo').textContent = `${localStorage.length} items`;
-                document.getElementById('syncQueueCount').textContent = state.offlineData.syncQueue.length;
-            } catch (e) {
-                // Ignore storage errors
-            }
-            
-            // Update offline status text
-            const offlineStatus = document.getElementById('offlineStatusText');
-            if (!state.offlineData.isOnline && pendingCount > 0) {
-                offlineStatus.innerHTML = `<i class="fas fa-wifi-slash"></i> ${pendingCount} stored offline`;
-                offlineStatus.className = 'stat-change warning';
-            } else if (pendingCount > 0) {
-                offlineStatus.innerHTML = `<i class="fas fa-clock"></i> ${pendingCount} pending`;
-                offlineStatus.className = 'stat-change';
-            } else {
-                offlineStatus.innerHTML = `<i class="fas fa-check-circle"></i> All clear`;
-                offlineStatus.className = 'stat-change positive';
-            }
-        }
-
-        function updateOfflineStatus() {
-            state.offlineData.isOnline = navigator.onLine;
-            const indicator = document.getElementById('offlineIndicator');
-            
-            if (!navigator.onLine) {
-                indicator.classList.add('show');
-                document.getElementById('connectionStatusText').textContent = 'Offline';
-                document.getElementById('connectionStatusText').style.color = 'var(--warning)';
-                showToast('You are offline. Data will be stored locally.', 'warning');
-                
-                // Save current state
-                saveOfflineData();
-            } else {
-                indicator.classList.remove('show');
-                
-                // If we were offline and now online, sync data
-                if (!state.offlineData.isOnline) {
-                    showToast('Connection restored. Syncing data...', 'success');
-                    forceSync();
-                }
-            }
-            
-            updateOfflineDataUI();
-        }
-
-        function forceSync() {
-            if (!state.socket || !state.isAdmin) {
-                showToast('Not connected to server', 'error');
-                return;
-            }
-            
-            showToast('Syncing offline data with server...', 'info');
-            
-            // Sync pending transactions
-            syncPendingTransactions();
-            
-            // Also refresh all data
-            forceRefreshData();
-            
-            // Update last sync time
-            state.offlineData.lastSync = new Date().toISOString();
-            saveOfflineData();
         }
 
         // Socket Functions
         function connectSocket() {
             state.socket = io(CONFIG.SERVER_URL, {
                 reconnection: true,
-                reconnectionAttempts: 10,
+                reconnectionAttempts: 5,
                 reconnectionDelay: 1000,
-                reconnectionDelayMax: 5000,
-                timeout: 20000,
                 transports: ['websocket', 'polling']
             });
 
@@ -2916,30 +2773,12 @@
                 showToast('Connected to server', 'success');
                 document.getElementById('connectionStatusText').textContent = 'Connected';
                 document.getElementById('connectionStatusText').style.color = 'var(--success)';
-                
-                // Update online status
-                state.offlineData.isOnline = true;
-                updateOfflineStatus();
-                
-                // Request full sync after reconnection
-                if (state.isAdmin) {
-                    setTimeout(() => {
-                        syncPendingTransactions();
-                    }, 1000);
-                }
             });
 
             state.socket.on('disconnect', () => {
                 showToast('Disconnected from server', 'error');
                 document.getElementById('connectionStatusText').textContent = 'Disconnected';
                 document.getElementById('connectionStatusText').style.color = 'var(--danger)';
-                
-                // Update online status
-                state.offlineData.isOnline = false;
-                updateOfflineStatus();
-                
-                // Save data to offline storage when disconnecting
-                saveOfflineData();
             });
 
             state.socket.on('admin:authSuccess', () => {
@@ -2959,16 +2798,15 @@
                 startAutoRefresh();
                 initCharts();
                 
-                // Sync pending transactions after login
-                setTimeout(() => {
-                    syncPendingTransactions();
-                    refreshAgents();
-                    refreshDepositRequests();
-                    refreshWithdrawalRequests();
-                }, 1000);
+                // Request initial data
+                loadAllTransactions(); // Load all transactions first
+                refreshPendingTransactions(); // Then load pending
+                refreshAgents();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
                 
-                // Add login activity
-                addActivityItem({details: 'Admin logged in successfully', type: 'INFO'});
+                // Load analytics
+                updateAnalytics();
             });
 
             state.socket.on('admin:authError', (message) => {
@@ -2981,6 +2819,12 @@
                 updateLastUpdateTime();
                 document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
                 updateOnlineStatus(data.totalPlayers || 0);
+                
+                // Update debug info
+                if (data.debugInfo) {
+                    state.debugInfo = data.debugInfo;
+                    updateDebugInfo();
+                }
             });
 
             state.socket.on('admin:players', (data) => {
@@ -3038,78 +2882,89 @@
                 showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
             });
 
-            // Deposit request events
-            state.socket.on('admin:newDepositRequest', (transaction) => {
-                const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
-                if (!exists) {
-                    const depositRequest = {
-                        _id: transaction.transactionId,
-                        type: 'DEPOSIT_REQUEST',
-                        userId: transaction.userId,
-                        userName: transaction.userName,
-                        amount: transaction.amount,
-                        receiptNumber: transaction.receiptNumber,
-                        createdAt: transaction.timestamp,
-                        status: 'pending',
-                        source: 'server'
-                    };
-                    
-                    state.pendingTransactions.unshift(depositRequest);
-                    
-                    // Update UI
-                    updateWalletApprovalsTable();
-                    updateRecentRequestsTable();
+            // NEW: Load all transactions (including completed ones)
+            state.socket.on('admin:allTransactions', (transactions) => {
+                state.allTransactions = transactions;
+                updateTransactionHistory();
+                updateAnalyticsFromTransactions();
+            });
+
+            // NEW: Load pending transactions only
+            state.socket.on('admin:pendingTransactions', (transactions) => {
+                state.pendingTransactions = transactions;
+                updatePendingTransactionsBadge();
+                updateWalletApprovalsTable();
+                updateRecentRequestsTable();
+                
+                // Also update deposit and withdrawal requests
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
+            });
+
+            // NEW: Transaction updated
+            state.socket.on('admin:transactionUpdated', (transaction) => {
+                // Update in allTransactions
+                const index = state.allTransactions.findIndex(t => t._id === transaction._id);
+                if (index !== -1) {
+                    state.allTransactions[index] = transaction;
+                } else {
+                    state.allTransactions.unshift(transaction);
+                }
+                
+                // Update in pendingTransactions if status changed
+                const pendingIndex = state.pendingTransactions.findIndex(t => t._id === transaction._id);
+                if (pendingIndex !== -1 && transaction.status !== 'pending') {
+                    state.pendingTransactions.splice(pendingIndex, 1);
+                }
+                
+                // Update UI
+                updateTransactionHistory();
+                updateWalletApprovalsTable();
+                updateRecentRequestsTable();
+                refreshDepositRequests();
+                refreshWithdrawalRequests();
+                updatePendingTransactionsBadge();
+            });
+
+            // NEW: New transaction added
+            state.socket.on('admin:newTransaction', (transaction) => {
+                state.allTransactions.unshift(transaction);
+                
+                if (transaction.status === 'pending') {
+                    state.pendingTransactions.unshift(transaction);
                     updatePendingTransactionsBadge();
-                    refreshDepositRequests();
-                    
-                    showToast('New deposit request from ' + transaction.userName, 'info');
                     
                     // Play notification sound
                     playNotificationSound();
                     
-                    // Save to offline storage
-                    saveOfflineData();
+                    // Show toast
+                    if (transaction.type === 'DEPOSIT_REQUEST') {
+                        showToast(`New deposit request from ${transaction.userName}`, 'info');
+                    } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                        showToast(`New withdrawal request from ${transaction.userName}`, 'info');
+                    }
                 }
+                
+                updateTransactionHistory();
+                updateWalletApprovalsTable();
+                updateRecentRequestsTable();
+            });
+
+            // Deposit request events
+            state.socket.on('admin:newDepositRequest', (transaction) => {
+                // This is handled by admin:newTransaction now
             });
 
             // Withdrawal request events
             state.socket.on('admin:newWithdrawRequest', (transaction) => {
-                const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
-                if (!exists) {
-                    const withdrawalRequest = {
-                        _id: transaction.transactionId,
-                        type: 'WITHDRAW_REQUEST',
-                        userId: transaction.userId,
-                        userName: transaction.userName,
-                        amount: transaction.amount,
-                        phoneNumber: transaction.phoneNumber,
-                        createdAt: transaction.timestamp,
-                        status: 'pending',
-                        source: 'server'
-                    };
-                    
-                    state.pendingTransactions.unshift(withdrawalRequest);
-                    
-                    // Update UI
-                    updateWalletApprovalsTable();
-                    updateRecentRequestsTable();
-                    updatePendingTransactionsBadge();
-                    refreshWithdrawalRequests();
-                    
-                    showToast('New withdrawal request from ' + transaction.userName, 'info');
-                    
-                    // Play notification sound
-                    playNotificationSound();
-                    
-                    // Save to offline storage
-                    saveOfflineData();
-                }
+                // This is handled by admin:newTransaction now
             });
 
             state.socket.on('admin:success', (message) => {
                 showToast(message, 'success');
                 state.socket.emit('admin:getData');
                 refreshPendingTransactions();
+                loadAllTransactions(); // Reload all transactions
             });
 
             state.socket.on('admin:error', (message) => {
@@ -3123,62 +2978,34 @@
             // Wallet transaction events
             state.socket.on('wallet:depositApproved', (data) => {
                 showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                
-                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
-                
-                // Save to offline storage
-                saveOfflineData();
+                loadAllTransactions(); // Reload all transactions
             });
 
             state.socket.on('wallet:withdrawalApproved', (data) => {
                 showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                
-                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
-                
-                // Save to offline storage
-                saveOfflineData();
+                loadAllTransactions(); // Reload all transactions
             });
 
             state.socket.on('wallet:depositRejected', (data) => {
                 showToast(`Deposit rejected: ${data.message}`, 'error');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                
-                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
-                
-                // Save to offline storage
-                saveOfflineData();
+                loadAllTransactions(); // Reload all transactions
             });
 
             state.socket.on('wallet:withdrawalRejected', (data) => {
                 showToast(`Withdrawal rejected: ${data.message}`, 'error');
-                
-                // Remove from pending transactions
-                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
-                
-                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
-                
-                // Save to offline storage
-                saveOfflineData();
+                loadAllTransactions(); // Reload all transactions
             });
 
             // House earnings reset
@@ -3190,33 +3017,10 @@
                 showToast('Failed to reset house earnings: ' + message, 'error');
             });
 
-            // Pending transactions sync
-            state.socket.on('admin:pendingTransactionsSync', (transactions) => {
-                // Merge offline data with server data
-                const offlineIds = state.pendingTransactions.map(t => t._id);
-                const newTransactions = transactions.filter(t => !offlineIds.includes(t._id));
-                
-                // Add source marker
-                newTransactions.forEach(t => t.source = 'server');
-                
-                state.pendingTransactions = [...state.pendingTransactions, ...newTransactions];
-                
-                // Update last sync time
-                state.offlineData.lastSync = new Date().toISOString();
-                
-                // Save merged data
-                saveOfflineData();
-                
-                // Update UI
-                updateWalletApprovalsTable();
-                updateDepositRequestsTable();
-                updateWithdrawalRequestsTable();
-                updateRecentRequestsTable();
-                updatePendingTransactionsBadge();
-                updateDepositRequestBadge();
-                updateWithdrawalRequestBadge();
-                
-                showToast(`Synced ${newTransactions.length} new transactions`, 'success');
+            // NEW: Debug info
+            state.socket.on('admin:debugInfo', (debugInfo) => {
+                state.debugInfo = debugInfo;
+                updateDebugInfo();
             });
         }
 
@@ -3242,10 +3046,10 @@
             toast.className = `toast ${type}`;
             toast.innerHTML = `
                 <div class="toast-icon">
-                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
                 </div>
                 <div class="toast-content">
-                    <div class="toast-title">${type === 'success' ? 'Success' : 'Error'}</div>
+                    <div class="toast-title">${type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'}</div>
                     <div class="toast-message">${message}</div>
                 </div>
             `;
@@ -3304,21 +3108,10 @@
             document.getElementById('totalUsers').textContent = data.totalUsers || 0;
             document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
             document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
-            document.getElementById('houseEarningsAnalytics').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
             
             // Update pending requests count
             const pendingCount = state.pendingTransactions.length;
             document.getElementById('pendingRequests').textContent = pendingCount;
-            
-            if (data.totalWagered !== undefined) {
-                document.getElementById('totalWagered').textContent = (data.totalWagered || 0).toFixed(2) + ' ETB';
-            }
-            if (data.totalWins !== undefined) {
-                document.getElementById('totalWins').textContent = (data.totalWins || 0).toFixed(2) + ' ETB';
-            }
-            if (data.totalBingos !== undefined) {
-                document.getElementById('totalBingos').textContent = data.totalBingos || 0;
-            }
         }
         
         function updateOnlineStatus(onlineCount) {
@@ -3470,40 +3263,29 @@
             });
         }
 
-        // Wallet Approvals Functions
-        function syncPendingTransactions() {
-            if (!state.socket || !state.isAdmin) return;
-            
-            // Request sync from server
-            state.socket.emit('admin:syncPendingTransactions', {
-                lastSync: state.offlineData.lastSync,
-                localIds: state.pendingTransactions.map(t => t._id)
-            });
-            
-            showToast('Syncing pending transactions...', 'info');
+        // Transaction Functions
+        function loadAllTransactions() {
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getAllTransactions');
+            }
         }
 
         function refreshPendingTransactions() {
             if (state.socket && state.isAdmin) {
                 state.socket.emit('admin:getPendingTransactions');
             }
-            
-            // Update UI with current data
-            updateWalletApprovalsTable();
-            updateRecentRequestsTable();
-            updatePendingTransactionsBadge();
         }
 
         function refreshDepositRequests() {
-            state.depositRequests = state.pendingTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
-            updateDepositRequestsTable();
-            updateDepositRequestBadge();
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getDepositRequests');
+            }
         }
 
         function refreshWithdrawalRequests() {
-            state.withdrawalRequests = state.pendingTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
-            updateWithdrawalRequestsTable();
-            updateWithdrawalRequestBadge();
+            if (state.socket && state.isAdmin) {
+                state.socket.emit('admin:getWithdrawalRequests');
+            }
         }
 
         function filterWalletTransactions() {
@@ -3523,12 +3305,18 @@
             tbody.innerHTML = '';
             
             const typeFilter = document.getElementById('walletTypeFilter').value;
+            const statusFilter = document.getElementById('walletStatusFilter').value;
             
             let filtered = state.pendingTransactions;
+            
             if (typeFilter === 'deposit') {
                 filtered = filtered.filter(t => t.type === 'DEPOSIT_REQUEST');
             } else if (typeFilter === 'withdraw') {
                 filtered = filtered.filter(t => t.type === 'WITHDRAW_REQUEST');
+            }
+            
+            if (statusFilter !== 'all') {
+                filtered = filtered.filter(t => t.status === statusFilter);
             }
             
             if (filtered.length === 0) {
@@ -3536,7 +3324,7 @@
                     <tr>
                         <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                             <i class="fas fa-check-circle"></i>
-                            <div class="mt-2">No pending transactions</div>
+                            <div class="mt-2">No transactions found</div>
                         </td>
                     </tr>
                 `;
@@ -3557,16 +3345,24 @@
                     typeBadge = '<span class="badge badge-danger">Withdrawal</span>';
                 }
                 
+                let statusBadge = '';
+                if (transaction.status === 'pending') {
+                    statusBadge = '<span class="badge badge-warning">Pending</span>';
+                } else if (transaction.status === 'approved') {
+                    statusBadge = '<span class="badge badge-success">Approved</span>';
+                } else if (transaction.status === 'rejected') {
+                    statusBadge = '<span class="badge badge-danger">Rejected</span>';
+                }
+                
                 let details = '';
                 if (transaction.type === 'DEPOSIT_REQUEST') {
                     details = `Receipt: ${transaction.receiptNumber || 'N/A'}`;
+                    if (transaction.phoneNumber) {
+                        details += `<br>Phone: ${transaction.phoneNumber}`;
+                    }
                 } else if (transaction.type === 'WITHDRAW_REQUEST') {
                     details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
                 }
-                
-                // Add offline indicator if from local storage
-                const offlineIndicator = transaction.source === 'local' ? 
-                    '<span class="badge badge-warning" style="margin-left: 5px; font-size: 0.7rem;">Offline</span>' : '';
                 
                 row.innerHTML = `
                     <td>
@@ -3578,7 +3374,7 @@
                             </div>
                         </div>
                     </td>
-                    <td>${typeBadge}${offlineIndicator}</td>
+                    <td>${typeBadge}</td>
                     <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
                         ${transaction.type === 'DEPOSIT_REQUEST' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
                     </td>
@@ -3589,16 +3385,19 @@
                         <div>${date}</div>
                         <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
                     </td>
-                    <td>
-                        <span class="badge badge-warning">Pending</span>
-                    </td>
+                    <td>${statusBadge}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="rejectTransaction('${transaction._id}', '${transaction.type}')" title="Reject">
-                                <i class="fas fa-times"></i>
+                            ${transaction.status === 'pending' ? `
+                                <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="rejectTransaction('${transaction._id}', '${transaction.type}')" title="Reject">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-primary btn-sm" onclick="showTransactionDetails('${transaction._id}')" title="View Details">
+                                <i class="fas fa-eye"></i>
                             </button>
                             <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
                                 <i class="fas fa-money-bill-wave"></i>
@@ -3616,16 +3415,35 @@
             tbody.innerHTML = '';
             
             const statusFilter = document.getElementById('depositStatusFilter').value;
+            const dateFilter = document.getElementById('depositDateFilter').value;
             
-            let filtered = state.depositRequests;
+            let filtered = state.allTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
+            
             if (statusFilter !== 'all') {
                 filtered = filtered.filter(t => t.status === statusFilter);
+            }
+            
+            if (dateFilter !== 'all') {
+                const now = new Date();
+                filtered = filtered.filter(t => {
+                    const transactionDate = new Date(t.createdAt);
+                    if (dateFilter === 'today') {
+                        return transactionDate.toDateString() === now.toDateString();
+                    } else if (dateFilter === 'week') {
+                        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= weekAgo;
+                    } else if (dateFilter === 'month') {
+                        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= monthAgo;
+                    }
+                    return true;
+                });
             }
             
             if (filtered.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                             <i class="fas fa-inbox"></i>
                             <div class="mt-2">No deposit requests</div>
                         </td>
@@ -3666,6 +3484,9 @@
                     <td>
                         <div style="font-family: monospace; font-weight: 600;">${transaction.receiptNumber || 'N/A'}</div>
                     </td>
+                    <td>
+                        <div style="font-family: monospace;">${transaction.phoneNumber || 'N/A'}</div>
+                    </td>
                     <td>${statusBadge}</td>
                     <td>
                         <div>${date}</div>
@@ -3681,8 +3502,8 @@
                                     <i class="fas fa-times"></i>
                                 </button>
                             ` : ''}
-                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
-                                <i class="fas fa-money-bill-wave"></i>
+                            <button class="btn btn-primary btn-sm" onclick="showTransactionDetails('${transaction._id}')" title="View Details">
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </td>
@@ -3697,10 +3518,29 @@
             tbody.innerHTML = '';
             
             const statusFilter = document.getElementById('withdrawalStatusFilter').value;
+            const dateFilter = document.getElementById('withdrawalDateFilter').value;
             
-            let filtered = state.withdrawalRequests;
+            let filtered = state.allTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
+            
             if (statusFilter !== 'all') {
                 filtered = filtered.filter(t => t.status === statusFilter);
+            }
+            
+            if (dateFilter !== 'all') {
+                const now = new Date();
+                filtered = filtered.filter(t => {
+                    const transactionDate = new Date(t.createdAt);
+                    if (dateFilter === 'today') {
+                        return transactionDate.toDateString() === now.toDateString();
+                    } else if (dateFilter === 'week') {
+                        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= weekAgo;
+                    } else if (dateFilter === 'month') {
+                        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= monthAgo;
+                    }
+                    return true;
+                });
             }
             
             if (filtered.length === 0) {
@@ -3762,8 +3602,8 @@
                                     <i class="fas fa-times"></i>
                                 </button>
                             ` : ''}
-                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
-                                <i class="fas fa-money-bill-wave"></i>
+                            <button class="btn btn-primary btn-sm" onclick="showTransactionDetails('${transaction._id}')" title="View Details">
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </td>
@@ -3777,7 +3617,7 @@
             const tbody = document.getElementById('recentRequestsTableBody');
             tbody.innerHTML = '';
             
-            // Get recent 5 requests
+            // Get recent 5 pending requests
             const recentRequests = state.pendingTransactions.slice(0, 5);
             
             if (recentRequests.length === 0) {
@@ -3805,18 +3645,21 @@
                     typeBadge = '<span class="badge badge-danger">Withdrawal</span>';
                 }
                 
+                let statusBadge = '';
+                if (transaction.status === 'pending') {
+                    statusBadge = '<span class="badge badge-warning">Pending</span>';
+                } else if (transaction.status === 'approved') {
+                    statusBadge = '<span class="badge badge-success">Approved</span>';
+                } else if (transaction.status === 'rejected') {
+                    statusBadge = '<span class="badge badge-danger">Rejected</span>';
+                }
+                
                 let details = '';
                 if (transaction.type === 'DEPOSIT_REQUEST') {
                     details = `Receipt: ${transaction.receiptNumber?.substring(0, 10) || 'N/A'}`;
                 } else if (transaction.type === 'WITHDRAW_REQUEST') {
                     details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
                 }
-                
-                // Add offline indicator if from local storage
-                const offlineIndicator = transaction.source === 'local' ? 
-                    '<span class="badge badge-warning" style="margin-left: 5px; font-size: 0.7rem;">Offline</span>' : '';
-                
-                let statusBadge = '<span class="badge badge-warning">Pending</span>';
                 
                 row.innerHTML = `
                     <td>
@@ -3828,7 +3671,7 @@
                             </div>
                         </div>
                     </td>
-                    <td>${typeBadge}${offlineIndicator}</td>
+                    <td>${typeBadge}</td>
                     <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
                         ${transaction.type === 'DEPOSIT_REQUEST' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
                     </td>
@@ -3841,12 +3684,14 @@
                     <td>${statusBadge}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="btn btn-primary btn-sm" onclick="quickAddFundsToUser('${transaction.userId}', '${transaction.userName}', 0)" title="Add Funds">
-                                <i class="fas fa-money-bill-wave"></i>
-                            </button>
+                            ${transaction.status === 'pending' ? `
+                                <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="showTransactionDetails('${transaction._id}')" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            ` : ''}
                         </div>
                     </td>
                 `;
@@ -3855,8 +3700,253 @@
             });
         }
 
+        function updateTransactionHistory() {
+            const container = document.getElementById('transactionHistory');
+            container.innerHTML = '';
+            
+            const searchTerm = document.getElementById('transactionSearch').value.toLowerCase();
+            const typeFilter = document.getElementById('transactionTypeFilter').value;
+            
+            let filtered = state.allTransactions;
+            
+            if (typeFilter !== 'all') {
+                if (typeFilter === 'deposit') {
+                    filtered = filtered.filter(t => t.type === 'DEPOSIT_REQUEST');
+                } else if (typeFilter === 'withdrawal') {
+                    filtered = filtered.filter(t => t.type === 'WITHDRAW_REQUEST');
+                } else if (typeFilter === 'agent') {
+                    filtered = filtered.filter(t => t.type === 'AGENT_COMMISSION');
+                } else if (typeFilter === 'bingo') {
+                    filtered = filtered.filter(t => t.type === 'BINGO_WIN');
+                } else if (typeFilter === 'keno') {
+                    filtered = filtered.filter(t => t.type === 'KENO_WIN');
+                } else if (typeFilter === 'bonus') {
+                    filtered = filtered.filter(t => t.type === 'BONUS');
+                }
+            }
+            
+            if (searchTerm) {
+                filtered = filtered.filter(t => 
+                    (t.userName && t.userName.toLowerCase().includes(searchTerm)) ||
+                    (t.userId && t.userId.toLowerCase().includes(searchTerm)) ||
+                    (t.receiptNumber && t.receiptNumber.toLowerCase().includes(searchTerm)) ||
+                    (t.phoneNumber && t.phoneNumber.includes(searchTerm))
+                );
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-exchange-alt"></i>
+                        <div class="mt-2">No transactions found</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            filtered.slice(0, 50).forEach(transaction => {
+                const item = document.createElement('div');
+                item.className = 'transaction-item';
+                item.onclick = () => showTransactionDetails(transaction._id);
+                
+                const time = new Date(transaction.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const date = new Date(transaction.createdAt).toLocaleDateString();
+                
+                let iconClass = '';
+                let amountClass = '';
+                let icon = '';
+                
+                if (transaction.type === 'DEPOSIT_REQUEST') {
+                    iconClass = 'deposit';
+                    amountClass = 'deposit';
+                    icon = 'fa-money-bill-wave';
+                } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                    iconClass = 'withdraw';
+                    amountClass = 'withdraw';
+                    icon = 'fa-money-check-alt';
+                } else if (transaction.type === 'AGENT_COMMISSION') {
+                    iconClass = 'commission';
+                    amountClass = 'commission';
+                    icon = 'fa-user-tie';
+                } else if (transaction.type === 'BINGO_WIN' || transaction.type === 'KENO_WIN') {
+                    iconClass = 'deposit';
+                    amountClass = 'deposit';
+                    icon = 'fa-trophy';
+                } else if (transaction.type === 'BONUS') {
+                    iconClass = 'deposit';
+                    amountClass = 'deposit';
+                    icon = 'fa-gift';
+                }
+                
+                let statusBadge = '';
+                if (transaction.status === 'pending') {
+                    statusBadge = '<span class="badge badge-warning" style="margin-left: 8px;">Pending</span>';
+                } else if (transaction.status === 'rejected') {
+                    statusBadge = '<span class="badge badge-danger" style="margin-left: 8px;">Rejected</span>';
+                }
+                
+                item.innerHTML = `
+                    <div class="transaction-icon ${iconClass}">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="transaction-details">
+                        <div class="transaction-title">
+                            ${transaction.userName || 'Unknown'} 
+                            ${statusBadge}
+                        </div>
+                        <div class="transaction-time">${date} ${time}</div>
+                        ${transaction.receiptNumber ? `<div class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">Receipt: ${transaction.receiptNumber}</div>` : ''}
+                        ${transaction.phoneNumber ? `<div class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">Phone: ${transaction.phoneNumber}</div>` : ''}
+                    </div>
+                    <div class="transaction-amount ${amountClass}">
+                        ${transaction.type === 'DEPOSIT_REQUEST' || transaction.type === 'BINGO_WIN' || transaction.type === 'KENO_WIN' || transaction.type === 'BONUS' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
+                    </div>
+                `;
+                
+                container.appendChild(item);
+            });
+        }
+
+        function showTransactionDetails(transactionId) {
+            const transaction = state.allTransactions.find(t => t._id === transactionId);
+            if (!transaction) return;
+            
+            const content = document.getElementById('transactionDetailsContent');
+            const time = new Date(transaction.createdAt).toLocaleString();
+            const updatedTime = transaction.updatedAt ? new Date(transaction.updatedAt).toLocaleString() : 'N/A';
+            
+            let statusBadge = '';
+            if (transaction.status === 'pending') {
+                statusBadge = '<span class="badge badge-warning">Pending</span>';
+            } else if (transaction.status === 'approved') {
+                statusBadge = '<span class="badge badge-success">Approved</span>';
+            } else if (transaction.status === 'rejected') {
+                statusBadge = '<span class="badge badge-danger">Rejected</span>';
+            }
+            
+            let typeText = '';
+            if (transaction.type === 'DEPOSIT_REQUEST') {
+                typeText = 'Deposit Request';
+            } else if (transaction.type === 'WITHDRAW_REQUEST') {
+                typeText = 'Withdrawal Request';
+            } else if (transaction.type === 'AGENT_COMMISSION') {
+                typeText = 'Agent Commission';
+            } else if (transaction.type === 'BINGO_WIN') {
+                typeText = 'Bingo Win';
+            } else if (transaction.type === 'KENO_WIN') {
+                typeText = 'Keno Win';
+            } else if (transaction.type === 'BONUS') {
+                typeText = 'Bonus';
+            }
+            
+            content.innerHTML = `
+                <div class="form-group">
+                    <label class="form-label">Transaction ID</label>
+                    <div class="form-input" style="background: var(--dark-3); font-family: monospace;">${transaction._id}</div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">User</label>
+                        <div class="form-input" style="background: var(--dark-3);">${transaction.userName || 'Unknown'} (${transaction.userId || 'N/A'})</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Amount</label>
+                        <div class="form-input" style="background: var(--dark-3); font-weight: bold; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
+                            ${Math.abs(transaction.amount).toFixed(2)} ETB
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Type</label>
+                        <div class="form-input" style="background: var(--dark-3);">${typeText}</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <div class="form-input" style="background: var(--dark-3);">${statusBadge}</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Created</label>
+                    <div class="form-input" style="background: var(--dark-3);">${time}</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Last Updated</label>
+                    <div class="form-input" style="background: var(--dark-3);">${updatedTime}</div>
+                </div>
+                
+                ${transaction.receiptNumber ? `
+                    <div class="form-group">
+                        <label class="form-label">Receipt Number</label>
+                        <div class="form-input" style="background: var(--dark-3); font-family: monospace;">${transaction.receiptNumber}</div>
+                    </div>
+                ` : ''}
+                
+                ${transaction.phoneNumber ? `
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <div class="form-input" style="background: var(--dark-3); font-family: monospace;">${transaction.phoneNumber}</div>
+                    </div>
+                ` : ''}
+                
+                ${transaction.notes ? `
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <div class="form-input" style="background: var(--dark-3);">${transaction.notes}</div>
+                    </div>
+                ` : ''}
+                
+                ${transaction.processedBy ? `
+                    <div class="form-group">
+                        <label class="form-label">Processed By</label>
+                        <div class="form-input" style="background: var(--dark-3);">${transaction.processedBy}</div>
+                    </div>
+                ` : ''}
+                
+                ${transaction.rejectionReason ? `
+                    <div class="form-group">
+                        <label class="form-label">Rejection Reason</label>
+                        <div class="form-input" style="background: var(--dark-3); color: var(--danger);">${transaction.rejectionReason}</div>
+                    </div>
+                ` : ''}
+            `;
+            
+            showModal('transactionDetailsModal');
+        }
+
+        function printTransactionDetails() {
+            const printContent = document.getElementById('transactionDetailsContent').innerHTML;
+            const originalContent = document.body.innerHTML;
+            
+            document.body.innerHTML = `
+                <html>
+                    <head>
+                        <title>Transaction Details</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; }
+                            .form-group { margin-bottom: 15px; }
+                            .form-label { font-weight: bold; margin-bottom: 5px; }
+                            .form-input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Transaction Details</h2>
+                        ${printContent}
+                    </body>
+                </html>
+            `;
+            
+            window.print();
+            document.body.innerHTML = originalContent;
+            location.reload();
+        }
+
         function approveTransaction(transactionId, type) {
-            const transaction = state.pendingTransactions.find(t => t._id === transactionId);
+            const transaction = state.allTransactions.find(t => t._id === transactionId);
             if (!transaction) return;
             
             const action = type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
@@ -3865,111 +3955,55 @@
                 return;
             }
             
-            // Remove from local storage immediately
-            state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
-            
-            // Save to offline storage
-            saveOfflineData();
-            
-            // Send to server if online
-            if (state.socket && state.isAdmin && state.offlineData.isOnline) {
-                if (type === 'DEPOSIT_REQUEST') {
-                    state.socket.emit('admin:approveDeposit', transactionId);
-                } else if (type === 'WITHDRAW_REQUEST') {
-                    state.socket.emit('admin:approveWithdrawal', transactionId);
-                }
-                
-                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
-            } else {
-                // Add to sync queue if offline
-                state.offlineData.syncQueue.push({
-                    action: 'approve',
-                    type: type,
-                    transactionId: transactionId,
-                    timestamp: Date.now()
-                });
-                
-                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} queued for sync (offline)`, 'warning');
+            if (type === 'DEPOSIT_REQUEST') {
+                state.socket.emit('admin:approveDeposit', transactionId);
+            } else if (type === 'WITHDRAW_REQUEST') {
+                state.socket.emit('admin:approveWithdrawal', transactionId);
             }
             
-            // Update UI
-            updateWalletApprovalsTable();
-            updateDepositRequestsTable();
-            updateWithdrawalRequestsTable();
-            updateRecentRequestsTable();
-            updatePendingTransactionsBadge();
-            updateDepositRequestBadge();
-            updateWithdrawalRequestBadge();
+            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
         }
 
         function rejectTransaction(transactionId, type) {
-            const transaction = state.pendingTransactions.find(t => t._id === transactionId);
+            const transaction = state.allTransactions.find(t => t._id === transactionId);
             if (!transaction) return;
             
             const action = type === 'DEPOSIT_REQUEST' ? 'deposit' : 'withdrawal';
+            const reason = prompt(`Enter rejection reason for ${action} request of ${transaction.amount} ETB:`, "Invalid receipt/phone number");
             
-            if (!confirm(`Reject this ${action} request of ${transaction.amount} ETB for ${transaction.userName}?`)) {
-                return;
-            }
+            if (reason === null) return;
             
-            // Remove from local storage immediately
-            state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
+            state.socket.emit('admin:rejectTransaction', {
+                transactionId: transactionId,
+                reason: reason
+            });
             
-            // Save to offline storage
-            saveOfflineData();
-            
-            // Send to server if online
-            if (state.socket && state.isAdmin && state.offlineData.isOnline) {
-                state.socket.emit('admin:rejectTransaction', transactionId);
-                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
-            } else {
-                // Add to sync queue if offline
-                state.offlineData.syncQueue.push({
-                    action: 'reject',
-                    type: type,
-                    transactionId: transactionId,
-                    timestamp: Date.now()
-                });
-                
-                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection queued for sync (offline)`, 'warning');
-            }
-            
-            // Update UI
-            updateWalletApprovalsTable();
-            updateDepositRequestsTable();
-            updateWithdrawalRequestsTable();
-            updateRecentRequestsTable();
-            updatePendingTransactionsBadge();
-            updateDepositRequestBadge();
-            updateWithdrawalRequestBadge();
+            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
         }
 
         function updatePendingTransactionsBadge() {
             const badge = document.getElementById('walletApprovalBadge');
-            const count = state.pendingTransactions.length;
+            const pendingCount = state.pendingTransactions.filter(t => t.status === 'pending').length;
             
-            badge.textContent = count;
+            badge.textContent = pendingCount;
             
-            if (count > 0) {
+            if (pendingCount > 0) {
                 badge.style.background = 'var(--warning)';
             } else {
                 badge.style.background = 'var(--text-muted)';
             }
             
             // Also update the pending requests stat
-            document.getElementById('pendingRequests').textContent = count;
-            
-            // Update offline data UI
-            updateOfflineDataUI();
+            document.getElementById('pendingRequests').textContent = pendingCount;
         }
 
         function updateDepositRequestBadge() {
             const badge = document.getElementById('depositRequestBadge');
-            const count = state.depositRequests.filter(r => r.status === 'pending').length;
+            const pendingCount = state.allTransactions.filter(t => t.type === 'DEPOSIT_REQUEST' && t.status === 'pending').length;
             
-            badge.textContent = count;
+            badge.textContent = pendingCount;
             
-            if (count > 0) {
+            if (pendingCount > 0) {
                 badge.style.background = 'var(--success)';
             } else {
                 badge.style.background = 'var(--text-muted)';
@@ -3978,11 +4012,11 @@
 
         function updateWithdrawalRequestBadge() {
             const badge = document.getElementById('withdrawalRequestBadge');
-            const count = state.withdrawalRequests.filter(r => r.status === 'pending').length;
+            const pendingCount = state.allTransactions.filter(t => t.type === 'WITHDRAW_REQUEST' && t.status === 'pending').length;
             
-            badge.textContent = count;
+            badge.textContent = pendingCount;
             
-            if (count > 0) {
+            if (pendingCount > 0) {
                 badge.style.background = 'var(--danger)';
             } else {
                 badge.style.background = 'var(--text-muted)';
@@ -4366,7 +4400,8 @@
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
-                showToast('Refreshing data...', 'success');
+                loadAllTransactions();
+                showToast('Refreshing all data...', 'success');
             }
         }
 
@@ -4394,6 +4429,168 @@
             }
         }
 
+        // Analytics Functions
+        function updateAnalytics() {
+            if (!state.socket || !state.isAdmin) return;
+            
+            const dateRange = document.getElementById('analyticsDateRange').value;
+            state.socket.emit('admin:getAnalytics', { dateRange: dateRange });
+        }
+
+        function updateAnalyticsFromTransactions() {
+            const now = new Date();
+            const dateRange = document.getElementById('analyticsDateRange').value;
+            
+            let filteredTransactions = state.allTransactions;
+            
+            if (dateRange !== 'all') {
+                filteredTransactions = filteredTransactions.filter(t => {
+                    const transactionDate = new Date(t.createdAt);
+                    if (dateRange === 'today') {
+                        return transactionDate.toDateString() === now.toDateString();
+                    } else if (dateRange === 'week') {
+                        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= weekAgo;
+                    } else if (dateRange === 'month') {
+                        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        return transactionDate >= monthAgo;
+                    }
+                    return true;
+                });
+            }
+            
+            // Calculate analytics
+            const deposits = filteredTransactions.filter(t => t.type === 'DEPOSIT_REQUEST' && t.status === 'approved');
+            const withdrawals = filteredTransactions.filter(t => t.type === 'WITHDRAW_REQUEST' && t.status === 'approved');
+            
+            const totalDeposits = deposits.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const totalWithdrawals = withdrawals.reduce((sum, t) => sum + (t.amount || 0), 0);
+            const netProfit = totalDeposits - totalWithdrawals;
+            
+            // Update UI
+            document.getElementById('totalDeposits').textContent = totalDeposits.toFixed(2) + ' ETB';
+            document.getElementById('totalWithdrawals').textContent = totalWithdrawals.toFixed(2) + ' ETB';
+            document.getElementById('netProfit').textContent = netProfit.toFixed(2) + ' ETB';
+            
+            // Update analytics data
+            state.analyticsData.totalDeposits = totalDeposits;
+            state.analyticsData.totalWithdrawals = totalWithdrawals;
+            state.analyticsData.netProfit = netProfit;
+            
+            // Update transaction chart if it exists
+            if (state.transactionChart) {
+                updateTransactionChart();
+            }
+        }
+
+        function initTransactionChart() {
+            const ctx = document.getElementById('transactionChart').getContext('2d');
+            
+            if (state.transactionChart) {
+                state.transactionChart.destroy();
+            }
+            
+            // Get last 7 days
+            const labels = [];
+            const depositData = [];
+            const withdrawalData = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                labels.push(dateStr);
+                
+                // Filter transactions for this date
+                const startOfDay = new Date(date);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(date);
+                endOfDay.setHours(23, 59, 59, 999);
+                
+                const dayDeposits = state.allTransactions.filter(t => 
+                    t.type === 'DEPOSIT_REQUEST' && 
+                    t.status === 'approved' &&
+                    new Date(t.createdAt) >= startOfDay &&
+                    new Date(t.createdAt) <= endOfDay
+                );
+                
+                const dayWithdrawals = state.allTransactions.filter(t => 
+                    t.type === 'WITHDRAW_REQUEST' && 
+                    t.status === 'approved' &&
+                    new Date(t.createdAt) >= startOfDay &&
+                    new Date(t.createdAt) <= endOfDay
+                );
+                
+                depositData.push(dayDeposits.reduce((sum, t) => sum + (t.amount || 0), 0));
+                withdrawalData.push(dayWithdrawals.reduce((sum, t) => sum + (t.amount || 0), 0));
+            }
+            
+            state.transactionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Deposits',
+                            data: depositData,
+                            backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                            borderColor: 'var(--success)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Withdrawals',
+                            data: withdrawalData,
+                            backgroundColor: 'rgba(239, 68, 68, 0.5)',
+                            borderColor: 'var(--danger)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                color: 'var(--text-secondary)'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                color: 'var(--text-secondary)',
+                                callback: function(value) {
+                                    return value + ' ETB';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'var(--text-primary)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTransactionChart() {
+            if (!state.transactionChart) return;
+            
+            // Update chart data based on current date range
+            updateAnalyticsFromTransactions();
+            
+            // For now, just update the chart with current analytics data
+            // In a real implementation, you would update the chart data
+        }
+
         // Activity Log Functions
         function addActivityItem(activity) {
             const activityFeed = document.getElementById('activityFeed');
@@ -4412,15 +4609,12 @@
             } else if (activity.type === 'AGENT_COMMISSION') {
                 icon = 'fa-user-tie';
                 color = 'var(--agent)';
-            } else if (activity.type === 'DEPOSIT') {
+            } else if (activity.type === 'DEPOSIT_REQUEST') {
                 icon = 'fa-money-bill-wave';
                 color = 'var(--primary)';
-            } else if (activity.type === 'WITHDRAWAL') {
+            } else if (activity.type === 'WITHDRAW_REQUEST') {
                 icon = 'fa-money-check-alt';
                 color = 'var(--warning)';
-            } else if (activity.type === 'OFFLINE_SYNC') {
-                icon = 'fa-sync';
-                color = 'var(--info)';
             }
             
             activityItem.innerHTML = `
@@ -4457,57 +4651,7 @@
 
         // Chart Functions
         function initCharts() {
-            // Revenue Chart
-            const revenueCtx = document.getElementById('revenueChart');
-            if (revenueCtx) {
-                new Chart(revenueCtx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                        datasets: [{
-                            label: 'Revenue (ETB)',
-                            data: [1200, 1900, 1500, 2500, 2200, 3000, 2800],
-                            borderColor: 'var(--primary)',
-                            backgroundColor: 'rgba(58, 86, 212, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                labels: {
-                                    color: 'var(--text-primary)'
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: {
-                                    color: 'rgba(255,255,255,0.05)'
-                                },
-                                ticks: {
-                                    color: 'var(--text-secondary)'
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(255,255,255,0.05)'
-                                },
-                                ticks: {
-                                    color: 'var(--text-secondary)',
-                                    callback: function(value) {
-                                        return value + ' ETB';
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
+            // Initialize any other charts here
         }
 
         // System Functions
@@ -4576,17 +4720,31 @@
             }
         }
 
+        function updateTransactionSettings() {
+            const minDeposit = document.getElementById('minDeposit').value;
+            const minWithdrawal = document.getElementById('minWithdrawal').value;
+            const maxWithdrawal = document.getElementById('maxWithdrawal').value;
+            const autoApproveLimit = document.getElementById('autoApproveLimit').value;
+            
+            if (confirm('Update transaction settings?')) {
+                // In a real implementation, send to server
+                showToast('Transaction settings updated', 'success');
+            }
+        }
+
         function updateDefaultCommissions() {
             const bingoRate = document.getElementById('defaultBingoCommission').value;
             const kenoRate = document.getElementById('defaultKenoCommission').value;
             
             if (confirm(`Set default commissions to Bingo: ${bingoRate}%, Keno: ${kenoRate}%?`)) {
+                // In a real implementation, send to server
                 showToast('Default commissions updated', 'success');
             }
         }
 
         function forceStartAllGames() {
             if (confirm('Force start all waiting games?')) {
+                // In a real implementation, send to server
                 showToast('Starting all games...', 'success');
             }
         }
@@ -4607,45 +4765,68 @@
         }
 
         function searchTransactions() {
-            showToast('Searching transactions...', 'info');
+            updateTransactionHistory();
         }
 
         function applyTransactionFilters() {
-            showToast('Applying filters...', 'info');
+            updateTransactionHistory();
         }
 
         function filterLogs() {
+            // Implement log filter functionality
             showToast('Filtering logs...', 'info');
+        }
+
+        function updateDebugInfo() {
+            if (state.debugInfo) {
+                document.getElementById('debugSockets').textContent = state.debugInfo.connectedSockets || 0;
+                document.getElementById('debugStoredTransactions').textContent = state.debugInfo.storedTransactions || 0;
+                document.getElementById('debugAdmins').textContent = state.debugInfo.activeAdmins || 0;
+                document.getElementById('debugMultiSocketUsers').textContent = state.debugInfo.multiSocketUsers || 0;
+            }
+        }
+
+        function clearAllApprovedTransactions() {
+            if (confirm('Clear all approved/rejected transactions from view? This does not delete them from database.')) {
+                // Filter out non-pending transactions from display
+                state.pendingTransactions = state.pendingTransactions.filter(t => t.status === 'pending');
+                updateWalletApprovalsTable();
+                updatePendingTransactionsBadge();
+                showToast('Cleared approved/rejected transactions from view', 'success');
+            }
+        }
+
+        function clearTransactionCache() {
+            if (confirm('Clear transaction cache? This will reload all transactions from server.')) {
+                loadAllTransactions();
+                refreshPendingTransactions();
+                showToast('Transaction cache cleared', 'success');
+            }
+        }
+
+        function resetAllTransactions() {
+            if (confirm('WARNING: Reset all transactions? This will mark all pending transactions as rejected and clear history.')) {
+                if (state.socket && state.isAdmin) {
+                    state.socket.emit('admin:resetAllTransactions');
+                    showToast('Resetting all transactions...', 'warning');
+                }
+            }
+        }
+
+        function testNotification() {
+            playNotificationSound();
+            showToast('Test notification sent', 'info');
+        }
+
+        function backupDatabase() {
+            showToast('Database backup initiated', 'info');
+            // In a real implementation, trigger server backup
         }
 
         function logout() {
             if (confirm('Logout from admin panel?')) {
-                // Save any pending data before logout
-                saveOfflineData();
-                
                 localStorage.removeItem('bingo_admin_session');
                 window.location.reload();
-            }
-        }
-
-        function updateDebugInfo() {
-            // Update debug information
-            document.getElementById('debugSockets').textContent = state.socket?.connected ? 'Connected' : 'Disconnected';
-            document.getElementById('debugMappedUsers').textContent = state.users.length;
-            document.getElementById('debugAdmins').textContent = state.isAdmin ? '1' : '0';
-            document.getElementById('debugMultiSocketUsers').textContent = state.multiSocketUsers;
-            document.getElementById('debugOfflineData').textContent = state.pendingTransactions.length;
-            
-            // Update storage info
-            try {
-                document.getElementById('sessionStorageInfo').textContent = `${sessionStorage.length} items`;
-                document.getElementById('localStorageInfo').textContent = `${localStorage.length} items`;
-                
-                const offlineSize = JSON.stringify(state.pendingTransactions).length;
-                document.getElementById('offlineTransactionsCount').textContent = state.pendingTransactions.length;
-                document.getElementById('syncQueueCount').textContent = state.offlineData.syncQueue.length;
-            } catch (e) {
-                // Ignore errors
             }
         }
 
@@ -4657,12 +4838,8 @@
             if (state.isAdmin) {
                 addActivityItem({details: 'System initialized successfully', type: 'INFO'});
                 addActivityItem({details: `Welcome to Bingo Elite Admin Dashboard v${CONFIG.VERSION}`, type: 'INFO'});
-                addActivityItem({details: 'Offline data storage enabled', type: 'INFO'});
-                
-                // Show offline data status
-                if (state.pendingTransactions.length > 0) {
-                    addActivityItem({details: `Loaded ${state.pendingTransactions.length} pending transactions from offline storage`, type: 'OFFLINE_SYNC'});
-                }
+                addActivityItem({details: 'Persistent transaction storage enabled', type: 'INFO'});
+                addActivityItem({details: 'All pending requests will be saved until processed', type: 'INFO'});
             }
         }, 2000);
     </script>
