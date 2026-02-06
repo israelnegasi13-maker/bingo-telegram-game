@@ -1928,9 +1928,13 @@
                                     <i class="fas fa-sync"></i>
                                     Refresh
                                 </button>
-                                <button class="btn btn-warning" onclick="clearAllApprovedTransactions()" title="Clear Approved/Rejected">
+                                <button class="btn btn-warning" onclick="clearAllApprovedTransactions()" title="Clear Approved/Rejected from view">
                                     <i class="fas fa-trash"></i>
                                     Clear History
+                                </button>
+                                <button class="btn btn-danger" onclick="resetAllTransactions()" title="Reset ALL Transactions (including pending)">
+                                    <i class="fas fa-undo"></i>
+                                    Reset All
                                 </button>
                             </div>
                         </div>
@@ -3010,17 +3014,34 @@
 
             // House earnings reset
             state.socket.on('admin:houseEarningsReset', (data) => {
-                showToast(`House earnings reset from ${data.previousAmount} to 0 ETB`, 'success');
+                showToast(`House earnings reset to ${data.newAmount} ETB`, 'success');
+                document.getElementById('houseEarnings').textContent = data.newAmount.toFixed(2) + ' ETB';
             });
 
             state.socket.on('admin:houseEarningsResetError', (message) => {
                 showToast('Failed to reset house earnings: ' + message, 'error');
+                // Revert optimistic update
+                state.socket.emit('admin:getData');
             });
 
             // NEW: Debug info
             state.socket.on('admin:debugInfo', (debugInfo) => {
                 state.debugInfo = debugInfo;
                 updateDebugInfo();
+            });
+
+            // NEW: All transactions reset event
+            state.socket.on('admin:allTransactionsReset', () => {
+                showToast('All transactions reset successfully', 'success');
+                loadAllTransactions();
+                refreshPendingTransactions();
+            });
+
+            // NEW: Pending transactions cleared
+            state.socket.on('admin:pendingTransactionsCleared', (data) => {
+                showToast(`Cleared ${data.count} pending transactions`, 'success');
+                refreshPendingTransactions();
+                loadAllTransactions();
             });
         }
 
@@ -4658,8 +4679,64 @@
         function resetHouseEarnings() {
             if (confirm('Are you sure you want to reset house earnings to zero? This action cannot be undone.')) {
                 if (state.socket && state.isAdmin) {
+                    // Optimistically update the UI
+                    document.getElementById('houseEarnings').textContent = '0.00 ETB';
+                    
+                    // Emit reset event to server
                     state.socket.emit('admin:resetHouseEarnings');
+                    
                     showToast('Resetting house earnings to zero...', 'warning');
+                }
+            }
+        }
+
+        function clearAllApprovedTransactions() {
+            if (confirm('Clear all approved/rejected transactions from view? This will remove them from the list but keep them in the database.')) {
+                // Filter out only pending transactions to keep
+                state.pendingTransactions = state.pendingTransactions.filter(t => t.status === 'pending');
+                
+                // Also filter allTransactions to remove completed transactions from view
+                state.allTransactions = state.allTransactions.filter(t => 
+                    t.status === 'pending' || 
+                    t.type === 'BINGO_WIN' || 
+                    t.type === 'KENO_WIN' ||
+                    t.type === 'AGENT_COMMISSION' ||
+                    t.type === 'BONUS'
+                );
+                
+                // Update all UI components
+                updateWalletApprovalsTable();
+                updateRecentRequestsTable();
+                updateTransactionHistory();
+                updateDepositRequestsTable();
+                updateWithdrawalRequestsTable();
+                updatePendingTransactionsBadge();
+                updateDepositRequestBadge();
+                updateWithdrawalRequestBadge();
+                
+                showToast('Cleared all approved/rejected transactions from view', 'success');
+            }
+        }
+
+        function resetAllTransactions() {
+            if (confirm('WARNING: This will reset ALL transaction history including pending requests. Are you sure?')) {
+                if (state.socket && state.isAdmin) {
+                    state.socket.emit('admin:resetAllTransactions');
+                    showToast('Resetting all transactions...', 'warning');
+                    
+                    // Clear local state
+                    state.allTransactions = [];
+                    state.pendingTransactions = [];
+                    
+                    // Update all UI components
+                    updateWalletApprovalsTable();
+                    updateRecentRequestsTable();
+                    updateTransactionHistory();
+                    updateDepositRequestsTable();
+                    updateWithdrawalRequestsTable();
+                    updatePendingTransactionsBadge();
+                    updateDepositRequestBadge();
+                    updateWithdrawalRequestBadge();
                 }
             }
         }
@@ -4786,30 +4863,11 @@
             }
         }
 
-        function clearAllApprovedTransactions() {
-            if (confirm('Clear all approved/rejected transactions from view? This does not delete them from database.')) {
-                // Filter out non-pending transactions from display
-                state.pendingTransactions = state.pendingTransactions.filter(t => t.status === 'pending');
-                updateWalletApprovalsTable();
-                updatePendingTransactionsBadge();
-                showToast('Cleared approved/rejected transactions from view', 'success');
-            }
-        }
-
         function clearTransactionCache() {
             if (confirm('Clear transaction cache? This will reload all transactions from server.')) {
                 loadAllTransactions();
                 refreshPendingTransactions();
                 showToast('Transaction cache cleared', 'success');
-            }
-        }
-
-        function resetAllTransactions() {
-            if (confirm('WARNING: Reset all transactions? This will mark all pending transactions as rejected and clear history.')) {
-                if (state.socket && state.isAdmin) {
-                    state.socket.emit('admin:resetAllTransactions');
-                    showToast('Resetting all transactions...', 'warning');
-                }
             }
         }
 
