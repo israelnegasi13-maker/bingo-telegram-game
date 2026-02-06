@@ -1275,6 +1275,29 @@
 
         .w-100 { width: 100%; }
         .h-100 { height: 100%; }
+        
+        /* Offline indicator */
+        .offline-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning);
+            color: white;
+            padding: 10px 20px;
+            border-radius: var(--border-radius);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: var(--shadow-lg);
+            animation: pulse 2s infinite;
+            display: none;
+        }
+        
+        .offline-indicator.show {
+            display: flex;
+        }
     </style>
 </head>
 <body>
@@ -1289,7 +1312,7 @@
                         </div>
                         <div class="login-logo-text">Bingo Elite</div>
                     </div>
-                    <p class="login-subtitle">Admin Dashboard v4.1</p>
+                    <p class="login-subtitle">Admin Dashboard v4.2</p>
                 </div>
                 
                 <div class="form-group">
@@ -1318,6 +1341,12 @@
         </div>
     </div>
 
+    <!-- Offline Indicator -->
+    <div id="offlineIndicator" class="offline-indicator">
+        <i class="fas fa-wifi-slash"></i>
+        <span>You are offline. Data is being stored locally.</span>
+    </div>
+
     <!-- Main Dashboard -->
     <div id="dashboard" class="dashboard">
         <div class="dashboard-container">
@@ -1330,7 +1359,7 @@
                         </div>
                         <div>
                             <div class="sidebar-logo-text">Bingo Elite</div>
-                            <div class="sidebar-version">Admin v4.1</div>
+                            <div class="sidebar-version">Admin v4.2</div>
                         </div>
                     </div>
                 </div>
@@ -1419,6 +1448,9 @@
                     <div class="last-update mt-1">
                         <small>Active: <span id="activeConnections">0</span> connections</small>
                     </div>
+                    <div class="last-update mt-1">
+                        <small>Offline Data: <span id="offlineDataCount">0</span> items</small>
+                    </div>
                 </div>
             </div>
             
@@ -1437,6 +1469,9 @@
                     </div>
                     
                     <div class="header-actions">
+                        <button class="btn-icon" onclick="forceSync()" title="Sync Offline Data">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </button>
                         <button class="btn-icon" onclick="forceRefreshData()" title="Refresh Data">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -1528,7 +1563,7 @@
                             </div>
                             <div class="stat-change">
                                 <i class="fas fa-exclamation-circle"></i>
-                                <span>Need approval</span>
+                                <span id="offlineStatusText">Need approval</span>
                             </div>
                         </div>
                     </div>
@@ -1579,6 +1614,14 @@
                                 <div class="quick-action-title">Pending Requests</div>
                                 <div class="quick-action-desc">View pending approvals</div>
                             </div>
+                            
+                            <div class="quick-action-card" onclick="clearOfflineData()">
+                                <div class="quick-action-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">
+                                    <i class="fas fa-trash-alt"></i>
+                                </div>
+                                <div class="quick-action-title">Clear Offline Data</div>
+                                <div class="quick-action-desc">Remove stored offline data</div>
+                            </div>
                         </div>
                     </div>
                     
@@ -1604,13 +1647,14 @@
                                             <th>Amount</th>
                                             <th>Details</th>
                                             <th>Time</th>
+                                            <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="recentRequestsTableBody">
                                         <!-- Recent requests will be inserted here -->
                                         <tr>
-                                            <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                            <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                                                 <i class="fas fa-inbox"></i>
                                                 <div class="mt-2">No recent requests</div>
                                             </td>
@@ -1847,6 +1891,7 @@
                                     <th>Amount</th>
                                     <th>Details</th>
                                     <th>Time</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -2043,6 +2088,47 @@
                             </div>
                         </div>
                         
+                        <!-- Offline Data Management -->
+                        <div class="mt-5 pt-4 border-top">
+                            <h3 class="mb-4"><i class="fas fa-database"></i> Offline Data Management</h3>
+                            <div class="form-row mb-4">
+                                <div class="form-group">
+                                    <label class="form-label">Offline Data Status</label>
+                                    <div class="p-3 bg-dark-3 rounded">
+                                        <div class="d-flex align-center justify-between">
+                                            <span>Pending Transactions:</span>
+                                            <span id="offlinePendingCount">0</span>
+                                        </div>
+                                        <div class="d-flex align-center justify-between mt-2">
+                                            <span>Last Sync:</span>
+                                            <span id="lastSyncTime">Never</span>
+                                        </div>
+                                        <div class="d-flex align-center justify-between mt-2">
+                                            <span>Storage Used:</span>
+                                            <span id="storageUsed">0 KB</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Actions</label>
+                                    <div class="d-flex flex-column gap-2">
+                                        <button class="btn btn-primary" onclick="forceSync()">
+                                            <i class="fas fa-sync"></i>
+                                            Sync Now
+                                        </button>
+                                        <button class="btn btn-warning" onclick="backupOfflineData()">
+                                            <i class="fas fa-download"></i>
+                                            Backup Data
+                                        </button>
+                                        <button class="btn btn-danger" onclick="clearOfflineData()">
+                                            <i class="fas fa-trash"></i>
+                                            Clear All
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Agent System Settings -->
                         <div class="mt-5 pt-4 border-top">
                             <h3 class="mb-4"><i class="fas fa-user-tie"></i> Agent System Settings</h3>
@@ -2157,16 +2243,40 @@
                             <div class="stat-card">
                                 <div class="stat-header">
                                     <div class="stat-icon">
-                                        <i class="fas fa-robot"></i>
+                                        <i class="fas fa-database"></i>
                                     </div>
                                     <div class="stat-title">
-                                        <h3>Multi-Socket Users</h3>
-                                        <div class="stat-value" id="debugMultiSocketUsers">0</div>
+                                        <h3>Offline Data</h3>
+                                        <div class="stat-value" id="debugOfflineData">0</div>
                                     </div>
                                 </div>
                                 <div class="stat-change">
-                                    <i class="fas fa-mobile-alt"></i>
-                                    <span>Multiple devices</span>
+                                    <i class="fas fa-save"></i>
+                                    <span>Stored items</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">Local Storage Info</h3>
+                            </div>
+                            <div class="p-4">
+                                <div class="d-flex align-center justify-between mb-3">
+                                    <span>Session Storage:</span>
+                                    <span id="sessionStorageInfo">0 KB</span>
+                                </div>
+                                <div class="d-flex align-center justify-between mb-3">
+                                    <span>Local Storage:</span>
+                                    <span id="localStorageInfo">0 KB</span>
+                                </div>
+                                <div class="d-flex align-center justify-between mb-3">
+                                    <span>Offline Transactions:</span>
+                                    <span id="offlineTransactionsCount">0</span>
+                                </div>
+                                <div class="d-flex align-center justify-between">
+                                    <span>Sync Queue:</span>
+                                    <span id="syncQueueCount">0</span>
                                 </div>
                             </div>
                         </div>
@@ -2438,7 +2548,10 @@
         const CONFIG = {
             SERVER_URL: "https://bingo-telegram-game.onrender.com",
             AUTO_REFRESH_INTERVAL: 2000,
-            MAX_ACTIVITY_ITEMS: 20
+            MAX_ACTIVITY_ITEMS: 20,
+            OFFLINE_STORAGE_KEY: "bingo_admin_offline_data",
+            SYNC_QUEUE_KEY: "bingo_admin_sync_queue",
+            VERSION: "4.2"
         };
 
         // State
@@ -2472,6 +2585,13 @@
                 activeAgents: 0,
                 totalCommissions: 0,
                 referralUsers: 0
+            },
+            // Offline storage properties
+            offlineData: {
+                pendingTransactions: [],
+                lastSync: null,
+                syncQueue: [],
+                isOnline: true
             }
         };
 
@@ -2485,13 +2605,41 @@
                     if (session.expires > Date.now()) {
                         document.getElementById('adminPassword').value = session.password;
                         adminLogin();
+                    } else {
+                        localStorage.removeItem('bingo_admin_session');
                     }
                 } catch (e) {
                     localStorage.removeItem('bingo_admin_session');
                 }
             }
             
+            // Load offline data immediately
+            loadOfflineData();
+            updateOfflineStatus();
+            
             attachNavListeners();
+            
+            // Check online status
+            window.addEventListener('online', updateOfflineStatus);
+            window.addEventListener('offline', updateOfflineStatus);
+            
+            // Auto-save every 30 seconds
+            setInterval(() => {
+                if (state.isAdmin) {
+                    saveOfflineData();
+                }
+            }, 30000);
+            
+            // Save before page unload
+            window.addEventListener('beforeunload', () => {
+                if (state.isAdmin) {
+                    saveOfflineData();
+                }
+            });
+            
+            // Show version
+            document.querySelector('.sidebar-version').textContent = `Admin v${CONFIG.VERSION}`;
+            document.querySelector('.login-subtitle').textContent = `Admin Dashboard v${CONFIG.VERSION}`;
         });
         
         function attachNavListeners() {
@@ -2536,17 +2684,231 @@
                         refreshAgents();
                     } else if (section === 'users') {
                         applyFilters();
+                    } else if (section === 'debug') {
+                        updateDebugInfo();
                     }
                 });
             });
+        }
+
+        // Offline Data Functions
+        function saveOfflineData() {
+            try {
+                const storageData = {
+                    pendingTransactions: state.pendingTransactions,
+                    depositRequests: state.depositRequests,
+                    withdrawalRequests: state.withdrawalRequests,
+                    lastSync: state.offlineData.lastSync || new Date().toISOString(),
+                    version: CONFIG.VERSION,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem(CONFIG.OFFLINE_STORAGE_KEY, JSON.stringify(storageData));
+                
+                // Update UI
+                updateOfflineDataUI();
+                
+                return true;
+            } catch (e) {
+                console.error('Failed to save offline data:', e);
+                showToast('Failed to save offline data', 'error');
+                return false;
+            }
+        }
+
+        function loadOfflineData() {
+            try {
+                const saved = localStorage.getItem(CONFIG.OFFLINE_STORAGE_KEY);
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    
+                    // Check if data is from current version
+                    if (data.version === CONFIG.VERSION) {
+                        state.pendingTransactions = data.pendingTransactions || [];
+                        state.depositRequests = data.depositRequests || [];
+                        state.withdrawalRequests = data.withdrawalRequests || [];
+                        state.offlineData.lastSync = data.lastSync;
+                        
+                        // Update UI with offline data
+                        updateWalletApprovalsTable();
+                        updateDepositRequestsTable();
+                        updateWithdrawalRequestsTable();
+                        updateRecentRequestsTable();
+                        updatePendingTransactionsBadge();
+                        updateDepositRequestBadge();
+                        updateWithdrawalRequestBadge();
+                        
+                        updateOfflineDataUI();
+                        
+                        return true;
+                    } else {
+                        // Clear old version data
+                        clearOfflineData();
+                        showToast('Cleared old version offline data', 'warning');
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load offline data:', e);
+            }
+            return false;
+        }
+
+        function clearOfflineData() {
+            if (confirm('Are you sure you want to clear all offline data? This cannot be undone.')) {
+                localStorage.removeItem(CONFIG.OFFLINE_STORAGE_KEY);
+                localStorage.removeItem(CONFIG.SYNC_QUEUE_KEY);
+                
+                state.pendingTransactions = [];
+                state.depositRequests = [];
+                state.withdrawalRequests = [];
+                state.offlineData.lastSync = null;
+                state.offlineData.syncQueue = [];
+                
+                // Update UI
+                updateWalletApprovalsTable();
+                updateDepositRequestsTable();
+                updateWithdrawalRequestsTable();
+                updateRecentRequestsTable();
+                updatePendingTransactionsBadge();
+                updateDepositRequestBadge();
+                updateWithdrawalRequestBadge();
+                updateOfflineDataUI();
+                
+                showToast('Offline data cleared', 'success');
+            }
+        }
+
+        function backupOfflineData() {
+            try {
+                const data = {
+                    pendingTransactions: state.pendingTransactions,
+                    depositRequests: state.depositRequests,
+                    withdrawalRequests: state.withdrawalRequests,
+                    lastSync: state.offlineData.lastSync,
+                    timestamp: Date.now(),
+                    version: CONFIG.VERSION
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bingo-admin-backup-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast('Backup downloaded successfully', 'success');
+            } catch (e) {
+                console.error('Failed to backup data:', e);
+                showToast('Failed to backup data', 'error');
+            }
+        }
+
+        function updateOfflineDataUI() {
+            const pendingCount = state.pendingTransactions.length;
+            document.getElementById('offlinePendingCount').textContent = pendingCount;
+            document.getElementById('offlineDataCount').textContent = pendingCount;
+            document.getElementById('debugOfflineData').textContent = pendingCount;
+            document.getElementById('offlineTransactionsCount').textContent = pendingCount;
+            
+            if (state.offlineData.lastSync) {
+                const lastSync = new Date(state.offlineData.lastSync);
+                const now = new Date();
+                const diff = Math.floor((now - lastSync) / 1000);
+                
+                let text = 'Just now';
+                if (diff > 60) {
+                    const minutes = Math.floor(diff / 60);
+                    text = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+                }
+                
+                document.getElementById('lastSyncTime').textContent = text;
+            } else {
+                document.getElementById('lastSyncTime').textContent = 'Never';
+            }
+            
+            // Update storage size
+            try {
+                const pendingSize = JSON.stringify(state.pendingTransactions).length;
+                const totalSize = pendingSize + (localStorage.length * 100); // Rough estimate
+                document.getElementById('storageUsed').textContent = `${Math.round(totalSize / 1024)} KB`;
+                
+                // Update debug info
+                document.getElementById('sessionStorageInfo').textContent = `${sessionStorage.length} items`;
+                document.getElementById('localStorageInfo').textContent = `${localStorage.length} items`;
+                document.getElementById('syncQueueCount').textContent = state.offlineData.syncQueue.length;
+            } catch (e) {
+                // Ignore storage errors
+            }
+            
+            // Update offline status text
+            const offlineStatus = document.getElementById('offlineStatusText');
+            if (!state.offlineData.isOnline && pendingCount > 0) {
+                offlineStatus.innerHTML = `<i class="fas fa-wifi-slash"></i> ${pendingCount} stored offline`;
+                offlineStatus.className = 'stat-change warning';
+            } else if (pendingCount > 0) {
+                offlineStatus.innerHTML = `<i class="fas fa-clock"></i> ${pendingCount} pending`;
+                offlineStatus.className = 'stat-change';
+            } else {
+                offlineStatus.innerHTML = `<i class="fas fa-check-circle"></i> All clear`;
+                offlineStatus.className = 'stat-change positive';
+            }
+        }
+
+        function updateOfflineStatus() {
+            state.offlineData.isOnline = navigator.onLine;
+            const indicator = document.getElementById('offlineIndicator');
+            
+            if (!navigator.onLine) {
+                indicator.classList.add('show');
+                document.getElementById('connectionStatusText').textContent = 'Offline';
+                document.getElementById('connectionStatusText').style.color = 'var(--warning)';
+                showToast('You are offline. Data will be stored locally.', 'warning');
+                
+                // Save current state
+                saveOfflineData();
+            } else {
+                indicator.classList.remove('show');
+                
+                // If we were offline and now online, sync data
+                if (!state.offlineData.isOnline) {
+                    showToast('Connection restored. Syncing data...', 'success');
+                    forceSync();
+                }
+            }
+            
+            updateOfflineDataUI();
+        }
+
+        function forceSync() {
+            if (!state.socket || !state.isAdmin) {
+                showToast('Not connected to server', 'error');
+                return;
+            }
+            
+            showToast('Syncing offline data with server...', 'info');
+            
+            // Sync pending transactions
+            syncPendingTransactions();
+            
+            // Also refresh all data
+            forceRefreshData();
+            
+            // Update last sync time
+            state.offlineData.lastSync = new Date().toISOString();
+            saveOfflineData();
         }
 
         // Socket Functions
         function connectSocket() {
             state.socket = io(CONFIG.SERVER_URL, {
                 reconnection: true,
-                reconnectionAttempts: 5,
+                reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 20000,
                 transports: ['websocket', 'polling']
             });
 
@@ -2554,12 +2916,30 @@
                 showToast('Connected to server', 'success');
                 document.getElementById('connectionStatusText').textContent = 'Connected';
                 document.getElementById('connectionStatusText').style.color = 'var(--success)';
+                
+                // Update online status
+                state.offlineData.isOnline = true;
+                updateOfflineStatus();
+                
+                // Request full sync after reconnection
+                if (state.isAdmin) {
+                    setTimeout(() => {
+                        syncPendingTransactions();
+                    }, 1000);
+                }
             });
 
             state.socket.on('disconnect', () => {
                 showToast('Disconnected from server', 'error');
                 document.getElementById('connectionStatusText').textContent = 'Disconnected';
                 document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+                
+                // Update online status
+                state.offlineData.isOnline = false;
+                updateOfflineStatus();
+                
+                // Save data to offline storage when disconnecting
+                saveOfflineData();
             });
 
             state.socket.on('admin:authSuccess', () => {
@@ -2579,11 +2959,16 @@
                 startAutoRefresh();
                 initCharts();
                 
-                // Request initial data
-                refreshPendingTransactions();
-                refreshAgents();
-                refreshDepositRequests();
-                refreshWithdrawalRequests();
+                // Sync pending transactions after login
+                setTimeout(() => {
+                    syncPendingTransactions();
+                    refreshAgents();
+                    refreshDepositRequests();
+                    refreshWithdrawalRequests();
+                }, 1000);
+                
+                // Add login activity
+                addActivityItem({details: 'Admin logged in successfully', type: 'INFO'});
             });
 
             state.socket.on('admin:authError', (message) => {
@@ -2653,7 +3038,7 @@
                 showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
             });
 
-            // Deposit request events - FIXED: Removed duplicate array updates
+            // Deposit request events
             state.socket.on('admin:newDepositRequest', (transaction) => {
                 const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
                 if (!exists) {
@@ -2665,24 +3050,29 @@
                         amount: transaction.amount,
                         receiptNumber: transaction.receiptNumber,
                         createdAt: transaction.timestamp,
-                        status: 'pending'
+                        status: 'pending',
+                        source: 'server'
                     };
                     
                     state.pendingTransactions.unshift(depositRequest);
                     
-                    // Only update the necessary tables
+                    // Update UI
                     updateWalletApprovalsTable();
                     updateRecentRequestsTable();
                     updatePendingTransactionsBadge();
+                    refreshDepositRequests();
                     
                     showToast('New deposit request from ' + transaction.userName, 'info');
                     
                     // Play notification sound
                     playNotificationSound();
+                    
+                    // Save to offline storage
+                    saveOfflineData();
                 }
             });
 
-            // Withdrawal request events - FIXED: Removed duplicate array updates
+            // Withdrawal request events
             state.socket.on('admin:newWithdrawRequest', (transaction) => {
                 const exists = state.pendingTransactions.find(t => t._id === transaction.transactionId);
                 if (!exists) {
@@ -2694,20 +3084,25 @@
                         amount: transaction.amount,
                         phoneNumber: transaction.phoneNumber,
                         createdAt: transaction.timestamp,
-                        status: 'pending'
+                        status: 'pending',
+                        source: 'server'
                     };
                     
                     state.pendingTransactions.unshift(withdrawalRequest);
                     
-                    // Only update the necessary tables
+                    // Update UI
                     updateWalletApprovalsTable();
                     updateRecentRequestsTable();
                     updatePendingTransactionsBadge();
+                    refreshWithdrawalRequests();
                     
                     showToast('New withdrawal request from ' + transaction.userName, 'info');
                     
                     // Play notification sound
                     playNotificationSound();
+                    
+                    // Save to offline storage
+                    saveOfflineData();
                 }
             });
 
@@ -2728,30 +3123,62 @@
             // Wallet transaction events
             state.socket.on('wallet:depositApproved', (data) => {
                 showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
+                
+                // Remove from pending transactions
+                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                
+                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
+                
+                // Save to offline storage
+                saveOfflineData();
             });
 
             state.socket.on('wallet:withdrawalApproved', (data) => {
                 showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
+                
+                // Remove from pending transactions
+                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                
+                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
+                
+                // Save to offline storage
+                saveOfflineData();
             });
 
             state.socket.on('wallet:depositRejected', (data) => {
                 showToast(`Deposit rejected: ${data.message}`, 'error');
+                
+                // Remove from pending transactions
+                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                
+                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
+                
+                // Save to offline storage
+                saveOfflineData();
             });
 
             state.socket.on('wallet:withdrawalRejected', (data) => {
                 showToast(`Withdrawal rejected: ${data.message}`, 'error');
+                
+                // Remove from pending transactions
+                state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== data.transactionId);
+                
+                // Refresh data
                 refreshPendingTransactions();
                 refreshDepositRequests();
                 refreshWithdrawalRequests();
+                
+                // Save to offline storage
+                saveOfflineData();
             });
 
             // House earnings reset
@@ -2761,6 +3188,35 @@
 
             state.socket.on('admin:houseEarningsResetError', (message) => {
                 showToast('Failed to reset house earnings: ' + message, 'error');
+            });
+
+            // Pending transactions sync
+            state.socket.on('admin:pendingTransactionsSync', (transactions) => {
+                // Merge offline data with server data
+                const offlineIds = state.pendingTransactions.map(t => t._id);
+                const newTransactions = transactions.filter(t => !offlineIds.includes(t._id));
+                
+                // Add source marker
+                newTransactions.forEach(t => t.source = 'server');
+                
+                state.pendingTransactions = [...state.pendingTransactions, ...newTransactions];
+                
+                // Update last sync time
+                state.offlineData.lastSync = new Date().toISOString();
+                
+                // Save merged data
+                saveOfflineData();
+                
+                // Update UI
+                updateWalletApprovalsTable();
+                updateDepositRequestsTable();
+                updateWithdrawalRequestsTable();
+                updateRecentRequestsTable();
+                updatePendingTransactionsBadge();
+                updateDepositRequestBadge();
+                updateWithdrawalRequestBadge();
+                
+                showToast(`Synced ${newTransactions.length} new transactions`, 'success');
             });
         }
 
@@ -3015,21 +3471,35 @@
         }
 
         // Wallet Approvals Functions
+        function syncPendingTransactions() {
+            if (!state.socket || !state.isAdmin) return;
+            
+            // Request sync from server
+            state.socket.emit('admin:syncPendingTransactions', {
+                lastSync: state.offlineData.lastSync,
+                localIds: state.pendingTransactions.map(t => t._id)
+            });
+            
+            showToast('Syncing pending transactions...', 'info');
+        }
+
         function refreshPendingTransactions() {
             if (state.socket && state.isAdmin) {
                 state.socket.emit('admin:getPendingTransactions');
-                showToast('Refreshing pending transactions...', 'info');
             }
+            
+            // Update UI with current data
+            updateWalletApprovalsTable();
+            updateRecentRequestsTable();
+            updatePendingTransactionsBadge();
         }
 
-        // FIXED: Only filter from pendingTransactions
         function refreshDepositRequests() {
             state.depositRequests = state.pendingTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
             updateDepositRequestsTable();
             updateDepositRequestBadge();
         }
 
-        // FIXED: Only filter from pendingTransactions
         function refreshWithdrawalRequests() {
             state.withdrawalRequests = state.pendingTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
             updateWithdrawalRequestsTable();
@@ -3064,7 +3534,7 @@
             if (filtered.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                             <i class="fas fa-check-circle"></i>
                             <div class="mt-2">No pending transactions</div>
                         </td>
@@ -3094,6 +3564,10 @@
                     details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
                 }
                 
+                // Add offline indicator if from local storage
+                const offlineIndicator = transaction.source === 'local' ? 
+                    '<span class="badge badge-warning" style="margin-left: 5px; font-size: 0.7rem;">Offline</span>' : '';
+                
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-center gap-2">
@@ -3104,7 +3578,7 @@
                             </div>
                         </div>
                     </td>
-                    <td>${typeBadge}</td>
+                    <td>${typeBadge}${offlineIndicator}</td>
                     <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
                         ${transaction.type === 'DEPOSIT_REQUEST' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
                     </td>
@@ -3114,6 +3588,9 @@
                     <td>
                         <div>${date}</div>
                         <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
+                    </td>
+                    <td>
+                        <span class="badge badge-warning">Pending</span>
                     </td>
                     <td>
                         <div class="action-buttons">
@@ -3306,7 +3783,7 @@
             if (recentRequests.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">
                             <i class="fas fa-inbox"></i>
                             <div class="mt-2">No recent requests</div>
                         </td>
@@ -3335,6 +3812,12 @@
                     details = `Phone: ${transaction.phoneNumber || 'N/A'}`;
                 }
                 
+                // Add offline indicator if from local storage
+                const offlineIndicator = transaction.source === 'local' ? 
+                    '<span class="badge badge-warning" style="margin-left: 5px; font-size: 0.7rem;">Offline</span>' : '';
+                
+                let statusBadge = '<span class="badge badge-warning">Pending</span>';
+                
                 row.innerHTML = `
                     <td>
                         <div class="d-flex align-center gap-2">
@@ -3345,7 +3828,7 @@
                             </div>
                         </div>
                     </td>
-                    <td>${typeBadge}</td>
+                    <td>${typeBadge}${offlineIndicator}</td>
                     <td style="font-weight: 700; color: ${transaction.type === 'DEPOSIT_REQUEST' ? 'var(--success)' : 'var(--danger)'}">
                         ${transaction.type === 'DEPOSIT_REQUEST' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)} ETB
                     </td>
@@ -3355,6 +3838,7 @@
                     <td>
                         <div class="text-muted" style="font-size: 0.75rem;">${time}</div>
                     </td>
+                    <td>${statusBadge}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn btn-success btn-sm" onclick="approveTransaction('${transaction._id}', '${transaction.type}')" title="Approve">
@@ -3381,13 +3865,41 @@
                 return;
             }
             
-            if (type === 'DEPOSIT_REQUEST') {
-                state.socket.emit('admin:approveDeposit', transactionId);
-            } else if (type === 'WITHDRAW_REQUEST') {
-                state.socket.emit('admin:approveWithdrawal', transactionId);
+            // Remove from local storage immediately
+            state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
+            
+            // Save to offline storage
+            saveOfflineData();
+            
+            // Send to server if online
+            if (state.socket && state.isAdmin && state.offlineData.isOnline) {
+                if (type === 'DEPOSIT_REQUEST') {
+                    state.socket.emit('admin:approveDeposit', transactionId);
+                } else if (type === 'WITHDRAW_REQUEST') {
+                    state.socket.emit('admin:approveWithdrawal', transactionId);
+                }
+                
+                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
+            } else {
+                // Add to sync queue if offline
+                state.offlineData.syncQueue.push({
+                    action: 'approve',
+                    type: type,
+                    transactionId: transactionId,
+                    timestamp: Date.now()
+                });
+                
+                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} queued for sync (offline)`, 'warning');
             }
             
-            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
+            // Update UI
+            updateWalletApprovalsTable();
+            updateDepositRequestsTable();
+            updateWithdrawalRequestsTable();
+            updateRecentRequestsTable();
+            updatePendingTransactionsBadge();
+            updateDepositRequestBadge();
+            updateWithdrawalRequestBadge();
         }
 
         function rejectTransaction(transactionId, type) {
@@ -3400,8 +3912,36 @@
                 return;
             }
             
-            state.socket.emit('admin:rejectTransaction', transactionId);
-            showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
+            // Remove from local storage immediately
+            state.pendingTransactions = state.pendingTransactions.filter(t => t._id !== transactionId);
+            
+            // Save to offline storage
+            saveOfflineData();
+            
+            // Send to server if online
+            if (state.socket && state.isAdmin && state.offlineData.isOnline) {
+                state.socket.emit('admin:rejectTransaction', transactionId);
+                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
+            } else {
+                // Add to sync queue if offline
+                state.offlineData.syncQueue.push({
+                    action: 'reject',
+                    type: type,
+                    transactionId: transactionId,
+                    timestamp: Date.now()
+                });
+                
+                showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection queued for sync (offline)`, 'warning');
+            }
+            
+            // Update UI
+            updateWalletApprovalsTable();
+            updateDepositRequestsTable();
+            updateWithdrawalRequestsTable();
+            updateRecentRequestsTable();
+            updatePendingTransactionsBadge();
+            updateDepositRequestBadge();
+            updateWithdrawalRequestBadge();
         }
 
         function updatePendingTransactionsBadge() {
@@ -3418,6 +3958,9 @@
             
             // Also update the pending requests stat
             document.getElementById('pendingRequests').textContent = count;
+            
+            // Update offline data UI
+            updateOfflineDataUI();
         }
 
         function updateDepositRequestBadge() {
@@ -3875,6 +4418,9 @@
             } else if (activity.type === 'WITHDRAWAL') {
                 icon = 'fa-money-check-alt';
                 color = 'var(--warning)';
+            } else if (activity.type === 'OFFLINE_SYNC') {
+                icon = 'fa-sync';
+                color = 'var(--info)';
             }
             
             activityItem.innerHTML = `
@@ -4061,24 +4607,45 @@
         }
 
         function searchTransactions() {
-            // Implement search functionality
             showToast('Searching transactions...', 'info');
         }
 
         function applyTransactionFilters() {
-            // Implement filter functionality
             showToast('Applying filters...', 'info');
         }
 
         function filterLogs() {
-            // Implement log filter functionality
             showToast('Filtering logs...', 'info');
         }
 
         function logout() {
             if (confirm('Logout from admin panel?')) {
+                // Save any pending data before logout
+                saveOfflineData();
+                
                 localStorage.removeItem('bingo_admin_session');
                 window.location.reload();
+            }
+        }
+
+        function updateDebugInfo() {
+            // Update debug information
+            document.getElementById('debugSockets').textContent = state.socket?.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('debugMappedUsers').textContent = state.users.length;
+            document.getElementById('debugAdmins').textContent = state.isAdmin ? '1' : '0';
+            document.getElementById('debugMultiSocketUsers').textContent = state.multiSocketUsers;
+            document.getElementById('debugOfflineData').textContent = state.pendingTransactions.length;
+            
+            // Update storage info
+            try {
+                document.getElementById('sessionStorageInfo').textContent = `${sessionStorage.length} items`;
+                document.getElementById('localStorageInfo').textContent = `${localStorage.length} items`;
+                
+                const offlineSize = JSON.stringify(state.pendingTransactions).length;
+                document.getElementById('offlineTransactionsCount').textContent = state.pendingTransactions.length;
+                document.getElementById('syncQueueCount').textContent = state.offlineData.syncQueue.length;
+            } catch (e) {
+                // Ignore errors
             }
         }
 
@@ -4089,8 +4656,13 @@
         setTimeout(() => {
             if (state.isAdmin) {
                 addActivityItem({details: 'System initialized successfully', type: 'INFO'});
-                addActivityItem({details: 'Welcome to Bingo Elite Admin Dashboard v4.1', type: 'INFO'});
-                addActivityItem({details: 'Enhanced deposit/withdrawal tracking enabled', type: 'INFO'});
+                addActivityItem({details: `Welcome to Bingo Elite Admin Dashboard v${CONFIG.VERSION}`, type: 'INFO'});
+                addActivityItem({details: 'Offline data storage enabled', type: 'INFO'});
+                
+                // Show offline data status
+                if (state.pendingTransactions.length > 0) {
+                    addActivityItem({details: `Loaded ${state.pendingTransactions.length} pending transactions from offline storage`, type: 'OFFLINE_SYNC'});
+                }
             }
         }, 2000);
     </script>
