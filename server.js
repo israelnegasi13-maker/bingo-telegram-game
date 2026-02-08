@@ -629,6 +629,228 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== TRANSACTION HISTORY HANDLER ==========
+  socket.on('admin:getAllTransactions', async (data) => {
+    if (socket.admin) {
+      try {
+        const { limit = 100, skip = 0, type, status, userId } = data || {};
+        
+        let query = {};
+        if (type && type !== 'ALL') query.type = type;
+        if (status && status !== 'ALL') query.status = status;
+        if (userId) query.userId = userId;
+        
+        const transactions = await Transaction.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+        
+        const totalCount = await Transaction.countDocuments(query);
+        
+        socket.emit('admin:allTransactions', {
+          transactions,
+          totalCount,
+          currentPage: Math.floor(skip / limit) + 1,
+          totalPages: Math.ceil(totalCount / limit)
+        });
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        socket.emit('admin:error', 'Failed to fetch transactions');
+      }
+    }
+  });
+  
+  // ========== ANALYTICS DATA HANDLER ==========
+  socket.on('admin:getAnalytics', async () => {
+    if (socket.admin) {
+      try {
+        // Get current date and previous periods
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        
+        // Get today's stats
+        const todayStats = await Stats.findOne({ date: today }) || {
+          totalWagered: 0,
+          totalEarnings: 0,
+          totalGames: 0,
+          totalUsers: 0,
+          newUsers: 0,
+          totalBingos: 0,
+          totalFourCorners: 0,
+          totalKenoWagered: 0,
+          totalKenoEarnings: 0,
+          totalKenoGames: 0,
+          totalKenoWins: 0,
+          agentCommissions: 0,
+          agentReferrals: 0,
+          activeAgents: 0
+        };
+        
+        // Get yesterday's stats
+        const yesterdayStats = await Stats.findOne({ date: yesterdayStr }) || {
+          totalWagered: 0,
+          totalEarnings: 0,
+          totalGames: 0,
+          totalUsers: 0,
+          newUsers: 0,
+          totalBingos: 0,
+          totalFourCorners: 0,
+          totalKenoWagered: 0,
+          totalKenoEarnings: 0,
+          totalKenoGames: 0,
+          totalKenoWins: 0,
+          agentCommissions: 0,
+          agentReferrals: 0,
+          activeAgents: 0
+        };
+        
+        // Get last 7 days stats
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          const dayStats = await Stats.findOne({ date: dateStr }) || {
+            date: dateStr,
+            totalWagered: 0,
+            totalEarnings: 0,
+            totalGames: 0,
+            totalUsers: 0,
+            newUsers: 0,
+            totalBingos: 0,
+            totalFourCorners: 0,
+            totalKenoWagered: 0,
+            totalKenoEarnings: 0,
+            totalKenoGames: 0,
+            totalKenoWins: 0,
+            agentCommissions: 0,
+            agentReferrals: 0,
+            activeAgents: 0
+          };
+          last7Days.push(dayStats);
+        }
+        
+        // Get user statistics
+        const totalUsers = await User.countDocuments();
+        const todayUsers = await User.countDocuments({
+          joinedAt: { $gte: new Date(today) }
+        });
+        const onlineUsers = await User.countDocuments({ isOnline: true });
+        const usersWithBalance = await User.countDocuments({ balance: { $gt: 0 } });
+        
+        // Get transaction statistics
+        const totalDeposits = await Transaction.aggregate([
+          { $match: { type: 'DEPOSIT_APPROVED' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+        ]);
+        
+        const totalWithdrawals = await Transaction.aggregate([
+          { $match: { type: 'WITHDRAW_APPROVED' } },
+          { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
+        ]);
+        
+        const pendingDeposits = await Transaction.countDocuments({
+          type: 'DEPOSIT_REQUEST',
+          status: 'pending'
+        });
+        
+        const pendingWithdrawals = await Transaction.countDocuments({
+          type: 'WITHDRAW_REQUEST',
+          status: 'pending'
+        });
+        
+        // Get game statistics
+        const totalBingoGames = await Room.countDocuments();
+        const activeBingoGames = await Room.countDocuments({ status: 'playing' });
+        const totalBingoWinners = await Room.aggregate([
+          { $unwind: '$gameHistory' },
+          { $group: { _id: '$gameHistory.winner' } },
+          { $count: 'total' }
+        ]);
+        
+        // Get agent statistics
+        const totalAgents = await Agent.countDocuments();
+        const activeAgents = await Agent.countDocuments({ isActive: true });
+        const agentCommissions = await AgentCommission.aggregate([
+          { $match: { status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+        ]);
+        
+        const analytics = {
+          // Date information
+          today: today,
+          yesterday: yesterdayStr,
+          
+          // Today vs Yesterday comparison
+          todayStats: todayStats,
+          yesterdayStats: yesterdayStats,
+          
+          // 7-day trend
+          last7Days: last7Days,
+          
+          // User statistics
+          userStats: {
+            totalUsers,
+            todayUsers,
+            onlineUsers,
+            usersWithBalance,
+            percentageOnline: totalUsers > 0 ? (onlineUsers / totalUsers * 100).toFixed(1) : 0
+          },
+          
+          // Transaction statistics
+          transactionStats: {
+            totalDeposits: totalDeposits[0]?.total || 0,
+            totalWithdrawals: totalWithdrawals[0]?.total || 0,
+            pendingDeposits,
+            pendingWithdrawals,
+            netCashFlow: (totalDeposits[0]?.total || 0) - (totalWithdrawals[0]?.total || 0)
+          },
+          
+          // Game statistics
+          gameStats: {
+            totalBingoGames,
+            activeBingoGames,
+            totalBingoWinners: totalBingoWinners[0]?.total || 0,
+            // Keno stats from Keno logic
+            kenoStats: kenoLogic && kenoLogic.getKenoGameStats ? kenoLogic.getKenoGameStats() : {
+              totalGames: 0,
+              totalWagered: 0,
+              totalWins: 0,
+              currentPlayers: 0,
+              activeGames: 0
+            }
+          },
+          
+          // Agent statistics
+          agentStats: {
+            totalAgents,
+            activeAgents,
+            totalCommissions: agentCommissions[0]?.total || 0,
+            todayCommissions: todayStats.agentCommissions || 0
+          },
+          
+          // Performance metrics
+          performance: {
+            avgDailyWagered: last7Days.reduce((sum, day) => sum + day.totalWagered, 0) / 7,
+            avgDailyEarnings: last7Days.reduce((sum, day) => sum + day.totalEarnings, 0) / 7,
+            avgDailyUsers: last7Days.reduce((sum, day) => sum + day.newUsers, 0) / 7,
+            conversionRate: todayStats.newUsers > 0 ? 
+              (todayStats.totalGames / todayStats.newUsers * 100).toFixed(1) : 0
+          }
+        };
+        
+        socket.emit('admin:analytics', analytics);
+      } catch (error) {
+        console.error('Error fetching analytics:', error);
+        socket.emit('admin:error', 'Failed to fetch analytics data');
+      }
+    }
+  });
+  
   // ========== WALLET EVENT HANDLERS FOR TELEGRAM ENTRY PAGE ==========
   // Handle wallet events from Telegram entry page
   socket.on('wallet:depositRequest', async (data) => {
