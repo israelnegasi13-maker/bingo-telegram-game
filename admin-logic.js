@@ -55,6 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
         el.textContent = `Admin v${CONFIG.VERSION}`;
     });
     
+    // Test server connection on load
+    setTimeout(() => testServerConnection(), 1000);
+    
     // Check for saved session
     const savedSession = localStorage.getItem('bingo_admin_session');
     if (savedSession) {
@@ -62,7 +65,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const session = JSON.parse(savedSession);
             if (session.expires > Date.now()) {
                 document.getElementById('adminPassword').value = session.password;
-                adminLogin();
+                console.log('📋 Found saved session (expires:', new Date(session.expires).toLocaleString(), ')');
+                showToast('Found saved session. Click "Access Dashboard" to login.', 'info');
             } else {
                 console.log('⚠️ Saved session expired');
                 localStorage.removeItem('bingo_admin_session');
@@ -79,6 +83,17 @@ document.addEventListener('DOMContentLoaded', function() {
             adminLogin();
         }
     });
+    
+    // Add connection status indicator to HTML if missing
+    if (!document.querySelector('.status-indicator')) {
+        const connectionStatus = document.querySelector('.connection-status');
+        if (connectionStatus) {
+            const indicator = document.createElement('div');
+            indicator.className = 'status-indicator';
+            indicator.style.background = 'var(--danger)';
+            connectionStatus.prepend(indicator);
+        }
+    }
     
     attachNavListeners();
     updateConnectionStatus();
@@ -143,51 +158,85 @@ function connectSocket() {
     console.log(`🔗 Connecting to server: ${CONFIG.SERVER_URL}`);
     
     // Disconnect existing socket if any
-    if (state.socket && state.socket.connected) {
+    if (state.socket) {
         state.socket.disconnect();
+        state.socket = null;
     }
     
-    state.socket = io(CONFIG.SERVER_URL, {
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        transports: ['websocket', 'polling'],
-        timeout: 10000
-    });
+    // Create new socket connection
+    try {
+        state.socket = io(CONFIG.SERVER_URL, {
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 10000,
+            transports: ['websocket', 'polling']
+        });
+        
+        // Add connection event listeners
+        setupSocketListeners();
+        
+    } catch (error) {
+        console.error('❌ Failed to create socket:', error);
+        showToast('Failed to create connection: ' + error.message, 'error');
+    }
+}
 
+// Fix 3: Separate socket listener setup
+function setupSocketListeners() {
+    if (!state.socket) return;
+    
     state.socket.on('connect', () => {
         console.log('✅ Connected to server');
         showToast('Connected to server', 'success');
         document.getElementById('connectionStatusText').textContent = 'Connected';
         document.getElementById('connectionStatusText').style.color = 'var(--success)';
-        document.getElementById('connectionIcon').className = 'fas fa-wifi connection-icon connected';
+        
+        // Update connection icon
+        const statusIndicator = document.querySelector('.status-indicator');
+        if (statusIndicator) {
+            statusIndicator.style.background = 'var(--success)';
+        }
     });
 
     state.socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
+        showToast('Connection error: ' + (error.message || 'Unknown error'), 'error');
         document.getElementById('connectionStatusText').textContent = 'Connection Error';
         document.getElementById('connectionStatusText').style.color = 'var(--danger)';
-        document.getElementById('connectionIcon').className = 'fas fa-wifi-slash connection-icon disconnected';
+        
+        // Update connection icon
+        const statusIndicator = document.querySelector('.status-indicator');
+        if (statusIndicator) {
+            statusIndicator.style.background = 'var(--danger)';
+        }
     });
 
     state.socket.on('disconnect', (reason) => {
         console.log('🔌 Disconnected from server:', reason);
-        showToast('Disconnected from server', 'error');
+        showToast('Disconnected from server: ' + reason, 'error');
         document.getElementById('connectionStatusText').textContent = 'Disconnected';
         document.getElementById('connectionStatusText').style.color = 'var(--danger)';
-        document.getElementById('connectionIcon').className = 'fas fa-wifi-slash connection-icon disconnected';
         
-        if (reason === 'io server disconnect') {
-            // Server disconnected, try to reconnect
+        // Update connection icon
+        const statusIndicator = document.querySelector('.status-indicator');
+        if (statusIndicator) {
+            statusIndicator.style.background = 'var(--danger)';
+        }
+        
+        // Auto-reconnect for certain disconnect reasons
+        if (reason === 'io server disconnect' || reason === 'transport close') {
             setTimeout(() => {
-                if (!state.socket.connected) {
+                if (!state.socket || !state.socket.connected) {
                     console.log('🔄 Attempting to reconnect...');
-                    state.socket.connect();
+                    connectSocket();
                 }
-            }, 1000);
+            }, 2000);
         }
     });
 
+    // Add all other socket listeners here...
     state.socket.on('admin:authSuccess', () => {
         console.log('🔑 Admin authentication successful');
         state.isAdmin = true;
@@ -218,6 +267,10 @@ function connectSocket() {
         console.error('❌ Admin auth error:', message);
         showToast('Login failed: ' + message, 'error');
         localStorage.removeItem('bingo_admin_session');
+        
+        // Clear password field
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('adminPassword').focus();
     });
 
     state.socket.on('admin:update', (data) => {
@@ -484,19 +537,39 @@ function adminLogin() {
     
     console.log('🔑 Attempting admin login...');
     
+    // Check if we have a valid socket connection first
     if (!state.socket || !state.socket.connected) {
-        console.log('🔄 Creating new socket connection...');
+        console.log('🔄 No active connection, establishing socket...');
+        
+        // Create a connection timeout
+        const connectionTimeout = setTimeout(() => {
+            showToast('Connection timeout. Please check server.', 'error');
+        }, 10000); // 10 second timeout
+        
+        // Connect socket first
         connectSocket();
         
         // Wait for connection before sending auth
-        setTimeout(() => {
+        const waitForConnection = () => {
             if (state.socket && state.socket.connected) {
+                clearTimeout(connectionTimeout);
                 console.log('✅ Socket connected, sending auth...');
                 state.socket.emit('admin:auth', password);
             } else {
-                showToast('Failed to connect to server', 'error');
+                // Try again after short delay
+                setTimeout(waitForConnection, 500);
             }
-        }, 1000);
+        };
+        
+        waitForConnection();
+        
+        // Also set a global timeout
+        setTimeout(() => {
+            if (!state.socket || !state.socket.connected) {
+                showToast('Failed to connect to server. Please refresh and try again.', 'error');
+                console.error('❌ Connection timeout reached');
+            }
+        }, 15000);
     } else {
         console.log('✅ Socket already connected, sending auth...');
         state.socket.emit('admin:auth', password);
@@ -580,13 +653,25 @@ function updateStats(data) {
 }
 
 function updateConnectionStatus() {
-    const status = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('connectionStatusText');
+    const statusIndicator = document.querySelector('.status-indicator');
+    
     if (state.socket && state.socket.connected) {
-        status.innerHTML = '<i class="fas fa-wifi"></i> Connected';
-        status.style.color = 'var(--success)';
+        if (statusText) {
+            statusText.textContent = 'Connected';
+            statusText.style.color = 'var(--success)';
+        }
+        if (statusIndicator) {
+            statusIndicator.style.background = 'var(--success)';
+        }
     } else {
-        status.innerHTML = '<i class="fas fa-wifi-slash"></i> Disconnected';
-        status.style.color = 'var(--danger)';
+        if (statusText) {
+            statusText.textContent = 'Disconnected';
+            statusText.style.color = 'var(--danger)';
+        }
+        if (statusIndicator) {
+            statusIndicator.style.background = 'var(--danger)';
+        }
     }
 }
 
@@ -2401,6 +2486,26 @@ function backupDatabase() {
     console.log('💾 Backing up database...');
     showToast('Database backup initiated', 'info');
     // In a real implementation, trigger server backup
+}
+
+// Fix 4: Add connection test function
+function testServerConnection() {
+    console.log('🧪 Testing server connection...');
+    showToast('Testing connection to server...', 'info');
+    
+    fetch(`${CONFIG.SERVER_URL}/health`, { method: 'HEAD' })
+        .then(response => {
+            if (response.ok) {
+                showToast('Server is reachable', 'success');
+                return true;
+            }
+            throw new Error('Server responded with ' + response.status);
+        })
+        .catch(error => {
+            console.error('❌ Server connection test failed:', error);
+            showToast('Cannot reach server: ' + error.message, 'error');
+            return false;
+        });
 }
 
 function logout() {
