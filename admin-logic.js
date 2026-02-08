@@ -1,6 +1,6 @@
 // Configuration
 const CONFIG = {
-    SERVER_URL: "https://bingo-telegram-game.onrender.com",
+    SERVER_URL: window.location.origin || "https://bingo-telegram-game.onrender.com",
     AUTO_REFRESH_INTERVAL: 3000,
     MAX_ACTIVITY_ITEMS: 20,
     PERSISTENT_STORAGE: true,
@@ -124,26 +124,38 @@ function attachNavListeners() {
 
 // Socket Functions
 function connectSocket() {
+    console.log(`🔌 Connecting to server: ${CONFIG.SERVER_URL}`);
+    
     state.socket = io(CONFIG.SERVER_URL, {
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        timeout: 10000
     });
 
     state.socket.on('connect', () => {
+        console.log('✅ Connected to server');
         showToast('Connected to server', 'success');
         document.getElementById('connectionStatusText').textContent = 'Connected';
         document.getElementById('connectionStatusText').style.color = 'var(--success)';
     });
 
-    state.socket.on('disconnect', () => {
+    state.socket.on('connect_error', (error) => {
+        console.error('❌ Connection error:', error);
+        document.getElementById('connectionStatusText').textContent = 'Connection Error';
+        document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+    });
+
+    state.socket.on('disconnect', (reason) => {
+        console.log('❌ Disconnected from server:', reason);
         showToast('Disconnected from server', 'error');
         document.getElementById('connectionStatusText').textContent = 'Disconnected';
         document.getElementById('connectionStatusText').style.color = 'var(--danger)';
     });
 
     state.socket.on('admin:authSuccess', () => {
+        console.log('✅ Admin authentication successful');
         state.isAdmin = true;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
@@ -156,7 +168,9 @@ function connectSocket() {
         };
         localStorage.setItem('bingo_admin_session', JSON.stringify(session));
         
+        // Request initial data
         state.socket.emit('admin:getData');
+        state.socket.emit('admin:getTelebirrNumber');
         startAutoRefresh();
         initCharts();
         
@@ -172,6 +186,7 @@ function connectSocket() {
     });
 
     state.socket.on('admin:authError', (message) => {
+        console.log('❌ Admin auth error:', message);
         showToast('Login failed: ' + message, 'error');
     });
 
@@ -401,6 +416,12 @@ function connectSocket() {
         refreshPendingTransactions();
         loadAllTransactions();
     });
+
+    // Handle connection errors
+    state.socket.on('error', (error) => {
+        console.error('Socket error:', error);
+        showToast('Socket error: ' + error, 'error');
+    });
 }
 
 // Login Function
@@ -411,11 +432,32 @@ function adminLogin() {
         return;
     }
     
-    if (!state.socket) {
-        connectSocket();
-    }
+    console.log('🔑 Attempting admin login...');
     
-    state.socket.emit('admin:auth', password);
+    if (!state.socket || !state.socket.connected) {
+        console.log('🔄 Socket not connected, connecting...');
+        connectSocket();
+        
+        // Wait for connection before sending auth
+        const checkConnection = setInterval(() => {
+            if (state.socket && state.socket.connected) {
+                clearInterval(checkConnection);
+                console.log('✅ Socket connected, sending auth');
+                state.socket.emit('admin:auth', password);
+            }
+        }, 100);
+        
+        // Timeout after 5 seconds
+        setTimeout(() => {
+            clearInterval(checkConnection);
+            if (!state.socket || !state.socket.connected) {
+                showToast('Failed to connect to server. Please check your connection.', 'error');
+            }
+        }, 5000);
+    } else {
+        console.log('✅ Socket already connected, sending auth');
+        state.socket.emit('admin:auth', password);
+    }
 }
 
 // UI Functions
@@ -644,25 +686,31 @@ function updateFundsUserList() {
 
 // Transaction Functions
 function loadAllTransactions() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
+        console.log('📊 Loading all transactions...');
         state.socket.emit('admin:getAllTransactions');
+    } else {
+        console.log('⚠️ Cannot load transactions: Socket not connected or not admin');
     }
 }
 
 function refreshPendingTransactions() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
+        console.log('🔄 Refreshing pending transactions...');
         state.socket.emit('admin:getPendingTransactions');
     }
 }
 
 function refreshDepositRequests() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
+        console.log('🔄 Refreshing deposit requests...');
         state.socket.emit('admin:getDepositRequests');
     }
 }
 
 function refreshWithdrawalRequests() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
+        console.log('🔄 Refreshing withdrawal requests...');
         state.socket.emit('admin:getWithdrawalRequests');
     }
 }
@@ -1404,7 +1452,8 @@ function updateWithdrawalRequestBadge() {
 
 // Agent Management Functions
 function refreshAgents() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
+        console.log('👑 Refreshing agents...');
         state.socket.emit('agent:getAllAgents');
     }
 }
@@ -1773,7 +1822,7 @@ function showPendingRequests() {
 }
 
 function forceRefreshData() {
-    if (state.socket) {
+    if (state.socket && state.socket.connected) {
         state.socket.emit('admin:getData');
         refreshAgents();
         refreshPendingTransactions();
@@ -1781,6 +1830,8 @@ function forceRefreshData() {
         refreshWithdrawalRequests();
         loadAllTransactions();
         showToast('Refreshing all data...', 'success');
+    } else {
+        showToast('Not connected to server', 'error');
     }
 }
 
@@ -1810,7 +1861,10 @@ function updateUserCountBadge(count) {
 
 // Analytics Functions
 function updateAnalytics() {
-    if (!state.socket || !state.isAdmin) return;
+    if (!state.socket || !state.isAdmin || !state.socket.connected) {
+        showToast('Not connected to server', 'error');
+        return;
+    }
     
     const dateRange = document.getElementById('analyticsDateRange').value;
     state.socket.emit('admin:getAnalytics', { dateRange: dateRange });
@@ -2014,7 +2068,7 @@ function addActivityItem(activity) {
 }
 
 function refreshActivity() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         state.socket.emit('admin:getData');
         showToast('Activity refreshed', 'success');
     }
@@ -2022,7 +2076,7 @@ function refreshActivity() {
 
 function startAutoRefresh() {
     setInterval(() => {
-        if (state.isAdmin && state.socket) {
+        if (state.isAdmin && state.socket && state.socket.connected) {
             state.socket.emit('admin:getData');
         }
     }, CONFIG.AUTO_REFRESH_INTERVAL);
@@ -2036,7 +2090,7 @@ function initCharts() {
 // System Functions
 function resetHouseEarnings() {
     if (confirm('Are you sure you want to reset house earnings to zero? This action cannot be undone.')) {
-        if (state.socket && state.isAdmin) {
+        if (state.socket && state.isAdmin && state.socket.connected) {
             // Optimistically update the UI
             document.getElementById('houseEarnings').textContent = '0.00 ETB';
             
@@ -2078,7 +2132,7 @@ function clearAllApprovedTransactions() {
 
 function resetAllTransactions() {
     if (confirm('WARNING: This will reset ALL transaction history including pending requests. Are you sure?')) {
-        if (state.socket && state.isAdmin) {
+        if (state.socket && state.isAdmin && state.socket.connected) {
             state.socket.emit('admin:resetAllTransactions');
             showToast('Resetting all transactions...', 'warning');
             
@@ -2115,7 +2169,7 @@ function updateTelebirrNumber() {
         return;
     }
     
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
         state.socket.emit('admin:updateTelebirrNumber', newNumber);
         showToast('Updating Telebirr number...', 'info');
@@ -2242,7 +2296,12 @@ function backupDatabase() {
 function logout() {
     if (confirm('Logout from admin panel?')) {
         localStorage.removeItem('bingo_admin_session');
-        window.location.reload();
+        state.isAdmin = false;
+        state.socket.disconnect();
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('adminPassword').value = '';
+        showToast('Logged out successfully', 'success');
     }
 }
 
@@ -2258,3 +2317,46 @@ setTimeout(() => {
         addActivityItem({details: 'All pending requests will be saved until processed', type: 'INFO'});
     }
 }, 2000);
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl + R to refresh
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        forceRefreshData();
+    }
+    
+    // Ctrl + L to logout
+    if (e.ctrlKey && e.key === 'l') {
+        e.preventDefault();
+        logout();
+    }
+    
+    // Ctrl + F to focus search
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        const activeSection = document.querySelector('.content-section.active');
+        if (activeSection) {
+            const searchInput = activeSection.querySelector('input[type="text"]');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+    }
+});
+
+// Add connection status indicator
+function updateConnectionStatus() {
+    const indicator = document.getElementById('connectionIndicator');
+    if (!state.socket || !state.socket.connected) {
+        indicator.className = 'connection-indicator disconnected';
+        indicator.title = 'Disconnected';
+    } else {
+        indicator.className = 'connection-indicator connected';
+        indicator.title = 'Connected';
+    }
+}
+
+// Periodically update connection status
+setInterval(updateConnectionStatus, 5000);
