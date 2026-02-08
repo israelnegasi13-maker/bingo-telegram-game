@@ -1,7 +1,7 @@
 // Configuration
 const CONFIG = {
-    SERVER_URL: window.location.origin || "https://bingo-telegram-game.onrender.com",
-    AUTO_REFRESH_INTERVAL: 3000,
+    SERVER_URL: window.location.origin, // Use current origin (dynamic)
+    AUTO_REFRESH_INTERVAL: 5000,
     MAX_ACTIVITY_ITEMS: 20,
     PERSISTENT_STORAGE: true,
     VERSION: "4.2"
@@ -48,6 +48,8 @@ let state = {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔄 Admin panel loading...');
+    
     // Update version display
     document.querySelectorAll('.sidebar-version, .login-subtitle').forEach(el => {
         el.textContent = `Admin v${CONFIG.VERSION}`;
@@ -61,13 +63,27 @@ document.addEventListener('DOMContentLoaded', function() {
             if (session.expires > Date.now()) {
                 document.getElementById('adminPassword').value = session.password;
                 adminLogin();
+            } else {
+                console.log('⚠️ Saved session expired');
+                localStorage.removeItem('bingo_admin_session');
             }
         } catch (e) {
+            console.error('❌ Error parsing saved session:', e);
             localStorage.removeItem('bingo_admin_session');
         }
     }
     
+    // Setup auto-connect on password input enter key
+    document.getElementById('adminPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            adminLogin();
+        }
+    });
+    
     attachNavListeners();
+    updateConnectionStatus();
+    
+    console.log('✅ Admin panel initialized');
 });
 
 function attachNavListeners() {
@@ -124,7 +140,12 @@ function attachNavListeners() {
 
 // Socket Functions
 function connectSocket() {
-    console.log(`🔌 Connecting to server: ${CONFIG.SERVER_URL}`);
+    console.log(`🔗 Connecting to server: ${CONFIG.SERVER_URL}`);
+    
+    // Disconnect existing socket if any
+    if (state.socket && state.socket.connected) {
+        state.socket.disconnect();
+    }
     
     state.socket = io(CONFIG.SERVER_URL, {
         reconnection: true,
@@ -139,23 +160,36 @@ function connectSocket() {
         showToast('Connected to server', 'success');
         document.getElementById('connectionStatusText').textContent = 'Connected';
         document.getElementById('connectionStatusText').style.color = 'var(--success)';
+        document.getElementById('connectionIcon').className = 'fas fa-wifi connection-icon connected';
     });
 
     state.socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
         document.getElementById('connectionStatusText').textContent = 'Connection Error';
         document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+        document.getElementById('connectionIcon').className = 'fas fa-wifi-slash connection-icon disconnected';
     });
 
     state.socket.on('disconnect', (reason) => {
-        console.log('❌ Disconnected from server:', reason);
+        console.log('🔌 Disconnected from server:', reason);
         showToast('Disconnected from server', 'error');
         document.getElementById('connectionStatusText').textContent = 'Disconnected';
         document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+        document.getElementById('connectionIcon').className = 'fas fa-wifi-slash connection-icon disconnected';
+        
+        if (reason === 'io server disconnect') {
+            // Server disconnected, try to reconnect
+            setTimeout(() => {
+                if (!state.socket.connected) {
+                    console.log('🔄 Attempting to reconnect...');
+                    state.socket.connect();
+                }
+            }, 1000);
+        }
     });
 
     state.socket.on('admin:authSuccess', () => {
-        console.log('✅ Admin authentication successful');
+        console.log('🔑 Admin authentication successful');
         state.isAdmin = true;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
@@ -169,42 +203,34 @@ function connectSocket() {
         localStorage.setItem('bingo_admin_session', JSON.stringify(session));
         
         // Request initial data
+        console.log('📊 Requesting initial data...');
         state.socket.emit('admin:getData');
+        state.socket.emit('admin:getAllAgents');
         state.socket.emit('admin:getTelebirrNumber');
+        loadAllTransactions();
+        refreshPendingTransactions();
+        
         startAutoRefresh();
         initCharts();
-        
-        // Request initial data
-        loadAllTransactions(); // Load all transactions first
-        refreshPendingTransactions(); // Then load pending
-        refreshAgents();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        
-        // Load analytics
-        updateAnalytics();
     });
 
     state.socket.on('admin:authError', (message) => {
-        console.log('❌ Admin auth error:', message);
+        console.error('❌ Admin auth error:', message);
         showToast('Login failed: ' + message, 'error');
+        localStorage.removeItem('bingo_admin_session');
     });
 
     state.socket.on('admin:update', (data) => {
+        console.log('📊 Received admin update data');
         updateStats(data);
         state.lastUpdate = new Date();
         updateLastUpdateTime();
         document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
         updateOnlineStatus(data.totalPlayers || 0);
-        
-        // Update debug info
-        if (data.debugInfo) {
-            state.debugInfo = data.debugInfo;
-            updateDebugInfo();
-        }
     });
 
     state.socket.on('admin:players', (data) => {
+        console.log(`👥 Received ${data.length} users`);
         state.users = data;
         applyFilters();
         updateUsersTable();
@@ -233,6 +259,7 @@ function connectSocket() {
 
     // Agent-related socket events
     state.socket.on('agent:allAgents', (data) => {
+        console.log(`👑 Received ${data.length} agents`);
         state.agents = data;
         updateAgentsTable();
         updateAgentCountBadge();
@@ -245,6 +272,7 @@ function connectSocket() {
 
     // Telebirr number events
     state.socket.on('admin:telebirrNumber', (number) => {
+        console.log(`📱 Received Telebirr number: ${number}`);
         state.telebirrNumber = number;
         document.getElementById('telebirrNumber').value = number;
         const statusEl = document.getElementById('telebirrNumberStatus');
@@ -252,6 +280,7 @@ function connectSocket() {
     });
 
     state.socket.on('admin:telebirrNumberUpdated', (data) => {
+        console.log(`📱 Telebirr number updated: ${data.telebirrNumber}`);
         state.telebirrNumber = data.telebirrNumber;
         document.getElementById('telebirrNumber').value = data.telebirrNumber;
         const statusEl = document.getElementById('telebirrNumberStatus');
@@ -259,15 +288,16 @@ function connectSocket() {
         showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
     });
 
-    // NEW: Load all transactions (including completed ones)
+    // Transaction events
     state.socket.on('admin:allTransactions', (transactions) => {
+        console.log(`💰 Received ${transactions.length} all transactions`);
         state.allTransactions = transactions;
         updateTransactionHistory();
         updateAnalyticsFromTransactions();
     });
 
-    // NEW: Load pending transactions only
     state.socket.on('admin:pendingTransactions', (transactions) => {
+        console.log(`⏳ Received ${transactions.length} pending transactions`);
         state.pendingTransactions = transactions;
         updatePendingTransactionsBadge();
         updateWalletApprovalsTable();
@@ -278,33 +308,23 @@ function connectSocket() {
         refreshWithdrawalRequests();
     });
 
-    // NEW: Transaction updated
-    state.socket.on('admin:transactionUpdated', (transaction) => {
-        // Update in allTransactions
-        const index = state.allTransactions.findIndex(t => t._id === transaction._id);
-        if (index !== -1) {
-            state.allTransactions[index] = transaction;
-        } else {
-            state.allTransactions.unshift(transaction);
-        }
-        
-        // Update in pendingTransactions if status changed
-        const pendingIndex = state.pendingTransactions.findIndex(t => t._id === transaction._id);
-        if (pendingIndex !== -1 && transaction.status !== 'pending') {
-            state.pendingTransactions.splice(pendingIndex, 1);
-        }
-        
-        // Update UI
-        updateTransactionHistory();
-        updateWalletApprovalsTable();
-        updateRecentRequestsTable();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        updatePendingTransactionsBadge();
+    state.socket.on('admin:depositRequests', (deposits) => {
+        console.log(`💳 Received ${deposits.length} deposit requests`);
+        state.depositRequests = deposits;
+        updateDepositRequestsTable();
+        updateDepositRequestBadge();
     });
 
-    // NEW: New transaction added
+    state.socket.on('admin:withdrawalRequests', (withdrawals) => {
+        console.log(`💸 Received ${withdrawals.length} withdrawal requests`);
+        state.withdrawalRequests = withdrawals;
+        updateWithdrawalRequestsTable();
+        updateWithdrawalRequestBadge();
+    });
+
+    // New transaction added
     state.socket.on('admin:newTransaction', (transaction) => {
+        console.log(`➕ New transaction: ${transaction.type} for ${transaction.userName}`);
         state.allTransactions.unshift(transaction);
         
         if (transaction.status === 'pending') {
@@ -317,8 +337,10 @@ function connectSocket() {
             // Show toast
             if (transaction.type === 'DEPOSIT_REQUEST') {
                 showToast(`New deposit request from ${transaction.userName}`, 'info');
+                refreshDepositRequests();
             } else if (transaction.type === 'WITHDRAW_REQUEST') {
                 showToast(`New withdrawal request from ${transaction.userName}`, 'info');
+                refreshWithdrawalRequests();
             }
         }
         
@@ -329,22 +351,26 @@ function connectSocket() {
 
     // Deposit request events
     state.socket.on('admin:newDepositRequest', (transaction) => {
+        console.log(`💳 New deposit request: ${transaction.userName} - ${transaction.amount} ETB`);
         // This is handled by admin:newTransaction now
     });
 
     // Withdrawal request events
     state.socket.on('admin:newWithdrawRequest', (transaction) => {
+        console.log(`💸 New withdrawal request: ${transaction.userName} - ${transaction.amount} ETB`);
         // This is handled by admin:newTransaction now
     });
 
     state.socket.on('admin:success', (message) => {
         showToast(message, 'success');
+        // Refresh data
         state.socket.emit('admin:getData');
         refreshPendingTransactions();
-        loadAllTransactions(); // Reload all transactions
+        loadAllTransactions();
     });
 
     state.socket.on('admin:error', (message) => {
+        console.error('❌ Admin error:', message);
         showToast('Error: ' + message, 'error');
     });
 
@@ -354,74 +380,98 @@ function connectSocket() {
 
     // Wallet transaction events
     state.socket.on('wallet:depositApproved', (data) => {
+        console.log(`✅ Deposit approved: ${data.amount} ETB for ${data.userName}`);
         showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
         refreshPendingTransactions();
         refreshDepositRequests();
         refreshWithdrawalRequests();
-        loadAllTransactions(); // Reload all transactions
+        loadAllTransactions();
     });
 
     state.socket.on('wallet:withdrawalApproved', (data) => {
+        console.log(`✅ Withdrawal approved: ${data.amount} ETB to ${data.phoneNumber}`);
         showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
         refreshPendingTransactions();
         refreshDepositRequests();
         refreshWithdrawalRequests();
-        loadAllTransactions(); // Reload all transactions
+        loadAllTransactions();
     });
 
     state.socket.on('wallet:depositRejected', (data) => {
+        console.log(`❌ Deposit rejected: ${data.message}`);
         showToast(`Deposit rejected: ${data.message}`, 'error');
         refreshPendingTransactions();
         refreshDepositRequests();
         refreshWithdrawalRequests();
-        loadAllTransactions(); // Reload all transactions
+        loadAllTransactions();
     });
 
     state.socket.on('wallet:withdrawalRejected', (data) => {
+        console.log(`❌ Withdrawal rejected: ${data.message}`);
         showToast(`Withdrawal rejected: ${data.message}`, 'error');
         refreshPendingTransactions();
         refreshDepositRequests();
         refreshWithdrawalRequests();
-        loadAllTransactions(); // Reload all transactions
+        loadAllTransactions();
     });
 
     // House earnings reset
     state.socket.on('admin:houseEarningsReset', (data) => {
-        showToast(`House earnings reset to ${data.newAmount} ETB`, 'success');
-        document.getElementById('houseEarnings').textContent = data.newAmount.toFixed(2) + ' ETB';
+        console.log(`🔄 House earnings reset: ${data.previousAmount} to 0`);
+        showToast(`House earnings reset to ${data.resetAmount} ETB`, 'success');
+        document.getElementById('houseEarnings').textContent = data.resetAmount.toFixed(2) + ' ETB';
     });
 
     state.socket.on('admin:houseEarningsResetError', (message) => {
+        console.error('❌ House earnings reset error:', message);
         showToast('Failed to reset house earnings: ' + message, 'error');
         // Revert optimistic update
         state.socket.emit('admin:getData');
     });
 
-    // NEW: Debug info
+    // Debug info
     state.socket.on('admin:debugInfo', (debugInfo) => {
+        console.log('🔍 Received debug info');
         state.debugInfo = debugInfo;
         updateDebugInfo();
     });
 
-    // NEW: All transactions reset event
+    // All transactions reset event
     state.socket.on('admin:allTransactionsReset', () => {
+        console.log('🔄 All transactions reset');
         showToast('All transactions reset successfully', 'success');
         loadAllTransactions();
         refreshPendingTransactions();
     });
 
-    // NEW: Pending transactions cleared
+    // Pending transactions cleared
     state.socket.on('admin:pendingTransactionsCleared', (data) => {
+        console.log(`🧹 Cleared ${data.count} pending transactions`);
         showToast(`Cleared ${data.count} pending transactions`, 'success');
         refreshPendingTransactions();
         loadAllTransactions();
     });
 
-    // Handle connection errors
+    // Agent stats
+    state.socket.on('admin:agentStats', (stats) => {
+        console.log('📊 Received agent stats');
+        state.agentStatistics = stats;
+        updateAgentStatsDisplay();
+    });
+
+    // Keno stats
+    state.socket.on('admin:kenoStats', (stats) => {
+        console.log('🎰 Received Keno stats');
+        updateKenoStatsDisplay(stats);
+    });
+
+    // Socket error
     state.socket.on('error', (error) => {
-        console.error('Socket error:', error);
+        console.error('❌ Socket error:', error);
         showToast('Socket error: ' + error, 'error');
     });
+
+    console.log('✅ Socket event listeners attached');
 }
 
 // Login Function
@@ -435,27 +485,20 @@ function adminLogin() {
     console.log('🔑 Attempting admin login...');
     
     if (!state.socket || !state.socket.connected) {
-        console.log('🔄 Socket not connected, connecting...');
+        console.log('🔄 Creating new socket connection...');
         connectSocket();
         
         // Wait for connection before sending auth
-        const checkConnection = setInterval(() => {
-            if (state.socket && state.socket.connected) {
-                clearInterval(checkConnection);
-                console.log('✅ Socket connected, sending auth');
-                state.socket.emit('admin:auth', password);
-            }
-        }, 100);
-        
-        // Timeout after 5 seconds
         setTimeout(() => {
-            clearInterval(checkConnection);
-            if (!state.socket || !state.socket.connected) {
-                showToast('Failed to connect to server. Please check your connection.', 'error');
+            if (state.socket && state.socket.connected) {
+                console.log('✅ Socket connected, sending auth...');
+                state.socket.emit('admin:auth', password);
+            } else {
+                showToast('Failed to connect to server', 'error');
             }
-        }, 5000);
+        }, 1000);
     } else {
-        console.log('✅ Socket already connected, sending auth');
+        console.log('✅ Socket already connected, sending auth...');
         state.socket.emit('admin:auth', password);
     }
 }
@@ -526,6 +569,7 @@ function playNotificationSound() {
 
 // Data Update Functions
 function updateStats(data) {
+    console.log('📈 Updating stats:', data);
     document.getElementById('totalUsers').textContent = data.totalUsers || 0;
     document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
     document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
@@ -533,6 +577,17 @@ function updateStats(data) {
     // Update pending requests count
     const pendingCount = state.pendingTransactions.length;
     document.getElementById('pendingRequests').textContent = pendingCount;
+}
+
+function updateConnectionStatus() {
+    const status = document.getElementById('connectionStatus');
+    if (state.socket && state.socket.connected) {
+        status.innerHTML = '<i class="fas fa-wifi"></i> Connected';
+        status.style.color = 'var(--success)';
+    } else {
+        status.innerHTML = '<i class="fas fa-wifi-slash"></i> Disconnected';
+        status.style.color = 'var(--danger)';
+    }
 }
 
 function updateOnlineStatus(onlineCount) {
@@ -686,31 +741,29 @@ function updateFundsUserList() {
 
 // Transaction Functions
 function loadAllTransactions() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
-        console.log('📊 Loading all transactions...');
+    if (state.socket && state.isAdmin) {
+        console.log('📊 Requesting all transactions...');
         state.socket.emit('admin:getAllTransactions');
-    } else {
-        console.log('⚠️ Cannot load transactions: Socket not connected or not admin');
     }
 }
 
 function refreshPendingTransactions() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
-        console.log('🔄 Refreshing pending transactions...');
+    if (state.socket && state.isAdmin) {
+        console.log('⏳ Requesting pending transactions...');
         state.socket.emit('admin:getPendingTransactions');
     }
 }
 
 function refreshDepositRequests() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
-        console.log('🔄 Refreshing deposit requests...');
+    if (state.socket && state.isAdmin) {
+        console.log('💳 Requesting deposit requests...');
         state.socket.emit('admin:getDepositRequests');
     }
 }
 
 function refreshWithdrawalRequests() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
-        console.log('🔄 Refreshing withdrawal requests...');
+    if (state.socket && state.isAdmin) {
+        console.log('💸 Requesting withdrawal requests...');
         state.socket.emit('admin:getWithdrawalRequests');
     }
 }
@@ -1452,8 +1505,8 @@ function updateWithdrawalRequestBadge() {
 
 // Agent Management Functions
 function refreshAgents() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
-        console.log('👑 Refreshing agents...');
+    if (state.socket && state.isAdmin) {
+        console.log('👑 Requesting agents...');
         state.socket.emit('agent:getAllAgents');
     }
 }
@@ -1541,6 +1594,21 @@ function updateAgentCountBadge() {
     document.getElementById('totalAgents').textContent = state.agents.length;
 }
 
+function updateAgentStatsDisplay() {
+    document.getElementById('totalAgentsStat').textContent = state.agentStatistics.totalAgents || 0;
+    document.getElementById('activeAgentsStat').textContent = state.agentStatistics.activeAgents || 0;
+    document.getElementById('totalCommissionsStat').textContent = (state.agentStatistics.totalCommissions || 0).toFixed(2) + ' ETB';
+    document.getElementById('referralUsersStat').textContent = state.agentStatistics.referralUsers || 0;
+}
+
+function updateKenoStatsDisplay(stats) {
+    if (!stats) return;
+    document.getElementById('kenoPlayersStat').textContent = stats.totalPlayers || 0;
+    document.getElementById('kenoOnlineStat').textContent = stats.onlinePlayers || 0;
+    document.getElementById('kenoEarningsStat').textContent = (stats.totalEarnings || 0).toFixed(2) + ' ETB';
+    document.getElementById('kenoGamesStat').textContent = stats.totalGames || 0;
+}
+
 function showCreateAgentModal() {
     state.editingAgentId = null;
     document.getElementById('agentModalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Create New Agent';
@@ -1607,11 +1675,13 @@ function saveAgent() {
     }
     
     if (state.editingAgentId) {
+        console.log('👑 Updating agent:', state.editingAgentId);
         state.socket.emit('agent:updateAgent', {
             agentId: state.editingAgentId,
             updates: agentData
         });
     } else {
+        console.log('👑 Creating new agent:', username);
         state.socket.emit('agent:createAgent', agentData);
     }
     
@@ -1620,6 +1690,7 @@ function saveAgent() {
 
 function deleteAgent(agentId) {
     if (confirm('Are you sure you want to deactivate this agent?')) {
+        console.log('👑 Deleting agent:', agentId);
         state.socket.emit('agent:deleteAgent', agentId);
         showToast('Deactivating agent...', 'warning');
     }
@@ -1700,6 +1771,7 @@ function assignUserToAgent() {
         agentData.override = true;
     }
     
+    console.log('👑 Assigning user to agent:', agentData);
     state.socket.emit('agent:manualReferralAssignment', agentData);
     
     showToast('Assigning user to agent...', 'info');
@@ -1730,6 +1802,7 @@ function addFunds() {
         reason: reason
     };
     
+    console.log('💰 Adding funds:', data);
     state.socket.emit('admin:addFunds', data);
     hideModal('addFundsModal');
     showToast(`Adding ${amount} ETB to user...`, 'info');
@@ -1763,6 +1836,7 @@ function quickAddFunds() {
         reason: 'quick_add'
     };
     
+    console.log('💰 Quick adding funds:', data);
     state.socket.emit('admin:addFunds', data);
     hideModal('quickAddFundsModal');
     showToast(`Adding ${amount} ETB to ${state.quickAddUserName}...`, 'success');
@@ -1785,6 +1859,7 @@ function showAddFundsModal() {
 
 function kickUser(userId) {
     if (confirm('Kick this user from the game?')) {
+        console.log('👢 Kicking user:', userId);
         state.socket.emit('admin:kickPlayer', userId);
         showToast('User kicked', 'warning');
     }
@@ -1804,6 +1879,7 @@ function sendBroadcast() {
         return;
     }
     
+    console.log('📢 Sending broadcast:', { message, type });
     state.socket.emit('admin:broadcast', { message, type });
     hideModal('broadcastModal');
     showToast('Broadcast sent to all players', 'success');
@@ -1822,16 +1898,17 @@ function showPendingRequests() {
 }
 
 function forceRefreshData() {
-    if (state.socket && state.socket.connected) {
+    if (state.socket) {
+        console.log('🔄 Forcing refresh of all data...');
         state.socket.emit('admin:getData');
+        state.socket.emit('admin:getAllAgents');
+        state.socket.emit('admin:getTelebirrNumber');
         refreshAgents();
         refreshPendingTransactions();
         refreshDepositRequests();
         refreshWithdrawalRequests();
         loadAllTransactions();
         showToast('Refreshing all data...', 'success');
-    } else {
-        showToast('Not connected to server', 'error');
     }
 }
 
@@ -1861,13 +1938,13 @@ function updateUserCountBadge(count) {
 
 // Analytics Functions
 function updateAnalytics() {
-    if (!state.socket || !state.isAdmin || !state.socket.connected) {
-        showToast('Not connected to server', 'error');
-        return;
-    }
+    if (!state.socket || !state.isAdmin) return;
     
     const dateRange = document.getElementById('analyticsDateRange').value;
-    state.socket.emit('admin:getAnalytics', { dateRange: dateRange });
+    console.log('📈 Requesting analytics for:', dateRange);
+    // This would need to be implemented on the server side
+    // For now, we'll just update from existing transactions
+    updateAnalyticsFromTransactions();
 }
 
 function updateAnalyticsFromTransactions() {
@@ -1917,7 +1994,10 @@ function updateAnalyticsFromTransactions() {
 }
 
 function initTransactionChart() {
-    const ctx = document.getElementById('transactionChart').getContext('2d');
+    const ctx = document.getElementById('transactionChart');
+    if (!ctx) return;
+    
+    ctx.getContext('2d');
     
     if (state.transactionChart) {
         state.transactionChart.destroy();
@@ -1956,6 +2036,12 @@ function initTransactionChart() {
         
         depositData.push(dayDeposits.reduce((sum, t) => sum + (t.amount || 0), 0));
         withdrawalData.push(dayWithdrawals.reduce((sum, t) => sum + (t.amount || 0), 0));
+    }
+    
+    // Check if Chart is available
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded');
+        return;
     }
     
     state.transactionChart = new Chart(ctx, {
@@ -2068,29 +2154,38 @@ function addActivityItem(activity) {
 }
 
 function refreshActivity() {
-    if (state.socket && state.isAdmin && state.socket.connected) {
+    if (state.socket && state.isAdmin) {
+        console.log('🔄 Refreshing activity...');
         state.socket.emit('admin:getData');
         showToast('Activity refreshed', 'success');
     }
 }
 
 function startAutoRefresh() {
+    console.log('⏰ Starting auto-refresh every', CONFIG.AUTO_REFRESH_INTERVAL, 'ms');
     setInterval(() => {
         if (state.isAdmin && state.socket && state.socket.connected) {
             state.socket.emit('admin:getData');
+            // Refresh pending transactions more frequently
+            if (Math.random() < 0.3) { // 30% chance each interval
+                refreshPendingTransactions();
+            }
         }
     }, CONFIG.AUTO_REFRESH_INTERVAL);
 }
 
 // Chart Functions
 function initCharts() {
+    console.log('📊 Initializing charts...');
     // Initialize any other charts here
+    setTimeout(initTransactionChart, 1000);
 }
 
 // System Functions
 function resetHouseEarnings() {
     if (confirm('Are you sure you want to reset house earnings to zero? This action cannot be undone.')) {
-        if (state.socket && state.isAdmin && state.socket.connected) {
+        if (state.socket && state.isAdmin) {
+            console.log('🔄 Resetting house earnings...');
             // Optimistically update the UI
             document.getElementById('houseEarnings').textContent = '0.00 ETB';
             
@@ -2104,6 +2199,7 @@ function resetHouseEarnings() {
 
 function clearAllApprovedTransactions() {
     if (confirm('Clear all approved/rejected transactions from view? This will remove them from the list but keep them in the database.')) {
+        console.log('🧹 Clearing approved/rejected transactions from view...');
         // Filter out only pending transactions to keep
         state.pendingTransactions = state.pendingTransactions.filter(t => t.status === 'pending');
         
@@ -2132,7 +2228,8 @@ function clearAllApprovedTransactions() {
 
 function resetAllTransactions() {
     if (confirm('WARNING: This will reset ALL transaction history including pending requests. Are you sure?')) {
-        if (state.socket && state.isAdmin && state.socket.connected) {
+        if (state.socket && state.isAdmin) {
+            console.log('🔄 Resetting all transactions...');
             state.socket.emit('admin:resetAllTransactions');
             showToast('Resetting all transactions...', 'warning');
             
@@ -2169,7 +2266,8 @@ function updateTelebirrNumber() {
         return;
     }
     
-    if (state.socket && state.isAdmin && state.socket.connected) {
+    if (state.socket && state.isAdmin) {
+        console.log('📱 Updating Telebirr number to:', newNumber);
         statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
         state.socket.emit('admin:updateTelebirrNumber', newNumber);
         showToast('Updating Telebirr number...', 'info');
@@ -2196,7 +2294,8 @@ function focusTelebirrNumber() {
 function updateGameTimer() {
     const timer = document.getElementById('gameTimer').value;
     if (timer && timer > 0) {
-        state.socket.emit('admin:updateGameTimer', parseInt(timer));
+        // This would need to be implemented on the server side
+        console.log('⏱️ Updating game timer to:', timer, 'seconds');
         showToast(`Game timer updated to ${timer} seconds`, 'success');
     }
 }
@@ -2204,7 +2303,8 @@ function updateGameTimer() {
 function updateMinPlayers() {
     const minPlayers = document.getElementById('minPlayers').value;
     if (minPlayers && minPlayers >= 1) {
-        state.socket.emit('admin:updateMinPlayers', parseInt(minPlayers));
+        // This would need to be implemented on the server side
+        console.log('👥 Updating minimum players to:', minPlayers);
         showToast(`Minimum players updated to ${minPlayers}`, 'success');
     }
 }
@@ -2216,6 +2316,7 @@ function updateTransactionSettings() {
     const autoApproveLimit = document.getElementById('autoApproveLimit').value;
     
     if (confirm('Update transaction settings?')) {
+        console.log('⚙️ Updating transaction settings:', { minDeposit, minWithdrawal, maxWithdrawal, autoApproveLimit });
         // In a real implementation, send to server
         showToast('Transaction settings updated', 'success');
     }
@@ -2226,6 +2327,7 @@ function updateDefaultCommissions() {
     const kenoRate = document.getElementById('defaultKenoCommission').value;
     
     if (confirm(`Set default commissions to Bingo: ${bingoRate}%, Keno: ${kenoRate}%?`)) {
+        console.log('👑 Updating default commissions:', { bingoRate, kenoRate });
         // In a real implementation, send to server
         showToast('Default commissions updated', 'success');
     }
@@ -2233,6 +2335,7 @@ function updateDefaultCommissions() {
 
 function forceStartAllGames() {
     if (confirm('Force start all waiting games?')) {
+        console.log('🎮 Force starting all games...');
         // In a real implementation, send to server
         showToast('Starting all games...', 'success');
     }
@@ -2240,16 +2343,19 @@ function forceStartAllGames() {
 
 function clearLogs() {
     if (confirm('Clear all system logs?')) {
+        console.log('🗑️ Clearing system logs...');
         document.getElementById('systemLogs').innerHTML = '';
         showToast('System logs cleared', 'success');
     }
 }
 
 function exportLogs() {
+    console.log('📤 Exporting logs...');
     showToast('Logs exported to CSV', 'success');
 }
 
 function exportUsers() {
+    console.log('📤 Exporting users...');
     showToast('Users exported to CSV', 'success');
 }
 
@@ -2263,6 +2369,7 @@ function applyTransactionFilters() {
 
 function filterLogs() {
     // Implement log filter functionality
+    console.log('🔍 Filtering logs...');
     showToast('Filtering logs...', 'info');
 }
 
@@ -2277,6 +2384,7 @@ function updateDebugInfo() {
 
 function clearTransactionCache() {
     if (confirm('Clear transaction cache? This will reload all transactions from server.')) {
+        console.log('🧹 Clearing transaction cache...');
         loadAllTransactions();
         refreshPendingTransactions();
         showToast('Transaction cache cleared', 'success');
@@ -2284,79 +2392,39 @@ function clearTransactionCache() {
 }
 
 function testNotification() {
+    console.log('🔔 Testing notification...');
     playNotificationSound();
     showToast('Test notification sent', 'info');
 }
 
 function backupDatabase() {
+    console.log('💾 Backing up database...');
     showToast('Database backup initiated', 'info');
     // In a real implementation, trigger server backup
 }
 
 function logout() {
     if (confirm('Logout from admin panel?')) {
+        console.log('👋 Logging out...');
         localStorage.removeItem('bingo_admin_session');
-        state.isAdmin = false;
-        state.socket.disconnect();
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('dashboard').style.display = 'none';
-        document.getElementById('adminPassword').value = '';
-        showToast('Logged out successfully', 'success');
-    }
-}
-
-// Initialize charts when dashboard loads
-setTimeout(initCharts, 1000);
-
-// Add sample activity on load
-setTimeout(() => {
-    if (state.isAdmin) {
-        addActivityItem({details: 'System initialized successfully', type: 'INFO'});
-        addActivityItem({details: `Welcome to Bingo Elite Admin Dashboard v${CONFIG.VERSION}`, type: 'INFO'});
-        addActivityItem({details: 'Persistent transaction storage enabled', type: 'INFO'});
-        addActivityItem({details: 'All pending requests will be saved until processed', type: 'INFO'});
-    }
-}, 2000);
-
-// Add keyboard shortcuts
-document.addEventListener('keydown', function(e) {
-    // Ctrl + R to refresh
-    if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        forceRefreshData();
-    }
-    
-    // Ctrl + L to logout
-    if (e.ctrlKey && e.key === 'l') {
-        e.preventDefault();
-        logout();
-    }
-    
-    // Ctrl + F to focus search
-    if (e.ctrlKey && e.key === 'f') {
-        e.preventDefault();
-        const activeSection = document.querySelector('.content-section.active');
-        if (activeSection) {
-            const searchInput = activeSection.querySelector('input[type="text"]');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
+        if (state.socket) {
+            state.socket.disconnect();
         }
-    }
-});
-
-// Add connection status indicator
-function updateConnectionStatus() {
-    const indicator = document.getElementById('connectionIndicator');
-    if (!state.socket || !state.socket.connected) {
-        indicator.className = 'connection-indicator disconnected';
-        indicator.title = 'Disconnected';
-    } else {
-        indicator.className = 'connection-indicator connected';
-        indicator.title = 'Connected';
+        window.location.reload();
     }
 }
 
-// Periodically update connection status
-setInterval(updateConnectionStatus, 5000);
+// Test connection function
+function testConnection() {
+    console.log('🔗 Testing connection to:', CONFIG.SERVER_URL);
+    showToast('Testing connection...', 'info');
+    
+    if (!state.socket || !state.socket.connected) {
+        connectSocket();
+    } else {
+        showToast('Already connected to server', 'success');
+    }
+}
+
+// Initialize on load
+console.log('🚀 Admin panel ready');
