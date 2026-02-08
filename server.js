@@ -556,18 +556,30 @@ if (kenoLogic && kenoLogic.initialize) {
 }
 
 // Initialize Agent System
-const agentSystem = new AgentSystem(io, models);
-if (agentSystem && agentSystem.initialize) {
-  agentSystem.initialize();
+let agentSystem;
+try {
+  agentSystem = new AgentSystem(io, models);
+  if (agentSystem && agentSystem.initialize) {
+    // Wait for initialization to complete
+    setTimeout(async () => {
+      await agentSystem.initialize();
+      console.log('✅ Agent System initialized successfully');
+    }, 1000);
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Agent System:', error);
+  agentSystem = null;
 }
 
 // Set game logic references in agent system
 if (agentSystem && agentSystem.setGameLogic) {
   agentSystem.setGameLogic(gameLogic);
+  console.log('✅ Game logic reference set in Agent System');
 }
 
 if (agentSystem && agentSystem.setKenoLogic) {
   agentSystem.setKenoLogic(kenoLogic);
+  console.log('✅ Keno logic reference set in Agent System');
 }
 
 // Load initial Telebirr number into game logic
@@ -575,6 +587,137 @@ if (agentSystem && agentSystem.setKenoLogic) {
   const telebirrNumber = await getTelebirrNumber();
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
 })();
+
+// ========== AGENT SYSTEM SOCKET HANDLERS ==========
+// Function to attach all agent system socket handlers
+function attachAgentSystemHandlers(socket) {
+  if (!agentSystem) {
+    console.log('⚠️ Agent System not available for socket handlers');
+    return;
+  }
+
+  // Agent login
+  socket.on('agent:login', (data) => {
+    agentSystem.handleAgentLogin(socket, data);
+  });
+  
+  // Agent verify token for auto login
+  socket.on('agent:verifyToken', (data) => {
+    agentSystem.handleVerifyAgentToken(socket, data);
+  });
+  
+  // Agent dashboard data
+  socket.on('agent:dashboard', () => {
+    agentSystem.handleAgentDashboard(socket);
+  });
+
+  socket.on('agent:getDashboard', () => {
+    agentSystem.handleAgentDashboard(socket);
+  });
+  
+  // Generate referral link
+  socket.on('agent:generateReferralLink', () => {
+    agentSystem.handleGenerateReferralLink(socket);
+  });
+  
+  // Manual referral assignment by agent
+  socket.on('agent:manualReferralAssignment', (data) => {
+    agentSystem.handleManualReferralAssignmentByAgent(socket, data);
+  });
+  
+  // Bulk manual referral assignment
+  socket.on('agent:bulkManualReferral', (data) => {
+    agentSystem.handleBulkManualReferral(socket, data);
+  });
+  
+  // Search users for assignment
+  socket.on('agent:searchUsers', (data) => {
+    agentSystem.handleSearchUsers(socket, data);
+  });
+  
+  // Get user suggestions
+  socket.on('agent:getUserSuggestions', () => {
+    agentSystem.handleGetUserSuggestions(socket);
+  });
+  
+  // Get agent report
+  socket.on('agent:report', (data) => {
+    agentSystem.handleAgentReport(socket, data);
+  });
+
+  socket.on('agent:getReport', (data) => {
+    agentSystem.handleAgentReport(socket, data);
+  });
+  
+  // Agent withdrawal request
+  socket.on('agent:withdrawRequest', (data) => {
+    agentSystem.handleAgentWithdrawRequest(socket, data);
+  });
+  
+  // Get agent withdrawal history
+  socket.on('agent:withdrawalHistory', () => {
+    agentSystem.handleGetWithdrawalHistory(socket);
+  });
+
+  socket.on('agent:getWithdrawalHistory', () => {
+    agentSystem.handleGetWithdrawalHistory(socket);
+  });
+  
+  // Test user database
+  socket.on('agent:testUserDatabase', () => {
+    agentSystem.testUserDatabase(socket);
+  });
+  
+  // Get agent referral tree
+  socket.on('agent:getReferralTree', (data) => {
+    const agentId = data.agentId || socket.agentId;
+    agentSystem.getAgentReferralTree(agentId, data.depth || 2)
+      .then(tree => socket.emit('agent:referralTree', tree))
+      .catch(err => socket.emit('agent:error', err.message));
+  });
+  
+  // Get agent leaderboard
+  socket.on('agent:getLeaderboard', (data) => {
+    const limit = data.limit || 10;
+    const period = data.period || 'month';
+    agentSystem.getAgentLeaderboard(limit, period)
+      .then(leaderboard => socket.emit('agent:leaderboard', leaderboard))
+      .catch(err => socket.emit('agent:error', err.message));
+  });
+  
+  // Get agent performance metrics
+  socket.on('agent:getPerformanceMetrics', (data) => {
+    const agentId = data.agentId || socket.agentId;
+    agentSystem.getAgentPerformanceMetrics(agentId)
+      .then(metrics => socket.emit('agent:performanceMetrics', metrics))
+      .catch(err => socket.emit('agent:error', err.message));
+  });
+  
+  // Get agent statistics
+  socket.on('agent:getAgentStatistics', () => {
+    agentSystem.getAgentStatistics()
+      .then(stats => socket.emit('agent:statistics', stats))
+      .catch(err => socket.emit('agent:error', err.message));
+  });
+  
+  // Get agent system status
+  socket.on('agent:getSystemStatus', () => {
+    if (agentSystem && agentSystem.getSystemStatus) {
+      const status = agentSystem.getSystemStatus();
+      socket.emit('agent:systemStatus', status);
+    }
+  });
+
+  // Fix missing referral records
+  socket.on('agent:fixMissingReferralRecords', () => {
+    agentSystem.fixMissingReferralRecords(socket);
+  });
+
+  // Migrate old referrals
+  socket.on('agent:migrateOldReferrals', () => {
+    agentSystem.migrateOldReferrals(socket);
+  });
+}
 
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
@@ -746,159 +889,8 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS ==========
-  // Agent login
-  socket.on('agent:login', (data) => {
-    if (agentSystem && agentSystem.handleAgentLogin) {
-      agentSystem.handleAgentLogin(socket, data);
-    }
-  });
-  
-  // Agent verify token for auto login
-  socket.on('agent:verifyToken', (data) => {
-    if (agentSystem && agentSystem.handleVerifyAgentToken) {
-      agentSystem.handleVerifyAgentToken(socket, data);
-    }
-  });
-  
-  // Agent dashboard data
-  socket.on('agent:dashboard', () => {
-    if (agentSystem && agentSystem.handleAgentDashboard) {
-      agentSystem.handleAgentDashboard(socket);
-    }
-  });
-
-  // Agent get dashboard data
-  socket.on('agent:getDashboard', () => {
-    if (agentSystem && agentSystem.handleAgentDashboard) {
-      agentSystem.handleAgentDashboard(socket);
-    }
-  });
-  
-  // Generate referral link
-  socket.on('agent:generateReferralLink', () => {
-    if (agentSystem && agentSystem.handleGenerateReferralLink) {
-      agentSystem.handleGenerateReferralLink(socket);
-    }
-  });
-  
-  // Manual referral assignment by agent
-  socket.on('agent:manualReferralAssignment', (data) => {
-    if (agentSystem && agentSystem.handleManualReferralAssignmentByAgent) {
-      agentSystem.handleManualReferralAssignmentByAgent(socket, data);
-    }
-  });
-  
-  // Bulk manual referral assignment
-  socket.on('agent:bulkManualReferral', (data) => {
-    if (agentSystem && agentSystem.handleBulkManualReferral) {
-      agentSystem.handleBulkManualReferral(socket, data);
-    }
-  });
-  
-  // Search users for assignment
-  socket.on('agent:searchUsers', (data) => {
-    if (agentSystem && agentSystem.handleSearchUsers) {
-      agentSystem.handleSearchUsers(socket, data);
-    }
-  });
-  
-  // Get user suggestions
-  socket.on('agent:getUserSuggestions', () => {
-    if (agentSystem && agentSystem.handleGetUserSuggestions) {
-      agentSystem.handleGetUserSuggestions(socket);
-    }
-  });
-  
-  // Get agent report
-  socket.on('agent:report', (data) => {
-    if (agentSystem && agentSystem.handleAgentReport) {
-      agentSystem.handleAgentReport(socket, data);
-    }
-  });
-
-  // Get agent report (alternative name)
-  socket.on('agent:getReport', (data) => {
-    if (agentSystem && agentSystem.handleAgentReport) {
-      agentSystem.handleAgentReport(socket, data);
-    }
-  });
-  
-  // Agent withdrawal request
-  socket.on('agent:withdrawRequest', (data) => {
-    if (agentSystem && agentSystem.handleAgentWithdrawRequest) {
-      agentSystem.handleAgentWithdrawRequest(socket, data);
-    }
-  });
-  
-  // Get agent withdrawal history
-  socket.on('agent:withdrawalHistory', () => {
-    if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
-      agentSystem.handleGetWithdrawalHistory(socket);
-    }
-  });
-
-  // Get agent withdrawal history (alternative name)
-  socket.on('agent:getWithdrawalHistory', () => {
-    if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
-      agentSystem.handleGetWithdrawalHistory(socket);
-    }
-  });
-  
-  // Test user database
-  socket.on('agent:testUserDatabase', () => {
-    if (agentSystem && agentSystem.testUserDatabase) {
-      agentSystem.testUserDatabase(socket);
-    }
-  });
-  
-  // Get agent referral tree
-  socket.on('agent:getReferralTree', (data) => {
-    if (agentSystem && agentSystem.getAgentReferralTree) {
-      const agentId = data.agentId || socket.agentId;
-      agentSystem.getAgentReferralTree(agentId, data.depth || 2)
-        .then(tree => socket.emit('agent:referralTree', tree))
-        .catch(err => socket.emit('agent:error', err.message));
-    }
-  });
-  
-  // Get agent leaderboard
-  socket.on('agent:getLeaderboard', (data) => {
-    if (agentSystem && agentSystem.getAgentLeaderboard) {
-      const limit = data.limit || 10;
-      const period = data.period || 'month';
-      agentSystem.getAgentLeaderboard(limit, period)
-        .then(leaderboard => socket.emit('agent:leaderboard', leaderboard))
-        .catch(err => socket.emit('agent:error', err.message));
-    }
-  });
-  
-  // Get agent performance metrics
-  socket.on('agent:getPerformanceMetrics', (data) => {
-    if (agentSystem && agentSystem.getAgentPerformanceMetrics) {
-      const agentId = data.agentId || socket.agentId;
-      agentSystem.getAgentPerformanceMetrics(agentId)
-        .then(metrics => socket.emit('agent:performanceMetrics', metrics))
-        .catch(err => socket.emit('agent:error', err.message));
-    }
-  });
-  
-  // Get agent statistics
-  socket.on('agent:getAgentStatistics', () => {
-    if (agentSystem && agentSystem.getAgentStatistics) {
-      agentSystem.getAgentStatistics()
-        .then(stats => socket.emit('agent:statistics', stats))
-        .catch(err => socket.emit('agent:error', err.message));
-    }
-  });
-  
-  // Get agent system status
-  socket.on('agent:getSystemStatus', () => {
-    if (agentSystem && agentSystem.getSystemStatus) {
-      const status = agentSystem.getSystemStatus();
-      socket.emit('agent:systemStatus', status);
-    }
-  });
+  // ========== ATTACH AGENT SYSTEM HANDLERS ==========
+  attachAgentSystemHandlers(socket);
   
   // ========== SUPER ADMIN AGENT EVENTS ==========
   // Get all agents (super admin only)
@@ -908,7 +900,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Get all agents (for agent admin panel)
   socket.on('agent:getAllAgents', () => {
     if (socket.admin && agentSystem && agentSystem.handleGetAllAgents) {
       agentSystem.handleGetAllAgents(socket);
@@ -922,7 +913,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Create new agent (for agent admin panel)
   socket.on('agent:createAgent', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
       agentSystem.handleCreateAgent(socket, data);
@@ -943,7 +933,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Delete agent (for agent admin panel)
   socket.on('agent:deleteAgent', (agentId) => {
     if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
       agentSystem.handleDeleteAgent(socket, agentId);
@@ -1210,14 +1199,25 @@ io.on('connection', (socket) => {
   });
   
   // ========== GAME EVENTS (FORWARDED TO GAME LOGIC) ==========
-  socket.on('join', (data) => {
-    // Process referral if present
-    if (data.referralCode && agentSystem && agentSystem.processReferral) {
-      agentSystem.processReferral(data.userId, data.referralCode);
-    }
-    
-    if (gameLogic && gameLogic.handleJoin) {
-      gameLogic.handleJoin(socket, data);
+  socket.on('join', async (data) => {
+    try {
+      // Process referral if present - FIXED
+      if (data.referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+        const result = await agentSystem.handleTelegramReferral(data.userId, data.referralCode);
+        if (result.success) {
+          console.log(`✅ Referral processed for ${data.userId}: ${result.message}`);
+        }
+      }
+      
+      if (gameLogic && gameLogic.handleJoin) {
+        gameLogic.handleJoin(socket, data);
+      }
+    } catch (error) {
+      console.error('Error processing join with referral:', error);
+      // Continue with game join even if referral fails
+      if (gameLogic && gameLogic.handleJoin) {
+        gameLogic.handleJoin(socket, data);
+      }
     }
   });
   
@@ -1347,7 +1347,7 @@ app.get('/', async (req, res) => {
     const telebirrNumber = await getTelebirrNumber();
     
     // Get agent statistics
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
+    let agentStats = { 
       totalAgents: 0, 
       activeAgents: 0, 
       totalCommissions: 0,
@@ -1355,6 +1355,14 @@ app.get('/', async (req, res) => {
       todayCommissions: 0,
       pendingWithdrawals: 0 
     };
+    
+    if (agentSystem && agentSystem.getAgentStatistics) {
+      try {
+        agentStats = await agentSystem.getAgentStatistics();
+      } catch (error) {
+        console.error('Error getting agent stats:', error);
+      }
+    }
     
     // Get referral statistics
     const totalUsers = await User.countDocuments();
@@ -1539,6 +1547,7 @@ app.get('/', async (req, res) => {
               <a href="/debug-agents" class="btn" style="background: #f59e0b;" target="_blank">👑 Debug Agents</a>
               <a href="/debug-telebirr" class="btn" style="background: #f59e0b;" target="_blank">📱 Debug Telebirr</a>
               <a href="/debug/referrals" class="btn" style="background: #f59e0b;" target="_blank">📊 Debug Referrals</a>
+              <a href="/test-agent" class="btn" style="background: #10b981;" target="_blank">🧪 Test Agent System</a>
             </div>
           </div>
           
@@ -1686,7 +1695,7 @@ app.get('/status', (req, res) => {
 // ========== AGENT PORTAL PAGE ==========
 app.get('/agent', (req, res) => {
   // Serve the agent-dashboard.html file
-  res.sendFile(path.join(__dirname, 'agent-dashboard.html'), (err) => {
+  res.sendFile(path.join(__dirname, 'public/agent-dashboard.html'), (err) => {
     if (err) {
       console.error('Error serving agent dashboard:', err);
       // Fallback to a simple HTML page
@@ -1733,6 +1742,7 @@ app.get('/agent', (req, res) => {
             <div style="margin-top: 30px;">
               <a href="/" class="btn" style="background: #3b82f6;">← Back to Home</a>
               <a href="/telegram" class="btn" style="background: #8b5cf6;">🤖 Telegram Entry</a>
+              <a href="/test-agent" class="btn" style="background: #10b981;">🧪 Test Agent System</a>
             </div>
           </div>
           
@@ -1768,6 +1778,75 @@ app.get('/agent', (req, res) => {
 // Serve Agent Portal HTML (fallback if file doesn't exist)
 app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
+});
+
+// ========== TEST AGENT SYSTEM ENDPOINT ==========
+app.get('/test-agent', async (req, res) => {
+  try {
+    const agent = await Agent.findOne({ username: 'admin' });
+    const users = await User.countDocuments();
+    const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
+    const agentCount = await Agent.countDocuments();
+    const referralCount = await Referral.countDocuments();
+    
+    res.json({
+      success: true,
+      message: 'Agent System Test',
+      agentExists: !!agent,
+      totalUsers: users,
+      usersWithAgents: usersWithAgents,
+      agentCount: agentCount,
+      referralCount: referralCount,
+      agentSystemStatus: agentSystem ? 'Initialized' : 'Not initialized',
+      adminAgent: agent ? {
+        username: agent.username,
+        referralCode: agent.referralCode,
+        isActive: agent.isActive
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// ========== TEST REFERRAL ENDPOINT ==========
+app.get('/test-referral', async (req, res) => {
+  try {
+    if (!agentSystem) {
+      return res.json({ success: false, error: 'Agent System not initialized' });
+    }
+    
+    // Create a test user if needed
+    let testUser = await User.findOne({ userId: 'test_user_123' });
+    if (!testUser) {
+      testUser = new User({
+        userId: 'test_user_123',
+        userName: 'Test User',
+        balance: 100
+      });
+      await testUser.save();
+    }
+    
+    // Test referral with admin code
+    const result = await agentSystem.handleTelegramReferral('test_user_123', 'ADMIN001');
+    
+    res.json({
+      testResult: result,
+      userAfter: await User.findOne({ userId: 'test_user_123' }),
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE WITH WALLET AND MORE GAMES ==========
@@ -3521,6 +3600,7 @@ app.get('/setup-telegram', async (req, res) => {
             <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
             <a href="/agent" class="btn" style="background: #f59e0b;" target="_blank">Test Agent Portal</a>
             <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">Test Telegram Entry</a>
+            <a href="/test-agent" class="btn" style="background: #10b981;" target="_blank">Test Agent System</a>
           </div>
           
           <div style="margin-top: 30px; text-align: left;">
@@ -3725,6 +3805,7 @@ app.use((req, res) => {
           <a href="/agent" class="btn" style="background: #f59e0b;">👑 Agent Portal</a>
           <a href="/game" class="btn" style="background: #10b981;">🎮 Play Bingo</a>
           <a href="/keno" class="btn" style="background: #8b5cf6;">🎰 Play Keno</a>
+          <a href="/test-agent" class="btn" style="background: #10b981;">🧪 Test Agent System</a>
         </div>
       </div>
     </body>
@@ -3755,9 +3836,12 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Health:       /health                                                      ║
 ║  Status:       /status                                                      ║
 ║  Ready:        /ready                                                       ║
+║  Agent Test:   /test-agent                                                  ║
 ║  Node:         ${process.version}                                           ║
 ║  Environment:  ${process.env.NODE_ENV || 'development'}                     ║
 ║  Bot Username: @Ethio_elite_games_bot                                       ║
+║  Agent Portal: /agent                                                       ║
+║  Admin Panel:  /admin (password: admin123)                                  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
