@@ -500,8 +500,8 @@
             font-weight: 400;
         }
 
-        /* Referral Methods Section */
-        .referral-methods {
+        /* Manual Referral Section */
+        .manual-referral-section {
             background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(139, 92, 246, 0.1));
             border: 1px solid var(--primary);
             border-radius: var(--radius-xl);
@@ -511,7 +511,7 @@
             overflow: hidden;
         }
 
-        .referral-methods::before {
+        .manual-referral-section::before {
             content: '';
             position: absolute;
             top: 0;
@@ -522,77 +522,79 @@
             z-index: 0;
         }
 
-        .referral-methods > * {
+        .manual-referral-section > * {
             position: relative;
             z-index: 1;
         }
 
-        .method-card {
+        /* Manual Method Card */
+        .manual-method-card {
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: var(--radius-lg);
-            padding: 28px;
+            padding: 32px;
             transition: all 0.3s ease;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 24px;
         }
 
-        .method-card:hover {
+        .manual-method-card:hover {
             transform: translateY(-4px);
             border-color: var(--primary);
             box-shadow: var(--shadow-lg);
         }
 
-        .method-header {
+        .manual-method-header {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 20px;
             margin-bottom: 8px;
         }
 
-        .method-icon {
-            width: 56px;
-            height: 56px;
+        .manual-method-icon {
+            width: 64px;
+            height: 64px;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 24px;
+            font-size: 28px;
         }
 
-        .method-title {
-            font-size: 20px;
+        .manual-method-title {
+            font-size: 24px;
             font-weight: 700;
             color: var(--light);
             letter-spacing: -0.02em;
         }
 
-        .method-desc {
+        .manual-method-desc {
             color: var(--gray-400);
-            font-size: 15px;
+            font-size: 16px;
             line-height: 1.6;
         }
 
         .method-steps {
             list-style: none;
-            margin-top: 16px;
+            margin-top: 20px;
         }
 
         .method-steps li {
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             color: var(--gray-300);
-            font-size: 14px;
+            font-size: 15px;
         }
 
         .method-steps li i {
             color: var(--accent);
             margin-top: 2px;
+            font-size: 16px;
         }
 
         /* Tables */
@@ -672,24 +674,6 @@
             border: 1px solid rgba(6, 182, 212, 0.2);
         }
 
-        .badge.telegram {
-            background: rgba(0, 136, 204, 0.15);
-            color: #0088cc;
-            border: 1px solid rgba(0, 136, 204, 0.2);
-        }
-
-        .badge.manual {
-            background: rgba(40, 167, 69, 0.15);
-            color: #28a745;
-            border: 1px solid rgba(40, 167, 69, 0.2);
-        }
-
-        .badge.admin {
-            background: rgba(255, 193, 7, 0.15);
-            color: #ffc107;
-            border: 1px solid rgba(255, 193, 7, 0.2);
-        }
-
         /* Mobile Responsive */
         @media (max-width: 768px) {
             .dashboard-header {
@@ -718,11 +702,11 @@
                 padding: 28px;
             }
 
-            .method-card {
+            .manual-method-card {
                 padding: 20px;
             }
 
-            .referral-methods {
+            .manual-referral-section {
                 padding: 20px;
             }
 
@@ -766,69 +750,27 @@
             font-size: 22px;
         }
 
-        /* Referral Link Card */
-        .referral-link-card {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: white;
-            padding: 32px;
-            border-radius: var(--radius-xl);
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .referral-link-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, transparent 0%, rgba(255, 255, 255, 0.1) 100%);
-        }
-
-        .referral-link-card > * {
-            position: relative;
-            z-index: 1;
-        }
-
-        .referral-link-display {
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: var(--radius);
-            padding: 16px;
-            margin: 20px 0;
+        /* Input Group */
+        .input-group {
             display: flex;
-            align-items: center;
             gap: 12px;
-            font-family: 'SF Mono', monospace;
-            font-size: 14px;
-            word-break: break-all;
+            margin-bottom: 20px;
         }
 
-        .referral-link-display a {
-            color: white;
-            text-decoration: none;
+        .input-group .form-control {
             flex: 1;
         }
 
-        .copy-btn {
-            background: white;
-            color: var(--primary);
-            border: none;
-            padding: 10px 16px;
+        /* Error Message */
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            padding: 12px 16px;
             border-radius: var(--radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .copy-btn:hover {
-            background: rgba(255, 255, 255, 0.9);
-            transform: translateY(-1px);
+            font-size: 14px;
+            margin-top: 16px;
+            display: none;
         }
 
         /* Animations */
@@ -1085,94 +1027,254 @@
             font-weight: 500;
         }
 
-        /* Input Group */
-        .input-group {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .input-group .form-control {
-            flex: 1;
-        }
-
-        /* Error Message */
-        .error-message {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-            padding: 12px 16px;
+        /* Search Results */
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.05);
             border-radius: var(--radius);
-            font-size: 14px;
+            padding: 16px;
             margin-top: 16px;
-            display: none;
         }
 
-        /* Referral Sources Cards */
-        .referral-source-card {
+        .user-result {
+            background: rgba(255,255,255,0.05);
+            padding: 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .user-result:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--primary);
+        }
+
+        .user-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .user-result-name {
+            font-weight: 600;
+            color: var(--light);
+            font-size: 15px;
+        }
+
+        .user-result-id {
+            font-size: 12px;
+            color: var(--gray-400);
+            margin-bottom: 4px;
+        }
+
+        .user-result-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: var(--gray-400);
+            margin-top: 8px;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Commission Breakdown */
+        .commission-breakdown {
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .commission-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .commission-item:last-child {
+            border-bottom: none;
+        }
+
+        .commission-label {
+            color: var(--gray-400);
+            font-size: 14px;
+        }
+
+        .commission-value {
+            font-weight: 600;
+            color: var(--light);
+            font-size: 16px;
+        }
+
+        /* How it Works Section */
+        .how-it-works {
+            background: rgba(37, 99, 235, 0.05);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            border-radius: var(--radius);
             padding: 24px;
-            text-align: center;
-            transition: all 0.3s ease;
+            margin-top: 24px;
         }
 
-        .referral-source-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-lg);
+        .how-it-works h4 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-size: 18px;
         }
 
-        .source-icon {
-            width: 60px;
-            height: 60px;
+        .step {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            width: 28px;
+            height: 28px;
+            background: var(--primary);
+            color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 16px;
-            font-size: 28px;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
         }
 
-        .source-icon.telegram {
-            background: rgba(0, 136, 204, 0.1);
-            color: #0088cc;
+        .step-content {
+            flex: 1;
         }
 
-        .source-icon.manual {
-            background: rgba(40, 167, 69, 0.1);
-            color: #28a745;
+        .step-title {
+            font-weight: 600;
+            color: var(--light);
+            margin-bottom: 4px;
         }
 
-        .source-icon.admin {
-            background: rgba(255, 193, 7, 0.1);
-            color: #ffc107;
-        }
-
-        .source-icon.unknown {
-            background: rgba(108, 117, 125, 0.1);
-            color: #6c757d;
-        }
-
-        .source-value {
-            font-size: 32px;
-            font-weight: 800;
-            margin: 8px 0;
-            background: linear-gradient(45deg, var(--primary), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .source-label {
+        .step-desc {
             color: var(--gray-400);
             font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
         }
 
-        .source-percentage {
+        /* Recent Referrals Widget */
+        .recent-referrals-widget {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .referral-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .referral-item:last-child {
+            border-bottom: none;
+        }
+
+        .referral-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .referral-info {
+            flex: 1;
+        }
+
+        .referral-name {
+            font-weight: 600;
+            color: var(--light);
+            font-size: 14px;
+        }
+
+        .referral-meta {
             font-size: 12px;
-            color: var(--gray-500);
+            color: var(--gray-400);
+        }
+
+        /* Stats Change Indicators */
+        .stat-change {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .stat-change.positive {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent);
+        }
+
+        .stat-change.negative {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .stat-change.neutral {
+            background: rgba(100, 116, 139, 0.15);
+            color: var(--gray-400);
+        }
+
+        /* Form Help Text */
+        .form-help {
+            font-size: 13px;
+            color: var(--gray-400);
+            margin-top: 8px;
+        }
+
+        /* Loading States */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
         }
     </style>
 </head>
@@ -1189,7 +1291,7 @@
             <div class="login-card">
                 <div class="login-header">
                     <h1>👑 Elite Agent Portal</h1>
-                    <p>Commission Management System</p>
+                    <p>Manual Referral Management System</p>
                 </div>
                 
                 <div class="form-group">
@@ -1308,71 +1410,123 @@
                 </div>
             </div>
 
-            <!-- Referral Sources Section -->
-            <div class="section" id="referralSourcesSection">
+            <!-- Manual Referral Section -->
+            <div class="section" id="manualReferralSection">
                 <h2 class="section-title">
-                    <i class="fas fa-chart-pie"></i> Referral Sources
+                    <i class="fas fa-user-plus"></i> Add Players Manually
                 </h2>
                 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon" style="background: rgba(0, 123, 255, 0.1); color: #007bff;">
-                                <i class="fab fa-telegram"></i>
-                            </div>
-                            <div class="stat-change positive" id="telegramGrowth">+0%</div>
-                        </div>
-                        <div class="stat-value" id="telegramReferrals">0</div>
-                        <div class="stat-label">Telegram Links</div>
-                        <div class="stat-change" id="telegramPercentage">0% of total</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon" style="background: rgba(40, 167, 69, 0.1); color: #28a745;">
+                <div class="manual-referral-section">
+                    <div class="manual-method-card">
+                        <div class="manual-method-header">
+                            <div class="manual-method-icon">
                                 <i class="fas fa-keyboard"></i>
                             </div>
-                            <div class="stat-change positive" id="manualGrowth">+0%</div>
-                        </div>
-                        <div class="stat-value" id="manualReferrals">0</div>
-                        <div class="stat-label">Manual Adds</div>
-                        <div class="stat-change" id="manualPercentage">0% of total</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon" style="background: rgba(255, 193, 7, 0.1); color: #ffc107;">
-                                <i class="fas fa-user-shield"></i>
+                            <div>
+                                <div class="manual-method-title">Manual Player Addition</div>
+                                <div class="manual-method-desc">Add players by their username, user ID, or display name to become your referrals</div>
                             </div>
-                            <div class="stat-change">Admin</div>
                         </div>
-                        <div class="stat-value" id="adminReferrals">0</div>
-                        <div class="stat-label">Admin Assigned</div>
-                        <div class="stat-change" id="adminPercentage">0% of total</div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-icon" style="background: rgba(108, 117, 125, 0.1); color: #6c757d;">
-                                <i class="fas fa-question-circle"></i>
+                        
+                        <div style="margin-top: 20px;">
+                            <div class="input-group">
+                                <input type="text" id="manualUserInput" class="form-control" placeholder="Enter username, user ID, or display name..." onkeypress="if(event.key === 'Enter') addManualReferral()">
+                                <button class="btn btn-success" onclick="addManualReferral()" id="addReferralBtn">
+                                    <i class="fas fa-plus"></i> Add Player
+                                </button>
                             </div>
-                            <div class="stat-change">Method</div>
+                            
+                            <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                                <button class="btn btn-sm" onclick="showAdvancedSearchModal()" style="flex: 1; min-width: 120px;">
+                                    <i class="fas fa-search"></i> Search Players
+                                </button>
+                                <button class="btn btn-sm btn-outline" onclick="showBulkAddModal()" style="flex: 1; min-width: 120px;">
+                                    <i class="fas fa-users"></i> Bulk Add
+                                </button>
+                            </div>
+                            
+                            <!-- How it Works -->
+                            <div class="how-it-works">
+                                <h4><i class="fas fa-info-circle"></i> How Manual Referrals Work</h4>
+                                <div class="step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <div class="step-title">Find Player Information</div>
+                                        <div class="step-desc">Get the player's username, user ID, or display name from the game</div>
+                                    </div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">2</div>
+                                    <div class="step-content">
+                                        <div class="step-title">Add Player Manually</div>
+                                        <div class="step-desc">Enter the player information and add them as your referral</div>
+                                    </div>
+                                </div>
+                                <div class="step">
+                                    <div class="step-number">3</div>
+                                    <div class="step-content">
+                                        <div class="step-title">Earn Commissions</div>
+                                        <div class="step-desc">Earn 40% from Bingo wins and 10% from Keno wins of your referrals</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="stat-value" id="unknownReferrals">0</div>
-                        <div class="stat-label">Unknown Source</div>
-                        <div class="stat-change">Needs verification</div>
+                        
+                        <ul class="method-steps">
+                            <li><i class="fas fa-check-circle"></i> Search for player by username or ID</li>
+                            <li><i class="fas fa-check-circle"></i> Verify player's game activity and wins</li>
+                            <li><i class="fas fa-check-circle"></i> Add as your referral instantly</li>
+                            <li><i class="fas fa-check-circle"></i> Start earning commissions immediately</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commission Breakdown -->
+            <div class="section">
+                <h2 class="section-title">
+                    <i class="fas fa-percentage"></i> Commission Rates
+                </h2>
+                
+                <div class="commission-breakdown">
+                    <div class="commission-item">
+                        <div class="commission-label">
+                            <i class="fas fa-dice" style="color: var(--primary); margin-right: 8px;"></i>
+                            Bingo Wins Commission
+                        </div>
+                        <div class="commission-value" style="color: var(--primary);">
+                            40%
+                        </div>
+                    </div>
+                    <div class="commission-item">
+                        <div class="commission-label">
+                            <i class="fas fa-square" style="color: var(--secondary); margin-right: 8px;"></i>
+                            Keno Wins Commission
+                        </div>
+                        <div class="commission-value" style="color: var(--secondary);">
+                            10%
+                        </div>
+                    </div>
+                    <div class="commission-item">
+                        <div class="commission-label">
+                            <i class="fas fa-clock" style="color: var(--accent); margin-right: 8px;"></i>
+                            Commission Processing
+                        </div>
+                        <div class="commission-value" style="color: var(--accent);">
+                            Real-time
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Quick Actions -->
             <div class="quick-actions">
-                <div class="action-card" onclick="showReferralMethods()">
+                <div class="action-card" onclick="showAdvancedSearchModal()">
                     <div class="action-icon">
-                        <i class="fas fa-user-plus"></i>
+                        <i class="fas fa-search"></i>
                     </div>
-                    <div class="action-title">Add Referral</div>
-                    <div class="action-desc">Add users manually or via link</div>
+                    <div class="action-title">Search Players</div>
+                    <div class="action-desc">Find players to add as referrals</div>
                 </div>
                 
                 <div class="action-card" onclick="showWithdrawalModal()">
@@ -1391,7 +1545,7 @@
                     <div class="action-desc">Update dashboard data</div>
                 </div>
                 
-                <div class="action-card" onclick="showReports()">
+                <div class="action-card" onclick="showReportsModal()">
                     <div class="action-icon">
                         <i class="fas fa-chart-pie"></i>
                     </div>
@@ -1400,101 +1554,10 @@
                 </div>
             </div>
 
-            <!-- Referral Methods Section -->
-            <div class="section" id="referralMethodsSection" style="display: none;">
-                <h2 class="section-title">
-                    <i class="fas fa-user-plus"></i> Referral Methods
-                </h2>
-                
-                <div class="referral-methods">
-                    <h3 style="color: white; font-size: 24px; font-weight: 700; margin-bottom: 24px;">Grow Your Network</h3>
-                    <p style="color: rgba(255, 255, 255, 0.8); font-size: 16px; margin-bottom: 32px;">Earn 40% commission on Bingo wins and 10% on Keno wins. Use both methods to maximize your earnings.</p>
-                    
-                    <div class="divider"></div>
-                    
-                    <!-- Telegram Link Method -->
-                    <div class="method-card" style="margin-bottom: 24px;">
-                        <div class="method-header">
-                            <div class="method-icon">
-                                <i class="fab fa-telegram"></i>
-                            </div>
-                            <div>
-                                <div class="method-title">Telegram Link Method</div>
-                                <div class="method-desc">Share your unique Telegram referral link with users</div>
-                            </div>
-                        </div>
-                        
-                        <div id="referralLinkSection">
-                            <div class="referral-link-display">
-                                <i class="fab fa-telegram" style="font-size: 20px;"></i>
-                                <span id="telegramLinkText" style="flex: 1;">Generating link...</span>
-                                <button class="copy-btn" onclick="copyTelegramLink()" id="copyLinkBtn">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                            </div>
-                            
-                            <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-                                <button class="btn btn-sm" onclick="shareTelegramLink('whatsapp')" style="flex: 1; min-width: 120px;">
-                                    <i class="fab fa-whatsapp"></i> WhatsApp
-                                </button>
-                                <button class="btn btn-sm btn-outline" onclick="shareTelegramLink('telegram')" style="flex: 1; min-width: 120px;">
-                                    <i class="fab fa-telegram"></i> Telegram
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <ul class="method-steps">
-                            <li><i class="fas fa-check-circle"></i> Share your unique link with users</li>
-                            <li><i class="fas fa-check-circle"></i> User clicks link and starts @Ethio_elite_games_bot</li>
-                            <li><i class="fas fa-check-circle"></i> User automatically becomes your referral</li>
-                            <li><i class="fas fa-check-circle"></i> Earn commissions from their game wins</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- Manual Method -->
-                    <div class="method-card">
-                        <div class="method-header">
-                            <div class="method-icon">
-                                <i class="fas fa-keyboard"></i>
-                            </div>
-                            <div>
-                                <div class="method-title">Manual Method</div>
-                                <div class="method-desc">Add users by typing their username or ID</div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 20px;">
-                            <div class="input-group">
-                                <input type="text" id="manualUserInput" class="form-control" placeholder="Enter Telegram ID, username, or display name..." onkeypress="if(event.key === 'Enter') addManualReferral()">
-                                <button class="btn btn-success" onclick="addManualReferral()" id="addReferralBtn">
-                                    <i class="fas fa-plus"></i> Add
-                                </button>
-                            </div>
-                            
-                            <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
-                                <button class="btn btn-sm" onclick="showAdvancedSearchModal()" style="flex: 1; min-width: 120px;">
-                                    <i class="fas fa-search"></i> Advanced Search
-                                </button>
-                                <button class="btn btn-sm btn-outline" onclick="showBulkAddModal()" style="flex: 1; min-width: 120px;">
-                                    <i class="fas fa-users"></i> Bulk Add
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <ul class="method-steps">
-                            <li><i class="fas fa-check-circle"></i> Find user's Telegram ID or username</li>
-                            <li><i class="fas fa-check-circle"></i> Type and search for the user</li>
-                            <li><i class="fas fa-check-circle"></i> Add as your referral instantly</li>
-                            <li><i class="fas fa-check-circle"></i> Start earning commissions immediately</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
             <!-- Recent Activity -->
             <div class="section">
                 <h2 class="section-title">
-                    <i class="fas fa-history"></i> Recent Activity
+                    <i class="fas fa-history"></i> Recent Commission Activity
                 </h2>
                 
                 <div class="table-responsive">
@@ -1502,8 +1565,7 @@
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>User</th>
-                                <th>Source</th>
+                                <th>Player</th>
                                 <th>Game</th>
                                 <th>Win Amount</th>
                                 <th>Commission</th>
@@ -1511,7 +1573,7 @@
                             </tr>
                         </thead>
                         <tbody id="recentActivityBody">
-                            <tr><td colspan="7" class="empty-state">No recent activity</td></tr>
+                            <tr><td colspan="6" class="empty-state">No recent commission activity</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1520,24 +1582,23 @@
             <!-- Referrals List -->
             <div class="section" id="referralsListSection">
                 <h2 class="section-title">
-                    <i class="fas fa-users"></i> Recent Referrals
+                    <i class="fas fa-users"></i> Your Referrals
                 </h2>
                 
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Date Added</th>
-                                <th>User ID</th>
+                                <th>Added On</th>
+                                <th>Player ID</th>
                                 <th>Username</th>
-                                <th>Source</th>
-                                <th>Balance</th>
                                 <th>Total Wins</th>
+                                <th>Total Commission</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="referralsListBody">
-                            <tr><td colspan="7" class="empty-state">No referrals yet. Start adding users!</td></tr>
+                            <tr><td colspan="6" class="empty-state">No referrals yet. Start adding players manually!</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1547,19 +1608,19 @@
         <!-- Mobile Bottom Navigation -->
         <div class="mobile-bottom-nav">
             <div class="nav-items">
-                <a href="#" class="nav-item active" onclick="showDashboard()">
+                <a href="#" class="nav-item active" onclick="scrollToTop()">
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item" onclick="showReferralMethods()">
+                <a href="#" class="nav-item" onclick="scrollToManualSection()">
                     <i class="fas fa-user-plus"></i>
-                    <span>Add Referral</span>
+                    <span>Add Player</span>
                 </a>
                 <a href="#" class="nav-item" onclick="showWithdrawalModal()">
                     <i class="fas fa-wallet"></i>
                     <span>Withdraw</span>
                 </a>
-                <a href="#" class="nav-item" onclick="showReports()">
+                <a href="#" class="nav-item" onclick="showReportsModal()">
                     <i class="fas fa-chart-bar"></i>
                     <span>Reports</span>
                 </a>
@@ -1567,7 +1628,7 @@
         </div>
 
         <!-- Floating Action Button -->
-        <button class="fab" onclick="showReferralMethods()" title="Add Referral">
+        <button class="fab" onclick="scrollToManualSection()" title="Add Player">
             <i class="fas fa-plus"></i>
         </button>
     </div>
@@ -1576,19 +1637,20 @@
     <div class="modal-overlay" id="advancedSearchModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Advanced User Search</h3>
+                <h3 class="modal-title">Search Players</h3>
                 <button class="modal-close" onclick="closeModal('advancedSearchModal')">&times;</button>
             </div>
             
             <div class="form-group">
                 <label>Search Query</label>
-                <input type="text" id="advancedSearchInput" class="form-control" placeholder="Search by ID, username, phone..." oninput="searchUsers()">
+                <input type="text" id="advancedSearchInput" class="form-control" placeholder="Search by username, user ID, or display name..." oninput="searchUsers()">
+                <div class="form-help">You can search for any player in the system</div>
             </div>
             
-            <div id="searchResults" style="max-height: 400px; overflow-y: auto; background: rgba(255,255,255,0.05); border-radius: var(--radius); padding: 16px;">
+            <div id="searchResultsModal" class="search-results">
                 <div class="empty-state" style="padding: 20px;">
                     <i class="fas fa-search"></i>
-                    <div>Enter a search query to find users</div>
+                    <div>Enter a search query to find players</div>
                 </div>
             </div>
         </div>
@@ -1597,28 +1659,29 @@
     <div class="modal-overlay" id="bulkAddModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title">Bulk Add Users</h3>
+                <h3 class="modal-title">Bulk Add Players</h3>
                 <button class="modal-close" onclick="closeModal('bulkAddModal')">&times;</button>
             </div>
             
             <div class="form-group">
                 <label>Enter usernames or IDs (one per line, max 20)</label>
                 <textarea id="bulkUserInput" class="form-control" rows="6" placeholder="Example:
-@username1
-tg_123456789
-username2
+username1
+user_123456789
+player_name
 display_name"></textarea>
+                <div class="form-help">Each line should contain a username, user ID, or display name</div>
             </div>
             
             <div class="form-group">
-                <label>Line Count: <span id="lineCount">0</span>/20</label>
-                <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 8px; overflow: hidden;">
-                    <div id="progressBar" style="height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 0.3s;"></div>
+                <label>Player Count: <span id="lineCount">0</span>/20</label>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
                 </div>
             </div>
             
             <button class="btn btn-success" onclick="processBulkAdd()">
-                <i class="fas fa-users"></i> Add All Users
+                <i class="fas fa-users"></i> Add All Players
             </button>
         </div>
     </div>
@@ -1638,7 +1701,7 @@ display_name"></textarea>
             <div class="form-group">
                 <label>Amount to Withdraw (ETB)</label>
                 <input type="number" id="withdrawAmount" class="form-control" placeholder="Enter amount" min="10" step="0.01">
-                <div style="font-size: 13px; color: var(--gray-400); margin-top: 8px;">Minimum withdrawal: 10 ETB</div>
+                <div class="form-help">Minimum withdrawal: 10 ETB</div>
             </div>
             
             <div class="form-group">
@@ -1647,7 +1710,7 @@ display_name"></textarea>
                     <i class="fas fa-phone"></i>
                     <input type="tel" id="withdrawPhone" class="form-control" placeholder="09xxxxxxxx">
                 </div>
-                <div style="font-size: 13px; color: var(--gray-400); margin-top: 8px;">Enter your Telebirr phone number</div>
+                <div class="form-help">Enter your Telebirr phone number</div>
             </div>
             
             <button class="btn btn-success" onclick="submitWithdrawal()">
@@ -1658,6 +1721,50 @@ display_name"></textarea>
                 <i class="fas fa-info-circle" style="color: var(--info); margin-right: 8px;"></i>
                 Withdrawal requests are processed within 24 hours by admin.
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="reportsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Performance Reports</h3>
+                <button class="modal-close" onclick="closeModal('reportsModal')">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>Report Period</label>
+                <select id="reportPeriod" class="form-control" onchange="generateReport()">
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="this_week">This Week</option>
+                    <option value="last_week">Last Week</option>
+                    <option value="this_month">This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+            
+            <div id="customRange" style="display: none;">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="startDate" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" id="endDate" class="form-control">
+                </div>
+            </div>
+            
+            <div id="reportResults">
+                <div class="empty-state" style="padding: 20px;">
+                    <i class="fas fa-chart-pie"></i>
+                    <div>Select a period to generate report</div>
+                </div>
+            </div>
+            
+            <button class="btn btn-outline" onclick="exportReport()" style="margin-top: 20px;">
+                <i class="fas fa-download"></i> Export Report
+            </button>
         </div>
     </div>
 
@@ -1705,12 +1812,12 @@ display_name"></textarea>
                 socket.on('agent:tokenVerified', handleLoginSuccess);
                 socket.on('agent:tokenInvalid', handleTokenInvalid);
                 socket.on('agent:dashboardData', updateDashboard);
-                socket.on('agent:referralLink', updateReferralLink);
                 socket.on('agent:newCommission', handleNewCommission);
                 socket.on('agent:manualReferralSuccess', handleManualReferralSuccess);
                 socket.on('agent:error', handleAgentError);
                 socket.on('agent:searchUsersResult', handleSearchResults);
                 socket.on('agent:bulkManualReferralResult', handleBulkReferralResult);
+                socket.on('agent:reportData', handleReportData);
                 
             } catch (error) {
                 console.error('Socket initialization error:', error);
@@ -1796,9 +1903,6 @@ display_name"></textarea>
             showDashboardScreen();
             loadDashboard();
             
-            // Generate referral link
-            socket.emit('agent:generateReferralLink');
-            
             showNotification('Welcome back, ' + data.name + '!', 'success');
         }
 
@@ -1852,45 +1956,60 @@ display_name"></textarea>
             document.getElementById('totalEarnings').textContent = data.stats.totalEarnings.toFixed(2) + ' ETB';
             document.getElementById('todayEarnings').textContent = 'Today: ' + data.stats.todaysEarnings.toFixed(2) + ' ETB';
             document.getElementById('totalReferrals').textContent = data.stats.totalReferrals;
+            document.getElementById('activeReferralsCount').textContent = 'Active: ' + data.stats.activeReferrals;
             document.getElementById('availableBalanceModal').textContent = data.agent.totalEarnings.toFixed(2) + ' ETB';
             
-            // Update referral sources
-            updateReferralStats(data);
+            // Calculate earnings growth
+            const todayTotal = data.stats.todaysEarnings || 0;
+            const yesterdayTotal = data.stats.yesterdayEarnings || 0;
+            let earningsGrowth = 0;
+            
+            if (yesterdayTotal > 0) {
+                earningsGrowth = ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1);
+            } else if (todayTotal > 0) {
+                earningsGrowth = 100;
+            }
+            
+            const earningsChange = document.getElementById('todayEarningsChange');
+            earningsChange.textContent = earningsGrowth >= 0 ? `+${earningsGrowth}%` : `${earningsGrowth}%`;
+            earningsChange.className = earningsGrowth >= 0 ? 'stat-change positive' : 'stat-change negative';
+            
+            // Update monthly earnings
+            document.getElementById('monthlyEarnings').textContent = data.stats.monthlyEarnings.toFixed(2) + ' ETB';
             
             // Update activity table
             const activityBody = document.getElementById('recentActivityBody');
             if (data.commissions && data.commissions.length > 0) {
                 activityBody.innerHTML = '';
-                data.commissions.slice(0, 5).forEach(comm => {
+                data.commissions.slice(0, 10).forEach(comm => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${new Date(comm.createdAt).toLocaleDateString()}</td>
                         <td>${comm.userName || comm.userId?.substring(0, 8)}...</td>
-                        <td>${getReferralMethodBadge(comm.referralMethod || 'unknown')}</td>
                         <td>${comm.gameType}</td>
                         <td>${comm.winningAmount.toFixed(2)} ETB</td>
-                        <td><strong>${comm.commissionAmount.toFixed(2)} ETB</strong></td>
+                        <td><strong style="color: var(--accent);">${comm.commissionAmount.toFixed(2)} ETB</strong></td>
                         <td><span class="badge success">Completed</span></td>
                     `;
                     activityBody.appendChild(row);
                 });
             } else {
-                activityBody.innerHTML = '<tr><td colspan="7" class="empty-state">No recent activity</td></tr>';
+                activityBody.innerHTML = '<tr><td colspan="6" class="empty-state">No recent commission activity</td></tr>';
             }
             
             // Update referrals list
             const referralsBody = document.getElementById('referralsListBody');
             if (data.referrals && data.referrals.length > 0) {
                 referralsBody.innerHTML = '';
-                data.referrals.slice(0, 10).forEach(ref => {
+                data.referrals.slice(0, 15).forEach(ref => {
+                    const totalCommission = ref.totalWagered > 0 ? ref.totalWagered * 0.4 : 0; // Estimate commission
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${new Date(ref.referredAt || ref.joinedAt).toLocaleDateString()}</td>
                         <td><small>${ref.userId.substring(0, 10)}...</small></td>
                         <td>${ref.userName || 'No Name'}</td>
-                        <td>${getReferralMethodBadge(ref.referralMethod || 'unknown')}</td>
-                        <td>${ref.balance.toFixed(2)} ETB</td>
                         <td>${ref.totalWins || 0}</td>
+                        <td>${totalCommission.toFixed(2)} ETB</td>
                         <td>
                             ${ref.isOnline ? 
                                 '<span class="badge success"><i class="fas fa-circle"></i> Online</span>' : 
@@ -1901,95 +2020,7 @@ display_name"></textarea>
                     referralsBody.appendChild(row);
                 });
             } else {
-                referralsBody.innerHTML = '<tr><td colspan="7" class="empty-state">No referrals yet. Start adding users!</td></tr>';
-            }
-        }
-
-        function updateReferralStats(data) {
-            if (data.stats) {
-                const stats = data.stats;
-                
-                // Update counts
-                document.getElementById('telegramReferrals').textContent = stats.telegramReferrals || 0;
-                document.getElementById('manualReferrals').textContent = stats.manualReferrals || 0;
-                document.getElementById('adminReferrals').textContent = stats.adminReferrals || 0;
-                
-                // Calculate percentages
-                const totalMethods = (stats.telegramReferrals || 0) + 
-                                    (stats.manualReferrals || 0) + 
-                                    (stats.adminReferrals || 0);
-                
-                const telegramPct = totalMethods > 0 ? 
-                    Math.round((stats.telegramReferrals / totalMethods) * 100) : 0;
-                const manualPct = totalMethods > 0 ? 
-                    Math.round((stats.manualReferrals / totalMethods) * 100) : 0;
-                const adminPct = totalMethods > 0 ? 
-                    Math.round((stats.adminReferrals / totalMethods) * 100) : 0;
-                
-                document.getElementById('telegramPercentage').textContent = `${telegramPct}% of total`;
-                document.getElementById('manualPercentage').textContent = `${manualPct}% of total`;
-                document.getElementById('adminPercentage').textContent = `${adminPct}% of total`;
-                
-                // Update unknown referrals (users without referral method recorded)
-                const totalReferrals = stats.totalReferrals || 0;
-                const unknownCount = Math.max(0, totalReferrals - totalMethods);
-                document.getElementById('unknownReferrals').textContent = unknownCount;
-                
-                // Update growth indicators (simplified for now)
-                document.getElementById('telegramGrowth').textContent = telegramPct > 50 ? '✓ Good' : '↑ Growing';
-                document.getElementById('manualGrowth').textContent = manualPct > 30 ? '✓ Active' : '↑ Adding';
-            }
-        }
-
-        function getReferralMethodBadge(method) {
-            const methodMap = {
-                'telegram_link': { text: 'Telegram Link', class: 'telegram', icon: 'fab fa-telegram' },
-                'manual': { text: 'Manual', class: 'manual', icon: 'fas fa-keyboard' },
-                'bulk_manual': { text: 'Bulk Manual', class: 'manual', icon: 'fas fa-users' },
-                'admin_assigned': { text: 'Admin', class: 'admin', icon: 'fas fa-user-shield' },
-                'unknown': { text: 'Unknown', class: 'info', icon: 'fas fa-question-circle' }
-            };
-            
-            const methodInfo = methodMap[method] || methodMap['unknown'];
-            return `<span class="badge ${methodInfo.class}"><i class="${methodInfo.icon}"></i> ${methodInfo.text}</span>`;
-        }
-
-        // Referral Link Functions
-        function updateReferralLink(data) {
-            const telegramLink = data.telegramLink || `https://t.me/Ethio_elite_games_bot?start=${data.referralCode}`;
-            document.getElementById('telegramLinkText').textContent = telegramLink;
-            document.getElementById('telegramLinkText').setAttribute('data-link', telegramLink);
-            document.getElementById('copyLinkBtn').disabled = false;
-        }
-
-        function copyTelegramLink() {
-            const link = document.getElementById('telegramLinkText').getAttribute('data-link');
-            if (link && link !== 'Generating link...') {
-                navigator.clipboard.writeText(link).then(() => {
-                    showNotification('Referral link copied to clipboard!', 'success');
-                }).catch(err => {
-                    console.error('Copy failed:', err);
-                    showNotification('Failed to copy link', 'error');
-                });
-            }
-        }
-
-        function shareTelegramLink(platform) {
-            const link = document.getElementById('telegramLinkText').getAttribute('data-link');
-            const text = `Join Elite Games via my referral link and earn together! ${link}`;
-            
-            let url = '';
-            switch(platform) {
-                case 'whatsapp':
-                    url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                    break;
-                case 'telegram':
-                    url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Join Elite Games via my referral link!')}`;
-                    break;
-            }
-            
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
+                referralsBody.innerHTML = '<tr><td colspan="6" class="empty-state">No referrals yet. Start adding players manually!</td></tr>';
             }
         }
 
@@ -1997,7 +2028,7 @@ display_name"></textarea>
         function addManualReferral() {
             const input = document.getElementById('manualUserInput').value;
             if (!input.trim()) {
-                showNotification('Please enter a username or ID', 'error');
+                showNotification('Please enter a username or player ID', 'error');
                 return;
             }
             
@@ -2012,7 +2043,7 @@ display_name"></textarea>
         function handleManualReferralSuccess(data) {
             const btn = document.getElementById('addReferralBtn');
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-plus"></i> Add';
+            btn.innerHTML = '<i class="fas fa-plus"></i> Add Player';
             
             showNotification(data.message, 'success');
             loadDashboard();
@@ -2028,20 +2059,12 @@ display_name"></textarea>
         }
 
         // Modal Functions
-        function showReferralMethods() {
-            document.getElementById('referralMethodsSection').style.display = 'block';
-            document.getElementById('referralSourcesSection').style.display = 'none';
-            document.getElementById('referralsListSection').style.display = 'none';
-            scrollToElement('referralMethodsSection');
-            updateMobileNav('referralMethods');
+        function scrollToManualSection() {
+            document.getElementById('manualReferralSection').scrollIntoView({ behavior: 'smooth' });
         }
 
-        function showDashboard() {
-            document.getElementById('referralMethodsSection').style.display = 'none';
-            document.getElementById('referralSourcesSection').style.display = 'block';
-            document.getElementById('referralsListSection').style.display = 'block';
-            scrollToElement('dashboardScreen');
-            updateMobileNav('dashboard');
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function showAdvancedSearchModal() {
@@ -2058,15 +2081,12 @@ display_name"></textarea>
             document.getElementById('withdrawalModal').classList.add('active');
         }
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
+        function showReportsModal() {
+            document.getElementById('reportsModal').classList.add('active');
         }
 
-        function scrollToElement(elementId) {
-            const element = document.getElementById(elementId);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
         }
 
         function toggleSidebar() {
@@ -2081,29 +2101,32 @@ display_name"></textarea>
         function searchUsers() {
             const query = document.getElementById('advancedSearchInput').value;
             if (query.length >= 2) {
-                socket.emit('agent:searchUsers', { query, limit: 10 });
+                socket.emit('agent:searchUsers', { query, limit: 15 });
             }
         }
 
         function handleSearchResults(data) {
-            const resultsContainer = document.getElementById('searchResults');
+            const resultsContainer = document.getElementById('searchResultsModal');
             if (!data.users || data.users.length === 0) {
                 resultsContainer.innerHTML = `
                     <div class="empty-state" style="padding: 20px;">
                         <i class="fas fa-search"></i>
-                        <div>No users found for "${data.query}"</div>
+                        <div>No players found for "${data.query}"</div>
                     </div>
                 `;
                 return;
             }
 
-            let html = '<div style="display: flex; flex-direction: column; gap: 12px;">';
+            let html = '';
             data.users.forEach(user => {
                 const canAdd = !user.hasAgent || user.currentAgentId !== agentData?.id;
                 html += `
-                    <div style="background: rgba(255,255,255,0.05); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div style="font-weight: 600; color: var(--light);">${user.userName || 'No Name'}</div>
+                    <div class="user-result">
+                        <div class="user-result-header">
+                            <div>
+                                <div class="user-result-name">${user.userName || 'No Name'}</div>
+                                <div class="user-result-id">${user.userId}</div>
+                            </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 11px; padding: 4px 8px; border-radius: 12px; background: ${user.isOnline ? 'rgba(16,185,129,0.2)' : 'rgba(100,116,139,0.2)'}; color: ${user.isOnline ? 'var(--accent)' : 'var(--gray-400)'};">
                                     ${user.isOnline ? 'Online' : 'Offline'}
@@ -2118,22 +2141,21 @@ display_name"></textarea>
                                 }
                             </div>
                         </div>
-                        <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">${user.userId}</div>
-                        <div style="display: flex; gap: 16px; font-size: 11px; color: var(--gray-400);">
-                            <span>${user.totalWins} wins</span>
-                            <span>${user.totalWagered.toFixed(2)} ETB wagered</span>
-                            <span>${new Date(user.joinedAt).toLocaleDateString()}</span>
+                        <div class="user-result-stats">
+                            <span><i class="fas fa-trophy"></i> ${user.totalWins} wins</span>
+                            <span><i class="fas fa-coins"></i> ${user.totalWagered.toFixed(2)} ETB</span>
+                            <span><i class="fas fa-calendar"></i> ${new Date(user.joinedAt).toLocaleDateString()}</span>
                         </div>
                     </div>
                 `;
             });
-            html += '</div>';
             resultsContainer.innerHTML = html;
         }
 
         function addUserAsReferral(userId) {
             socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: userId });
             closeModal('advancedSearchModal');
+            showNotification('Player added as referral!', 'success');
         }
 
         // Bulk Add Functions
@@ -2157,11 +2179,11 @@ display_name"></textarea>
             }
             
             if (lines.length > 20) {
-                showNotification('Maximum 20 users allowed. Using first 20.', 'warning');
+                showNotification('Maximum 20 players allowed. Using first 20.', 'warning');
                 lines.splice(20);
             }
             
-            if (confirm(`Add ${lines.length} users as referrals?`)) {
+            if (confirm(`Add ${lines.length} players as referrals?`)) {
                 socket.emit('agent:bulkManualReferral', { userIdentifiers: lines });
                 closeModal('bulkAddModal');
                 textarea.value = '';
@@ -2201,9 +2223,151 @@ display_name"></textarea>
             }
         }
 
-        function showReports() {
-            showNotification('Reports feature coming soon!', 'info');
-            updateMobileNav('reports');
+        // Report Functions
+        function showReportsModal() {
+            document.getElementById('reportsModal').classList.add('active');
+        }
+
+        function generateReport() {
+            const period = document.getElementById('reportPeriod').value;
+            let startDate, endDate;
+            
+            const now = new Date();
+            
+            switch(period) {
+                case 'today':
+                    startDate = new Date(now.setHours(0, 0, 0, 0));
+                    endDate = new Date(now.setHours(23, 59, 59, 999));
+                    break;
+                case 'yesterday':
+                    startDate = new Date(now.setDate(now.getDate() - 1));
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = new Date(startDate);
+                    endDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'this_week':
+                    const day = now.getDay();
+                    startDate = new Date(now.setDate(now.getDate() - day));
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = new Date();
+                    break;
+                case 'last_week':
+                    startDate = new Date(now.setDate(now.getDate() - now.getDay() - 7));
+                    startDate.setHours(0, 0, 0, 0);
+                    endDate = new Date(startDate);
+                    endDate.setDate(endDate.getDate() + 6);
+                    endDate.setHours(23, 59, 59, 999);
+                    break;
+                case 'this_month':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    endDate = new Date();
+                    break;
+                case 'last_month':
+                    startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+                    break;
+                case 'custom':
+                    const customStart = document.getElementById('startDate').value;
+                    const customEnd = document.getElementById('endDate').value;
+                    if (!customStart || !customEnd) {
+                        showNotification('Please select both start and end dates', 'error');
+                        return;
+                    }
+                    startDate = new Date(customStart);
+                    endDate = new Date(customEnd);
+                    endDate.setHours(23, 59, 59, 999);
+                    break;
+            }
+            
+            if (startDate && endDate && socket) {
+                socket.emit('agent:report', {
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString()
+                });
+            }
+        }
+
+        function handleReportData(data) {
+            const resultsContainer = document.getElementById('reportResults');
+            
+            if (!data || !data.summary) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <i class="fas fa-chart-pie"></i>
+                        <div>No data available for selected period</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const summary = data.summary;
+            const agent = data.agent;
+            
+            let html = `
+                <div style="margin-bottom: 24px;">
+                    <h4 style="color: var(--light); margin-bottom: 16px;">Report Summary</h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        <div style="background: rgba(37,99,235,0.1); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">Total Commission</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--primary);">${summary.totalCommission.toFixed(2)} ETB</div>
+                        </div>
+                        <div style="background: rgba(16,185,129,0.1); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">Total Games</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--accent);">${summary.totalGames}</div>
+                        </div>
+                        <div style="background: rgba(139,92,246,0.1); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">Average Commission</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--secondary);">${summary.averageCommission.toFixed(2)} ETB</div>
+                        </div>
+                        <div style="background: rgba(245,158,11,0.1); padding: 16px; border-radius: var(--radius);">
+                            <div style="font-size: 12px; color: var(--gray-400); margin-bottom: 4px;">Total Winnings</div>
+                            <div style="font-size: 24px; font-weight: 800; color: var(--warning);">${summary.totalWinnings.toFixed(2)} ETB</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            if (data.dailyCommissions && data.dailyCommissions.length > 0) {
+                html += `
+                    <div style="margin-top: 24px;">
+                        <h4 style="color: var(--light); margin-bottom: 16px;">Daily Breakdown</h4>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding: 8px; text-align: left; color: var(--gray-400); font-size: 12px;">Date</th>
+                                        <th style="padding: 8px; text-align: left; color: var(--gray-400); font-size: 12px;">Game</th>
+                                        <th style="padding: 8px; text-align: left; color: var(--gray-400); font-size: 12px;">Commission</th>
+                                        <th style="padding: 8px; text-align: left; color: var(--gray-400); font-size: 12px;">Games</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                data.dailyCommissions.forEach(item => {
+                    html += `
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid var(--border);">${item._id.date}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid var(--border);">${item._id.gameType}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid var(--border); color: var(--accent);">${item.totalCommission.toFixed(2)} ETB</td>
+                            <td style="padding: 8px; border-bottom: 1px solid var(--border);">${item.totalGames}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            resultsContainer.innerHTML = html;
+        }
+
+        function exportReport() {
+            showNotification('Export feature coming soon!', 'info');
         }
 
         // Notification System
@@ -2254,6 +2418,14 @@ display_name"></textarea>
             // Add event listeners
             document.getElementById('bulkUserInput').addEventListener('input', updateLineCount);
             document.getElementById('advancedSearchInput').addEventListener('input', searchUsers);
+            document.getElementById('reportPeriod').addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    document.getElementById('customRange').style.display = 'block';
+                } else {
+                    document.getElementById('customRange').style.display = 'none';
+                    generateReport();
+                }
+            });
             
             // Handle offline/online
             window.addEventListener('online', () => showNotification('Back online', 'success'));
