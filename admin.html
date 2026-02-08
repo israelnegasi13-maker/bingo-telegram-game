@@ -385,8 +385,8 @@
         }
 
         .status-indicator {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: var(--success);
             animation: pulse 2s infinite;
@@ -1204,9 +1204,11 @@
         @keyframes pulse {
             0%, 100% {
                 opacity: 1;
+                transform: scale(1);
             }
             50% {
                 opacity: 0.5;
+                transform: scale(1.1);
             }
         }
 
@@ -1356,6 +1358,20 @@
         .transaction-amount.commission {
             color: var(--agent);
         }
+        
+        /* Connection icon styles */
+        .connection-icon {
+            margin-right: 8px;
+            font-size: 1rem;
+        }
+        
+        .connection-icon.connected {
+            color: var(--success);
+        }
+        
+        .connection-icon.disconnected {
+            color: var(--danger);
+        }
     </style>
 </head>
 <body>
@@ -1385,6 +1401,13 @@
                     <i class="fas fa-sign-in-alt"></i>
                     Access Dashboard
                 </button>
+                
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="btn btn-sm" onclick="testServerConnection()" 
+                            style="background: var(--dark-3); color: var(--text-secondary); padding: 8px 16px;">
+                        <i class="fas fa-network-wired"></i> Test Connection
+                    </button>
+                </div>
                 
                 <div class="login-footer">
                     <p class="text-muted">
@@ -1494,9 +1517,9 @@
                 <div class="sidebar-footer">
                     <div class="connection-status">
                         <div class="status-indicator"></div>
-                        <span class="status-text" id="connectionStatusText">Connected</span>
+                        <span class="status-text" id="connectionStatusText">Disconnected</span>
                     </div>
-                    <div class="last-update" id="lastUpdateTime">Updated just now</div>
+                    <div class="last-update" id="lastUpdateTime">Not connected</div>
                     <div class="last-update mt-1">
                         <small>Active: <span id="activeConnections">0</span> connections</small>
                     </div>
