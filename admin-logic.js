@@ -65,6 +65,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('adminPassword').value = session.password;
                 console.log('📋 Found saved session (expires:', new Date(session.expires).toLocaleString(), ')');
                 showToast('Found saved session. Click "Access Dashboard" to login.', 'info');
+                
+                // Auto-login with saved session
+                setTimeout(() => {
+                    adminLogin();
+                }, 500);
             } else {
                 console.log('⚠️ Saved session expired');
                 localStorage.removeItem('bingo_admin_session');
@@ -95,6 +100,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     attachNavListeners();
     updateConnectionStatus();
+    
+    // Test server connection on load
+    setTimeout(() => {
+        testServerConnection();
+    }, 1000);
     
     console.log('✅ Admin panel initialized');
 });
@@ -169,11 +179,18 @@ function connectSocket() {
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 10000,
-            transports: ['websocket', 'polling']
+            transports: ['websocket', 'polling'],
+            autoConnect: true,
+            forceNew: true
         });
         
         // Add connection event listeners
         setupSocketListeners();
+        
+        // Manually connect
+        state.socket.connect();
+        
+        console.log('🔄 Socket connection initiated');
         
     } catch (error) {
         console.error('❌ Failed to create socket:', error);
@@ -537,7 +554,7 @@ function setupSocketListeners() {
     console.log('✅ Socket event listeners attached');
 }
 
-// Login Function - UPDATED VERSION
+// Login Function - FIXED VERSION
 function adminLogin() {
     const password = document.getElementById('adminPassword').value;
     if (!password) {
@@ -546,14 +563,14 @@ function adminLogin() {
     }
     
     console.log('🔑 Attempting admin login...');
+    showToast('Attempting login...', 'info');
     
-    // Check if we have a socket connection first
+    // Store password for authentication
+    state.pendingPassword = password;
+    
+    // Check if we have a socket connection
     if (!state.socket || !state.socket.connected) {
         console.log('🔄 No active connection, establishing socket...');
-        showToast('Connecting to server...', 'info');
-        
-        // Store password for when connection is established
-        state.pendingPassword = password;
         
         // Disconnect existing socket if any
         if (state.socket) {
@@ -562,42 +579,28 @@ function adminLogin() {
         }
         
         // Create new connection
-        try {
-            state.socket = io(CONFIG.SERVER_URL, {
-                reconnection: true,
-                reconnectionAttempts: 3,
-                reconnectionDelay: 1000,
-                transports: ['websocket', 'polling'],
-                timeout: 10000
-            });
-            
-            // Setup socket listeners
-            setupSocketListeners();
-            
-            // Set a connection timeout
-            const connectionTimeout = setTimeout(() => {
-                if (state.socket && !state.socket.connected) {
-                    console.error('❌ Connection timeout');
-                    showToast('Connection timeout. Server may be down.', 'error');
-                    state.pendingPassword = null;
-                    state.socket.disconnect();
-                }
-            }, 10000);
-            
-            // Clear timeout when connected
-            state.socket.once('connect', () => {
-                clearTimeout(connectionTimeout);
-            });
-            
-        } catch (error) {
-            console.error('❌ Failed to create socket:', error);
-            showToast('Failed to connect: ' + error.message, 'error');
-            state.pendingPassword = null;
-        }
+        connectSocket();
+        
+        // Wait a moment for connection, then try to authenticate
+        setTimeout(() => {
+            if (state.socket && state.socket.connected && state.pendingPassword) {
+                console.log('✅ Socket connected, sending auth...');
+                state.socket.emit('admin:auth', state.pendingPassword);
+                state.pendingPassword = null;
+            } else if (!state.socket || !state.socket.connected) {
+                console.error('❌ Failed to connect to server');
+                showToast('Failed to connect to server. Please check if server is running.', 'error');
+                state.pendingPassword = null;
+                
+                // Try to test connection
+                testServerConnection();
+            }
+        }, 1500);
         
     } else {
         console.log('✅ Socket already connected, sending auth...');
         state.socket.emit('admin:auth', password);
+        state.pendingPassword = null;
     }
 }
 
@@ -2515,22 +2518,34 @@ function backupDatabase() {
 
 // Connection test function
 function testServerConnection() {
-    console.log('🧪 Testing server connection...');
+    console.log('🧪 Testing server connection to:', CONFIG.SERVER_URL);
     showToast('Testing connection to server...', 'info');
     
-    fetch(`${CONFIG.SERVER_URL}/health`, { method: 'HEAD' })
-        .then(response => {
-            if (response.ok) {
-                showToast('Server is reachable', 'success');
-                return true;
+    // First try a simple fetch to check if server is reachable
+    fetch(`${CONFIG.SERVER_URL}/`, { 
+        method: 'GET',
+        mode: 'no-cors'
+    })
+    .then(() => {
+        console.log('✅ Server is reachable');
+        showToast('Server is reachable. Attempting to connect...', 'success');
+        
+        // Now try to connect socket
+        connectSocket();
+        
+        // Check after 2 seconds if connected
+        setTimeout(() => {
+            if (state.socket && state.socket.connected) {
+                showToast('Successfully connected to server!', 'success');
+            } else {
+                showToast('Connected to server but socket not established. Check server logs.', 'warning');
             }
-            throw new Error('Server responded with ' + response.status);
-        })
-        .catch(error => {
-            console.error('❌ Server connection test failed:', error);
-            showToast('Cannot reach server: ' + error.message, 'error');
-            return false;
-        });
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('❌ Cannot reach server:', error);
+        showToast('Cannot reach server. Make sure server is running on ' + CONFIG.SERVER_URL, 'error');
+    });
 }
 
 function logout() {
@@ -2544,17 +2559,30 @@ function logout() {
     }
 }
 
-// Test connection function
-function testConnection() {
-    console.log('🔗 Testing connection to:', CONFIG.SERVER_URL);
-    showToast('Testing connection...', 'info');
+// Debug function to check connection status
+window.debugConnection = function() {
+    console.log('=== DEBUG CONNECTION STATUS ===');
+    console.log('Socket exists:', !!state.socket);
+    console.log('Socket connected:', state.socket ? state.socket.connected : 'No socket');
+    console.log('Server URL:', CONFIG.SERVER_URL);
+    console.log('Is Admin:', state.isAdmin);
+    console.log('Pending Password:', state.pendingPassword ? 'Set' : 'Not set');
+    console.log('Current time:', new Date().toLocaleTimeString());
     
-    if (!state.socket || !state.socket.connected) {
-        connectSocket();
-    } else {
-        showToast('Already connected to server', 'success');
-    }
-}
+    // Test direct connection
+    console.log('Testing direct fetch...');
+    fetch(CONFIG.SERVER_URL)
+        .then(res => console.log('Fetch success:', res.status))
+        .catch(err => console.error('Fetch error:', err));
+    
+    return {
+        socket: !!state.socket,
+        connected: state.socket ? state.socket.connected : false,
+        server: CONFIG.SERVER_URL,
+        isAdmin: state.isAdmin,
+        pendingPassword: !!state.pendingPassword
+    };
+};
 
 // Initialize on load
 console.log('🚀 Admin panel ready');
