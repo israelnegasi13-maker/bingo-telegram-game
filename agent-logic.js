@@ -18,6 +18,9 @@ class ManualAgentSystem {
   async initialize() {
     console.log('✅ Manual Agent system initializing...');
     await this.ensureAdminAgent();
+    // Start background jobs
+    this.startCommissionCalculationJob();
+    this.startCleanupJob();
     console.log('👑 Manual Agent system ready with 40% Bingo and 10% Keno commissions');
   }
 
@@ -189,13 +192,13 @@ class ManualAgentSystem {
       const referrals = await this.models.User.find({ agentId: agent._id })
         .sort({ agentReferredAt: -1 })
         .limit(50)
-        .select('userId userName balance totalWagered totalWins totalBingos joinedAt lastSeen isOnline agentReferredAt');
+        .select('userId userName telegramUsername balance totalWagered totalWins totalBingos joinedAt lastSeen isOnline agentReferredAt');
 
       // Get recent commissions (last 50)
       const commissions = await this.models.AgentCommission.find({ agentId: agent._id })
         .sort({ createdAt: -1 })
         .limit(50)
-        .populate('userId', 'userName userId');
+        .populate('userId', 'userName userId telegramUsername');
 
       // Get today's earnings
       const today = new Date();
@@ -297,6 +300,7 @@ class ManualAgentSystem {
         referrals: referrals.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWagered: user.totalWagered || 0,
           totalWins: user.totalWins || 0,
@@ -310,6 +314,7 @@ class ManualAgentSystem {
           id: comm._id,
           userId: comm.userId?.userId || 'Unknown',
           userName: comm.userId?.userName || 'Unknown',
+          telegramUsername: comm.userId?.telegramUsername || '',
           gameType: comm.gameType,
           stake: comm.stake,
           winningAmount: comm.winningAmount,
@@ -350,7 +355,9 @@ class ManualAgentSystem {
       // Clean the identifier
       const cleanIdentifier = userIdentifier.replace('@', '').trim().toLowerCase();
       
-      console.log(`🔍 Searching for player: "${cleanIdentifier}" for agent ${agent.username}`);
+      console.log(`🔍 [DEBUG] Searching for player: "${cleanIdentifier}" for agent ${agent.username}`);
+      console.log(`🔍 [DEBUG] Clean identifier: "${cleanIdentifier}"`);
+      console.log(`🔍 [DEBUG] Agent ID: ${agent._id}`);
       
       // Find user by various methods
       let user = await this.findUserByIdentifier(cleanIdentifier);
@@ -362,12 +369,16 @@ class ManualAgentSystem {
         const similarUsers = await this.models.User.find({
           $or: [
             { userName: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } },
-            { userId: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } }
+            { userId: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } },
+            { telegramUsername: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } }
           ]
-        }).limit(5).select('userId userName');
+        }).limit(5).select('userId userName telegramUsername');
         
         if (similarUsers.length > 0) {
-          const suggestions = similarUsers.map(u => `• ${u.userName || 'No Name'} (${u.userId})`).join('\n');
+          const suggestions = similarUsers.map(u => {
+            const username = u.telegramUsername ? `@${u.telegramUsername}` : (u.userName || 'No Name');
+            return `• ${username} (${u.userId})`;
+          }).join('\n');
           socket.emit('agent:suggestions', {
             message: `No exact match found. Did you mean one of these?\n${suggestions}`,
             suggestions: similarUsers
@@ -377,7 +388,12 @@ class ManualAgentSystem {
         return;
       }
 
-      console.log(`✅ Player found: ${user.userId} (${user.userName || 'No Name'})`);
+      console.log(`✅ [DEBUG] Player found: ${user.userId} (${user.userName || 'No Name'})`);
+      console.log(`🔍 [DEBUG] User agentId: ${user.agentId}`);
+      console.log(`🔍 [DEBUG] Current agent._id: ${agent._id}`);
+      console.log(`🔍 [DEBUG] User telegramUsername: ${user.telegramUsername || 'None'}`);
+      console.log(`🔍 [DEBUG] User totalWins: ${user.totalWins || 0}`);
+      console.log(`🔍 [DEBUG] User totalBingos: ${user.totalBingos || 0}`);
 
       // Check if user already has an agent
       if (user.agentId) {
@@ -400,7 +416,22 @@ class ManualAgentSystem {
       // Assign user to agent
       user.agentId = agent._id;
       user.agentReferredAt = new Date();
+      user.referredBy = 'manual';
       await user.save();
+
+      // Create referral record
+      const referral = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        telegramUsername: user.telegramUsername,
+        referralMethod: 'manual',
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await referral.save();
+      console.log(`📝 Created referral record for ${user.userId}`);
 
       // Update agent's referral count
       agent.totalReferrals = (agent.totalReferrals || 0) + 1;
@@ -416,6 +447,7 @@ class ManualAgentSystem {
         user: {
           userId: user.userId,
           userName: user.userName,
+          telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWins: user.totalWins || 0,
           totalBingos: user.totalBingos || 0,
@@ -448,30 +480,62 @@ class ManualAgentSystem {
   async findUserByIdentifier(identifier) {
     const cleanId = identifier.replace('@', '').trim().toLowerCase();
     
-    // Try different search patterns
+    // Try different search patterns - INCLUDING telegramUsername
     const searchPatterns = [
+      // Exact matches first
       { userId: { $regex: new RegExp('^' + cleanId + '$', 'i') } },
-      { userId: { $regex: cleanId, $options: 'i' } },
+      { telegramUsername: { $regex: new RegExp('^' + cleanId + '$', 'i') } },
       { userName: { $regex: new RegExp('^' + cleanId + '$', 'i') } },
+      // Partial matches
+      { userId: { $regex: cleanId, $options: 'i' } },
+      { telegramUsername: { $regex: cleanId, $options: 'i' } },
       { userName: { $regex: cleanId, $options: 'i' } },
+      // Telegram ID formats
       { userId: { $regex: 'tg_' + cleanId.replace('tg_', ''), $options: 'i' } },
+      { userId: { $regex: 'tg_' + cleanId, $options: 'i' } },
+      // Phone number
       { phoneNumber: cleanId }
     ];
 
+    console.log(`🔍 [FIND USER] Searching for identifier: "${cleanId}"`);
+    
     for (const pattern of searchPatterns) {
-      const user = await this.models.User.findOne(pattern);
-      if (user) return user;
+      try {
+        const user = await this.models.User.findOne(pattern);
+        if (user) {
+          console.log(`✅ [FIND USER] Found user with pattern:`, pattern);
+          console.log(`   User ID: ${user.userId}`);
+          console.log(`   User Name: ${user.userName || 'No Name'}`);
+          console.log(`   Telegram Username: ${user.telegramUsername || 'None'}`);
+          console.log(`   Agent ID: ${user.agentId || 'None'}`);
+          return user;
+        }
+      } catch (err) {
+        console.error(`❌ [FIND USER] Error with pattern:`, pattern, err);
+      }
     }
 
-    // Broader search
-    const users = await this.models.User.find({
-      $or: [
-        { userId: { $regex: cleanId, $options: 'i' } },
-        { userName: { $regex: cleanId, $options: 'i' } }
-      ]
-    }).limit(1);
+    console.log(`❌ [FIND USER] No user found for identifier: "${cleanId}"`);
     
-    return users[0] || null;
+    // Broader search as fallback
+    try {
+      const users = await this.models.User.find({
+        $or: [
+          { userId: { $regex: cleanId, $options: 'i' } },
+          { userName: { $regex: cleanId, $options: 'i' } },
+          { telegramUsername: { $regex: cleanId, $options: 'i' } }
+        ]
+      }).limit(1);
+      
+      if (users[0]) {
+        console.log(`✅ [FIND USER] Found user via broader search: ${users[0].userId}`);
+        return users[0];
+      }
+    } catch (err) {
+      console.error('❌ [FIND USER] Broader search error:', err);
+    }
+    
+    return null;
   }
 
   // Bulk manual referral assignment
@@ -529,6 +593,7 @@ class ManualAgentSystem {
                 identifier,
                 userId: user.userId,
                 userName: user.userName,
+                telegramUsername: user.telegramUsername || '',
                 status: 'already_yours',
                 message: 'Already your referral'
               });
@@ -538,6 +603,7 @@ class ManualAgentSystem {
                 identifier,
                 userId: user.userId,
                 userName: user.userName,
+                telegramUsername: user.telegramUsername || '',
                 status: 'assigned_to_other',
                 message: 'Assigned to another agent'
               });
@@ -548,18 +614,34 @@ class ManualAgentSystem {
           // Assign user
           user.agentId = agent._id;
           user.agentReferredAt = new Date();
+          user.referredBy = 'bulk_manual';
           await user.save();
+
+          // Create referral record
+          const referral = new this.models.Referral({
+            agentId: agent._id,
+            userId: user.userId,
+            userName: user.userName,
+            telegramUsername: user.telegramUsername,
+            referralMethod: 'bulk_manual',
+            status: 'active',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          await referral.save();
 
           results.success++;
           results.details.push({
             identifier,
             userId: user.userId,
             userName: user.userName,
+            telegramUsername: user.telegramUsername || '',
             status: 'success',
             message: 'Successfully added'
           });
 
         } catch (err) {
+          console.error(`❌ Bulk error for ${identifier}:`, err);
           results.failed++;
           results.details.push({
             identifier,
@@ -616,16 +698,24 @@ class ManualAgentSystem {
       const agent = await this.models.Agent.findById(socket.agentId);
       const cleanQuery = query.replace('@', '').trim().toLowerCase();
       
-      // Build search query
+      console.log(`🔍 [SEARCH] Searching users for query: "${cleanQuery}"`);
+      
+      // Build search query - INCLUDING telegramUsername
       const searchQuery = {
         $and: [
           {
             $or: [
+              // Exact matches
               { userId: { $regex: new RegExp('^' + cleanQuery + '$', 'i') } },
-              { userId: { $regex: cleanQuery, $options: 'i' } },
+              { telegramUsername: { $regex: new RegExp('^' + cleanQuery + '$', 'i') } },
               { userName: { $regex: new RegExp('^' + cleanQuery + '$', 'i') } },
+              // Partial matches
+              { userId: { $regex: cleanQuery, $options: 'i' } },
+              { telegramUsername: { $regex: cleanQuery, $options: 'i' } },
               { userName: { $regex: cleanQuery, $options: 'i' } },
+              // Telegram ID format
               { userId: { $regex: 'tg_' + cleanQuery.replace('tg_', ''), $options: 'i' } },
+              // Phone number
               { phoneNumber: { $regex: cleanQuery, $options: 'i' } }
             ]
           }
@@ -642,7 +732,7 @@ class ManualAgentSystem {
       });
 
       const users = await this.models.User.find(searchQuery)
-        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentId')
+        .select('userId userName telegramUsername balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentId phoneNumber')
         .limit(parseInt(limit))
         .sort({ 
           isOnline: -1, 
@@ -657,11 +747,13 @@ class ManualAgentSystem {
         users: users.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWins: user.totalWins || 0,
           totalBingos: user.totalBingos || 0,
           totalWagered: user.totalWagered || 0,
           isOnline: user.isOnline || false,
+          phoneNumber: user.phoneNumber || '',
           joinedAt: user.joinedAt,
           lastSeen: user.lastSeen,
           hasAgent: !!user.agentId,
@@ -771,6 +863,7 @@ class ManualAgentSystem {
           commissionId: commission._id,
           userId: userId,
           userName: user.userName,
+          telegramUsername: user.telegramUsername || '',
           gameType: gameType,
           winningAmount: winningAmount,
           commissionAmount: commissionAmount,
@@ -1376,25 +1469,6 @@ class ManualAgentSystem {
     }
   }
 
-  // Send notification to agent
-  async sendAgentNotification(agentId, message, type = 'info') {
-    try {
-      const agentSocket = this.agentSockets.get(agentId.toString());
-      if (agentSocket) {
-        agentSocket.emit('agent:notification', {
-          message,
-          type,
-          timestamp: new Date()
-        });
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Send agent notification error:', error);
-      return false;
-    }
-  }
-
   // Broadcast to all admin agents
   broadcastToAdmins(event, data) {
     this.agentSockets.forEach((socket, agentId) => {
@@ -1402,14 +1476,6 @@ class ManualAgentSystem {
         socket.emit(event, data);
       }
     });
-  }
-
-  // Agent disconnect
-  handleAgentDisconnect(socket) {
-    if (socket.agentId) {
-      this.agentSockets.delete(socket.agentId);
-      console.log(`👤 Agent disconnected: ${socket.agentData?.username}`);
-    }
   }
 
   // Start commission calculation job (runs every 5 minutes)
@@ -1566,16 +1632,20 @@ class ManualAgentSystem {
     try {
       const cleanIdentifier = identifier.replace('@', '').trim().toLowerCase();
       
-      console.log(`🔍 Debug search for: "${cleanIdentifier}"`);
+      console.log(`🔍 [DEBUG FIND] Searching for: "${cleanIdentifier}"`);
       
       // Try all possible matches
       const queries = [
         // Exact userId match
         { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
-        // Partial userId match
-        { userId: { $regex: cleanIdentifier, $options: 'i' } },
+        // Exact telegramUsername match
+        { telegramUsername: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
         // Exact userName match
         { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+        // Partial userId match
+        { userId: { $regex: cleanIdentifier, $options: 'i' } },
+        // Partial telegramUsername match
+        { telegramUsername: { $regex: cleanIdentifier, $options: 'i' } },
         // Partial userName match
         { userName: { $regex: cleanIdentifier, $options: 'i' } },
         // Telegram ID format
@@ -1589,27 +1659,30 @@ class ManualAgentSystem {
       for (const query of queries) {
         const user = await this.models.User.findOne(query);
         if (user) {
-          console.log(`✅ Found user with query:`, query);
+          console.log(`✅ [DEBUG FIND] Found user with query:`, query);
           console.log(`   User ID: ${user.userId}`);
           console.log(`   User Name: ${user.userName || 'No Name'}`);
-          console.log(`   Agent ID: ${user.agentId}`);
+          console.log(`   Telegram Username: ${user.telegramUsername || 'None'}`);
+          console.log(`   Agent ID: ${user.agentId || 'None'}`);
           console.log(`   Is Online: ${user.isOnline}`);
-          console.log(`   Total Wins: ${user.totalWins}`);
+          console.log(`   Total Wins: ${user.totalWins || 0}`);
+          console.log(`   Total Bingos: ${user.totalBingos || 0}`);
           return user;
         }
       }
       
-      console.log(`❌ No user found for: "${cleanIdentifier}"`);
+      console.log(`❌ [DEBUG FIND] No user found for: "${cleanIdentifier}"`);
       
       // List all users in database for debugging
       const allUsers = await this.models.User.find({})
-        .select('userId userName agentId isOnline totalWins joinedAt')
+        .select('userId userName telegramUsername agentId isOnline totalWins totalBingos joinedAt')
         .limit(50)
         .sort({ joinedAt: -1 });
       
-      console.log(`📋 Sample users in database (${allUsers.length} total):`);
+      console.log(`📋 [DEBUG FIND] Sample users in database (${allUsers.length} total):`);
       allUsers.forEach(u => {
-        console.log(`   ${u.userId} - ${u.userName || 'No Name'} - Agent: ${u.agentId || 'None'} - Wins: ${u.totalWins} - Online: ${u.isOnline}`);
+        const telegramInfo = u.telegramUsername ? `@${u.telegramUsername}` : 'No Telegram';
+        console.log(`   ${u.userId} - ${u.userName || 'No Name'} - ${telegramInfo} - Agent: ${u.agentId || 'None'} - Wins: ${u.totalWins || 0} - Bingos: ${u.totalBingos || 0} - Online: ${u.isOnline}`);
       });
       
       return null;
@@ -1623,13 +1696,14 @@ class ManualAgentSystem {
   async testUserDatabase(socket) {
     try {
       const users = await this.models.User.find({})
-        .select('userId userName agentId totalWins joinedAt isOnline')
+        .select('userId userName telegramUsername agentId totalWins totalBingos joinedAt isOnline')
         .limit(20)
         .sort({ joinedAt: -1 });
       
       console.log('📋 Recent users in database:');
       users.forEach(user => {
-        console.log(`   ${user.userId} - ${user.userName || 'No Name'} - Agent: ${user.agentId || 'None'} - Wins: ${user.totalWins} - Online: ${user.isOnline}`);
+        const telegramInfo = user.telegramUsername ? `@${user.telegramUsername}` : 'No Telegram';
+        console.log(`   ${user.userId} - ${user.userName || 'No Name'} - ${telegramInfo} - Agent: ${user.agentId || 'None'} - Wins: ${user.totalWins || 0} - Bingos: ${user.totalBingos || 0} - Online: ${user.isOnline}`);
       });
       
       const totalUsers = await this.models.User.countDocuments();
@@ -1643,7 +1717,15 @@ class ManualAgentSystem {
       socket.emit('agent:testResult', {
         totalUsers,
         usersWithoutAgents,
-        sampleUsers: users
+        sampleUsers: users.map(u => ({
+          userId: u.userId,
+          userName: u.userName,
+          telegramUsername: u.telegramUsername,
+          agentId: u.agentId,
+          totalWins: u.totalWins,
+          totalBingos: u.totalBingos,
+          isOnline: u.isOnline
+        }))
       });
     } catch (error) {
       console.error('Test error:', error);
@@ -1778,7 +1860,7 @@ class ManualAgentSystem {
 
       // Get direct referrals
       const directReferrals = await this.models.User.find({ agentId: agent._id })
-        .select('userId userName balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentReferredAt')
+        .select('userId userName telegramUsername balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentReferredAt')
         .sort({ agentReferredAt: -1 })
         .limit(100);
 
@@ -1792,6 +1874,7 @@ class ManualAgentSystem {
         directReferrals: directReferrals.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWagered: user.totalWagered || 0,
           totalWins: user.totalWins || 0,
@@ -1970,7 +2053,21 @@ class ManualAgentSystem {
       // Assign user to agent
       user.agentId = agent._id;
       user.agentReferredAt = new Date();
+      user.referredBy = 'admin_assigned';
       await user.save();
+
+      // Create referral record
+      const referral = new this.models.Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        telegramUsername: user.telegramUsername,
+        referralMethod: 'admin_assigned',
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await referral.save();
 
       // Update agent referral counts
       agent.totalReferrals = (agent.totalReferrals || 0) + 1;
@@ -1984,6 +2081,7 @@ class ManualAgentSystem {
         message: 'User assigned to agent successfully',
         userId: userId,
         userName: user.userName,
+        telegramUsername: user.telegramUsername || '',
         agentId: agent._id,
         agentName: agent.name,
         agentUsername: agent.username
@@ -1995,6 +2093,7 @@ class ManualAgentSystem {
         agentSocket.emit('agent:newReferral', {
           userId: userId,
           userName: user.userName,
+          telegramUsername: user.telegramUsername || '',
           timestamp: new Date(),
           assignedBy: socket.agentData?.username || 'Admin'
         });
@@ -2026,7 +2125,7 @@ class ManualAgentSystem {
         ],
         totalWins: { $gt: 0 } // Only suggest users who have won something
       })
-      .select('userId userName balance totalWins totalBingos isOnline totalWagered lastSeen')
+      .select('userId userName telegramUsername balance totalWins totalBingos isOnline totalWagered lastSeen')
       .limit(20)
       .sort({ totalWins: -1, joinedAt: -1 });
 
@@ -2038,7 +2137,7 @@ class ManualAgentSystem {
           { agentId: null }
         ]
       })
-      .select('userId userName isOnline lastSeen totalWins')
+      .select('userId userName telegramUsername isOnline lastSeen totalWins')
       .limit(10)
       .sort({ lastSeen: -1 });
 
@@ -2050,7 +2149,7 @@ class ManualAgentSystem {
         ],
         totalWagered: { $gt: 1000 } // Users who wagered more than 1000 ETB
       })
-      .select('userId userName totalWagered totalWins isOnline')
+      .select('userId userName telegramUsername totalWagered totalWins isOnline')
       .limit(10)
       .sort({ totalWagered: -1 });
 
@@ -2058,6 +2157,7 @@ class ManualAgentSystem {
         potentialUsers: potentialUsers.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWins: user.totalWins || 0,
           totalWagered: user.totalWagered || 0,
@@ -2068,6 +2168,7 @@ class ManualAgentSystem {
         recentUsers: recentUsers.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           isOnline: user.isOnline || false,
           totalWins: user.totalWins || 0,
           lastSeen: user.lastSeen,
@@ -2076,6 +2177,7 @@ class ManualAgentSystem {
         highRollers: highRollers.map(user => ({
           userId: user.userId,
           userName: user.userName || 'No Name',
+          telegramUsername: user.telegramUsername || '',
           totalWagered: user.totalWagered || 0,
           totalWins: user.totalWins || 0,
           isOnline: user.isOnline || false,
@@ -2376,6 +2478,7 @@ class ManualAgentSystem {
           date: ref.agentReferredAt,
           userId: ref.userId,
           userName: ref.userName,
+          telegramUsername: ref.telegramUsername || '',
           totalWins: ref.totalWins,
           totalWagered: ref.totalWagered
         })),
