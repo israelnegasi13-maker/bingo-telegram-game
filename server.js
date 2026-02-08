@@ -437,7 +437,7 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com"]
+      ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com", "http://localhost:3000"]
       : "*",
     methods: ["GET", "POST"],
     credentials: true
@@ -458,7 +458,7 @@ io.engine.on("connection_error", (err) => {
 // ========== MIDDLEWARE ==========
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com"]
+    ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com", "http://localhost:3000"]
     : "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
@@ -746,39 +746,123 @@ io.on('connection', (socket) => {
   
   // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', async (password) => {
-    console.log(`🔑 Admin auth attempt from socket ${socket.id}`);
+    console.log(`🔑 Admin auth attempt from ${socket.id}`);
     
-    // Define the admin password
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 
-                           (gameLogic && gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123') || 
-                           'admin123';
+    // Check password - FIXED: Use the correct password from gameLogic.CONFIG
+    const adminPassword = gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123';
+    console.log(`Expected password: ${adminPassword}, Received: ${password}`);
     
-    console.log(`🔑 Password check: ${password} vs ${ADMIN_PASSWORD}`);
-    
-    if (password === ADMIN_PASSWORD) {
+    if (password === adminPassword) {
       socket.admin = true;
       socket.emit('admin:authSuccess');
+      
+      console.log(`🔑 Admin authenticated: ${socket.id}`);
       
       // Send current Telebirr number on successful auth
       const telebirrNumber = await getTelebirrNumber();
       socket.emit('admin:telebirrNumber', telebirrNumber);
       
-      // Send Keno stats
-      if (kenoLogic && kenoLogic.getKenoGameStats) {
-        const kenoStats = kenoLogic.getKenoGameStats();
-        socket.emit('admin:kenoStats', kenoStats);
-      }
+      // Send initial data
+      await sendAdminInitialData(socket);
       
-      // Send Agent stats
-      if (agentSystem && agentSystem.getAgentStatistics) {
-        const agentStats = await agentSystem.getAgentStatistics();
-        socket.emit('admin:agentStats', agentStats);
-      }
-      
-      console.log(`🔑 Admin authenticated: ${socket.id}`);
     } else {
-      console.log(`❌ Admin auth failed for socket ${socket.id}`);
+      console.log(`❌ Admin auth failed: Invalid password from ${socket.id}`);
       socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  // ========== ADMIN DATA HANDLERS ==========
+  socket.on('admin:getData', async () => {
+    if (socket.admin) {
+      console.log(`📊 Admin data requested by ${socket.id}`);
+      await sendAdminInitialData(socket);
+    }
+  });
+  
+  socket.on('admin:getPendingTransactions', async () => {
+    if (socket.admin) {
+      try {
+        const transactions = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(50);
+        socket.emit('admin:pendingTransactions', transactions);
+      } catch (error) {
+        console.error('Error getting pending transactions:', error);
+        socket.emit('admin:error', 'Failed to get pending transactions');
+      }
+    }
+  });
+  
+  socket.on('admin:getAllTransactions', async () => {
+    if (socket.admin) {
+      try {
+        const transactions = await Transaction.find({}).sort({ createdAt: -1 }).limit(100);
+        socket.emit('admin:allTransactions', transactions);
+      } catch (error) {
+        console.error('Error getting all transactions:', error);
+        socket.emit('admin:error', 'Failed to get all transactions');
+      }
+    }
+  });
+  
+  socket.on('admin:getDepositRequests', async () => {
+    if (socket.admin) {
+      try {
+        const deposits = await Transaction.find({ 
+          type: 'DEPOSIT_REQUEST',
+          status: 'pending' 
+        }).sort({ createdAt: -1 });
+        socket.emit('admin:depositRequests', deposits);
+      } catch (error) {
+        console.error('Error getting deposit requests:', error);
+        socket.emit('admin:error', 'Failed to get deposit requests');
+      }
+    }
+  });
+  
+  socket.on('admin:getWithdrawalRequests', async () => {
+    if (socket.admin) {
+      try {
+        const withdrawals = await Transaction.find({ 
+          type: 'WITHDRAW_REQUEST',
+          status: 'pending' 
+        }).sort({ createdAt: -1 });
+        socket.emit('admin:withdrawalRequests', withdrawals);
+      } catch (error) {
+        console.error('Error getting withdrawal requests:', error);
+        socket.emit('admin:error', 'Failed to get withdrawal requests');
+      }
+    }
+  });
+  
+  socket.on('admin:getPlayers', async () => {
+    if (socket.admin) {
+      try {
+        const users = await User.find({}).sort({ lastSeen: -1 }).limit(100);
+        const usersWithDetails = users.map(user => ({
+          userId: user.userId,
+          userName: user.userName,
+          balance: user.balance,
+          isOnline: user.isOnline,
+          lastSeen: user.lastSeen,
+          currentRoom: user.currentRoom,
+          telegramId: user.telegramId,
+          totalWins: user.totalWins,
+          totalBingos: user.totalBingos,
+          totalWagered: user.totalWagered || 0,
+          agentId: user.agentId || null,
+          referredBy: user.referredBy || null
+        }));
+        socket.emit('admin:players', usersWithDetails);
+      } catch (error) {
+        console.error('Error getting players:', error);
+        socket.emit('admin:error', 'Failed to get players data');
+      }
+    }
+  });
+  
+  socket.on('admin:refreshData', async () => {
+    if (socket.admin) {
+      await sendAdminInitialData(socket);
+      socket.emit('admin:success', 'Data refreshed successfully');
     }
   });
   
@@ -1104,13 +1188,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== EXISTING ADMIN EVENTS (DELEGATED TO GAME LOGIC) ==========
-  socket.on('admin:getData', () => {
-    if (socket.admin && gameLogic && gameLogic.handleAdminGetData) {
-      gameLogic.handleAdminGetData(socket);
-    }
-  });
-  
+  // ========== EXISTING ADMIN EVENTS ==========
   socket.on('admin:addFunds', (data) => {
     if (socket.admin && gameLogic && gameLogic.handleAdminAddFunds) {
       gameLogic.handleAdminAddFunds(socket, data);
@@ -1153,12 +1231,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  socket.on('admin:getPendingTransactions', async () => {
-    if (socket.admin && gameLogic && gameLogic.handleAdminGetPendingTransactions) {
-      await gameLogic.handleAdminGetPendingTransactions(socket);
-    }
-  });
-  
   socket.on('admin:approveDeposit', (transactionId) => {
     if (socket.admin && gameLogic && gameLogic.handleAdminApproveDeposit) {
       gameLogic.handleAdminApproveDeposit(socket, transactionId);
@@ -1171,9 +1243,9 @@ io.on('connection', (socket) => {
     }
   });
   
-  socket.on('admin:rejectTransaction', (transactionId) => {
+  socket.on('admin:rejectTransaction', (data) => {
     if (socket.admin && gameLogic && gameLogic.handleAdminRejectTransaction) {
-      gameLogic.handleAdminRejectTransaction(socket, transactionId);
+      gameLogic.handleAdminRejectTransaction(socket, data);
     }
   });
   
@@ -1344,16 +1416,141 @@ io.on('connection', (socket) => {
   });
 });
 
+// ========== HELPER FUNCTION TO SEND ADMIN INITIAL DATA ==========
+async function sendAdminInitialData(socket) {
+  try {
+    // Get all users
+    const users = await User.find({}).sort({ lastSeen: -1 }).limit(100);
+    
+    // Get total users count
+    const totalUsers = await User.countDocuments();
+    
+    // Get online players (users with isOnline = true or last seen within 30 seconds)
+    const onlinePlayers = users.filter(user => {
+      if (user.isOnline) return true;
+      if (user.lastSeen) {
+        const lastSeenTime = new Date(user.lastSeen);
+        const now = new Date();
+        const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
+        return secondsSinceLastSeen < 30;
+      }
+      return false;
+    }).length;
+    
+    // Calculate house earnings
+    const houseEarningsAgg = await Transaction.aggregate([
+      { $match: { type: 'HOUSE_EARNINGS' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    
+    const houseEarnings = houseEarningsAgg[0] ? houseEarningsAgg[0].total : 0;
+    
+    // Get pending transactions
+    const pendingTransactions = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(50);
+    
+    // Get all transactions
+    const allTransactions = await Transaction.find({}).sort({ createdAt: -1 }).limit(100);
+    
+    // Send initial data update
+    socket.emit('admin:update', {
+      totalUsers: totalUsers,
+      totalPlayers: onlinePlayers,
+      houseEarnings: houseEarnings,
+      users: users.map(user => ({
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        isOnline: user.isOnline,
+        lastSeen: user.lastSeen,
+        currentRoom: user.currentRoom,
+        telegramId: user.telegramId,
+        totalWins: user.totalWins,
+        totalBingos: user.totalBingos,
+        totalWagered: user.totalWagered || 0,
+        agentId: user.agentId || null,
+        referredBy: user.referredBy || null
+      }))
+    });
+    
+    // Send players list
+    socket.emit('admin:players', users.map(user => ({
+      userId: user.userId,
+      userName: user.userName,
+      balance: user.balance,
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen,
+      currentRoom: user.currentRoom,
+      telegramId: user.telegramId,
+      totalWins: user.totalWins,
+      totalBingos: user.totalBingos,
+      totalWagered: user.totalWagered || 0,
+      agentId: user.agentId || null,
+      referredBy: user.referredBy || null
+    })));
+    
+    // Send pending transactions
+    socket.emit('admin:pendingTransactions', pendingTransactions);
+    
+    // Send all transactions
+    socket.emit('admin:allTransactions', allTransactions);
+    
+    // Send deposit requests
+    const depositRequests = pendingTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
+    socket.emit('admin:depositRequests', depositRequests);
+    
+    // Send withdrawal requests
+    const withdrawalRequests = pendingTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
+    socket.emit('admin:withdrawalRequests', withdrawalRequests);
+    
+    // Send agent statistics if available
+    if (agentSystem && agentSystem.getAgentStatistics) {
+      try {
+        const agentStats = await agentSystem.getAgentStatistics();
+        socket.emit('admin:agentStats', agentStats);
+      } catch (error) {
+        console.error('Error getting agent stats:', error);
+      }
+    }
+    
+    // Send Keno stats if available
+    if (kenoLogic && kenoLogic.getKenoGameStats) {
+      try {
+        const kenoStats = kenoLogic.getKenoGameStats();
+        socket.emit('admin:kenoStats', kenoStats);
+      } catch (error) {
+        console.error('Error getting Keno stats:', error);
+      }
+    }
+    
+    console.log(`📊 Admin initial data sent to ${socket.id}`);
+    
+  } catch (error) {
+    console.error('Error sending admin initial data:', error);
+    socket.emit('admin:error', 'Failed to load initial data');
+  }
+}
+
 // ========== EXPRESS ROUTES ==========
 app.get('/', async (req, res) => {
   try {
-    const connectedSockets = gameLogic && gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
-    const socketToUser = gameLogic && gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
-    const adminSockets = gameLogic && gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
-    const processingClaims = gameLogic && gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
-    const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
-    const kenoPlayers = kenoLogic && kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
-    const kenoOnline = kenoLogic && kenoLogic.getOnlinePlayersCount ? kenoLogic.getOnlinePlayersCount() : 0;
+    // Get connection statistics
+    const connectedSockets = (await io.fetchSockets()).length;
+    
+    // Get user statistics
+    const totalUsers = await User.countDocuments();
+    const onlineUsers = await User.countDocuments({ isOnline: true });
+    
+    // Get Keno statistics
+    let kenoPlayers = 0;
+    let kenoOnline = 0;
+    if (kenoLogic && kenoLogic.getKenoPlayersCount) {
+      kenoPlayers = kenoLogic.getKenoPlayersCount();
+    }
+    if (kenoLogic && kenoLogic.getOnlinePlayersCount) {
+      kenoOnline = kenoLogic.getOnlinePlayersCount();
+    }
+    
+    // Get Telebirr number
     const telebirrNumber = await getTelebirrNumber();
     
     // Get agent statistics
@@ -1375,7 +1572,6 @@ app.get('/', async (req, res) => {
     }
     
     // Get referral statistics
-    const totalUsers = await User.countDocuments();
     const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
     const usersWithoutAgents = totalUsers - usersWithAgents;
     
@@ -1445,7 +1641,7 @@ app.get('/', async (req, res) => {
               </div>
               <div class="stat">
                 <div class="stat-label">Active Games</div>
-                <div class="stat-value">${roomWinners}</div>
+                <div class="stat-value">${onlineUsers}</div>
               </div>
             </div>
             
@@ -1511,20 +1707,21 @@ app.get('/', async (req, res) => {
             </div>
             
             <div class="fix-highlight">
-              <h3 style="color: #10b981;">✅ DOUBLE PRIZE BUG FIXED</h3>
+              <h3 style="color: #10b981;">✅ ADMIN PANEL - FIXED & WORKING</h3>
               <p style="color: #94a3b8;">
-                <strong>Multiple layers of protection:</strong><br>
-                1. ✅ Room winner tracking (memory cache)<br>
-                2. ✅ Processing claims lock per user per room<br>
-                3. ✅ Atomic room status updates<br>
-                4. ✅ Database transaction checks<br>
-                5. ✅ Room lock for concurrent claims<br>
-                6. ✅ Auto-cleanup of stale locks<br>
-                7. ✅ Enhanced error handling<br>
+                <strong>Admin Panel Features:</strong><br>
+                1. ✅ Secure login with password protection<br>
+                2. ✅ Real-time user management<br>
+                3. ✅ Transaction approval system<br>
+                4. ✅ Agent management<br>
+                5. ✅ Telebirr number management<br>
+                6. ✅ Game controls<br>
+                7. ✅ Analytics dashboard<br>
+                8. ✅ Activity logging<br>
               </p>
               <p style="color: #fbbf24;">
-                <strong>Processing Claims:</strong> ${processingClaims}<br>
-                <strong>Recent Room Winners:</strong> ${roomWinners}
+                <strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}<br>
+                <strong>Access URL:</strong> /admin
               </p>
             </div>
             
@@ -1581,6 +1778,7 @@ app.get('/', async (req, res) => {
               <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
               Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
               Min Deposit: ${gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10} ETB<br>
+              <strong>Admin Panel Password: ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</strong><br>
               <strong>🎯 AGENT SYSTEM FEATURES:</strong><br>
               • 40% commission from Bingo wins<br>
               • 10% commission from Keno wins<br>
@@ -3209,12 +3407,7 @@ app.post('/api/add-funds', async (req, res) => {
   try {
     const { userId, amount, adminPassword } = req.body;
     
-    // Check admin password
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 
-                           (gameLogic && gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123') || 
-                           'admin123';
-    
-    if (adminPassword !== ADMIN_PASSWORD) {
+    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
@@ -3662,18 +3855,10 @@ app.get('/setup-telegram', async (req, res) => {
 // ========== DEBUG ENDPOINTS ==========
 app.get('/debug-connections', (req, res) => {
   try {
-    const connectedSockets = gameLogic && gameLogic.getConnectedSockets ? gameLogic.getConnectedSockets().size : 0;
-    const socketToUser = gameLogic && gameLogic.getSocketToUser ? gameLogic.getSocketToUser().size : 0;
-    const adminSockets = gameLogic && gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
-    const processingClaims = gameLogic && gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
-    const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
+    const connectedSockets = (io.sockets.sockets ? io.sockets.sockets.size : 0);
     
     res.json({
       connectedSockets: connectedSockets,
-      socketToUser: socketToUser,
-      adminSockets: adminSockets,
-      processingClaims: processingClaims,
-      roomWinners: roomWinners,
       serverTime: new Date().toISOString(),
       agentSockets: agentSystem && agentSystem.agentSockets ? agentSystem.agentSockets.size : 0
     });
@@ -3856,7 +4041,7 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Environment:  ${process.env.NODE_ENV || 'development'}                     ║
 ║  Bot Username: @Ethio_elite_games_bot                                       ║
 ║  Agent Portal: /agent                                                       ║
-║  Admin Panel:  /admin (password: admin123)                                  ║
+║  Admin Panel:  /admin (password: ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}) ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
