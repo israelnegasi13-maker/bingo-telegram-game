@@ -1,6 +1,6 @@
 // Configuration
 const CONFIG = {
-    SERVER_URL: window.location.origin, // Use current origin (dynamic)
+    SERVER_URL: window.location.origin,
     AUTO_REFRESH_INTERVAL: 5000,
     MAX_ACTIVITY_ITEMS: 20,
     PERSISTENT_STORAGE: true,
@@ -14,8 +14,8 @@ let state = {
     filteredUsers: [],
     agents: [],
     filteredAgents: [],
-    allTransactions: [], // All transactions (including completed)
-    pendingTransactions: [], // Only pending transactions
+    allTransactions: [],
+    pendingTransactions: [],
     depositRequests: [],
     withdrawalRequests: [],
     activityLog: [],
@@ -43,7 +43,10 @@ let state = {
         netProfit: 0,
         activeUsers: 0
     },
-    transactionChart: null
+    transactionChart: null,
+    isConnecting: false,
+    loginAttempts: 0,
+    maxLoginAttempts: 3
 };
 
 // Initialize
@@ -55,9 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
         el.textContent = `Admin v${CONFIG.VERSION}`;
     });
     
-    // Test server connection on load
-    setTimeout(() => testServerConnection(), 1000);
-    
     // Check for saved session
     const savedSession = localStorage.getItem('bingo_admin_session');
     if (savedSession) {
@@ -65,8 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const session = JSON.parse(savedSession);
             if (session.expires > Date.now()) {
                 document.getElementById('adminPassword').value = session.password;
-                console.log('📋 Found saved session (expires:', new Date(session.expires).toLocaleString(), ')');
-                showToast('Found saved session. Click "Access Dashboard" to login.', 'info');
+                // Don't auto-login, let user click the button
             } else {
                 console.log('⚠️ Saved session expired');
                 localStorage.removeItem('bingo_admin_session');
@@ -84,19 +83,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Add connection status indicator to HTML if missing
-    if (!document.querySelector('.status-indicator')) {
-        const connectionStatus = document.querySelector('.connection-status');
-        if (connectionStatus) {
-            const indicator = document.createElement('div');
-            indicator.className = 'status-indicator';
-            indicator.style.background = 'var(--danger)';
-            connectionStatus.prepend(indicator);
-        }
-    }
-    
-    attachNavListeners();
+    // Setup initial connection status
     updateConnectionStatus();
+    updateLastUpdateTime();
+    
+    // Initialize navigation listeners
+    attachNavListeners();
     
     console.log('✅ Admin panel initialized');
 });
@@ -153,9 +145,16 @@ function attachNavListeners() {
     });
 }
 
-// Socket Functions
+// Socket connection with retry logic
 function connectSocket() {
     console.log(`🔗 Connecting to server: ${CONFIG.SERVER_URL}`);
+    
+    if (state.isConnecting) {
+        console.log('⚠️ Already connecting to server...');
+        return state.socket;
+    }
+    
+    state.isConnecting = true;
     
     // Disconnect existing socket if any
     if (state.socket) {
@@ -173,77 +172,71 @@ function connectSocket() {
             timeout: 10000,
             transports: ['websocket', 'polling']
         });
-        
-        // Add connection event listeners
+
         setupSocketListeners();
         
+        return state.socket;
     } catch (error) {
         console.error('❌ Failed to create socket:', error);
-        showToast('Failed to create connection: ' + error.message, 'error');
+        state.isConnecting = false;
+        showToast('Failed to connect: ' + error.message, 'error');
+        return null;
     }
 }
 
-// Fix 3: Separate socket listener setup
 function setupSocketListeners() {
-    if (!state.socket) return;
-    
+    // Socket event handlers
     state.socket.on('connect', () => {
         console.log('✅ Connected to server');
+        state.isConnecting = false;
+        updateConnectionStatus('Connected', 'success');
         showToast('Connected to server', 'success');
-        document.getElementById('connectionStatusText').textContent = 'Connected';
-        document.getElementById('connectionStatusText').style.color = 'var(--success)';
-        
-        // Update connection icon
-        const statusIndicator = document.querySelector('.status-indicator');
-        if (statusIndicator) {
-            statusIndicator.style.background = 'var(--success)';
-        }
     });
 
     state.socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
-        showToast('Connection error: ' + (error.message || 'Unknown error'), 'error');
-        document.getElementById('connectionStatusText').textContent = 'Connection Error';
-        document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+        state.isConnecting = false;
+        updateConnectionStatus('Connection Failed', 'error');
+        showToast(`Connection failed: ${error.message || 'Unknown error'}`, 'error');
         
-        // Update connection icon
-        const statusIndicator = document.querySelector('.status-indicator');
-        if (statusIndicator) {
-            statusIndicator.style.background = 'var(--danger)';
-        }
+        // Try to reconnect after 3 seconds
+        setTimeout(() => {
+            if (!state.socket?.connected) {
+                console.log('🔄 Attempting to reconnect...');
+                connectSocket();
+            }
+        }, 3000);
     });
 
     state.socket.on('disconnect', (reason) => {
         console.log('🔌 Disconnected from server:', reason);
-        showToast('Disconnected from server: ' + reason, 'error');
-        document.getElementById('connectionStatusText').textContent = 'Disconnected';
-        document.getElementById('connectionStatusText').style.color = 'var(--danger)';
+        updateConnectionStatus('Disconnected', 'error');
+        showToast('Disconnected from server', 'error');
         
-        // Update connection icon
-        const statusIndicator = document.querySelector('.status-indicator');
-        if (statusIndicator) {
-            statusIndicator.style.background = 'var(--danger)';
-        }
-        
-        // Auto-reconnect for certain disconnect reasons
-        if (reason === 'io server disconnect' || reason === 'transport close') {
+        if (reason === 'io server disconnect') {
+            // Server disconnected, try to reconnect
             setTimeout(() => {
-                if (!state.socket || !state.socket.connected) {
-                    console.log('🔄 Attempting to reconnect...');
+                if (!state.socket?.connected) {
+                    console.log('🔄 Server disconnected, attempting to reconnect...');
                     connectSocket();
                 }
             }, 2000);
         }
     });
 
-    // Add all other socket listeners here...
-    state.socket.on('admin:authSuccess', () => {
+    // Admin authentication events
+    state.socket.on('admin:authSuccess', (data) => {
         console.log('🔑 Admin authentication successful');
         state.isAdmin = true;
+        state.loginAttempts = 0;
+        
+        // Hide login screen and show dashboard
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
+        
         showToast('Login successful!', 'success');
         
+        // Save session
         const password = document.getElementById('adminPassword').value;
         const session = {
             password: password,
@@ -254,31 +247,46 @@ function setupSocketListeners() {
         // Request initial data
         console.log('📊 Requesting initial data...');
         state.socket.emit('admin:getData');
-        state.socket.emit('admin:getAllAgents');
+        state.socket.emit('agent:getAllAgents');
         state.socket.emit('admin:getTelebirrNumber');
-        loadAllTransactions();
-        refreshPendingTransactions();
+        state.socket.emit('admin:getAllTransactions');
+        state.socket.emit('admin:getPendingTransactions');
         
+        // Start auto-refresh
         startAutoRefresh();
-        initCharts();
+        
+        // Initialize charts after a delay
+        setTimeout(initCharts, 1000);
     });
 
     state.socket.on('admin:authError', (message) => {
         console.error('❌ Admin auth error:', message);
+        state.isAdmin = false;
+        state.loginAttempts++;
+        
         showToast('Login failed: ' + message, 'error');
         localStorage.removeItem('bingo_admin_session');
-        
-        // Clear password field
         document.getElementById('adminPassword').value = '';
         document.getElementById('adminPassword').focus();
+        
+        if (state.loginAttempts >= state.maxLoginAttempts) {
+            showToast('Too many failed attempts. Please try again later.', 'error');
+            document.querySelector('.btn-primary').disabled = true;
+            setTimeout(() => {
+                document.querySelector('.btn-primary').disabled = false;
+            }, 30000);
+        }
     });
 
+    // Data update events
     state.socket.on('admin:update', (data) => {
         console.log('📊 Received admin update data');
         updateStats(data);
         state.lastUpdate = new Date();
         updateLastUpdateTime();
-        document.getElementById('activeConnections').textContent = data.connectedSockets || 0;
+        if (data.connectedSockets !== undefined) {
+            document.getElementById('activeConnections').textContent = data.connectedSockets;
+        }
         updateOnlineStatus(data.totalPlayers || 0);
     });
 
@@ -289,28 +297,19 @@ function setupSocketListeners() {
         updateUsersTable();
         updateRecentRequestsTable();
         
-        const onlineCount = data.filter(user => {
-            if (user.isOnline) return true;
-            if (user.lastSeen) {
-                const lastSeenTime = new Date(user.lastSeen);
-                const now = new Date();
-                const secondsSinceLastSeen = (now - lastSeenTime) / 1000;
-                return secondsSinceLastSeen < 30;
-            }
-            return false;
-        }).length;
-        
+        const onlineCount = data.filter(user => user.isOnline).length;
         updateUserCountBadge(onlineCount);
         
         const multiSocketCount = data.filter(user => (user.socketCount || 0) > 1).length;
         state.multiSocketUsers = multiSocketCount;
-        document.getElementById('debugMultiSocketUsers').textContent = multiSocketCount;
+        if (document.getElementById('debugMultiSocketUsers')) {
+            document.getElementById('debugMultiSocketUsers').textContent = multiSocketCount;
+        }
         
-        // Update user list for add funds modal
         updateFundsUserList();
     });
 
-    // Agent-related socket events
+    // Agent events
     state.socket.on('agent:allAgents', (data) => {
         console.log(`👑 Received ${data.length} agents`);
         state.agents = data;
@@ -318,32 +317,19 @@ function setupSocketListeners() {
         updateAgentCountBadge();
     });
 
-    state.socket.on('agent:agentCreated', (data) => {
-        showToast('Agent created successfully: ' + data.agent.username, 'success');
-        refreshAgents();
-    });
-
-    // Telebirr number events
     state.socket.on('admin:telebirrNumber', (number) => {
         console.log(`📱 Received Telebirr number: ${number}`);
         state.telebirrNumber = number;
         document.getElementById('telebirrNumber').value = number;
         const statusEl = document.getElementById('telebirrNumberStatus');
-        statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Current: ${number}</span>`;
-    });
-
-    state.socket.on('admin:telebirrNumberUpdated', (data) => {
-        console.log(`📱 Telebirr number updated: ${data.telebirrNumber}`);
-        state.telebirrNumber = data.telebirrNumber;
-        document.getElementById('telebirrNumber').value = data.telebirrNumber;
-        const statusEl = document.getElementById('telebirrNumberStatus');
-        statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Updated to: ${data.telebirrNumber}</span>`;
-        showToast(`Telebirr number updated to ${data.telebirrNumber}`, 'success');
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color: var(--success);"><i class="fas fa-check"></i> Current: ${number}</span>`;
+        }
     });
 
     // Transaction events
     state.socket.on('admin:allTransactions', (transactions) => {
-        console.log(`💰 Received ${transactions.length} all transactions`);
+        console.log(`💰 Received ${transactions.length} transactions`);
         state.allTransactions = transactions;
         updateTransactionHistory();
         updateAnalyticsFromTransactions();
@@ -355,45 +341,21 @@ function setupSocketListeners() {
         updatePendingTransactionsBadge();
         updateWalletApprovalsTable();
         updateRecentRequestsTable();
-        
-        // Also update deposit and withdrawal requests
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
     });
 
-    state.socket.on('admin:depositRequests', (deposits) => {
-        console.log(`💳 Received ${deposits.length} deposit requests`);
-        state.depositRequests = deposits;
-        updateDepositRequestsTable();
-        updateDepositRequestBadge();
-    });
-
-    state.socket.on('admin:withdrawalRequests', (withdrawals) => {
-        console.log(`💸 Received ${withdrawals.length} withdrawal requests`);
-        state.withdrawalRequests = withdrawals;
-        updateWithdrawalRequestsTable();
-        updateWithdrawalRequestBadge();
-    });
-
-    // New transaction added
     state.socket.on('admin:newTransaction', (transaction) => {
-        console.log(`➕ New transaction: ${transaction.type} for ${transaction.userName}`);
+        console.log(`➕ New transaction: ${transaction.type}`);
         state.allTransactions.unshift(transaction);
         
         if (transaction.status === 'pending') {
             state.pendingTransactions.unshift(transaction);
             updatePendingTransactionsBadge();
-            
-            // Play notification sound
             playNotificationSound();
             
-            // Show toast
             if (transaction.type === 'DEPOSIT_REQUEST') {
                 showToast(`New deposit request from ${transaction.userName}`, 'info');
-                refreshDepositRequests();
             } else if (transaction.type === 'WITHDRAW_REQUEST') {
                 showToast(`New withdrawal request from ${transaction.userName}`, 'info');
-                refreshWithdrawalRequests();
             }
         }
         
@@ -402,24 +364,14 @@ function setupSocketListeners() {
         updateRecentRequestsTable();
     });
 
-    // Deposit request events
-    state.socket.on('admin:newDepositRequest', (transaction) => {
-        console.log(`💳 New deposit request: ${transaction.userName} - ${transaction.amount} ETB`);
-        // This is handled by admin:newTransaction now
-    });
-
-    // Withdrawal request events
-    state.socket.on('admin:newWithdrawRequest', (transaction) => {
-        console.log(`💸 New withdrawal request: ${transaction.userName} - ${transaction.amount} ETB`);
-        // This is handled by admin:newTransaction now
-    });
-
     state.socket.on('admin:success', (message) => {
         showToast(message, 'success');
         // Refresh data
-        state.socket.emit('admin:getData');
-        refreshPendingTransactions();
-        loadAllTransactions();
+        if (state.socket && state.socket.connected) {
+            state.socket.emit('admin:getData');
+            state.socket.emit('admin:getAllTransactions');
+            state.socket.emit('admin:getPendingTransactions');
+        }
     });
 
     state.socket.on('admin:error', (message) => {
@@ -433,95 +385,36 @@ function setupSocketListeners() {
 
     // Wallet transaction events
     state.socket.on('wallet:depositApproved', (data) => {
-        console.log(`✅ Deposit approved: ${data.amount} ETB for ${data.userName}`);
-        showToast(`Deposit approved: ${data.amount} ETB added to user`, 'success');
+        console.log(`✅ Deposit approved: ${data.amount} ETB`);
+        showToast(`Deposit approved: ${data.amount} ETB added`, 'success');
         refreshPendingTransactions();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        loadAllTransactions();
     });
 
     state.socket.on('wallet:withdrawalApproved', (data) => {
-        console.log(`✅ Withdrawal approved: ${data.amount} ETB to ${data.phoneNumber}`);
-        showToast(`Withdrawal approved: ${data.amount} ETB sent to ${data.phoneNumber}`, 'success');
+        console.log(`✅ Withdrawal approved: ${data.amount} ETB`);
+        showToast(`Withdrawal approved: ${data.amount} ETB sent`, 'success');
         refreshPendingTransactions();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        loadAllTransactions();
     });
 
     state.socket.on('wallet:depositRejected', (data) => {
         console.log(`❌ Deposit rejected: ${data.message}`);
         showToast(`Deposit rejected: ${data.message}`, 'error');
         refreshPendingTransactions();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        loadAllTransactions();
     });
 
     state.socket.on('wallet:withdrawalRejected', (data) => {
         console.log(`❌ Withdrawal rejected: ${data.message}`);
         showToast(`Withdrawal rejected: ${data.message}`, 'error');
         refreshPendingTransactions();
-        refreshDepositRequests();
-        refreshWithdrawalRequests();
-        loadAllTransactions();
     });
 
     // House earnings reset
     state.socket.on('admin:houseEarningsReset', (data) => {
-        console.log(`🔄 House earnings reset: ${data.previousAmount} to 0`);
+        console.log(`🔄 House earnings reset`);
         showToast(`House earnings reset to ${data.resetAmount} ETB`, 'success');
-        document.getElementById('houseEarnings').textContent = data.resetAmount.toFixed(2) + ' ETB';
-    });
-
-    state.socket.on('admin:houseEarningsResetError', (message) => {
-        console.error('❌ House earnings reset error:', message);
-        showToast('Failed to reset house earnings: ' + message, 'error');
-        // Revert optimistic update
-        state.socket.emit('admin:getData');
-    });
-
-    // Debug info
-    state.socket.on('admin:debugInfo', (debugInfo) => {
-        console.log('🔍 Received debug info');
-        state.debugInfo = debugInfo;
-        updateDebugInfo();
-    });
-
-    // All transactions reset event
-    state.socket.on('admin:allTransactionsReset', () => {
-        console.log('🔄 All transactions reset');
-        showToast('All transactions reset successfully', 'success');
-        loadAllTransactions();
-        refreshPendingTransactions();
-    });
-
-    // Pending transactions cleared
-    state.socket.on('admin:pendingTransactionsCleared', (data) => {
-        console.log(`🧹 Cleared ${data.count} pending transactions`);
-        showToast(`Cleared ${data.count} pending transactions`, 'success');
-        refreshPendingTransactions();
-        loadAllTransactions();
-    });
-
-    // Agent stats
-    state.socket.on('admin:agentStats', (stats) => {
-        console.log('📊 Received agent stats');
-        state.agentStatistics = stats;
-        updateAgentStatsDisplay();
-    });
-
-    // Keno stats
-    state.socket.on('admin:kenoStats', (stats) => {
-        console.log('🎰 Received Keno stats');
-        updateKenoStatsDisplay(stats);
-    });
-
-    // Socket error
-    state.socket.on('error', (error) => {
-        console.error('❌ Socket error:', error);
-        showToast('Socket error: ' + error, 'error');
+        if (document.getElementById('houseEarnings')) {
+            document.getElementById('houseEarnings').textContent = data.resetAmount.toFixed(2) + ' ETB';
+        }
     });
 
     console.log('✅ Socket event listeners attached');
@@ -529,50 +422,65 @@ function setupSocketListeners() {
 
 // Login Function
 function adminLogin() {
-    const password = document.getElementById('adminPassword').value;
+    const password = document.getElementById('adminPassword').value.trim();
     if (!password) {
         showToast('Please enter password', 'error');
+        document.getElementById('adminPassword').focus();
         return;
     }
     
     console.log('🔑 Attempting admin login...');
     
-    // Check if we have a valid socket connection first
+    // Show loading state
+    const loginBtn = document.querySelector('.btn-primary');
+    const originalText = loginBtn.innerHTML;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+    loginBtn.disabled = true;
+    
+    // Connect socket first if not connected
     if (!state.socket || !state.socket.connected) {
-        console.log('🔄 No active connection, establishing socket...');
+        console.log('🔄 Creating new socket connection...');
+        const socket = connectSocket();
         
-        // Create a connection timeout
-        const connectionTimeout = setTimeout(() => {
-            showToast('Connection timeout. Please check server.', 'error');
-        }, 10000); // 10 second timeout
+        if (!socket) {
+            loginBtn.innerHTML = originalText;
+            loginBtn.disabled = false;
+            return;
+        }
         
-        // Connect socket first
-        connectSocket();
-        
-        // Wait for connection before sending auth
-        const waitForConnection = () => {
-            if (state.socket && state.socket.connected) {
-                clearTimeout(connectionTimeout);
+        // Wait for connection then send auth
+        const checkConnection = setInterval(() => {
+            if (state.socket?.connected) {
+                clearInterval(checkConnection);
                 console.log('✅ Socket connected, sending auth...');
                 state.socket.emit('admin:auth', password);
-            } else {
-                // Try again after short delay
-                setTimeout(waitForConnection, 500);
+            } else if (!state.isConnecting) {
+                clearInterval(checkConnection);
+                showToast('Failed to connect to server', 'error');
+                loginBtn.innerHTML = originalText;
+                loginBtn.disabled = false;
             }
-        };
+        }, 500);
         
-        waitForConnection();
-        
-        // Also set a global timeout
+        // Timeout after 10 seconds
         setTimeout(() => {
-            if (!state.socket || !state.socket.connected) {
-                showToast('Failed to connect to server. Please refresh and try again.', 'error');
-                console.error('❌ Connection timeout reached');
+            clearInterval(checkConnection);
+            if (!state.socket?.connected) {
+                showToast('Connection timeout. Check server.', 'error');
+                loginBtn.innerHTML = originalText;
+                loginBtn.disabled = false;
             }
-        }, 15000);
+        }, 10000);
     } else {
+        // Socket already connected, send auth
         console.log('✅ Socket already connected, sending auth...');
         state.socket.emit('admin:auth', password);
+        
+        // Restore button after 2 seconds
+        setTimeout(() => {
+            loginBtn.innerHTML = originalText;
+            loginBtn.disabled = false;
+        }, 2000);
     }
 }
 
@@ -618,77 +526,66 @@ function toggleSidebar() {
 }
 
 function playNotificationSound() {
-    // Create a simple notification sound
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = 800;
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
+        const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
+        audio.volume = 0.3;
+        audio.play().catch(e => console.log('Audio play failed:', e));
     } catch (e) {
-        // Audio context not supported
+        // Audio not supported
     }
 }
 
 // Data Update Functions
 function updateStats(data) {
     console.log('📈 Updating stats:', data);
-    document.getElementById('totalUsers').textContent = data.totalUsers || 0;
-    document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
-    document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
+    if (document.getElementById('totalUsers')) {
+        document.getElementById('totalUsers').textContent = data.totalUsers || 0;
+    }
+    if (document.getElementById('onlinePlayers')) {
+        document.getElementById('onlinePlayers').textContent = data.totalPlayers || 0;
+    }
+    if (document.getElementById('houseEarnings')) {
+        document.getElementById('houseEarnings').textContent = (data.houseEarnings || 0).toFixed(2) + ' ETB';
+    }
     
     // Update pending requests count
     const pendingCount = state.pendingTransactions.length;
-    document.getElementById('pendingRequests').textContent = pendingCount;
+    if (document.getElementById('pendingRequests')) {
+        document.getElementById('pendingRequests').textContent = pendingCount;
+    }
 }
 
-function updateConnectionStatus() {
+function updateConnectionStatus(status = 'Disconnected', type = 'error') {
     const statusText = document.getElementById('connectionStatusText');
     const statusIndicator = document.querySelector('.status-indicator');
     
-    if (state.socket && state.socket.connected) {
-        if (statusText) {
-            statusText.textContent = 'Connected';
-            statusText.style.color = 'var(--success)';
-        }
-        if (statusIndicator) {
-            statusIndicator.style.background = 'var(--success)';
-        }
-    } else {
-        if (statusText) {
-            statusText.textContent = 'Disconnected';
-            statusText.style.color = 'var(--danger)';
-        }
-        if (statusIndicator) {
-            statusIndicator.style.background = 'var(--danger)';
-        }
+    if (statusText) {
+        statusText.textContent = status;
+        statusText.style.color = type === 'success' ? 'var(--success)' : 'var(--danger)';
+    }
+    
+    if (statusIndicator) {
+        statusIndicator.style.background = type === 'success' ? 'var(--success)' : 'var(--danger)';
+        statusIndicator.style.animation = type === 'success' ? 'pulse 2s infinite' : 'none';
     }
 }
 
 function updateOnlineStatus(onlineCount) {
     const onlineStatus = document.getElementById('onlineStatus');
-    if (onlineCount > 0) {
-        onlineStatus.className = 'stat-change positive';
-        onlineStatus.innerHTML = '<i class="fas fa-circle"></i> ' + onlineCount + ' players online';
-    } else {
-        onlineStatus.className = 'stat-change';
-        onlineStatus.innerHTML = '<i class="fas fa-circle"></i> No players online';
+    if (onlineStatus) {
+        if (onlineCount > 0) {
+            onlineStatus.className = 'stat-change positive';
+            onlineStatus.innerHTML = '<i class="fas fa-circle"></i> ' + onlineCount + ' players online';
+        } else {
+            onlineStatus.className = 'stat-change';
+            onlineStatus.innerHTML = '<i class="fas fa-circle"></i> No players online';
+        }
     }
 }
 
 function applyFilters() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const searchTerm = document.getElementById('userSearch').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+    const searchTerm = document.getElementById('userSearch')?.value.toLowerCase() || '';
     
     let filtered = [...state.users];
     
@@ -723,6 +620,8 @@ function searchUsers() {
 
 function updateUsersTable() {
     const tbody = document.getElementById('usersTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
     if (state.filteredUsers.length === 0) {
@@ -814,6 +713,8 @@ function updateUsersTable() {
 // Update funds user list for datalist
 function updateFundsUserList() {
     const datalist = document.getElementById('fundsUserList');
+    if (!datalist) return;
+    
     datalist.innerHTML = '';
     
     state.users.forEach(user => {
@@ -826,28 +727,28 @@ function updateFundsUserList() {
 
 // Transaction Functions
 function loadAllTransactions() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('📊 Requesting all transactions...');
         state.socket.emit('admin:getAllTransactions');
     }
 }
 
 function refreshPendingTransactions() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('⏳ Requesting pending transactions...');
         state.socket.emit('admin:getPendingTransactions');
     }
 }
 
 function refreshDepositRequests() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('💳 Requesting deposit requests...');
         state.socket.emit('admin:getDepositRequests');
     }
 }
 
 function refreshWithdrawalRequests() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('💸 Requesting withdrawal requests...');
         state.socket.emit('admin:getWithdrawalRequests');
     }
@@ -867,10 +768,12 @@ function filterWithdrawalRequests() {
 
 function updateWalletApprovalsTable() {
     const tbody = document.getElementById('walletApprovalsTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
-    const typeFilter = document.getElementById('walletTypeFilter').value;
-    const statusFilter = document.getElementById('walletStatusFilter').value;
+    const typeFilter = document.getElementById('walletTypeFilter')?.value || 'all';
+    const statusFilter = document.getElementById('walletStatusFilter')?.value || 'pending';
     
     let filtered = state.pendingTransactions;
     
@@ -977,10 +880,12 @@ function updateWalletApprovalsTable() {
 
 function updateDepositRequestsTable() {
     const tbody = document.getElementById('depositRequestsTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
-    const statusFilter = document.getElementById('depositStatusFilter').value;
-    const dateFilter = document.getElementById('depositDateFilter').value;
+    const statusFilter = document.getElementById('depositStatusFilter')?.value || 'all';
+    const dateFilter = document.getElementById('depositDateFilter')?.value || 'all';
     
     let filtered = state.allTransactions.filter(t => t.type === 'DEPOSIT_REQUEST');
     
@@ -1080,10 +985,12 @@ function updateDepositRequestsTable() {
 
 function updateWithdrawalRequestsTable() {
     const tbody = document.getElementById('withdrawalRequestsTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
-    const statusFilter = document.getElementById('withdrawalStatusFilter').value;
-    const dateFilter = document.getElementById('withdrawalDateFilter').value;
+    const statusFilter = document.getElementById('withdrawalStatusFilter')?.value || 'all';
+    const dateFilter = document.getElementById('withdrawalDateFilter')?.value || 'all';
     
     let filtered = state.allTransactions.filter(t => t.type === 'WITHDRAW_REQUEST');
     
@@ -1180,6 +1087,8 @@ function updateWithdrawalRequestsTable() {
 
 function updateRecentRequestsTable() {
     const tbody = document.getElementById('recentRequestsTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
     // Get recent 5 pending requests
@@ -1267,10 +1176,12 @@ function updateRecentRequestsTable() {
 
 function updateTransactionHistory() {
     const container = document.getElementById('transactionHistory');
+    if (!container) return;
+    
     container.innerHTML = '';
     
-    const searchTerm = document.getElementById('transactionSearch').value.toLowerCase();
-    const typeFilter = document.getElementById('transactionTypeFilter').value;
+    const searchTerm = document.getElementById('transactionSearch')?.value.toLowerCase() || '';
+    const typeFilter = document.getElementById('transactionTypeFilter')?.value || 'all';
     
     let filtered = state.allTransactions;
     
@@ -1377,6 +1288,8 @@ function showTransactionDetails(transactionId) {
     if (!transaction) return;
     
     const content = document.getElementById('transactionDetailsContent');
+    if (!content) return;
+    
     const time = new Date(transaction.createdAt).toLocaleString();
     const updatedTime = transaction.updatedAt ? new Date(transaction.updatedAt).toLocaleString() : 'N/A';
     
@@ -1520,13 +1433,17 @@ function approveTransaction(transactionId, type) {
         return;
     }
     
-    if (type === 'DEPOSIT_REQUEST') {
-        state.socket.emit('admin:approveDeposit', transactionId);
-    } else if (type === 'WITHDRAW_REQUEST') {
-        state.socket.emit('admin:approveWithdrawal', transactionId);
+    if (state.socket && state.socket.connected) {
+        if (type === 'DEPOSIT_REQUEST') {
+            state.socket.emit('admin:approveDeposit', transactionId);
+        } else if (type === 'WITHDRAW_REQUEST') {
+            state.socket.emit('admin:approveWithdrawal', transactionId);
+        }
+        
+        showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
+    } else {
+        showToast('Not connected to server', 'error');
     }
-    
-    showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} approval sent...`, 'info');
 }
 
 function rejectTransaction(transactionId, type) {
@@ -1538,16 +1455,22 @@ function rejectTransaction(transactionId, type) {
     
     if (reason === null) return;
     
-    state.socket.emit('admin:rejectTransaction', {
-        transactionId: transactionId,
-        reason: reason
-    });
-    
-    showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
+    if (state.socket && state.socket.connected) {
+        state.socket.emit('admin:rejectTransaction', {
+            transactionId: transactionId,
+            reason: reason
+        });
+        
+        showToast(`${action === 'deposit' ? 'Deposit' : 'Withdrawal'} rejection sent...`, 'warning');
+    } else {
+        showToast('Not connected to server', 'error');
+    }
 }
 
 function updatePendingTransactionsBadge() {
     const badge = document.getElementById('walletApprovalBadge');
+    if (!badge) return;
+    
     const pendingCount = state.pendingTransactions.filter(t => t.status === 'pending').length;
     
     badge.textContent = pendingCount;
@@ -1559,11 +1482,15 @@ function updatePendingTransactionsBadge() {
     }
     
     // Also update the pending requests stat
-    document.getElementById('pendingRequests').textContent = pendingCount;
+    if (document.getElementById('pendingRequests')) {
+        document.getElementById('pendingRequests').textContent = pendingCount;
+    }
 }
 
 function updateDepositRequestBadge() {
     const badge = document.getElementById('depositRequestBadge');
+    if (!badge) return;
+    
     const pendingCount = state.allTransactions.filter(t => t.type === 'DEPOSIT_REQUEST' && t.status === 'pending').length;
     
     badge.textContent = pendingCount;
@@ -1577,6 +1504,8 @@ function updateDepositRequestBadge() {
 
 function updateWithdrawalRequestBadge() {
     const badge = document.getElementById('withdrawalRequestBadge');
+    if (!badge) return;
+    
     const pendingCount = state.allTransactions.filter(t => t.type === 'WITHDRAW_REQUEST' && t.status === 'pending').length;
     
     badge.textContent = pendingCount;
@@ -1590,7 +1519,7 @@ function updateWithdrawalRequestBadge() {
 
 // Agent Management Functions
 function refreshAgents() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('👑 Requesting agents...');
         state.socket.emit('agent:getAllAgents');
     }
@@ -1598,6 +1527,8 @@ function refreshAgents() {
 
 function updateAgentsTable() {
     const tbody = document.getElementById('agentsTableBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
     
     if (state.agents.length === 0) {
@@ -1666,6 +1597,8 @@ function updateAgentsTable() {
 
 function updateAgentCountBadge() {
     const badge = document.getElementById('agentCountBadge');
+    if (!badge) return;
+    
     const activeAgents = state.agents.filter(a => a.isActive).length;
     
     badge.textContent = activeAgents;
@@ -1676,22 +1609,9 @@ function updateAgentCountBadge() {
         badge.style.background = 'var(--text-muted)';
     }
     
-    document.getElementById('totalAgents').textContent = state.agents.length;
-}
-
-function updateAgentStatsDisplay() {
-    document.getElementById('totalAgentsStat').textContent = state.agentStatistics.totalAgents || 0;
-    document.getElementById('activeAgentsStat').textContent = state.agentStatistics.activeAgents || 0;
-    document.getElementById('totalCommissionsStat').textContent = (state.agentStatistics.totalCommissions || 0).toFixed(2) + ' ETB';
-    document.getElementById('referralUsersStat').textContent = state.agentStatistics.referralUsers || 0;
-}
-
-function updateKenoStatsDisplay(stats) {
-    if (!stats) return;
-    document.getElementById('kenoPlayersStat').textContent = stats.totalPlayers || 0;
-    document.getElementById('kenoOnlineStat').textContent = stats.onlinePlayers || 0;
-    document.getElementById('kenoEarningsStat').textContent = (stats.totalEarnings || 0).toFixed(2) + ' ETB';
-    document.getElementById('kenoGamesStat').textContent = stats.totalGames || 0;
+    if (document.getElementById('totalAgents')) {
+        document.getElementById('totalAgents').textContent = state.agents.length;
+    }
 }
 
 function showCreateAgentModal() {
@@ -1759,15 +1679,19 @@ function saveAgent() {
         agentData.password = password;
     }
     
-    if (state.editingAgentId) {
-        console.log('👑 Updating agent:', state.editingAgentId);
-        state.socket.emit('agent:updateAgent', {
-            agentId: state.editingAgentId,
-            updates: agentData
-        });
+    if (state.socket && state.socket.connected) {
+        if (state.editingAgentId) {
+            console.log('👑 Updating agent:', state.editingAgentId);
+            state.socket.emit('agent:updateAgent', {
+                agentId: state.editingAgentId,
+                updates: agentData
+            });
+        } else {
+            console.log('👑 Creating new agent:', username);
+            state.socket.emit('agent:createAgent', agentData);
+        }
     } else {
-        console.log('👑 Creating new agent:', username);
-        state.socket.emit('agent:createAgent', agentData);
+        showToast('Not connected to server', 'error');
     }
     
     hideModal('agentModal');
@@ -1775,14 +1699,20 @@ function saveAgent() {
 
 function deleteAgent(agentId) {
     if (confirm('Are you sure you want to deactivate this agent?')) {
-        console.log('👑 Deleting agent:', agentId);
-        state.socket.emit('agent:deleteAgent', agentId);
-        showToast('Deactivating agent...', 'warning');
+        if (state.socket && state.socket.connected) {
+            console.log('👑 Deleting agent:', agentId);
+            state.socket.emit('agent:deleteAgent', agentId);
+            showToast('Deactivating agent...', 'warning');
+        } else {
+            showToast('Not connected to server', 'error');
+        }
     }
 }
 
 function showAssignAgentModal() {
     const userSelect = document.getElementById('assignUserSelect');
+    if (!userSelect) return;
+    
     userSelect.innerHTML = '<option value="">Select a user</option>';
     
     state.users.forEach(user => {
@@ -1793,6 +1723,8 @@ function showAssignAgentModal() {
     });
     
     const agentSelect = document.getElementById('assignAgentSelect');
+    if (!agentSelect) return;
+    
     agentSelect.innerHTML = '<option value="">Select an agent</option>';
     
     state.agents.filter(a => a.isActive).forEach(agent => {
@@ -1810,6 +1742,8 @@ function showAssignAgentModal() {
 
 function showAssignAgentToUser(userId, userName) {
     const agentSelect = document.getElementById('assignAgentSelect');
+    if (!agentSelect) return;
+    
     agentSelect.innerHTML = '<option value="">Select an agent</option>';
     
     state.agents.filter(a => a.isActive).forEach(agent => {
@@ -1856,10 +1790,14 @@ function assignUserToAgent() {
         agentData.override = true;
     }
     
-    console.log('👑 Assigning user to agent:', agentData);
-    state.socket.emit('agent:manualReferralAssignment', agentData);
+    if (state.socket && state.socket.connected) {
+        console.log('👑 Assigning user to agent:', agentData);
+        state.socket.emit('agent:manualReferralAssignment', agentData);
+        showToast('Assigning user to agent...', 'info');
+    } else {
+        showToast('Not connected to server', 'error');
+    }
     
-    showToast('Assigning user to agent...', 'info');
     hideModal('assignAgentModal');
 }
 
@@ -1887,10 +1825,15 @@ function addFunds() {
         reason: reason
     };
     
-    console.log('💰 Adding funds:', data);
-    state.socket.emit('admin:addFunds', data);
+    if (state.socket && state.socket.connected) {
+        console.log('💰 Adding funds:', data);
+        state.socket.emit('admin:addFunds', data);
+        showToast(`Adding ${amount} ETB to user...`, 'info');
+    } else {
+        showToast('Not connected to server', 'error');
+    }
+    
     hideModal('addFundsModal');
-    showToast(`Adding ${amount} ETB to user...`, 'info');
 }
 
 function quickAddFundsToUser(userId, userName, currentBalance) {
@@ -1921,18 +1864,29 @@ function quickAddFunds() {
         reason: 'quick_add'
     };
     
-    console.log('💰 Quick adding funds:', data);
-    state.socket.emit('admin:addFunds', data);
+    if (state.socket && state.socket.connected) {
+        console.log('💰 Quick adding funds:', data);
+        state.socket.emit('admin:addFunds', data);
+        showToast(`Adding ${amount} ETB to ${state.quickAddUserName}...`, 'success');
+    } else {
+        showToast('Not connected to server', 'error');
+    }
+    
     hideModal('quickAddFundsModal');
-    showToast(`Adding ${amount} ETB to ${state.quickAddUserName}...`, 'success');
 }
 
 function setAmount(amount) {
-    document.getElementById('fundsAmount').value = amount;
+    const input = document.getElementById('fundsAmount');
+    if (input) {
+        input.value = amount;
+    }
 }
 
 function setQuickAmount(amount) {
-    document.getElementById('quickAddAmount').value = amount;
+    const input = document.getElementById('quickAddAmount');
+    if (input) {
+        input.value = amount;
+    }
 }
 
 function showAddFundsModal() {
@@ -1944,9 +1898,13 @@ function showAddFundsModal() {
 
 function kickUser(userId) {
     if (confirm('Kick this user from the game?')) {
-        console.log('👢 Kicking user:', userId);
-        state.socket.emit('admin:kickPlayer', userId);
-        showToast('User kicked', 'warning');
+        if (state.socket && state.socket.connected) {
+            console.log('👢 Kicking user:', userId);
+            state.socket.emit('admin:kickPlayer', userId);
+            showToast('User kicked', 'warning');
+        } else {
+            showToast('Not connected to server', 'error');
+        }
     }
 }
 
@@ -1964,26 +1922,40 @@ function sendBroadcast() {
         return;
     }
     
-    console.log('📢 Sending broadcast:', { message, type });
-    state.socket.emit('admin:broadcast', { message, type });
+    if (state.socket && state.socket.connected) {
+        console.log('📢 Sending broadcast:', { message, type });
+        state.socket.emit('admin:broadcast', { message, type });
+        showToast('Broadcast sent to all players', 'success');
+    } else {
+        showToast('Not connected to server', 'error');
+    }
+    
     hideModal('broadcastModal');
-    showToast('Broadcast sent to all players', 'success');
 }
 
 function showPendingRequests() {
     // Navigate to wallet approvals section
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    document.querySelector('.nav-item[data-section="wallet-approvals"]').classList.add('active');
+    const walletApprovalNav = document.querySelector('.nav-item[data-section="wallet-approvals"]');
+    if (walletApprovalNav) {
+        walletApprovalNav.classList.add('active');
+    }
     
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('walletApprovalsSection').classList.add('active');
-    document.getElementById('pageTitle').textContent = 'Wallet Approvals';
+    const walletSection = document.getElementById('walletApprovalsSection');
+    if (walletSection) {
+        walletSection.classList.add('active');
+    }
+    
+    if (document.getElementById('pageTitle')) {
+        document.getElementById('pageTitle').textContent = 'Wallet Approvals';
+    }
     
     refreshPendingTransactions();
 }
 
 function forceRefreshData() {
-    if (state.socket) {
+    if (state.socket && state.socket.connected) {
         console.log('🔄 Forcing refresh of all data...');
         state.socket.emit('admin:getData');
         state.socket.emit('admin:getAllAgents');
@@ -1994,6 +1966,8 @@ function forceRefreshData() {
         refreshWithdrawalRequests();
         loadAllTransactions();
         showToast('Refreshing all data...', 'success');
+    } else {
+        showToast('Not connected to server', 'error');
     }
 }
 
@@ -2007,11 +1981,16 @@ function updateLastUpdateTime() {
         text = `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     }
     
-    document.getElementById('lastUpdateTime').textContent = 'Updated ' + text;
+    const element = document.getElementById('lastUpdateTime');
+    if (element) {
+        element.textContent = 'Updated ' + text;
+    }
 }
 
 function updateUserCountBadge(count) {
     const badge = document.getElementById('userCountBadge');
+    if (!badge) return;
+    
     badge.textContent = count;
     
     if (count > 0) {
@@ -2023,18 +2002,16 @@ function updateUserCountBadge(count) {
 
 // Analytics Functions
 function updateAnalytics() {
-    if (!state.socket || !state.isAdmin) return;
+    if (!state.socket || !state.isAdmin || !state.socket.connected) return;
     
-    const dateRange = document.getElementById('analyticsDateRange').value;
+    const dateRange = document.getElementById('analyticsDateRange')?.value || 'today';
     console.log('📈 Requesting analytics for:', dateRange);
-    // This would need to be implemented on the server side
-    // For now, we'll just update from existing transactions
     updateAnalyticsFromTransactions();
 }
 
 function updateAnalyticsFromTransactions() {
     const now = new Date();
-    const dateRange = document.getElementById('analyticsDateRange').value;
+    const dateRange = document.getElementById('analyticsDateRange')?.value || 'today';
     
     let filteredTransactions = state.allTransactions;
     
@@ -2063,9 +2040,15 @@ function updateAnalyticsFromTransactions() {
     const netProfit = totalDeposits - totalWithdrawals;
     
     // Update UI
-    document.getElementById('totalDeposits').textContent = totalDeposits.toFixed(2) + ' ETB';
-    document.getElementById('totalWithdrawals').textContent = totalWithdrawals.toFixed(2) + ' ETB';
-    document.getElementById('netProfit').textContent = netProfit.toFixed(2) + ' ETB';
+    if (document.getElementById('totalDeposits')) {
+        document.getElementById('totalDeposits').textContent = totalDeposits.toFixed(2) + ' ETB';
+    }
+    if (document.getElementById('totalWithdrawals')) {
+        document.getElementById('totalWithdrawals').textContent = totalWithdrawals.toFixed(2) + ' ETB';
+    }
+    if (document.getElementById('netProfit')) {
+        document.getElementById('netProfit').textContent = netProfit.toFixed(2) + ' ETB';
+    }
     
     // Update analytics data
     state.analyticsData.totalDeposits = totalDeposits;
@@ -2082,10 +2065,10 @@ function initTransactionChart() {
     const ctx = document.getElementById('transactionChart');
     if (!ctx) return;
     
-    ctx.getContext('2d');
-    
-    if (state.transactionChart) {
-        state.transactionChart.destroy();
+    // Check if Chart is available
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded');
+        return;
     }
     
     // Get last 7 days
@@ -2123,13 +2106,11 @@ function initTransactionChart() {
         withdrawalData.push(dayWithdrawals.reduce((sum, t) => sum + (t.amount || 0), 0));
     }
     
-    // Check if Chart is available
-    if (typeof Chart === 'undefined') {
-        console.warn('Chart.js not loaded');
-        return;
+    if (state.transactionChart) {
+        state.transactionChart.destroy();
     }
     
-    state.transactionChart = new Chart(ctx, {
+    state.transactionChart = new Chart(ctx.getContext('2d'), {
         type: 'bar',
         data: {
             labels: labels,
@@ -2190,14 +2171,13 @@ function updateTransactionChart() {
     
     // Update chart data based on current date range
     updateAnalyticsFromTransactions();
-    
-    // For now, just update the chart with current analytics data
-    // In a real implementation, you would update the chart data
 }
 
 // Activity Log Functions
 function addActivityItem(activity) {
     const activityFeed = document.getElementById('activityFeed');
+    if (!activityFeed) return;
+    
     const activityItem = document.createElement('div');
     activityItem.className = 'd-flex align-center gap-3 mb-3';
     
@@ -2239,7 +2219,7 @@ function addActivityItem(activity) {
 }
 
 function refreshActivity() {
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('🔄 Refreshing activity...');
         state.socket.emit('admin:getData');
         showToast('Activity refreshed', 'success');
@@ -2262,22 +2242,25 @@ function startAutoRefresh() {
 // Chart Functions
 function initCharts() {
     console.log('📊 Initializing charts...');
-    // Initialize any other charts here
     setTimeout(initTransactionChart, 1000);
 }
 
 // System Functions
 function resetHouseEarnings() {
     if (confirm('Are you sure you want to reset house earnings to zero? This action cannot be undone.')) {
-        if (state.socket && state.isAdmin) {
+        if (state.socket && state.isAdmin && state.socket.connected) {
             console.log('🔄 Resetting house earnings...');
             // Optimistically update the UI
-            document.getElementById('houseEarnings').textContent = '0.00 ETB';
+            if (document.getElementById('houseEarnings')) {
+                document.getElementById('houseEarnings').textContent = '0.00 ETB';
+            }
             
             // Emit reset event to server
             state.socket.emit('admin:resetHouseEarnings');
             
             showToast('Resetting house earnings to zero...', 'warning');
+        } else {
+            showToast('Not connected to server', 'error');
         }
     }
 }
@@ -2313,7 +2296,7 @@ function clearAllApprovedTransactions() {
 
 function resetAllTransactions() {
     if (confirm('WARNING: This will reset ALL transaction history including pending requests. Are you sure?')) {
-        if (state.socket && state.isAdmin) {
+        if (state.socket && state.isAdmin && state.socket.connected) {
             console.log('🔄 Resetting all transactions...');
             state.socket.emit('admin:resetAllTransactions');
             showToast('Resetting all transactions...', 'warning');
@@ -2331,6 +2314,8 @@ function resetAllTransactions() {
             updatePendingTransactionsBadge();
             updateDepositRequestBadge();
             updateWithdrawalRequestBadge();
+        } else {
+            showToast('Not connected to server', 'error');
         }
     }
 }
@@ -2340,32 +2325,49 @@ function updateTelebirrNumber() {
     const statusEl = document.getElementById('telebirrNumberStatus');
     
     if (!newNumber) {
-        statusEl.innerHTML = '<span style="color: var(--danger);">Please enter a phone number</span>';
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color: var(--danger);">Please enter a phone number</span>';
+        }
         showToast('Please enter a phone number', 'error');
         return;
     }
     
     if (!/^09[0-9]{8}$/.test(newNumber)) {
-        statusEl.innerHTML = '<span style="color: var(--warning);">Format: 09xxxxxxxx (10 digits)</span>';
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color: var(--warning);">Format: 09xxxxxxxx (10 digits)</span>';
+        }
         showToast('Invalid format. Must be 09xxxxxxxx (10 digits)', 'warning');
         return;
     }
     
-    if (state.socket && state.isAdmin) {
+    if (state.socket && state.isAdmin && state.socket.connected) {
         console.log('📱 Updating Telebirr number to:', newNumber);
-        statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> Updating...</span>';
+        }
         state.socket.emit('admin:updateTelebirrNumber', newNumber);
         showToast('Updating Telebirr number...', 'info');
+    } else {
+        showToast('Not connected to server', 'error');
     }
 }
 
 function focusTelebirrNumber() {
     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    document.querySelector('.nav-item[data-section="controls"]').classList.add('active');
+    const controlsNav = document.querySelector('.nav-item[data-section="controls"]');
+    if (controlsNav) {
+        controlsNav.classList.add('active');
+    }
     
     document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('controlsSection').classList.add('active');
-    document.getElementById('pageTitle').textContent = 'System Controls';
+    const controlsSection = document.getElementById('controlsSection');
+    if (controlsSection) {
+        controlsSection.classList.add('active');
+    }
+    
+    if (document.getElementById('pageTitle')) {
+        document.getElementById('pageTitle').textContent = 'System Controls';
+    }
     
     setTimeout(() => {
         const input = document.getElementById('telebirrNumber');
@@ -2377,43 +2379,39 @@ function focusTelebirrNumber() {
 }
 
 function updateGameTimer() {
-    const timer = document.getElementById('gameTimer').value;
+    const timer = document.getElementById('gameTimer')?.value;
     if (timer && timer > 0) {
-        // This would need to be implemented on the server side
         console.log('⏱️ Updating game timer to:', timer, 'seconds');
         showToast(`Game timer updated to ${timer} seconds`, 'success');
     }
 }
 
 function updateMinPlayers() {
-    const minPlayers = document.getElementById('minPlayers').value;
+    const minPlayers = document.getElementById('minPlayers')?.value;
     if (minPlayers && minPlayers >= 1) {
-        // This would need to be implemented on the server side
         console.log('👥 Updating minimum players to:', minPlayers);
         showToast(`Minimum players updated to ${minPlayers}`, 'success');
     }
 }
 
 function updateTransactionSettings() {
-    const minDeposit = document.getElementById('minDeposit').value;
-    const minWithdrawal = document.getElementById('minWithdrawal').value;
-    const maxWithdrawal = document.getElementById('maxWithdrawal').value;
-    const autoApproveLimit = document.getElementById('autoApproveLimit').value;
+    const minDeposit = document.getElementById('minDeposit')?.value;
+    const minWithdrawal = document.getElementById('minWithdrawal')?.value;
+    const maxWithdrawal = document.getElementById('maxWithdrawal')?.value;
+    const autoApproveLimit = document.getElementById('autoApproveLimit')?.value;
     
     if (confirm('Update transaction settings?')) {
         console.log('⚙️ Updating transaction settings:', { minDeposit, minWithdrawal, maxWithdrawal, autoApproveLimit });
-        // In a real implementation, send to server
         showToast('Transaction settings updated', 'success');
     }
 }
 
 function updateDefaultCommissions() {
-    const bingoRate = document.getElementById('defaultBingoCommission').value;
-    const kenoRate = document.getElementById('defaultKenoCommission').value;
+    const bingoRate = document.getElementById('defaultBingoCommission')?.value;
+    const kenoRate = document.getElementById('defaultKenoCommission')?.value;
     
     if (confirm(`Set default commissions to Bingo: ${bingoRate}%, Keno: ${kenoRate}%?`)) {
         console.log('👑 Updating default commissions:', { bingoRate, kenoRate });
-        // In a real implementation, send to server
         showToast('Default commissions updated', 'success');
     }
 }
@@ -2421,7 +2419,6 @@ function updateDefaultCommissions() {
 function forceStartAllGames() {
     if (confirm('Force start all waiting games?')) {
         console.log('🎮 Force starting all games...');
-        // In a real implementation, send to server
         showToast('Starting all games...', 'success');
     }
 }
@@ -2429,7 +2426,10 @@ function forceStartAllGames() {
 function clearLogs() {
     if (confirm('Clear all system logs?')) {
         console.log('🗑️ Clearing system logs...');
-        document.getElementById('systemLogs').innerHTML = '';
+        const systemLogs = document.getElementById('systemLogs');
+        if (systemLogs) {
+            systemLogs.innerHTML = '';
+        }
         showToast('System logs cleared', 'success');
     }
 }
@@ -2453,17 +2453,24 @@ function applyTransactionFilters() {
 }
 
 function filterLogs() {
-    // Implement log filter functionality
     console.log('🔍 Filtering logs...');
     showToast('Filtering logs...', 'info');
 }
 
 function updateDebugInfo() {
     if (state.debugInfo) {
-        document.getElementById('debugSockets').textContent = state.debugInfo.connectedSockets || 0;
-        document.getElementById('debugStoredTransactions').textContent = state.debugInfo.storedTransactions || 0;
-        document.getElementById('debugAdmins').textContent = state.debugInfo.activeAdmins || 0;
-        document.getElementById('debugMultiSocketUsers').textContent = state.debugInfo.multiSocketUsers || 0;
+        if (document.getElementById('debugSockets')) {
+            document.getElementById('debugSockets').textContent = state.debugInfo.connectedSockets || 0;
+        }
+        if (document.getElementById('debugStoredTransactions')) {
+            document.getElementById('debugStoredTransactions').textContent = state.debugInfo.storedTransactions || 0;
+        }
+        if (document.getElementById('debugAdmins')) {
+            document.getElementById('debugAdmins').textContent = state.debugInfo.activeAdmins || 0;
+        }
+        if (document.getElementById('debugMultiSocketUsers')) {
+            document.getElementById('debugMultiSocketUsers').textContent = state.debugInfo.multiSocketUsers || 0;
+        }
     }
 }
 
@@ -2485,27 +2492,6 @@ function testNotification() {
 function backupDatabase() {
     console.log('💾 Backing up database...');
     showToast('Database backup initiated', 'info');
-    // In a real implementation, trigger server backup
-}
-
-// Fix 4: Add connection test function
-function testServerConnection() {
-    console.log('🧪 Testing server connection...');
-    showToast('Testing connection to server...', 'info');
-    
-    fetch(`${CONFIG.SERVER_URL}/health`, { method: 'HEAD' })
-        .then(response => {
-            if (response.ok) {
-                showToast('Server is reachable', 'success');
-                return true;
-            }
-            throw new Error('Server responded with ' + response.status);
-        })
-        .catch(error => {
-            console.error('❌ Server connection test failed:', error);
-            showToast('Cannot reach server: ' + error.message, 'error');
-            return false;
-        });
 }
 
 function logout() {
@@ -2533,3 +2519,63 @@ function testConnection() {
 
 // Initialize on load
 console.log('🚀 Admin panel ready');
+
+// Make functions available globally
+window.adminLogin = adminLogin;
+window.toggleSidebar = toggleSidebar;
+window.forceRefreshData = forceRefreshData;
+window.showBroadcastModal = showBroadcastModal;
+window.focusTelebirrNumber = focusTelebirrNumber;
+window.logout = logout;
+window.resetHouseEarnings = resetHouseEarnings;
+window.showAddFundsModal = showAddFundsModal;
+window.showCreateAgentModal = showCreateAgentModal;
+window.showPendingRequests = showPendingRequests;
+window.refreshPendingTransactions = refreshPendingTransactions;
+window.refreshActivity = refreshActivity;
+window.applyFilters = applyFilters;
+window.searchUsers = searchUsers;
+window.refreshAgents = refreshAgents;
+window.refreshDepositRequests = refreshDepositRequests;
+window.refreshWithdrawalRequests = refreshWithdrawalRequests;
+window.filterWalletTransactions = filterWalletTransactions;
+window.filterDepositRequests = filterDepositRequests;
+window.filterWithdrawalRequests = filterWithdrawalRequests;
+window.loadAllTransactions = loadAllTransactions;
+window.searchTransactions = searchTransactions;
+window.applyTransactionFilters = applyTransactionFilters;
+window.updateAnalytics = updateAnalytics;
+window.updateTelebirrNumber = updateTelebirrNumber;
+window.updateGameTimer = updateGameTimer;
+window.updateMinPlayers = updateMinPlayers;
+window.updateTransactionSettings = updateTransactionSettings;
+window.updateDefaultCommissions = updateDefaultCommissions;
+window.forceStartAllGames = forceStartAllGames;
+window.clearLogs = clearLogs;
+window.exportLogs = exportLogs;
+window.exportUsers = exportUsers;
+window.filterLogs = filterLogs;
+window.clearTransactionCache = clearTransactionCache;
+window.testNotification = testNotification;
+window.backupDatabase = backupDatabase;
+window.clearAllApprovedTransactions = clearAllApprovedTransactions;
+window.resetAllTransactions = resetAllTransactions;
+window.setAmount = setAmount;
+window.setQuickAmount = setQuickAmount;
+window.addFunds = addFunds;
+window.sendBroadcast = sendBroadcast;
+window.saveAgent = saveAgent;
+window.assignUserToAgent = assignUserToAgent;
+window.quickAddFundsToUser = quickAddFundsToUser;
+window.quickAddFunds = quickAddFunds;
+window.showAssignAgentModal = showAssignAgentModal;
+window.showAssignAgentToUser = showAssignAgentToUser;
+window.showEditAgentModal = showEditAgentModal;
+window.deleteAgent = deleteAgent;
+window.kickUser = kickUser;
+window.approveTransaction = approveTransaction;
+window.rejectTransaction = rejectTransaction;
+window.showTransactionDetails = showTransactionDetails;
+window.printTransactionDetails = printTransactionDetails;
+window.hideModal = hideModal;
+window.showModal = showModal;
