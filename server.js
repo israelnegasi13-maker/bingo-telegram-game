@@ -746,7 +746,16 @@ io.on('connection', (socket) => {
   
   // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', async (password) => {
-    if (password === (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
+    console.log(`🔑 Admin auth attempt from socket ${socket.id}`);
+    
+    // Define the admin password
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 
+                           (gameLogic && gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123') || 
+                           'admin123';
+    
+    console.log(`🔑 Password check: ${password} vs ${ADMIN_PASSWORD}`);
+    
+    if (password === ADMIN_PASSWORD) {
       socket.admin = true;
       socket.emit('admin:authSuccess');
       
@@ -768,6 +777,7 @@ io.on('connection', (socket) => {
       
       console.log(`🔑 Admin authenticated: ${socket.id}`);
     } else {
+      console.log(`❌ Admin auth failed for socket ${socket.id}`);
       socket.emit('admin:authError', 'Invalid password');
     }
   });
@@ -3199,7 +3209,12 @@ app.post('/api/add-funds', async (req, res) => {
   try {
     const { userId, amount, adminPassword } = req.body;
     
-    if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
+    // Check admin password
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 
+                           (gameLogic && gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123') || 
+                           'admin123';
+    
+    if (adminPassword !== ADMIN_PASSWORD) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
