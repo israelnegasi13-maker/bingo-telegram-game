@@ -18,6 +18,8 @@ class ManualAgentSystem {
   async initialize() {
     console.log('✅ Manual Agent system initializing...');
     await this.ensureAdminAgent();
+    // Clean up stale data on startup
+    await this.cleanupStaleReferrals();
     // Start background jobs
     this.startCommissionCalculationJob();
     this.startCleanupJob();
@@ -401,7 +403,13 @@ class ManualAgentSystem {
     }
   }
 
-  // Manual referral assignment by agent - UPDATED WITH DEBUG LOGS
+  // Helper to validate ObjectId
+  isValidObjectId(id) {
+    const ObjectId = require('mongoose').Types.ObjectId;
+    return ObjectId.isValid(id) && new ObjectId(id).toString() === id;
+  }
+
+  // Manual referral assignment by agent - FIXED WITH ATOMIC UPDATES
   async handleManualReferralAssignmentByAgent(socket, data) {
     try {
       if (!socket.agentId) {
@@ -425,9 +433,6 @@ class ManualAgentSystem {
       const cleanIdentifier = userIdentifier.replace('@', '').trim().toLowerCase();
       
       console.log(`🔍 [DEBUG] Searching for player: "${cleanIdentifier}" for agent ${agent.username}`);
-      console.log(`🔍 [DEBUG] Clean identifier: "${cleanIdentifier}"`);
-      console.log(`🔍 [DEBUG] Agent ID: ${agent._id}`);
-      console.log(`🔍 [DEBUG] Agent username: ${agent.username}`);
       
       // Find user by various methods
       let user = await this.findUserByIdentifier(cleanIdentifier);
@@ -459,11 +464,6 @@ class ManualAgentSystem {
       }
 
       console.log(`✅ [DEBUG] Player found: ${user.userId} (${user.userName || 'No Name'})`);
-      console.log(`🔍 [DEBUG] User agentId before: ${user.agentId}`);
-      console.log(`🔍 [DEBUG] Current agent._id: ${agent._id}`);
-      console.log(`🔍 [DEBUG] User telegramUsername: ${user.telegramUsername || 'None'}`);
-      console.log(`🔍 [DEBUG] User totalWins: ${user.totalWins || 0}`);
-      console.log(`🔍 [DEBUG] User totalBingos: ${user.totalBingos || 0}`);
 
       // Check if user already has an agent
       if (user.agentId) {
@@ -483,57 +483,96 @@ class ManualAgentSystem {
         return;
       }
 
-      // Assign user to agent
-      user.agentId = agent._id;
-      user.agentReferredAt = new Date();
-      user.referredBy = 'manual';
-      
-      try {
-        await user.save();
-        console.log(`✅ [DEBUG] User saved with agentId: ${user.agentId}`);
-        
-        // Verify the save by fetching again
-        const verifiedUser = await this.models.User.findOne({ userId: user.userId });
-        console.log(`✅ [DEBUG] Verified user agentId: ${verifiedUser?.agentId}`);
-      } catch (saveError) {
-        console.error('❌ [DEBUG] Error saving user:', saveError);
-        socket.emit('agent:error', 'Failed to save user assignment: ' + saveError.message);
+      // Validate agentId format
+      if (!this.isValidObjectId(agent._id)) {
+        console.error('❌ Invalid agent ObjectId format:', agent._id);
+        socket.emit('agent:error', 'Invalid agent format. Please contact admin.');
         return;
       }
 
-      // Create referral record
-      const referral = new this.models.Referral({
-        agentId: agent._id,
-        userId: user.userId,
-        userName: user.userName,
-        telegramUsername: user.telegramUsername,
-        referralMethod: 'manual',
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      
+      // ATOMIC UPDATE: Assign user to agent (replaces user.save() to avoid version conflicts)
+      const updateResult = await this.models.User.findOneAndUpdate(
+        { _id: user._id },
+        {
+          $set: {
+            agentId: agent._id,
+            agentReferredAt: new Date(),
+            referredBy: 'manual'
+          }
+        },
+        { new: true, runValidators: true }
+      );
+
+      if (!updateResult) {
+        console.error('❌ [DEBUG] Failed to update user:', user._id);
+        socket.emit('agent:error', 'Database update failed. Please try again.');
+        return;
+      }
+
+      user = updateResult; // Update the user object with the returned data
+      console.log(`✅ [DEBUG] User updated atomically with agentId: ${user.agentId}`);
+
+      // UPSERT LOGIC: Create or update referral record (replaces new Referral().save() to avoid duplicate key errors)
       try {
-        await referral.save();
-        console.log(`📝 Created referral record for ${user.userId}`);
+        const referralUpdate = await this.models.Referral.findOneAndUpdate(
+          { 
+            userId: user.userId,
+            agentId: agent._id 
+          },
+          {
+            $set: {
+              userName: user.userName,
+              telegramUsername: user.telegramUsername,
+              referralMethod: 'manual',
+              status: 'active',
+              updatedAt: new Date()
+            },
+            $setOnInsert: {
+              createdAt: new Date()
+            }
+          },
+          {
+            upsert: true,
+            new: true,
+            runValidators: true
+          }
+        );
+        console.log(`📝 Updated/Upserted referral record for ${user.userId}`);
       } catch (referralError) {
         console.error('❌ [DEBUG] Error saving referral:', referralError);
         // Don't fail the whole process if referral record fails
       }
 
-      // Update agent's referral count
-      const previousReferrals = agent.totalReferrals || 0;
-      agent.totalReferrals = previousReferrals + 1;
+      // ATOMIC UPDATE: Update agent stats
+      const agentUpdate = {
+        $inc: { totalReferrals: 1 },
+        $set: { updatedAt: new Date() }
+      };
+
       if (user.isOnline) {
-        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+        agentUpdate.$inc.activeReferrals = 1;
       }
-      agent.updatedAt = new Date();
-      
-      try {
-        await agent.save();
-        console.log(`✅ [DEBUG] Agent saved with totalReferrals: ${agent.totalReferrals}`);
-      } catch (agentError) {
-        console.error('❌ [DEBUG] Error saving agent:', agentError);
+
+      const updatedAgent = await this.models.Agent.findOneAndUpdate(
+        { _id: agent._id },
+        agentUpdate,
+        { new: true }
+      );
+
+      console.log(`✅ [DEBUG] Agent updated atomically. New total: ${updatedAgent.totalReferrals}`);
+
+      // Verify assignment
+      const verification = await this.verifyReferralAssignment(agent._id, user.userId);
+      if (!verification) {
+        console.error('❌ [DEBUG] Assignment verification failed!');
+        // Log this for admin review
+        await this.models.SystemLog?.create({
+          type: 'REFERRAL_VERIFICATION_FAILED',
+          agentId: agent._id,
+          userId: user.userId,
+          details: { user: user._id, agent: agent._id },
+          timestamp: new Date()
+        });
       }
 
       // Test query to verify it appears in dashboard
@@ -557,13 +596,12 @@ class ManualAgentSystem {
           referredAt: new Date()
         },
         agent: {
-          totalReferrals: agent.totalReferrals,
-          activeReferrals: agent.activeReferrals
+          totalReferrals: updatedAgent.totalReferrals,
+          activeReferrals: updatedAgent.activeReferrals
         },
         debug: {
-          previousReferrals,
-          newTotal: agent.totalReferrals,
-          databaseCount: testReferrals
+          databaseCount: testReferrals,
+          verification: verification ? 'passed' : 'failed'
         }
       });
 
@@ -587,7 +625,28 @@ class ManualAgentSystem {
     }
   }
 
-  // Search users for manual assignment - FIXED VERSION
+  // Verify referral assignment
+  async verifyReferralAssignment(agentId, userId) {
+    try {
+      const user = await this.models.User.findOne({ userId });
+      if (!user || user.agentId?.toString() !== agentId.toString()) {
+        console.error(`❌ Verification failed: ${userId} not assigned to ${agentId}`);
+        return false;
+      }
+      
+      const referral = await this.models.Referral.findOne({ 
+        userId, 
+        agentId 
+      });
+      
+      return !!referral;
+    } catch (error) {
+      console.error('Verification error:', error);
+      return false;
+    }
+  }
+
+  // Search users for manual assignment
   async handleSearchUsers(socket, data) {
     try {
       if (!socket.agentId) {
@@ -624,10 +683,6 @@ class ManualAgentSystem {
       searchConditions.push({ telegramUsername: new RegExp(cleanQuery, 'i') });
       searchConditions.push({ userName: new RegExp(cleanQuery, 'i') });
       
-      const searchQuery = {
-        $or: searchConditions
-      };
-
       // Only include users without agents OR users with other agents (not current agent)
       const finalQuery = {
         $and: [
@@ -678,7 +733,7 @@ class ManualAgentSystem {
     }
   }
 
-  // Bulk manual referral assignment
+  // Bulk manual referral assignment - FIXED WITH ATOMIC UPDATES
   async handleBulkManualReferral(socket, data) {
     try {
       if (!socket.agentId) {
@@ -751,24 +806,47 @@ class ManualAgentSystem {
             continue;
           }
 
-          // Assign user
-          user.agentId = agent._id;
-          user.agentReferredAt = new Date();
-          user.referredBy = 'bulk_manual';
-          await user.save();
+          // ATOMIC UPDATE: Assign user
+          const updatedUser = await this.models.User.findOneAndUpdate(
+            { _id: user._id },
+            {
+              $set: {
+                agentId: agent._id,
+                agentReferredAt: new Date(),
+                referredBy: 'bulk_manual'
+              }
+            },
+            { new: true, runValidators: true }
+          );
 
-          // Create referral record
-          const referral = new this.models.Referral({
-            agentId: agent._id,
-            userId: user.userId,
-            userName: user.userName,
-            telegramUsername: user.telegramUsername,
-            referralMethod: 'bulk_manual',
-            status: 'active',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
-          await referral.save();
+          if (!updatedUser) {
+            throw new Error('Failed to update user');
+          }
+
+          // UPSERT: Create or update referral record
+          await this.models.Referral.findOneAndUpdate(
+            { 
+              userId: user.userId,
+              agentId: agent._id 
+            },
+            {
+              $set: {
+                userName: user.userName,
+                telegramUsername: user.telegramUsername,
+                referralMethod: 'bulk_manual',
+                status: 'active',
+                updatedAt: new Date()
+              },
+              $setOnInsert: {
+                createdAt: new Date()
+              }
+            },
+            {
+              upsert: true,
+              new: true,
+              runValidators: true
+            }
+          );
 
           results.success++;
           results.details.push({
@@ -791,18 +869,25 @@ class ManualAgentSystem {
         }
       }
 
-      // Update agent stats
+      // ATOMIC UPDATE: Update agent stats
       if (results.success > 0) {
-        agent.totalReferrals = (agent.totalReferrals || 0) + results.success;
-        agent.updatedAt = new Date();
-        await agent.save();
+        const agentUpdate = {
+          $inc: { totalReferrals: results.success },
+          $set: { updatedAt: new Date() }
+        };
+
+        await this.models.Agent.findOneAndUpdate(
+          { _id: agent._id },
+          agentUpdate,
+          { new: true }
+        );
       }
 
       socket.emit('agent:bulkManualReferralResult', {
         success: true,
         summary: results,
         agentStats: {
-          totalReferrals: agent.totalReferrals,
+          totalReferrals: agent.totalReferrals + results.success,
           activeReferrals: agent.activeReferrals
         }
       });
@@ -1615,6 +1700,111 @@ class ManualAgentSystem {
     }
   }
 
+  // Clean up stale referral records
+  async cleanupStaleReferrals() {
+    try {
+      console.log('🧹 Cleaning up stale referral records...');
+      
+      // Find users where agentId exists but referral record doesn't
+      const usersWithMissingReferrals = await this.models.User.aggregate([
+        {
+          $match: {
+            agentId: { $exists: true, $ne: null }
+          }
+        },
+        {
+          $lookup: {
+            from: 'referrals',
+            localField: 'userId',
+            foreignField: 'userId',
+            as: 'referralRecord'
+          }
+        },
+        {
+          $match: {
+            referralRecord: { $size: 0 }
+          }
+        },
+        {
+          $project: {
+            userId: 1,
+            userName: 1,
+            agentId: 1,
+            agentReferredAt: 1
+          }
+        }
+      ]);
+
+      if (usersWithMissingReferrals.length > 0) {
+        console.log(`🔧 Found ${usersWithMissingReferrals.length} users with missing referral records`);
+        
+        for (const user of usersWithMissingReferrals) {
+          await this.models.Referral.findOneAndUpdate(
+            { 
+              userId: user.userId,
+              agentId: user.agentId 
+            },
+            {
+              $set: {
+                userName: user.userName || 'Unknown',
+                telegramUsername: user.telegramUsername || '',
+                referralMethod: 'cleanup_auto',
+                status: 'active',
+                updatedAt: new Date()
+              },
+              $setOnInsert: {
+                createdAt: user.agentReferredAt || new Date()
+              }
+            },
+            {
+              upsert: true,
+              new: true,
+              runValidators: true
+            }
+          );
+        }
+        
+        console.log(`✅ Created ${usersWithMissingReferrals.length} missing referral records`);
+      }
+      
+      // Clean up duplicate referral records
+      const duplicates = await this.models.Referral.aggregate([
+        {
+          $group: {
+            _id: "$userId",
+            count: { $sum: 1 },
+            docs: { $push: "$_id" }
+          }
+        },
+        {
+          $match: {
+            count: { $gt: 1 }
+          }
+        }
+      ]);
+
+      for (const dup of duplicates) {
+        // Keep the most recent, delete others
+        const recentId = await this.models.Referral.find({ userId: dup._id })
+          .sort({ updatedAt: -1 })
+          .limit(1)
+          .select('_id');
+        
+        if (recentId.length > 0) {
+          const idsToDelete = dup.docs.filter(id => !id.equals(recentId[0]._id));
+          if (idsToDelete.length > 0) {
+            await this.models.Referral.deleteMany({ _id: { $in: idsToDelete } });
+            console.log(`🧹 Removed ${idsToDelete.length} duplicate referral records for ${dup._id}`);
+          }
+        }
+      }
+      
+      console.log('✅ Stale referral cleanup completed');
+    } catch (error) {
+      console.error('Stale referral cleanup error:', error);
+    }
+  }
+
   // Get total agent earnings (for display in admin panel)
   async getTotalAgentEarnings() {
     try {
@@ -1643,14 +1833,17 @@ class ManualAgentSystem {
         return;
       }
 
-      if (isOnline) {
-        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
-      } else {
-        agent.activeReferrals = Math.max(0, (agent.activeReferrals || 0) - 1);
-      }
-      
-      agent.updatedAt = new Date();
-      await agent.save();
+      // Atomic update for active referrals
+      const update = {
+        $inc: { activeReferrals: isOnline ? 1 : -1 },
+        $set: { updatedAt: new Date() }
+      };
+
+      await this.models.Agent.findOneAndUpdate(
+        { _id: agent._id },
+        update,
+        { new: true }
+      );
     } catch (error) {
       console.error('Update agent active referrals error:', error);
     }
@@ -1842,6 +2035,27 @@ class ManualAgentSystem {
     } catch (error) {
       console.error('Test referral assignment error:', error);
       socket.emit('agent:error', 'Test failed: ' + error.message);
+    }
+  }
+
+  // Debug referral assignment
+  async handleDebugReferral(socket, data) {
+    try {
+      const { userId } = data;
+      console.log('🔍 DEBUG REFERRAL PROCESS:', {
+        userId,
+        currentAgentId: (await this.models.User.findOne({ userId }))?.agentId,
+        referralExists: await this.models.Referral.findOne({ userId }),
+        searchResult: await this.findUserByIdentifier(userId)
+      });
+
+      socket.emit('agent:debugResult', {
+        userId,
+        user: await this.models.User.findOne({ userId }),
+        referral: await this.models.Referral.findOne({ userId })
+      });
+    } catch (error) {
+      console.error('Debug error:', error);
     }
   }
 
@@ -2163,31 +2377,64 @@ class ManualAgentSystem {
         });
       }
 
-      // Assign user to agent
-      user.agentId = agent._id;
-      user.agentReferredAt = new Date();
-      user.referredBy = 'admin_assigned';
-      await user.save();
+      // ATOMIC UPDATE: Assign user to agent
+      const updatedUser = await this.models.User.findOneAndUpdate(
+        { _id: user._id },
+        {
+          $set: {
+            agentId: agent._id,
+            agentReferredAt: new Date(),
+            referredBy: 'admin_assigned'
+          }
+        },
+        { new: true, runValidators: true }
+      );
 
-      // Create referral record
-      const referral = new this.models.Referral({
-        agentId: agent._id,
-        userId: user.userId,
-        userName: user.userName,
-        telegramUsername: user.telegramUsername,
-        referralMethod: 'admin_assigned',
-        status: 'active',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-      await referral.save();
-
-      // Update agent referral counts
-      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
-      if (user.isOnline) {
-        agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      if (!updatedUser) {
+        socket.emit('agent:error', 'Failed to update user record');
+        return;
       }
-      await agent.save();
+
+      // UPSERT: Create or update referral record
+      await this.models.Referral.findOneAndUpdate(
+        { 
+          userId: user.userId,
+          agentId: agent._id 
+        },
+        {
+          $set: {
+            userName: user.userName,
+            telegramUsername: user.telegramUsername,
+            referralMethod: 'admin_assigned',
+            status: 'active',
+            updatedAt: new Date()
+          },
+          $setOnInsert: {
+            createdAt: new Date()
+          }
+        },
+        {
+          upsert: true,
+          new: true,
+          runValidators: true
+        }
+      );
+
+      // ATOMIC UPDATE: Update agent referral counts
+      const agentUpdate = {
+        $inc: { totalReferrals: 1 },
+        $set: { updatedAt: new Date() }
+      };
+
+      if (user.isOnline) {
+        agentUpdate.$inc.activeReferrals = 1;
+      }
+
+      await this.models.Agent.findOneAndUpdate(
+        { _id: agent._id },
+        agentUpdate,
+        { new: true }
+      );
 
       socket.emit('agent:manualAssignmentSuccess', {
         success: true,
