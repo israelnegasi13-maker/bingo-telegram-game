@@ -481,173 +481,181 @@ class ManualAgentSystem {
     }
   }
 
-  // Manual referral assignment by agent - COMPLETELY FIXED VERSION
+  // Manual referral assignment by agent - ULTRA-FIXED VERSION
   async handleManualReferralAssignmentByAgent(socket, data) {
     try {
+      console.log('🎯 [MANUAL REFERRAL] Starting manual referral assignment...');
+      
       if (!socket.agentId) {
-        socket.emit('agent:error', 'Not authenticated');
-        return;
+        console.log('❌ [MANUAL REFERRAL] Socket not authenticated');
+        return socket.emit('agent:error', 'Not authenticated');
       }
 
       const { userIdentifier } = data;
-      if (!userIdentifier) {
-        socket.emit('agent:error', 'Player identifier is required');
-        return;
+      if (!userIdentifier || userIdentifier.trim() === '') {
+        console.log('❌ [MANUAL REFERRAL] No user identifier provided');
+        return socket.emit('agent:error', 'Player identifier is required');
       }
 
       const agent = await this.models.Agent.findById(socket.agentId);
       if (!agent) {
-        socket.emit('agent:error', 'Agent not found');
-        return;
+        console.log(`❌ [MANUAL REFERRAL] Agent not found: ${socket.agentId}`);
+        return socket.emit('agent:error', 'Agent not found');
       }
 
       // Clean the identifier
-      const cleanIdentifier = userIdentifier.replace('@', '').trim().toLowerCase();
+      const cleanIdentifier = userIdentifier.replace('@', '').trim();
+      console.log(`🔍 [MANUAL REFERRAL] Agent ${agent.username} searching for: "${cleanIdentifier}"`);
       
-      console.log(`🔍 [MANUAL REFERRAL] Agent ${agent.username} searching for player: "${cleanIdentifier}"`);
-      
-      // Find user by various methods
-      let user = await this.findUserByIdentifier(cleanIdentifier);
+      // Find user using the improved method
+      let user = await this.models.User.findOne({
+        $or: [
+          { userId: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+          { telegramUsername: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+          { userName: { $regex: new RegExp('^' + cleanIdentifier + '$', 'i') } },
+          // Try without case sensitivity
+          { userId: { $regex: cleanIdentifier, $options: 'i' } },
+          { telegramUsername: { $regex: cleanIdentifier, $options: 'i' } },
+          { userName: { $regex: cleanIdentifier, $options: 'i' } }
+        ]
+      });
 
       if (!user) {
-        socket.emit('agent:error', `Player not found: "${userIdentifier}". Make sure the player has played at least once in the game.`);
+        console.log(`❌ [MANUAL REFERRAL] User not found for: "${cleanIdentifier}"`);
         
-        // Provide suggestions
+        // Show suggestions
         const similarUsers = await this.models.User.find({
           $or: [
-            { userName: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } },
-            { userId: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } },
-            { telegramUsername: { $regex: cleanIdentifier.substring(0, 3), $options: 'i' } }
+            { userName: { $regex: cleanIdentifier.substring(0, Math.min(3, cleanIdentifier.length)), $options: 'i' } },
+            { userId: { $regex: cleanIdentifier.substring(0, Math.min(3, cleanIdentifier.length)), $options: 'i' } },
+            { telegramUsername: { $regex: cleanIdentifier.substring(0, Math.min(3, cleanIdentifier.length)), $options: 'i' } }
           ]
         }).limit(5).select('userId userName telegramUsername');
         
+        let suggestionsMsg = `Player not found: "${userIdentifier}". Make sure the player has played at least once.\n`;
+        
         if (similarUsers.length > 0) {
-          const suggestions = similarUsers.map(u => {
-            const username = u.telegramUsername ? `@${u.telegramUsername}` : (u.userName || 'No Name');
-            return `• ${username} (${u.userId})`;
-          }).join('\n');
-          socket.emit('agent:suggestions', {
-            message: `No exact match found. Did you mean one of these?\n${suggestions}`,
-            suggestions: similarUsers
+          suggestionsMsg += "\nDid you mean:\n";
+          similarUsers.forEach(u => {
+            suggestionsMsg += `• ${u.userName || 'No Name'} (${u.userId}) ${u.telegramUsername ? '@' + u.telegramUsername : ''}\n`;
           });
         }
         
-        return;
+        return socket.emit('agent:error', suggestionsMsg);
       }
 
-      console.log(`✅ [MANUAL REFERRAL] Player found: ${user.userId} (${user.userName || 'No Name'})`);
+      console.log(`✅ [MANUAL REFERRAL] Found user: ${user.userId} (${user.userName || 'No Name'})`);
 
-      // Check if user already has an agent IN USER COLLECTION
+      // CRITICAL CHECK: Verify if user already has THIS agent
+      if (user.agentId && user.agentId.toString() === agent._id.toString()) {
+        console.log(`ℹ️ [MANUAL REFERRAL] User already assigned to this agent`);
+        return socket.emit('agent:error', 
+          `"${user.userName || user.userId}" is already your referral.`
+        );
+      }
+
+      // Check if user has ANY agent
       if (user.agentId) {
-        if (user.agentId.toString() === agent._id.toString()) {
-          socket.emit('agent:error', `"${user.userName || user.userId}" is already your referral.`);
-          return;
-        }
-        
         const currentAgent = await this.models.Agent.findById(user.agentId);
-        if (currentAgent) {
-          socket.emit('agent:error', 
-            `"${user.userName || user.userId}" is already assigned to agent: ${currentAgent.name || currentAgent.username}`
-          );
-        } else {
-          socket.emit('agent:error', `"${user.userName || user.userId}" is already assigned to another agent.`);
-        }
-        return;
+        console.log(`⚠️ [MANUAL REFERRAL] User already assigned to another agent: ${currentAgent?.username || 'Unknown'}`);
+        return socket.emit('agent:error', 
+          `"${user.userName || user.userId}" is already assigned to agent: ${currentAgent?.name || currentAgent?.username || 'Another agent'}`
+        );
       }
 
-      // DOUBLE CHECK in Referral collection too
-      const existingReferral = await this.models.Referral.findOne({
-        userId: user.userId,
-        agentId: { $exists: true, $ne: null }
-      });
+      // DOUBLE CHECK in Referral collection
+      const existingReferral = await this.models.Referral.findOne({ userId: user.userId });
+      if (existingReferral && existingReferral.agentId.toString() === agent._id.toString()) {
+        console.log(`ℹ️ [MANUAL REFERRAL] Referral record already exists for this agent`);
+        return socket.emit('agent:error', 
+          `"${user.userName || user.userId}" already has a referral record with you.`
+        );
+      }
       
       if (existingReferral) {
-        if (existingReferral.agentId.toString() === agent._id.toString()) {
-          socket.emit('agent:error', `"${user.userName || user.userId}" already has a referral record with you.`);
-          return;
-        }
-        
         const referralAgent = await this.models.Agent.findById(existingReferral.agentId);
-        if (referralAgent) {
-          socket.emit('agent:error', 
-            `"${user.userName || user.userId}" has an existing referral record with agent: ${referralAgent.name || referralAgent.username}`
-          );
-        } else {
-          socket.emit('agent:error', `"${user.userName || user.userId}" has an existing referral record with another agent.`);
-        }
-        return;
+        console.log(`⚠️ [MANUAL REFERRAL] Referral record exists with another agent`);
+        return socket.emit('agent:error', 
+          `"${user.userName || user.userId}" has existing referral record with: ${referralAgent?.name || referralAgent?.username || 'Another agent'}`
+        );
       }
 
-      // ✅ STEP 1: Update User collection - THIS IS WHAT THE DASHBOARD READS FROM
-      user.agentId = agent._id;
-      user.agentReferredAt = new Date();
-      user.referredBy = 'manual';
+      // ✅ STEP 1: Update User collection with agentId (THIS IS WHAT DASHBOARD READS)
+      console.log(`📝 [MANUAL REFERRAL] Updating User collection...`);
       
-      try {
-        await user.save();
-        console.log(`✅ [MANUAL REFERRAL] User collection updated: ${user.userId} -> agent ${agent.username}`);
-        
-        // VERIFY the save
-        const verifiedUser = await this.models.User.findOne({ userId: user.userId });
-        if (!verifiedUser || verifiedUser.agentId.toString() !== agent._id.toString()) {
-          throw new Error('User agentId not saved properly');
+      const updateResult = await this.models.User.updateOne(
+        { _id: user._id },
+        { 
+          $set: { 
+            agentId: agent._id,
+            agentReferredAt: new Date(),
+            referredBy: 'manual_agent',
+            updatedAt: new Date()
+          }
         }
-        console.log(`✅ [MANUAL REFERRAL] Verification passed for ${user.userId}`);
-      } catch (saveError) {
-        console.error('❌ [MANUAL REFERRAL] Error saving user:', saveError);
-        socket.emit('agent:error', 'Failed to save user assignment: ' + saveError.message);
-        return;
+      );
+
+      if (updateResult.modifiedCount === 0) {
+        console.log(`❌ [MANUAL REFERRAL] Failed to update User collection`);
+        return socket.emit('agent:error', 'Failed to assign user to agent');
       }
 
-      // ✅ STEP 2: Create referral record in Referral collection
+      console.log(`✅ [MANUAL REFERRAL] User collection updated successfully`);
+
+      // ✅ STEP 2: Create referral record
+      console.log(`📝 [MANUAL REFERRAL] Creating referral record...`);
+      
       const referral = new this.models.Referral({
         agentId: agent._id,
         userId: user.userId,
-        userName: user.userName,
-        telegramUsername: user.telegramUsername,
-        referralMethod: 'manual',
+        userName: user.userName || 'No Name',
+        telegramUsername: user.telegramUsername || '',
+        referralMethod: 'manual_agent',
         status: 'active',
         createdAt: new Date(),
         updatedAt: new Date()
       });
-      
-      try {
-        await referral.save();
-        console.log(`✅ [MANUAL REFERRAL] Referral record created for ${user.userId}`);
-      } catch (referralError) {
-        console.error('❌ [MANUAL REFERRAL] Error saving referral:', referralError);
-        // If referral record fails, we should still proceed since User collection was updated
-      }
 
-      // ✅ STEP 3: Update agent's referral count
-      const previousReferrals = agent.totalReferrals || 0;
+      await referral.save();
+      console.log(`✅ [MANUAL REFERRAL] Referral record created`);
+
+      // ✅ STEP 3: Update agent stats based on ACTUAL count
+      console.log(`📝 [MANUAL REFERRAL] Updating agent stats...`);
       
-      // Count actual referrals from User collection to ensure accuracy
       const actualReferralCount = await this.models.User.countDocuments({ agentId: agent._id });
       agent.totalReferrals = actualReferralCount;
       
+      // Update active referrals if user is online
       if (user.isOnline) {
         agent.activeReferrals = (agent.activeReferrals || 0) + 1;
       }
-      agent.updatedAt = new Date();
       
-      try {
-        await agent.save();
-        console.log(`✅ [MANUAL REFERRAL] Agent updated: totalReferrals = ${agent.totalReferrals}`);
-      } catch (agentError) {
-        console.error('❌ [MANUAL REFERRAL] Error saving agent:', agentError);
+      agent.updatedAt = new Date();
+      await agent.save();
+      
+      console.log(`✅ [MANUAL REFERRAL] Agent updated. Total referrals: ${agent.totalReferrals}`);
+
+      // ✅ STEP 4: Verify the assignment
+      console.log(`🔍 [MANUAL REFERRAL] Verifying assignment...`);
+      
+      const verifiedUser = await this.models.User.findOne({ userId: user.userId });
+      const verifiedReferral = await this.models.Referral.findOne({ userId: user.userId });
+      
+      if (!verifiedUser || verifiedUser.agentId.toString() !== agent._id.toString()) {
+        console.log(`❌ [MANUAL REFERRAL] Verification failed!`);
+        // Try emergency fix
+        await this.emergencyFixReferralSync(agent._id);
+      } else {
+        console.log(`✅ [MANUAL REFERRAL] Verification successful!`);
       }
 
-      // Test query to verify it appears in dashboard
-      const testReferrals = await this.models.User.find({ agentId: agent._id }).countDocuments();
-      console.log(`✅ [MANUAL REFERRAL] Database check: ${testReferrals} referrals in database for agent ${agent.username}`);
-
+      // Send success response
       socket.emit('agent:manualReferralSuccess', {
         success: true,
-        message: `✅ Successfully added ${user.userName || user.userId} as your referral!`,
+        message: `✅ Successfully added "${user.userName || user.userId}" as your referral!`,
         user: {
           userId: user.userId,
-          userName: user.userName,
+          userName: user.userName || 'No Name',
           telegramUsername: user.telegramUsername || '',
           balance: user.balance || 0,
           totalWins: user.totalWins || 0,
@@ -663,10 +671,9 @@ class ManualAgentSystem {
           activeReferrals: agent.activeReferrals
         },
         debug: {
-          previousReferrals,
-          newTotal: agent.totalReferrals,
-          databaseCount: testReferrals,
-          userAgentIdVerified: true
+          userAgentId: verifiedUser?.agentId?.toString(),
+          referralAgentId: verifiedReferral?.agentId?.toString(),
+          databaseCount: actualReferralCount
         }
       });
 
@@ -687,6 +694,100 @@ class ManualAgentSystem {
     } catch (error) {
       console.error('Manual referral error:', error);
       socket.emit('agent:error', 'Failed to add referral: ' + (error.message || 'Internal error'));
+    }
+  }
+
+  // DEBUG METHOD: Diagnose referral issues
+  async debugReferralIssue(socket, data) {
+    try {
+      const { userIdentifier } = data;
+      console.log(`🔍 [DEBUG REFERRAL] Starting debug for: "${userIdentifier}"`);
+      
+      // 1. Find the user
+      const user = await this.findUserByIdentifier(userIdentifier);
+      
+      if (!user) {
+        console.log(`❌ [DEBUG] User not found for: "${userIdentifier}"`);
+        
+        // Show all users in database for debugging
+        const allUsers = await this.models.User.find({})
+          .select('userId userName telegramUsername agentId totalWins totalBingos joinedAt')
+          .limit(20)
+          .sort({ joinedAt: -1 });
+        
+        console.log('📋 [DEBUG] Recent users in database:');
+        allUsers.forEach(u => {
+          console.log(`   • ${u.userId} - ${u.userName || 'No Name'} - ${u.telegramUsername ? '@' + u.telegramUsername : 'No Telegram'} - Agent: ${u.agentId || 'None'} - Wins: ${u.totalWins || 0}`);
+        });
+        
+        return socket.emit('agent:debugResult', {
+          error: 'User not found',
+          recentUsers: allUsers.map(u => ({
+            userId: u.userId,
+            userName: u.userName,
+            telegramUsername: u.telegramUsername,
+            hasAgent: !!u.agentId
+          }))
+        });
+      }
+      
+      console.log(`✅ [DEBUG] User found: ${user.userId} (${user.userName || 'No Name'})`);
+      
+      // 2. Check if user has agent
+      if (user.agentId) {
+        const currentAgent = await this.models.Agent.findById(user.agentId);
+        console.log(`⚠️ [DEBUG] User already has agent: ${currentAgent?.name || currentAgent?.username || 'Unknown'}`);
+      }
+      
+      // 3. Check database consistency
+      const userWithAgent = await this.models.User.findOne({ userId: user.userId }).select('agentId agentReferredAt');
+      const referralRecord = await this.models.Referral.findOne({ userId: user.userId });
+      
+      // 4. Test assignment logic
+      const testAgentId = socket.agentId;
+      const testData = {
+        userId: user.userId,
+        userExists: true,
+        currentAgentId: user.agentId,
+        databaseAgentId: userWithAgent?.agentId,
+        referralRecordExists: !!referralRecord,
+        userAgentIdField: user.agentId ? user.agentId.toString() : 'null',
+        userAgentIdType: typeof user.agentId,
+        userObjectId: user._id.toString()
+      };
+      
+      console.log('📊 [DEBUG] Test Results:', testData);
+      
+      socket.emit('agent:debugResult', {
+        success: true,
+        user: {
+          userId: user.userId,
+          userName: user.userName,
+          telegramUsername: user.telegramUsername,
+          currentAgentId: user.agentId,
+          hasAgent: !!user.agentId,
+          totalWins: user.totalWins || 0,
+          totalBingos: user.totalBingos || 0,
+          isOnline: user.isOnline || false,
+          joinedAt: user.joinedAt,
+          lastSeen: user.lastSeen
+        },
+        databaseInfo: {
+          userCollectionAgentId: userWithAgent?.agentId,
+          userCollectionAgentReferredAt: userWithAgent?.agentReferredAt,
+          referralRecordExists: !!referralRecord,
+          referralRecordAgentId: referralRecord?.agentId
+        },
+        testData: testData,
+        message: 'Debug completed'
+      });
+      
+    } catch (error) {
+      console.error('Debug error:', error);
+      socket.emit('agent:debugResult', {
+        error: error.message,
+        stack: error.stack
+      });
     }
   }
 
