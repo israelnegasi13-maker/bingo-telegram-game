@@ -1276,6 +1276,26 @@
             animation: spin 0.8s linear infinite;
             margin-left: 8px;
         }
+
+        /* Debug Info */
+        .debug-info {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-top: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            color: var(--info);
+        }
+
+        .debug-info pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -1443,6 +1463,9 @@
                                 <button class="btn btn-sm btn-outline" onclick="showBulkAddModal()" style="flex: 1; min-width: 120px;">
                                     <i class="fas fa-users"></i> Bulk Add
                                 </button>
+                                <button class="btn btn-sm btn-warning" onclick="debugCurrentPlayer()" style="flex: 1; min-width: 120px;">
+                                    <i class="fas fa-bug"></i> Debug Player
+                                </button>
                             </div>
                             
                             <!-- How it Works -->
@@ -1468,6 +1491,13 @@
                                         <div class="step-title">Earn Commissions</div>
                                         <div class="step-desc">Earn 40% from Bingo wins and 10% from Keno wins of your referrals</div>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Debug Section -->
+                            <div id="debugSection" style="display: none; margin-top: 20px;">
+                                <div class="debug-info">
+                                    <pre id="debugOutput">Debug information will appear here...</pre>
                                 </div>
                             </div>
                         </div>
@@ -1768,6 +1798,33 @@ display_name"></textarea>
         </div>
     </div>
 
+    <!-- Debug Modal -->
+    <div class="modal-overlay" id="debugModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Debug Player Issue</h3>
+                <button class="modal-close" onclick="closeModal('debugModal')">&times;</button>
+            </div>
+            
+            <div class="form-group">
+                <label>Player Identifier</label>
+                <input type="text" id="debugUserInput" class="form-control" placeholder="Enter username, user ID, or display name to debug..." value="">
+                <div class="form-help">Enter the exact player information you're trying to add</div>
+            </div>
+            
+            <button class="btn btn-warning" onclick="debugReferralIssue()">
+                <i class="fas fa-bug"></i> Run Debug
+            </button>
+            
+            <div id="debugResults" style="margin-top: 20px;">
+                <div class="empty-state" style="padding: 20px;">
+                    <i class="fas fa-bug"></i>
+                    <div>Enter a player identifier and click "Run Debug"</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification Container -->
     <div class="notification-container" id="notificationContainer"></div>
 
@@ -1818,6 +1875,7 @@ display_name"></textarea>
                 socket.on('agent:searchUsersResult', handleSearchResults);
                 socket.on('agent:bulkManualReferralResult', handleBulkReferralResult);
                 socket.on('agent:reportData', handleReportData);
+                socket.on('agent:debugResult', handleDebugResult);
                 
             } catch (error) {
                 console.error('Socket initialization error:', error);
@@ -2037,7 +2095,6 @@ display_name"></textarea>
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
             
             socket.emit('agent:manualReferralAssignmentByAgent', { userIdentifier: input });
-            document.getElementById('manualUserInput').value = '';
         }
 
         function handleManualReferralSuccess(data) {
@@ -2047,6 +2104,15 @@ display_name"></textarea>
             
             showNotification(data.message, 'success');
             loadDashboard();
+            
+            // Clear input field
+            document.getElementById('manualUserInput').value = '';
+            
+            // Show debug info if available
+            if (data.debug) {
+                document.getElementById('debugSection').style.display = 'block';
+                document.getElementById('debugOutput').textContent = JSON.stringify(data.debug, null, 2);
+            }
         }
 
         function handleNewCommission(data) {
@@ -2056,6 +2122,96 @@ display_name"></textarea>
 
         function handleAgentError(message) {
             showNotification(message, 'error');
+        }
+
+        // Debug Functions
+        function debugCurrentPlayer() {
+            const input = document.getElementById('manualUserInput').value;
+            if (!input.trim()) {
+                showNotification('Please enter a player identifier first', 'error');
+                return;
+            }
+            
+            document.getElementById('debugUserInput').value = input;
+            showDebugModal();
+        }
+
+        function debugReferralIssue() {
+            const identifier = document.getElementById('debugUserInput').value;
+            if (!identifier.trim()) {
+                showNotification('Please enter a player identifier', 'error');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                socket.emit('agent:debugReferralIssue', { userIdentifier: identifier });
+            }
+        }
+
+        function handleDebugResult(data) {
+            const debugResults = document.getElementById('debugResults');
+            
+            if (data.error) {
+                debugResults.innerHTML = `
+                    <div style="background: rgba(239,68,68,0.1); padding: 20px; border-radius: var(--radius); border: 1px solid var(--danger);">
+                        <h4 style="color: var(--danger); margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> Debug Error</h4>
+                        <p style="color: var(--gray-300);">${data.error}</p>
+                    </div>
+                `;
+            } else {
+                let html = `
+                    <div style="background: rgba(6,182,212,0.1); padding: 20px; border-radius: var(--radius); border: 1px solid var(--info);">
+                        <h4 style="color: var(--info); margin-bottom: 15px;"><i class="fas fa-check-circle"></i> Debug Results</h4>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <h5 style="color: var(--light); margin-bottom: 5px;">Player Information</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                                <div><strong>User ID:</strong> ${data.user.userId}</div>
+                                <div><strong>User Name:</strong> ${data.user.userName || 'No Name'}</div>
+                                <div><strong>Telegram:</strong> ${data.user.telegramUsername || 'None'}</div>
+                                <div><strong>Has Agent:</strong> ${data.user.hasAgent ? 'Yes' : 'No'}</div>
+                                <div><strong>Total Wins:</strong> ${data.user.totalWins}</div>
+                                <div><strong>Is Online:</strong> ${data.user.isOnline ? 'Yes' : 'No'}</div>
+                            </div>
+                        </div>
+                `;
+                
+                if (data.databaseInfo) {
+                    html += `
+                        <div style="margin-bottom: 15px;">
+                            <h5 style="color: var(--light); margin-bottom: 5px;">Database Information</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                                <div><strong>User Collection Agent ID:</strong> ${data.databaseInfo.userCollectionAgentId || 'None'}</div>
+                                <div><strong>Referral Record Exists:</strong> ${data.databaseInfo.referralRecordExists ? 'Yes' : 'No'}</div>
+                                <div><strong>Referral Agent ID:</strong> ${data.databaseInfo.referralRecordAgentId || 'None'}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (data.recentUsers && data.recentUsers.length > 0) {
+                    html += `
+                        <div>
+                            <h5 style="color: var(--light); margin-bottom: 5px;">Recent Users in Database</h5>
+                            <div style="max-height: 200px; overflow-y: auto; font-size: 11px;">
+                    `;
+                    
+                    data.recentUsers.forEach(user => {
+                        const agentStatus = user.hasAgent ? 'Has Agent' : 'No Agent';
+                        html += `
+                            <div style="padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <strong>${user.userId}</strong> - ${user.userName || 'No Name'} - ${agentStatus}
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div></div>`;
+                }
+                
+                html += `</div>`;
+                
+                debugResults.innerHTML = html;
+            }
         }
 
         // Modal Functions
@@ -2083,6 +2239,10 @@ display_name"></textarea>
 
         function showReportsModal() {
             document.getElementById('reportsModal').classList.add('active');
+        }
+
+        function showDebugModal() {
+            document.getElementById('debugModal').classList.add('active');
         }
 
         function closeModal(modalId) {
@@ -2435,6 +2595,28 @@ display_name"></textarea>
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/agent-sw.js').catch(console.error);
             }
+            
+            // Auto-focus manual input
+            document.getElementById('manualUserInput').addEventListener('focus', function() {
+                this.select();
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                // Ctrl/Cmd + R to refresh
+                if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                    e.preventDefault();
+                    refreshDashboard();
+                }
+                // Esc to close modals
+                if (e.key === 'Escape') {
+                    const modals = document.querySelectorAll('.modal-overlay.active');
+                    modals.forEach(modal => {
+                        const modalId = modal.id;
+                        closeModal(modalId);
+                    });
+                }
+            });
         });
     </script>
 </body>
