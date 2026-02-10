@@ -1632,6 +1632,8 @@ player123"></textarea>
         let currentAgent = null;
         let dashboardData = null;
         let realTimeUpdateEnabled = true;
+        let isLoggingOut = false; // Guard to prevent multiple logout attempts
+        let autoRefreshInterval = null;
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1639,6 +1641,7 @@ player123"></textarea>
             checkAutoLogin();
             setupEventListeners();
             setupRealTimeUpdates();
+            startAutoRefresh();
         });
         
         function checkAutoLogin() {
@@ -1664,12 +1667,17 @@ player123"></textarea>
             
             socket.on('disconnect', function() {
                 console.log('❌ Disconnected from server');
-                showNotification('Disconnected from server', 'error');
+                // Only show notification if we're not in the process of logging out
+                if (!isLoggingOut) {
+                    showNotification('Disconnected from server', 'error');
+                }
             });
             
             socket.on('connect_error', function(error) {
                 console.log('❌ Connection error:', error);
-                showNotification('Connection error: ' + error.message, 'error');
+                if (!isLoggingOut) {
+                    showNotification('Connection error: ' + error.message, 'error');
+                }
             });
             
             // Login success
@@ -1697,30 +1705,56 @@ player123"></textarea>
                 window.location.href = '/agent';
             });
             
-            // NEW: Logout success
-            socket.on('agent:logoutSuccess', function(data) {
-                console.log('✅ Logout successful');
-                showNotification('✅ Logged out successfully', 'success');
+            // FIXED: Logout success - prevents uncontrolled refresh
+            socket.once('agent:logoutSuccess', function(data) {
+                console.log('✅ Logout successful:', data.message);
                 
-                // Clear local data
+                // Stop auto-refresh immediately
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                
+                // Disable real-time updates
+                realTimeUpdateEnabled = false;
+                
+                // Show success notification
+                showNotification('✅ ' + data.message, 'success');
+                
+                // Clear all local data
                 localStorage.removeItem('agentToken');
                 currentAgent = null;
                 dashboardData = null;
                 
-                // Small delay before redirect
+                // Disable socket reconnection
+                socket.io.opts.reconnection = false;
+                socket.io.opts.reconnectionAttempts = 0;
+                
+                // Disconnect the socket
                 setTimeout(() => {
-                    window.location.href = '/agent';
-                }, 1000);
+                    socket.disconnect();
+                    
+                    // Redirect to login page after a short delay
+                    setTimeout(() => {
+                        window.location.replace('/agent');
+                    }, 800);
+                }, 100);
             });
             
-            // NEW: Logout error
-            socket.on('agent:logoutError', function(message) {
+            // FIXED: Logout error - re-enables logout button
+            socket.once('agent:logoutError', function(message) {
                 console.log('❌ Logout error:', message);
-                showNotification('❌ Logout failed: ' + message, 'error');
                 
-                // Re-enable logout button if error
-                document.querySelector('.logout-btn').disabled = false;
-                document.querySelector('.logout-btn').textContent = '🚪 Logout';
+                // Re-enable logout button
+                const logoutBtn = document.querySelector('.logout-btn');
+                logoutBtn.disabled = false;
+                logoutBtn.textContent = '🚪 Logout';
+                
+                // Reset logout flag
+                isLoggingOut = false;
+                
+                // Show error notification
+                showNotification('❌ Logout failed: ' + message, 'error');
             });
             
             // Dashboard data
@@ -1887,22 +1921,47 @@ player123"></textarea>
         function setupRealTimeUpdates() {
             console.log('🔧 Setting up real-time updates...');
             
-            // Enable real-time updates checkbox
-            const realTimeCheckbox = document.createElement('div');
-            realTimeCheckbox.innerHTML = `
-                <div style="margin-top: 15px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="realTimeToggle" checked onchange="toggleRealTimeUpdates(this.checked)">
-                    <label for="realTimeToggle" style="font-size: 0.9rem;">Enable Real-time Updates</label>
-                </div>`;
-            document.querySelector('.debug-panel').appendChild(realTimeCheckbox);
+            // Add real-time updates toggle to debug panel
+            const debugPanel = document.querySelector('.debug-panel');
+            if (debugPanel) {
+                const realTimeCheckbox = document.createElement('div');
+                realTimeCheckbox.innerHTML = `
+                    <div style="margin-top: 15px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="realTimeToggle" checked onchange="toggleRealTimeUpdates(this.checked)">
+                        <label for="realTimeToggle" style="font-size: 0.9rem;">Enable Real-time Updates</label>
+                    </div>`;
+                debugPanel.appendChild(realTimeCheckbox);
+            }
             
             console.log('✅ Real-time updates setup complete');
+        }
+        
+        function startAutoRefresh() {
+            // Clear any existing interval first
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            
+            // Start new auto-refresh interval
+            autoRefreshInterval = setInterval(() => {
+                if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled && !isLoggingOut) {
+                    console.log('🔄 Auto-refreshing dashboard...');
+                    loadDashboard();
+                }
+            }, 30000); // 30 seconds
+            
+            console.log('✅ Auto-refresh started (30s interval)');
         }
         
         function toggleRealTimeUpdates(enabled) {
             realTimeUpdateEnabled = enabled;
             console.log(`🔄 Real-time updates ${enabled ? 'enabled' : 'disabled'}`);
             showNotification(`Real-time updates ${enabled ? 'enabled' : 'disabled'}`, 'info');
+            
+            // Restart auto-refresh if enabling
+            if (enabled) {
+                startAutoRefresh();
+            }
         }
         
         function updateAgentInfo() {
@@ -1964,6 +2023,10 @@ player123"></textarea>
                 document.getElementById('lastLogin').textContent = 
                     formatTimeAgo(new Date(data.agent.lastLogin));
             }
+            
+            // Update available balance for withdrawal
+            document.getElementById('availableBalance').textContent = 
+                data.agent.totalEarnings.toFixed(2) + ' ETB';
             
             // Show debug panel if there are issues
             if (data.debug && data.debug.fixedMismatch) {
@@ -2988,21 +3051,48 @@ player123"></textarea>
             document.getElementById(modalId).classList.remove('show');
         }
         
+        // FIXED: Logout function with guard to prevent uncontrolled refresh
         function logout() {
-            if (confirm('Are you sure you want to logout?')) {
-                console.log('🚪 Logging out...');
-                
-                // Disable logout button to prevent multiple clicks
-                const logoutBtn = document.querySelector('.logout-btn');
-                logoutBtn.disabled = true;
-                logoutBtn.textContent = '⏳ Logging out...';
-                
-                // Emit logout event to server
-                socket.emit('agent:logout');
-                
-                // Show notification
-                showNotification('Logging out...', 'info');
+            // Prevent multiple logout attempts
+            if (isLoggingOut) {
+                console.log('⚠️ Logout already in progress');
+                return;
             }
+            
+            if (!confirm('Are you sure you want to logout?')) {
+                return;
+            }
+            
+            console.log('🚪 Logging out...');
+            isLoggingOut = true;
+            
+            // Disable logout button to prevent multiple clicks
+            const logoutBtn = document.querySelector('.logout-btn');
+            logoutBtn.disabled = true;
+            logoutBtn.textContent = '⏳ Logging out...';
+            
+            // Stop auto-refresh interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            
+            // Disable real-time updates
+            realTimeUpdateEnabled = false;
+            
+            // Disable socket reconnection during logout
+            socket.io.opts.reconnection = false;
+            socket.io.opts.reconnectionAttempts = 0;
+            
+            // Remove socket event listeners to prevent unwanted behavior
+            socket.off('agent:logoutSuccess');
+            socket.off('agent:logoutError');
+            
+            // Emit logout event to server
+            socket.emit('agent:logout');
+            
+            // Show notification
+            showNotification('Logging out...', 'info');
         }
         
         // Search as user types
@@ -3062,14 +3152,6 @@ player123"></textarea>
                 });
             }
         });
-        
-        // Auto-refresh dashboard every 30 seconds
-        setInterval(() => {
-            if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled) {
-                console.log('🔄 Auto-refreshing dashboard...');
-                loadDashboard();
-            }
-        }, 30000);
         
         console.log('✅ Dashboard initialization complete');
     </script>
