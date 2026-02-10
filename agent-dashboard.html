@@ -775,56 +775,6 @@
             color: var(--text);
         }
         
-        /* Real-time Commission Animation */
-        .commission-flash {
-            animation: flashGreen 2s ease;
-        }
-        
-        @keyframes flashGreen {
-            0% { background-color: transparent; }
-            25% { background-color: rgba(16, 185, 129, 0.3); }
-            100% { background-color: transparent; }
-        }
-        
-        .pulse {
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        
-        /* Real-time Indicator */
-        .real-time-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--success);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
-            display: none;
-        }
-        
-        .real-time-indicator.show {
-            display: flex;
-            animation: slideInUp 0.3s ease;
-        }
-        
-        @keyframes slideInUp {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        
         /* Responsive */
         @media (max-width: 1024px) {
             .dashboard-content {
@@ -863,13 +813,6 @@
                 padding: 10px;
                 font-size: 0.9rem;
             }
-            
-            .real-time-indicator {
-                bottom: 10px;
-                right: 10px;
-                left: 10px;
-                justify-content: center;
-            }
         }
         
         /* Utility Classes */
@@ -891,12 +834,6 @@
     <!-- Notifications -->
     <div class="notifications" id="notifications"></div>
     
-    <!-- Real-time Indicator -->
-    <div class="real-time-indicator" id="realtimeIndicator">
-        <span>⚡</span>
-        <span>Real-time updates active</span>
-    </div>
-    
     <!-- Main Container -->
     <div class="container">
         <!-- Header -->
@@ -915,7 +852,7 @@
             
             <!-- Stats Grid -->
             <div class="stats-grid">
-                <div class="stat-card" id="totalEarningsCard">
+                <div class="stat-card">
                     <div class="stat-label">Total Earnings</div>
                     <div class="stat-value" id="totalEarnings">0.00 ETB</div>
                     <div class="stat-change change-up" id="earningsChange">+0% today</div>
@@ -925,7 +862,7 @@
                     <div class="stat-value" id="totalReferrals">0</div>
                     <div class="stat-change" id="activeReferrals">0 online</div>
                 </div>
-                <div class="stat-card" id="todaysEarningsCard">
+                <div class="stat-card">
                     <div class="stat-label">Today's Commission</div>
                     <div class="stat-value" id="todaysEarnings">0.00 ETB</div>
                     <div class="stat-change change-up" id="commissionChange">+0% from yesterday</div>
@@ -1050,7 +987,6 @@
                     <div class="section">
                         <div class="section-title">
                             System Status
-                            <div class="section-subtitle">Real-time updates</div>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <div style="display: flex; justify-content: space-between;">
@@ -1069,10 +1005,6 @@
                                 <span>Database Status:</span>
                                 <span class="text-success">Connected</span>
                             </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Real-time Updates:</span>
-                                <span class="text-success" id="realtimeStatus">Active</span>
-                            </div>
                         </div>
                     </div>
                     
@@ -1087,15 +1019,20 @@
                                 No issues detected
                             </div>
                         </div>
-                        <button class="debug-btn" onclick="runEmergencySync()">
-                            🔧 Run Emergency Sync
-                        </button>
-                        <button class="debug-btn" onclick="testUserDatabase()" style="background: var(--secondary); margin-left: 10px;">
-                            🧪 Test Database
-                        </button>
-                        <button class="debug-btn" onclick="testCommissionTrigger()" style="background: var(--warning); margin-top: 10px;">
-                            💰 Test Commission
-                        </button>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <button class="debug-btn" onclick="runEmergencySync()">
+                                🔧 Run Emergency Sync
+                            </button>
+                            <button class="debug-btn" onclick="testUserDatabase()" style="background: var(--secondary);">
+                                🧪 Test Database
+                            </button>
+                            <button class="debug-btn" onclick="testCommission()" style="background: var(--warning);">
+                                💰 Test Commission
+                            </button>
+                            <button class="debug-btn" onclick="checkCommissionStatus()" style="background: var(--success);">
+                                📊 Commission Status
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1430,7 +1367,6 @@ player123"></textarea>
                     <div class="section">
                         <div class="section-title">
                             Commission Summary
-                            <div class="section-subtitle">Real-time updates</div>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <div>
@@ -1461,31 +1397,6 @@ player123"></textarea>
                             <div class="loader">
                                 <div class="spinner"></div>
                                 <div>Loading breakdown...</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Real-time Stats -->
-                    <div class="section">
-                        <div class="section-title">
-                            ⚡ Real-time Stats
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Commissions Today:</span>
-                                <span id="commissionsToday">0</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Last Commission:</span>
-                                <span id="lastCommissionTime">Never</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Highest Commission:</span>
-                                <span id="highestCommission">0.00 ETB</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span>Active Players:</span>
-                                <span id="activePlayersCount">0</span>
                             </div>
                         </div>
                     </div>
@@ -1640,6 +1551,69 @@ player123"></textarea>
         </div>
     </div>
     
+    <!-- Test Commission Modal -->
+    <div class="modal" id="testCommissionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">💰 Test Commission</div>
+                <button class="close-btn" onclick="closeModal('testCommissionModal')">×</button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Player User ID</label>
+                <input type="text" class="form-input" id="testUserId" 
+                       placeholder="Enter user ID (must be your referral)">
+                <div class="form-hint">User must be assigned to you as a referral</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Game Type</label>
+                <select class="form-input" id="testGameType">
+                    <option value="BINGO">🎱 Bingo (40% commission)</option>
+                    <option value="KENO">🎰 Keno (10% commission)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Winning Amount (ETB)</label>
+                <input type="number" class="form-input" id="testAmount" 
+                       placeholder="Enter winning amount" min="0.25" step="0.01">
+                <div class="form-hint">Minimum: 0.25 ETB for Bingo (gives 0.10 ETB commission at 40%)</div>
+            </div>
+            <button class="submit-btn" onclick="submitTestCommission()">
+                🧪 Test Commission
+            </button>
+            <div id="testCommissionResult" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+    
+    <!-- Commission Status Modal -->
+    <div class="modal" id="commissionStatusModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <div class="modal-title">📊 Commission Status</div>
+                <button class="close-btn" onclick="closeModal('commissionStatusModal')">×</button>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="text" class="form-input" id="searchUserId" 
+                           placeholder="Filter by User ID" style="flex: 1;">
+                    <select class="form-input" id="searchGameType" style="width: 150px;">
+                        <option value="">All Games</option>
+                        <option value="BINGO">Bingo</option>
+                        <option value="KENO">Keno</option>
+                    </select>
+                    <button class="refresh-btn" onclick="searchCommissionStatus()" style="white-space: nowrap;">
+                        🔍 Search
+                    </button>
+                </div>
+            </div>
+            <div id="commissionStatusContent" style="max-height: 400px; overflow-y: auto;">
+                <div class="loader">
+                    <div class="spinner"></div>
+                    <div>Loading commission status...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Debug Info Modal -->
     <div class="modal" id="debugModal">
         <div class="modal-content">
@@ -1652,76 +1626,65 @@ player123"></textarea>
             </div>
         </div>
     </div>
-    
-    <!-- Test Commission Modal -->
-    <div class="modal" id="testCommissionModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">💰 Test Commission</div>
-                <button class="close-btn" onclick="closeModal('testCommissionModal')">×</button>
-            </div>
-            <div class="form-group">
-                <label class="form-label">User ID</label>
-                <input type="text" class="form-input" id="testUserId" 
-                       placeholder="Enter User ID (tg_123456)">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Game Type</label>
-                <select class="form-input" id="testGameType">
-                    <option value="BINGO">Bingo (40%)</option>
-                    <option value="KENO">Keno (10%)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Winning Amount (ETB)</label>
-                <input type="number" class="form-input" id="testWinningAmount" 
-                       placeholder="Enter amount" min="1" max="10000" value="100">
-            </div>
-            <button class="submit-btn" onclick="triggerTestCommission()">
-                🧪 Trigger Test Commission
-            </button>
-            <div id="testCommissionResult" style="margin-top: 20px;"></div>
-        </div>
-    </div>
 
     <script>
         const socket = io();
         let currentAgent = null;
         let dashboardData = null;
-        let currentTab = 'dashboard';
-        let realtimeUpdates = true;
-        let lastCommissionTime = null;
-        let commissionCountToday = 0;
+        let realTimeUpdateEnabled = true;
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔧 Dashboard initializing...');
             checkAutoLogin();
             setupEventListeners();
-            startRealtimeIndicator();
+            setupRealTimeUpdates();
         });
         
         function checkAutoLogin() {
             const savedToken = localStorage.getItem('agentToken');
             if (savedToken) {
+                console.log('🔑 Attempting auto-login with token...');
                 socket.emit('agent:verifyToken', { token: savedToken });
             } else {
                 // Redirect to login if no token
+                console.log('❌ No saved token, redirecting to login...');
                 window.location.href = '/agent';
             }
         }
         
         function setupEventListeners() {
+            console.log('🔧 Setting up event listeners...');
+            
+            // Connection status
+            socket.on('connect', function() {
+                console.log('✅ Connected to server');
+                showNotification('Connected to server', 'success');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('❌ Disconnected from server');
+                showNotification('Disconnected from server', 'error');
+            });
+            
+            socket.on('connect_error', function(error) {
+                console.log('❌ Connection error:', error);
+                showNotification('Connection error: ' + error.message, 'error');
+            });
+            
             // Login success
             socket.on('agent:loginSuccess', function(data) {
+                console.log('✅ Login successful:', data.username);
                 currentAgent = data;
                 localStorage.setItem('agentToken', data.id);
                 updateAgentInfo();
                 loadDashboard();
-                showNotification('✅ Login successful!', 'success');
+                showNotification('✅ Login successful! Welcome ' + data.name, 'success');
             });
             
             // Token verified
             socket.on('agent:tokenVerified', function(data) {
+                console.log('✅ Token verified for:', data.username);
                 currentAgent = data;
                 updateAgentInfo();
                 loadDashboard();
@@ -1729,25 +1692,28 @@ player123"></textarea>
             
             // Token invalid
             socket.on('agent:tokenInvalid', function() {
+                console.log('❌ Token invalid, redirecting to login...');
                 localStorage.removeItem('agentToken');
                 window.location.href = '/agent';
             });
             
             // Dashboard data
             socket.on('agent:dashboardData', function(data) {
+                console.log('📊 Dashboard data received');
                 dashboardData = data;
                 updateDashboard(data);
-                updateRealtimeStats(data);
             });
             
             // Dashboard refreshed
             socket.on('agent:dashboardRefreshed', function(data) {
+                console.log('🔄 Dashboard refreshed');
                 showNotification('✅ Dashboard refreshed successfully!', 'success');
                 loadDashboard();
             });
             
             // Manual referral success
             socket.on('agent:manualReferralSuccess', function(data) {
+                console.log('✅ Manual referral added:', data.user.userName);
                 showNotification(data.message, 'success');
                 updateRecentAdditions(data.user);
                 loadDashboard();
@@ -1759,6 +1725,7 @@ player123"></textarea>
             
             // Bulk referral result
             socket.on('agent:bulkManualReferralResult', function(data) {
+                console.log('📦 Bulk referral result:', data.summary.success + ' added');
                 showBulkResults(data);
                 loadDashboard();
                 document.getElementById('bulkIdentifiers').value = '';
@@ -1769,83 +1736,76 @@ player123"></textarea>
             
             // Search users result
             socket.on('agent:searchUsersResult', function(data) {
+                console.log('🔍 Search results:', data.users.length + ' users found');
                 updateSearchResults(data.users);
             });
             
             // User suggestions
             socket.on('agent:userSuggestions', function(data) {
+                console.log('💡 User suggestions:', data.potentialUsers.length + ' suggestions');
                 updateUserSuggestions(data);
             });
             
             // Referral status
             socket.on('agent:referralStatus', function(data) {
+                console.log('🔍 Referral status for:', data.user.userId);
                 showStatusResult(data);
             });
             
             // Emergency sync result
             socket.on('agent:emergencySyncResult', function(data) {
+                console.log('🚨 Emergency sync result:', data);
                 showNotification(`Emergency sync: ${data.created} created, ${data.errors} errors`, 
                                data.success ? 'success' : 'error');
                 loadDashboard();
             });
             
-            // ============ REAL-TIME COMMISSION EVENTS ============
-            
-            // New commission notification (REAL-TIME)
+            // New commission notification - REAL-TIME
             socket.on('agent:newCommission', function(data) {
-                console.log('💰 REAL-TIME COMMISSION RECEIVED:', data);
-                
-                // Show notification
-                showNotification(`💰 New commission: ${data.commissionAmount.toFixed(2)} ETB from ${data.gameType} (${data.userName})`, 'success');
-                
-                // Update UI in real-time
-                updateRealtimeCommission(data);
-                
-                // Update dashboard after 2 seconds to sync
-                setTimeout(() => {
-                    if (currentTab === 'dashboard' || currentTab === 'commissions') {
-                        loadDashboard();
-                    }
-                }, 2000);
-                
-                // Flash the commission card
-                flashCommissionCard();
-                
-                // Show real-time indicator
-                showRealtimeIndicator('💰 Commission received!');
-            });
-            
-            // Agent notification
-            socket.on('agent:notification', function(data) {
-                showNotification(data.message, data.type || 'info');
+                console.log('💰 New commission received:', data);
+                if (realTimeUpdateEnabled) {
+                    showNotification(`💰 New commission: ${data.commissionAmount.toFixed(2)} ETB from ${data.gameType}`, 'success');
+                    updateDashboardRealTime(data);
+                }
             });
             
             // Test commission result
             socket.on('agent:testCommissionResult', function(data) {
+                console.log('🧪 Test commission result:', data);
+                const resultDiv = document.getElementById('testCommissionResult');
                 if (data.success) {
-                    showNotification(`✅ Test commission: ${data.commissionAmount} ETB processed`, 'success');
-                    closeModal('testCommissionModal');
-                    document.getElementById('testCommissionResult').innerHTML = `
-                        <div style="background: rgba(16, 185, 129, 0.1); border-radius: 8px; padding: 15px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <div style="color: var(--success); font-weight: 600;">✅ Test Successful</div>
-                            <div style="margin-top: 5px;">Commission: ${data.commissionAmount.toFixed(2)} ETB</div>
-                            <div>Message: ${data.message}</div>
-                        </div>
-                    `;
+                    resultDiv.innerHTML = `
+                        <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 15px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                            <div style="color: var(--success); font-weight: 600;">✅ Test Successful!</div>
+                            <div style="margin-top: 10px;">
+                                Commission recorded: <strong>${data.commissionAmount.toFixed(2)} ETB</strong><br>
+                                Message: ${data.message}
+                            </div>
+                        </div>`;
+                    // Refresh dashboard after 1 second
+                    setTimeout(() => {
+                        loadDashboard();
+                    }, 1000);
                 } else {
-                    showNotification(`❌ Test failed: ${data.error}`, 'error');
+                    resultDiv.innerHTML = `
+                        <div style="background: rgba(239, 68, 68, 0.1); border-radius: 12px; padding: 15px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <div style="color: var(--danger); font-weight: 600;">❌ Test Failed</div>
+                            <div style="margin-top: 10px;">
+                                Error: ${data.message}
+                            </div>
+                        </div>`;
                 }
             });
             
-            // Real-time stats
-            socket.on('agent:realTimeStats', function(data) {
-                updateRealtimeStats(data);
+            // Commission status
+            socket.on('agent:commissionStatus', function(data) {
+                console.log('📊 Commission status received:', data.commissions.length + ' commissions');
+                updateCommissionStatus(data);
             });
-            
-            // ============ END REAL-TIME EVENTS ============
             
             // Withdrawal requested
             socket.on('agent:withdrawRequested', function(data) {
+                console.log('💸 Withdrawal requested:', data.amount);
                 showNotification('✅ Withdrawal request submitted!', 'success');
                 loadWithdrawalHistory();
                 // Re-enable button
@@ -1858,11 +1818,21 @@ player123"></textarea>
             
             // Withdrawal history
             socket.on('agent:withdrawalHistory', function(data) {
+                console.log('📋 Withdrawal history:', data.length + ' records');
                 updateWithdrawalHistory(data);
+            });
+            
+            // Active referrals update
+            socket.on('agent:activeReferralsUpdated', function(data) {
+                console.log('👥 Active referrals updated:', data.activeReferrals);
+                if (realTimeUpdateEnabled) {
+                    updateActiveReferralsRealTime(data);
+                }
             });
             
             // Error handling
             socket.on('agent:error', function(message) {
+                console.error('❌ Agent error:', message);
                 showNotification(`❌ Error: ${message}`, 'error');
                 // Re-enable buttons on error
                 document.getElementById('addReferralBtn').disabled = false;
@@ -1875,13 +1845,38 @@ player123"></textarea>
             
             // Suggestions
             socket.on('agent:suggestions', function(data) {
+                console.log('💡 Suggestions received');
                 showNotification(`💡 ${data.message}`, 'info');
             });
             
             // Test result
             socket.on('agent:testResult', function(data) {
+                console.log('🧪 Test result received');
                 showDebugInfo(data);
             });
+            
+            console.log('✅ Event listeners setup complete');
+        }
+        
+        function setupRealTimeUpdates() {
+            console.log('🔧 Setting up real-time updates...');
+            
+            // Enable real-time updates checkbox
+            const realTimeCheckbox = document.createElement('div');
+            realTimeCheckbox.innerHTML = `
+                <div style="margin-top: 15px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="realTimeToggle" checked onchange="toggleRealTimeUpdates(this.checked)">
+                    <label for="realTimeToggle" style="font-size: 0.9rem;">Enable Real-time Updates</label>
+                </div>`;
+            document.querySelector('.debug-panel').appendChild(realTimeCheckbox);
+            
+            console.log('✅ Real-time updates setup complete');
+        }
+        
+        function toggleRealTimeUpdates(enabled) {
+            realTimeUpdateEnabled = enabled;
+            console.log(`🔄 Real-time updates ${enabled ? 'enabled' : 'disabled'}`);
+            showNotification(`Real-time updates ${enabled ? 'enabled' : 'disabled'}`, 'info');
         }
         
         function updateAgentInfo() {
@@ -1889,17 +1884,22 @@ player123"></textarea>
             
             document.getElementById('agentName').textContent = currentAgent.name;
             document.getElementById('agentId').textContent = `ID: ${currentAgent.username}`;
+            document.getElementById('agentStatus').textContent = 'Active';
         }
         
         function loadDashboard() {
+            console.log('📊 Loading dashboard...');
             socket.emit('agent:getDashboard');
         }
         
         function refreshDashboard() {
+            console.log('🔄 Refreshing dashboard...');
             socket.emit('agent:refreshDashboard');
         }
         
         function updateDashboard(data) {
+            console.log('🔄 Updating dashboard UI...');
+            
             // Update stats
             document.getElementById('totalEarnings').textContent = 
                 data.agent.totalEarnings.toFixed(2) + ' ETB';
@@ -1944,7 +1944,102 @@ player123"></textarea>
                 document.getElementById('debugPanel').classList.add('show');
                 document.getElementById('debugIssues').innerHTML = 
                     `Data mismatch detected! Fixed ${data.debug.userReferralsCount} vs ${data.debug.referralRecordsCount} records.`;
+            } else {
+                document.getElementById('debugPanel').classList.remove('show');
             }
+            
+            console.log('✅ Dashboard updated');
+        }
+        
+        function updateDashboardRealTime(commissionData) {
+            console.log('💰 Updating dashboard with real-time commission...');
+            
+            // Update total earnings
+            const currentEarnings = parseFloat(document.getElementById('totalEarnings').textContent) || 0;
+            const newEarnings = currentEarnings + commissionData.commissionAmount;
+            document.getElementById('totalEarnings').textContent = newEarnings.toFixed(2) + ' ETB';
+            
+            // Update today's earnings
+            const todayEarnings = parseFloat(document.getElementById('todaysEarnings').textContent) || 0;
+            const newTodayEarnings = todayEarnings + commissionData.commissionAmount;
+            document.getElementById('todaysEarnings').textContent = newTodayEarnings.toFixed(2) + ' ETB';
+            
+            // Update total commissions if on commissions tab
+            if (document.getElementById('commissions').classList.contains('active')) {
+                const totalCommissions = parseFloat(document.getElementById('totalCommissions').textContent) || 0;
+                document.getElementById('totalCommissions').textContent = 
+                    (totalCommissions + commissionData.commissionAmount).toFixed(2) + ' ETB';
+            }
+            
+            // Add to recent commissions if visible
+            const recentCommissions = document.getElementById('recentCommissions');
+            if (recentCommissions) {
+                const gameIcon = commissionData.gameType === 'BINGO' ? '🎱' : '🎰';
+                const gameClass = commissionData.gameType === 'BINGO' ? 'bingo' : 'keno';
+                
+                const newCommission = `
+                    <div class="commission-item">
+                        <div class="commission-game">
+                            <div class="game-icon ${gameClass}">${gameIcon}</div>
+                            <div>
+                                <div style="font-weight: 600;">${commissionData.userName || commissionData.userId}</div>
+                                <div style="font-size: 0.9rem; color: var(--text-secondary);">${commissionData.gameType} • Just now</div>
+                            </div>
+                        </div>
+                        <div class="commission-amount">${commissionData.commissionAmount.toFixed(2)} ETB</div>
+                    </div>`;
+                
+                // Insert at the beginning
+                const currentContent = recentCommissions.innerHTML;
+                recentCommissions.innerHTML = newCommission + currentContent;
+                
+                // Keep only last 5
+                const commissions = recentCommissions.querySelectorAll('.commission-item');
+                if (commissions.length > 5) {
+                    for (let i = 5; i < commissions.length; i++) {
+                        recentCommissions.removeChild(commissions[i]);
+                    }
+                }
+            }
+            
+            console.log('✅ Real-time dashboard update complete');
+        }
+        
+        function updateActiveReferralsRealTime(data) {
+            console.log('👥 Updating active referrals real-time...');
+            
+            // Update active referrals count
+            document.getElementById('activeReferrals').textContent = `${data.activeReferrals} online`;
+            
+            // Update status badges in tables if visible
+            const userId = data.userId;
+            const isOnline = data.isOnline;
+            
+            // Update in recent referrals table
+            document.querySelectorAll('#recentReferrals tr').forEach(row => {
+                const userIdCell = row.querySelector('.user-id');
+                if (userIdCell && userIdCell.textContent.includes(userId)) {
+                    const statusBadge = row.querySelector('.status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = `status-badge ${isOnline ? 'status-online' : 'status-offline'}`;
+                        statusBadge.textContent = isOnline ? 'Online' : 'Offline';
+                    }
+                }
+            });
+            
+            // Update in all referrals table
+            document.querySelectorAll('#allReferrals tr').forEach(row => {
+                const userIdCell = row.querySelector('.user-id');
+                if (userIdCell && userIdCell.textContent.includes(userId)) {
+                    const statusBadge = row.querySelector('.status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = `status-badge ${isOnline ? 'status-online' : 'status-offline'}`;
+                        statusBadge.textContent = isOnline ? 'Online' : 'Offline';
+                    }
+                }
+            });
+            
+            console.log('✅ Active referrals updated');
         }
         
         function updateReferralsTable(referrals) {
@@ -2180,232 +2275,23 @@ player123"></textarea>
                 </div>`;
         }
         
-        // ============ REAL-TIME COMMISSION FUNCTIONS ============
-        
-        function updateRealtimeCommission(data) {
-            console.log('🔄 Updating UI with real-time commission:', data);
-            
-            // Update total earnings
-            const totalEarningsElement = document.getElementById('totalEarnings');
-            if (totalEarningsElement) {
-                const currentTotal = parseFloat(totalEarningsElement.textContent) || 0;
-                const newTotal = currentTotal + data.commissionAmount;
-                totalEarningsElement.textContent = newTotal.toFixed(2) + ' ETB';
-                
-                // Flash animation
-                const card = document.getElementById('totalEarningsCard');
-                if (card) {
-                    card.classList.add('commission-flash');
-                    setTimeout(() => card.classList.remove('commission-flash'), 2000);
-                }
-            }
-            
-            // Update today's earnings
-            const todaysEarningsElement = document.getElementById('todaysEarnings');
-            if (todaysEarningsElement) {
-                const currentToday = parseFloat(todaysEarningsElement.textContent) || 0;
-                const newToday = currentToday + data.commissionAmount;
-                todaysEarningsElement.textContent = newToday.toFixed(2) + ' ETB';
-                
-                // Flash animation
-                const card = document.getElementById('todaysEarningsCard');
-                if (card) {
-                    card.classList.add('commission-flash');
-                    setTimeout(() => card.classList.remove('commission-flash'), 2000);
-                }
-            }
-            
-            // Update commission count
-            commissionCountToday++;
-            updateRealtimeStatsDisplay();
-            
-            // Update last commission time
-            lastCommissionTime = new Date();
-            updateLastCommissionTime();
-            
-            // Add to recent commissions list
-            addToRecentCommissions(data);
-            
-            // Update commission history table if on commissions tab
-            if (currentTab === 'commissions') {
-                addToCommissionHistory(data);
-            }
-            
-            // Update available balance for withdrawal
-            updateAvailableBalance();
-        }
-        
-        function addToRecentCommissions(data) {
-            const recentDiv = document.getElementById('recentCommissions');
-            if (!recentDiv) return;
-            
-            const gameIcon = data.gameType === 'BINGO' ? '🎱' : '🎰';
-            const gameClass = data.gameType === 'BINGO' ? 'bingo' : 'keno';
-            
-            const newCommissionItem = `
-                <div class="commission-item commission-flash">
-                    <div class="commission-game">
-                        <div class="game-icon ${gameClass}">${gameIcon}</div>
-                        <div>
-                            <div style="font-weight: 600;">${data.userName || data.userId}</div>
-                            <div style="font-size: 0.9rem; color: var(--text-secondary);">${data.gameType} • Just now</div>
-                        </div>
-                    </div>
-                    <div class="commission-amount pulse">${data.commissionAmount.toFixed(2)} ETB</div>
-                </div>
-            `;
-            
-            // Insert at top
-            const currentContent = recentDiv.innerHTML;
-            recentDiv.innerHTML = newCommissionItem + currentContent;
-            
-            // Keep only 5 items
-            const items = recentDiv.querySelectorAll('.commission-item');
-            if (items.length > 5) {
-                for (let i = 5; i < items.length; i++) {
-                    recentDiv.removeChild(items[i]);
-                }
-            }
-        }
-        
-        function addToCommissionHistory(data) {
-            const historyTbody = document.getElementById('commissionHistory');
-            if (!historyTbody) return;
-            
-            const gameIcon = data.gameType === 'BINGO' ? '🎱' : '🎰';
-            const gameClass = data.gameType === 'BINGO' ? 'bingo' : 'keno';
-            
-            const newRow = `
-                <tr class="commission-flash">
-                    <td>Just now</td>
-                    <td>${data.userName || data.userId}</td>
-                    <td>
-                        <div class="d-flex align-center gap-10">
-                            <div class="game-icon ${gameClass}">${gameIcon}</div>
-                            <div>${data.gameType}</div>
-                        </div>
-                    </td>
-                    <td>${data.stake} ETB</td>
-                    <td>${data.winningAmount.toFixed(2)} ETB</td>
-                    <td class="text-primary"><strong>${data.commissionAmount.toFixed(2)} ETB</strong></td>
-                </tr>
-            `;
-            
-            // Insert at top
-            const currentRows = historyTbody.innerHTML;
-            historyTbody.innerHTML = newRow + currentRows;
-            
-            // Keep only 50 rows
-            const rows = historyTbody.querySelectorAll('tr');
-            if (rows.length > 50) {
-                for (let i = 50; i < rows.length; i++) {
-                    historyTbody.removeChild(rows[i]);
-                }
-            }
-        }
-        
-        function updateRealtimeStats(data) {
-            // Update commission count today
-            if (data && data.recentCommissionCount) {
-                commissionCountToday = data.recentCommissionCount;
-            }
-            
-            // Update last commission time
-            if (data && data.recentCommissions && data.recentCommissions.length > 0) {
-                lastCommissionTime = new Date(data.recentCommissions[0].timestamp);
-            }
-            
-            // Update active players
-            if (data && data.activeToday) {
-                document.getElementById('activePlayersCount').textContent = data.activeToday;
-            }
-            
-            // Update highest commission
-            if (data && data.commissions && data.commissions.length > 0) {
-                const highest = Math.max(...data.commissions.map(c => c.commissionAmount));
-                document.getElementById('highestCommission').textContent = highest.toFixed(2) + ' ETB';
-            }
-            
-            updateRealtimeStatsDisplay();
-            updateLastCommissionTime();
-        }
-        
-        function updateRealtimeStatsDisplay() {
-            document.getElementById('commissionsToday').textContent = commissionCountToday;
-        }
-        
-        function updateLastCommissionTime() {
-            const element = document.getElementById('lastCommissionTime');
-            if (!element) return;
-            
-            if (lastCommissionTime) {
-                element.textContent = formatTimeAgo(lastCommissionTime);
-            } else {
-                element.textContent = 'Never';
-            }
-        }
-        
-        function updateAvailableBalance() {
-            const balanceElement = document.getElementById('availableBalance');
-            if (balanceElement && currentAgent) {
-                // Get current total earnings from the UI
-                const totalEarningsElement = document.getElementById('totalEarnings');
-                if (totalEarningsElement) {
-                    const currentTotal = parseFloat(totalEarningsElement.textContent) || 0;
-                    balanceElement.textContent = currentTotal.toFixed(2) + ' ETB';
-                }
-            }
-        }
-        
-        function flashCommissionCard() {
-            const cards = document.querySelectorAll('.stat-card');
-            cards.forEach(card => {
-                card.classList.add('commission-flash');
-                setTimeout(() => card.classList.remove('commission-flash'), 2000);
-            });
-        }
-        
-        function showRealtimeIndicator(message) {
-            const indicator = document.getElementById('realtimeIndicator');
-            if (indicator) {
-                indicator.innerHTML = `<span>⚡</span><span>${message || 'Real-time update'}</span>`;
-                indicator.classList.add('show');
-                
-                setTimeout(() => {
-                    indicator.classList.remove('show');
-                }, 3000);
-            }
-        }
-        
-        function startRealtimeIndicator() {
-            // Show indicator for 3 seconds on load
-            setTimeout(() => {
-                showRealtimeIndicator('Real-time updates active');
-            }, 1000);
-            
-            // Update every 30 seconds
-            setInterval(() => {
-                if (realtimeUpdates && Math.random() > 0.7) {
-                    showRealtimeIndicator('System connected');
-                }
-            }, 30000);
-        }
-        
-        // ============ END REAL-TIME FUNCTIONS ============
-        
         function loadReferrals() {
+            console.log('👥 Loading referrals...');
             socket.emit('agent:getDashboard');
         }
         
         function loadCommissions() {
+            console.log('💰 Loading commissions...');
             socket.emit('agent:getDashboard');
         }
         
         function loadUserSuggestions() {
+            console.log('💡 Loading user suggestions...');
             socket.emit('agent:getUserSuggestions');
         }
         
         function loadWithdrawalHistory() {
+            console.log('💸 Loading withdrawal history...');
             socket.emit('agent:getWithdrawalHistory');
         }
         
@@ -2518,6 +2404,7 @@ player123"></textarea>
             btn.disabled = true;
             btn.innerHTML = '⏳ Adding...';
             
+            console.log(`➕ Adding manual referral: ${identifier}`);
             socket.emit('agent:manualReferralAssignment', { userIdentifier: identifier });
         }
         
@@ -2526,6 +2413,7 @@ player123"></textarea>
             btn.disabled = true;
             btn.innerHTML = '⏳ Adding...';
             
+            console.log(`➕ Adding user as referral: ${userId}`);
             socket.emit('agent:manualReferralAssignment', { userIdentifier: userId });
         }
         
@@ -2554,6 +2442,7 @@ player123"></textarea>
             btn.disabled = true;
             btn.innerHTML = '⏳ Processing...';
             
+            console.log(`📦 Adding bulk referrals: ${identifiers.length} identifiers`);
             socket.emit('agent:bulkManualReferral', { userIdentifiers: identifiers });
         }
         
@@ -2700,10 +2589,8 @@ player123"></textarea>
         }
         
         function formatTimeAgo(date) {
-            if (!date) return 'Never';
-            
             const now = new Date();
-            const diff = now - new Date(date);
+            const diff = now - date;
             const seconds = Math.floor(diff / 1000);
             const minutes = Math.floor(seconds / 60);
             const hours = Math.floor(minutes / 60);
@@ -2730,6 +2617,7 @@ player123"></textarea>
                 return;
             }
             
+            console.log(`🔍 Checking referral status for: ${identifier}`);
             socket.emit('agent:checkReferralStatus', { userIdentifier: identifier });
         }
         
@@ -2790,6 +2678,122 @@ player123"></textarea>
             resultDiv.innerHTML = html;
         }
         
+        function testCommission() {
+            document.getElementById('testUserId').value = '';
+            document.getElementById('testAmount').value = '';
+            document.getElementById('testCommissionResult').innerHTML = '';
+            openModal('testCommissionModal');
+        }
+        
+        function submitTestCommission() {
+            const userId = document.getElementById('testUserId').value.trim();
+            const gameType = document.getElementById('testGameType').value;
+            const amount = parseFloat(document.getElementById('testAmount').value);
+            
+            if (!userId) {
+                showNotification('❌ Please enter a user ID', 'error');
+                return;
+            }
+            
+            if (!amount || amount < 0.25) {
+                showNotification('❌ Amount must be at least 0.25 ETB', 'error');
+                return;
+            }
+            
+            console.log(`🧪 Testing commission: ${userId}, ${gameType}, ${amount}`);
+            socket.emit('agent:testCommission', { 
+                userId: userId, 
+                gameType: gameType, 
+                amount: amount 
+            });
+        }
+        
+        function checkCommissionStatus() {
+            document.getElementById('searchUserId').value = '';
+            document.getElementById('searchGameType').value = '';
+            openModal('commissionStatusModal');
+            searchCommissionStatus();
+        }
+        
+        function searchCommissionStatus() {
+            const userId = document.getElementById('searchUserId').value.trim();
+            const gameType = document.getElementById('searchGameType').value;
+            
+            console.log(`📊 Checking commission status: userId=${userId}, gameType=${gameType}`);
+            socket.emit('agent:checkCommissionStatus', { 
+                userId: userId || null, 
+                gameType: gameType || null 
+            });
+        }
+        
+        function updateCommissionStatus(data) {
+            const contentDiv = document.getElementById('commissionStatusContent');
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <div style="font-weight: 600;">Statistics</div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                            ${data.stats.totalCommissions} commissions
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
+                        <div style="text-align: center; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--secondary);">${data.stats.totalAmount.toFixed(2)}</div>
+                            <div style="font-size: 0.8rem;">Total ETB</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);">${data.stats.totalCommissions}</div>
+                            <div style="font-size: 0.8rem;">Total</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; background: rgba(245, 158, 11, 0.1); border-radius: 8px;">
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--warning);">${data.stats.avgCommission.toFixed(2)}</div>
+                            <div style="font-size: 0.8rem;">Avg ETB</div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            if (data.commissions.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <div>No commissions found</div>
+                    </div>`;
+            } else {
+                html += `
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="padding: 8px; text-align: left; font-size: 0.8rem;">Date</th>
+                                    <th style="padding: 8px; text-align: left; font-size: 0.8rem;">User</th>
+                                    <th style="padding: 8px; text-align: left; font-size: 0.8rem;">Game</th>
+                                    <th style="padding: 8px; text-align: left; font-size: 0.8rem;">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                
+                data.commissions.forEach(comm => {
+                    const gameIcon = comm.gameType === 'BINGO' ? '🎱' : '🎰';
+                    
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 8px; font-size: 0.8rem;">${formatTimeAgo(new Date(comm.createdAt))}</td>
+                            <td style="padding: 8px; font-size: 0.8rem;">${comm.userName || comm.userId}</td>
+                            <td style="padding: 8px; font-size: 0.8rem;">${gameIcon} ${comm.gameType}</td>
+                            <td style="padding: 8px; font-size: 0.8rem; color: var(--primary); font-weight: 600;">${comm.commissionAmount.toFixed(2)} ETB</td>
+                        </tr>`;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>`;
+            }
+            
+            contentDiv.innerHTML = html;
+        }
+        
         function requestWithdrawal() {
             const amount = parseFloat(document.getElementById('withdrawAmount').value);
             const phone = document.getElementById('withdrawPhone').value.trim();
@@ -2813,6 +2817,7 @@ player123"></textarea>
             btn.disabled = true;
             btn.innerHTML = '⏳ Processing...';
             
+            console.log(`💸 Requesting withdrawal: ${amount} ETB to ${phone}`);
             socket.emit('agent:withdrawRequest', { amount, phoneNumber: phone });
         }
         
@@ -2863,33 +2868,14 @@ player123"></textarea>
         
         function runEmergencySync() {
             if (confirm('⚠️ Run emergency sync? This will fix any data mismatches between referrals and users.')) {
+                console.log('🚨 Running emergency sync...');
                 socket.emit('agent:emergencySync');
             }
         }
         
         function testUserDatabase() {
+            console.log('🧪 Testing user database...');
             socket.emit('agent:testUserDatabase');
-        }
-        
-        function testCommissionTrigger() {
-            openModal('testCommissionModal');
-        }
-        
-        function triggerTestCommission() {
-            const userId = document.getElementById('testUserId').value.trim();
-            const gameType = document.getElementById('testGameType').value;
-            const winningAmount = parseFloat(document.getElementById('testWinningAmount').value);
-            
-            if (!userId || !winningAmount || winningAmount <= 0) {
-                showNotification('❌ Please enter valid test data', 'error');
-                return;
-            }
-            
-            socket.emit('agent:testCommission', {
-                userId,
-                gameType,
-                winningAmount
-            });
         }
         
         function showDebugInfo(data) {
@@ -2899,7 +2885,7 @@ player123"></textarea>
         }
         
         function showTab(tabId) {
-            currentTab = tabId;
+            console.log(`📱 Switching to tab: ${tabId}`);
             
             // Hide all tabs
             document.querySelectorAll('.content').forEach(tab => {
@@ -2923,7 +2909,8 @@ player123"></textarea>
             } else if (tabId === 'commissions') {
                 loadCommissions();
             } else if (tabId === 'withdraw') {
-                updateAvailableBalance();
+                document.getElementById('availableBalance').textContent = 
+                    currentAgent ? currentAgent.totalEarnings.toFixed(2) + ' ETB' : '0.00 ETB';
                 loadWithdrawalHistory();
             } else if (tabId === 'add-referral') {
                 loadUserSuggestions();
@@ -2966,15 +2953,18 @@ player123"></textarea>
         }
         
         function openModal(modalId) {
+            console.log(`📂 Opening modal: ${modalId}`);
             document.getElementById(modalId).classList.add('show');
         }
         
         function closeModal(modalId) {
+            console.log(`📂 Closing modal: ${modalId}`);
             document.getElementById(modalId).classList.remove('show');
         }
         
         function logout() {
             if (confirm('Are you sure you want to logout?')) {
+                console.log('🚪 Logging out...');
                 localStorage.removeItem('agentToken');
                 window.location.href = '/agent';
             }
@@ -2988,6 +2978,7 @@ player123"></textarea>
             
             if (query.length >= 2) {
                 searchTimeout = setTimeout(() => {
+                    console.log(`🔍 Searching for: "${query}"`);
                     socket.emit('agent:searchUsers', { query });
                 }, 500);
             } else {
@@ -2998,8 +2989,7 @@ player123"></textarea>
         // Update available balance when typing withdrawal amount
         document.getElementById('withdrawAmount').addEventListener('input', function(e) {
             const amount = parseFloat(e.target.value) || 0;
-            const totalEarningsElement = document.getElementById('totalEarnings');
-            const available = totalEarningsElement ? parseFloat(totalEarningsElement.textContent) || 0 : 0;
+            const available = currentAgent ? currentAgent.totalEarnings : 0;
             
             if (amount > available) {
                 this.style.borderColor = 'var(--danger)';
@@ -3009,18 +2999,6 @@ player123"></textarea>
                 this.style.backgroundColor = '';
             }
         });
-        
-        // Auto-refresh dashboard every 60 seconds
-        setInterval(() => {
-            if (currentTab === 'dashboard' || currentTab === 'commissions') {
-                loadDashboard();
-            }
-        }, 60000);
-        
-        // Request real-time stats every 30 seconds
-        setInterval(() => {
-            socket.emit('agent:getRealTimeStats');
-        }, 30000);
         
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
@@ -3042,13 +3020,23 @@ player123"></textarea>
                 logout();
             }
             
-            // Ctrl+T to toggle real-time updates
-            if (e.ctrlKey && e.key === 't') {
-                e.preventDefault();
-                realtimeUpdates = !realtimeUpdates;
-                showNotification(`Real-time updates ${realtimeUpdates ? 'enabled' : 'disabled'}`, 'info');
+            // Esc to close modals
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.show').forEach(modal => {
+                    modal.classList.remove('show');
+                });
             }
         });
+        
+        // Auto-refresh dashboard every 30 seconds
+        setInterval(() => {
+            if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled) {
+                console.log('🔄 Auto-refreshing dashboard...');
+                loadDashboard();
+            }
+        }, 30000);
+        
+        console.log('✅ Dashboard initialization complete');
     </script>
 </body>
 </html>
