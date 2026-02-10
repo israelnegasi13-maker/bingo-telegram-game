@@ -1697,6 +1697,32 @@ player123"></textarea>
                 window.location.href = '/agent';
             });
             
+            // NEW: Logout success
+            socket.on('agent:logoutSuccess', function(data) {
+                console.log('✅ Logout successful');
+                showNotification('✅ Logged out successfully', 'success');
+                
+                // Clear local data
+                localStorage.removeItem('agentToken');
+                currentAgent = null;
+                dashboardData = null;
+                
+                // Small delay before redirect
+                setTimeout(() => {
+                    window.location.href = '/agent';
+                }, 1000);
+            });
+            
+            // NEW: Logout error
+            socket.on('agent:logoutError', function(message) {
+                console.log('❌ Logout error:', message);
+                showNotification('❌ Logout failed: ' + message, 'error');
+                
+                // Re-enable logout button if error
+                document.querySelector('.logout-btn').disabled = false;
+                document.querySelector('.logout-btn').textContent = '🚪 Logout';
+            });
+            
             // Dashboard data
             socket.on('agent:dashboardData', function(data) {
                 console.log('📊 Dashboard data received');
@@ -2965,8 +2991,17 @@ player123"></textarea>
         function logout() {
             if (confirm('Are you sure you want to logout?')) {
                 console.log('🚪 Logging out...');
-                localStorage.removeItem('agentToken');
-                window.location.href = '/agent';
+                
+                // Disable logout button to prevent multiple clicks
+                const logoutBtn = document.querySelector('.logout-btn');
+                logoutBtn.disabled = true;
+                logoutBtn.textContent = '⏳ Logging out...';
+                
+                // Emit logout event to server
+                socket.emit('agent:logout');
+                
+                // Show notification
+                showNotification('Logging out...', 'info');
             }
         }
         
