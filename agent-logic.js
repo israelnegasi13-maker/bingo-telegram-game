@@ -126,6 +126,37 @@ class ManualAgentSystem {
     }
   }
 
+  // NEW: Agent logout
+  async handleAgentLogout(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:logoutError', 'Not authenticated');
+        return;
+      }
+
+      const agentId = socket.agentId;
+      const agentUsername = socket.agentData?.username || 'Unknown';
+      
+      // Remove from agent sockets map
+      this.agentSockets.delete(agentId);
+      
+      // Clear socket agent data
+      socket.agentId = null;
+      socket.agentData = null;
+      
+      socket.emit('agent:logoutSuccess', {
+        message: 'Logged out successfully',
+        timestamp: new Date()
+      });
+
+      console.log(`👤 Agent logged out: ${agentUsername} (ID: ${agentId})`);
+      
+    } catch (error) {
+      console.error('Agent logout error:', error);
+      socket.emit('agent:logoutError', 'Logout failed');
+    }
+  }
+
   // Verify agent token for auto login
   async handleVerifyAgentToken(socket, data) {
     try {
@@ -568,7 +599,7 @@ class ManualAgentSystem {
       // Try to find by userId (exact match first)
       const userByUserId = await this.models.User.findOne({ 
         userId: new RegExp('^' + cleanId + '$', 'i') 
-      });
+        });
       if (userByUserId) {
         console.log(`✅ [FIND USER] Found by userId: ${userByUserId.userId}`);
         return userByUserId;
