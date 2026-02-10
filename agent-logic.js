@@ -126,7 +126,7 @@ class ManualAgentSystem {
     }
   }
 
-  // NEW: Agent logout
+  // FIXED: Agent logout - prevents uncontrolled refresh
   async handleAgentLogout(socket, data) {
     try {
       if (!socket.agentId) {
@@ -137,23 +137,42 @@ class ManualAgentSystem {
       const agentId = socket.agentId;
       const agentUsername = socket.agentData?.username || 'Unknown';
       
-      // Remove from agent sockets map
+      console.log(`🚪 Agent logout requested: ${agentUsername} (ID: ${agentId})`);
+      
+      // STEP 1: Send logout success to client FIRST
+      socket.emit('agent:logoutSuccess', {
+        message: 'Logged out successfully',
+        timestamp: new Date(),
+        agentId: agentId,
+        agentUsername: agentUsername
+      });
+
+      console.log(`✅ Logout success sent to client for agent ${agentUsername}`);
+
+      // STEP 2: Remove from agent sockets map AFTER sending success
       this.agentSockets.delete(agentId);
       
-      // Clear socket agent data
+      // STEP 3: Clear socket agent data
       socket.agentId = null;
       socket.agentData = null;
       
-      socket.emit('agent:logoutSuccess', {
-        message: 'Logged out successfully',
-        timestamp: new Date()
-      });
-
       console.log(`👤 Agent logged out: ${agentUsername} (ID: ${agentId})`);
+      
+      // STEP 4: Force disconnect after small delay to ensure message is delivered
+      setTimeout(() => {
+        if (socket.connected) {
+          console.log(`🔌 Force disconnecting socket for agent ${agentUsername}`);
+          socket.disconnect(true); // Force disconnect
+        }
+      }, 100);
       
     } catch (error) {
       console.error('Agent logout error:', error);
-      socket.emit('agent:logoutError', 'Logout failed');
+      
+      // Only send error if socket is still connected
+      if (socket.connected) {
+        socket.emit('agent:logoutError', 'Logout failed: ' + error.message);
+      }
     }
   }
 
