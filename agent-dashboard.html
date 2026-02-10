@@ -99,12 +99,6 @@
             transform: translateY(-2px);
         }
         
-        .logout-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -837,11 +831,41 @@
     </style>
 </head>
 <body>
+    <!-- Login Form (initially shown) -->
+    <div id="loginForm" class="login-container">
+        <div class="login-box">
+            <div class="logo">👑 ETHIO GAMES</div>
+            <h1 class="title">Agent Portal Login</h1>
+            
+            <div class="error-message" id="loginErrorMessage" style="display: none;"></div>
+            
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-input" id="loginUsername" 
+                       placeholder="Enter your username">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="loginPassword" 
+                       placeholder="Enter your password">
+            </div>
+            
+            <button class="submit-btn" onclick="submitLogin()" id="loginBtn">
+                🔑 Login
+            </button>
+            
+            <div class="form-hint" style="text-align: center; margin-top: 20px;">
+                Default admin: username: admin, password: admin123
+            </div>
+        </div>
+    </div>
+
     <!-- Notifications -->
     <div class="notifications" id="notifications"></div>
     
-    <!-- Main Container -->
-    <div class="container">
+    <!-- Main Container (initially hidden) -->
+    <div class="container" id="dashboardContainer" style="display: none;">
         <!-- Header -->
         <div class="header">
             <div class="header-top">
@@ -1638,28 +1662,13 @@ player123"></textarea>
         let currentAgent = null;
         let dashboardData = null;
         let realTimeUpdateEnabled = true;
-        let isLoggingOut = false;
-        let autoRefreshInterval = null;
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🔧 Dashboard initializing...');
-            checkAutoLogin();
             setupEventListeners();
             setupRealTimeUpdates();
         });
-        
-        function checkAutoLogin() {
-            const savedToken = localStorage.getItem('agentToken');
-            if (savedToken) {
-                console.log('🔑 Attempting auto-login with token...');
-                socket.emit('agent:verifyToken', { token: savedToken });
-            } else {
-                // Redirect to login if no token
-                console.log('❌ No saved token, redirecting to login...');
-                window.location.href = '/agent';
-            }
-        }
         
         function setupEventListeners() {
             console.log('🔧 Setting up event listeners...');
@@ -1672,25 +1681,11 @@ player123"></textarea>
             
             socket.on('disconnect', function() {
                 console.log('❌ Disconnected from server');
-                
-                // If we're logging out, this is expected
-                if (isLoggingOut) {
-                    console.log('🔄 Disconnected during logout (expected)');
-                    return;
-                }
-                
                 showNotification('Disconnected from server', 'error');
             });
             
             socket.on('connect_error', function(error) {
                 console.log('❌ Connection error:', error);
-                
-                // If we're logging out, this is expected
-                if (isLoggingOut) {
-                    console.log('🔄 Connection error during logout (expected)');
-                    return;
-                }
-                
                 showNotification('Connection error: ' + error.message, 'error');
             });
             
@@ -1699,75 +1694,90 @@ player123"></textarea>
                 console.log('✅ Login successful:', data.username);
                 currentAgent = data;
                 localStorage.setItem('agentToken', data.id);
+                
+                // Hide login form, show dashboard
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('dashboardContainer').style.display = 'block';
+                
                 updateAgentInfo();
                 loadDashboard();
                 showNotification('✅ Login successful! Welcome ' + data.name, 'success');
+            });
+            
+            // Login error
+            socket.on('agent:loginError', function(message) {
+                console.error('❌ Agent login error:', message);
+                const errorDiv = document.getElementById('loginErrorMessage');
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                
+                // Re-enable login button
+                const loginBtn = document.getElementById('loginBtn');
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '🔑 Login';
+                
+                showNotification(`❌ Login failed: ${message}`, 'error');
             });
             
             // Token verified
             socket.on('agent:tokenVerified', function(data) {
                 console.log('✅ Token verified for:', data.username);
                 currentAgent = data;
+                
+                // Hide login form, show dashboard
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('dashboardContainer').style.display = 'block';
+                
                 updateAgentInfo();
                 loadDashboard();
             });
             
             // Token invalid
             socket.on('agent:tokenInvalid', function() {
-                console.log('❌ Token invalid, redirecting to login...');
+                console.log('❌ Token invalid, showing login form...');
                 localStorage.removeItem('agentToken');
-                window.location.href = '/agent';
+                
+                // Show login form, hide dashboard
+                document.getElementById('loginForm').style.display = 'block';
+                document.getElementById('dashboardContainer').style.display = 'none';
+                
+                const errorDiv = document.getElementById('loginErrorMessage');
+                errorDiv.textContent = 'Session expired. Please login again.';
+                errorDiv.style.display = 'block';
             });
             
-            // FIXED: Logout success - handle properly
+            // Logout success
             socket.on('agent:logoutSuccess', function(data) {
-                console.log('✅ Logout successful from server');
-                
-                // Set logging out flag
-                isLoggingOut = true;
+                console.log('✅ Logout successful');
+                showNotification('✅ Logged out successfully', 'success');
                 
                 // Clear local data
                 localStorage.removeItem('agentToken');
                 currentAgent = null;
                 dashboardData = null;
                 
-                // Disable real-time updates
-                realTimeUpdateEnabled = false;
+                // Hide dashboard, show login form
+                document.getElementById('dashboardContainer').style.display = 'none';
+                document.getElementById('loginForm').style.display = 'block';
                 
-                // Clear auto-refresh interval
-                if (autoRefreshInterval) {
-                    clearInterval(autoRefreshInterval);
-                    autoRefreshInterval = null;
-                }
+                // Clear login form
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+                document.getElementById('loginErrorMessage').style.display = 'none';
                 
-                // Disconnect socket
-                socket.disconnect();
-                
-                // Show success notification
-                showNotification('✅ Logged out successfully', 'success');
-                
-                // Redirect to login page after short delay
-                setTimeout(() => {
-                    console.log('🔀 Redirecting to login page...');
-                    window.location.replace('/agent');
-                }, 800);
+                // Clear any existing socket data
+                socket.agentId = null;
+                socket.agentData = null;
             });
             
-            // FIXED: Logout error - handle properly
+            // Logout error
             socket.on('agent:logoutError', function(message) {
                 console.log('❌ Logout error:', message);
-                
-                // Reset logout flag
-                isLoggingOut = false;
-                
-                // Re-enable logout button
-                const logoutBtn = document.querySelector('.logout-btn');
-                if (logoutBtn) {
-                    logoutBtn.disabled = false;
-                    logoutBtn.textContent = '🚪 Logout';
-                }
-                
                 showNotification('❌ Logout failed: ' + message, 'error');
+                
+                // Re-enable logout button if error
+                document.querySelector('.logout-btn').disabled = false;
+                document.querySelector('.logout-btn').textContent = '🚪 Logout';
             });
             
             // Dashboard data
@@ -1943,14 +1953,6 @@ player123"></textarea>
                 </div>`;
             document.querySelector('.debug-panel').appendChild(realTimeCheckbox);
             
-            // Set up auto-refresh interval
-            autoRefreshInterval = setInterval(() => {
-                if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled) {
-                    console.log('🔄 Auto-refreshing dashboard...');
-                    loadDashboard();
-                }
-            }, 30000);
-            
             console.log('✅ Real-time updates setup complete');
         }
         
@@ -1958,6 +1960,28 @@ player123"></textarea>
             realTimeUpdateEnabled = enabled;
             console.log(`🔄 Real-time updates ${enabled ? 'enabled' : 'disabled'}`);
             showNotification(`Real-time updates ${enabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+        
+        function submitLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            
+            if (!username || !password) {
+                const errorDiv = document.getElementById('loginErrorMessage');
+                errorDiv.textContent = 'Please enter both username and password';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            const loginBtn = document.getElementById('loginBtn');
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '⏳ Logging in...';
+            
+            // Clear any previous error
+            document.getElementById('loginErrorMessage').style.display = 'none';
+            
+            console.log(`🔑 Attempting login for: ${username}`);
+            socket.emit('agent:login', { username, password });
         }
         
         function updateAgentInfo() {
@@ -2020,10 +2044,6 @@ player123"></textarea>
                     formatTimeAgo(new Date(data.agent.lastLogin));
             }
             
-            // Update available balance
-            document.getElementById('availableBalance').textContent = 
-                data.agent.totalEarnings.toFixed(2) + ' ETB';
-            
             // Show debug panel if there are issues
             if (data.debug && data.debug.fixedMismatch) {
                 document.getElementById('debugPanel').classList.add('show');
@@ -2055,11 +2075,6 @@ player123"></textarea>
                 document.getElementById('totalCommissions').textContent = 
                     (totalCommissions + commissionData.commissionAmount).toFixed(2) + ' ETB';
             }
-            
-            // Update available balance
-            const availableBalance = parseFloat(document.getElementById('availableBalance').textContent) || 0;
-            document.getElementById('availableBalance').textContent = 
-                (availableBalance + commissionData.commissionAmount).toFixed(2) + ' ETB';
             
             // Add to recent commissions if visible
             const recentCommissions = document.getElementById('recentCommissions');
@@ -2999,10 +3014,8 @@ player123"></textarea>
             } else if (tabId === 'commissions') {
                 loadCommissions();
             } else if (tabId === 'withdraw') {
-                if (currentAgent) {
-                    document.getElementById('availableBalance').textContent = 
-                        currentAgent.totalEarnings.toFixed(2) + ' ETB';
-                }
+                document.getElementById('availableBalance').textContent = 
+                    currentAgent ? currentAgent.totalEarnings.toFixed(2) + ' ETB' : '0.00 ETB';
                 loadWithdrawalHistory();
             } else if (tabId === 'add-referral') {
                 loadUserSuggestions();
@@ -3054,18 +3067,9 @@ player123"></textarea>
             document.getElementById(modalId).classList.remove('show');
         }
         
-        // FIXED: Logout function
         function logout() {
-            if (isLoggingOut) {
-                console.log('⚠️ Logout already in progress');
-                return;
-            }
-            
             if (confirm('Are you sure you want to logout?')) {
                 console.log('🚪 Logging out...');
-                
-                // Set logout flag
-                isLoggingOut = true;
                 
                 // Disable logout button to prevent multiple clicks
                 const logoutBtn = document.querySelector('.logout-btn');
@@ -3136,18 +3140,76 @@ player123"></textarea>
                     modal.classList.remove('show');
                 });
             }
-        });
-        
-        // Handle page unload
-        window.addEventListener('beforeunload', function(e) {
-            // Clean up intervals if page is being unloaded
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
+            
+            // Enter to login when in login form
+            if (e.key === 'Enter' && document.getElementById('loginForm').style.display === 'block') {
+                if (document.getElementById('loginUsername') === document.activeElement || 
+                    document.getElementById('loginPassword') === document.activeElement) {
+                    submitLogin();
+                }
             }
         });
         
+        // Auto-refresh dashboard every 30 seconds
+        setInterval(() => {
+            if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled) {
+                console.log('🔄 Auto-refreshing dashboard...');
+                loadDashboard();
+            }
+        }, 30000);
+        
         console.log('✅ Dashboard initialization complete');
+        
+        // Add CSS for login form
+        const style = document.createElement('style');
+        style.textContent = `
+            .login-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 20px;
+                background: linear-gradient(135deg, var(--dark), var(--dark-light));
+            }
+            
+            .login-box {
+                background: var(--dark-light);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 40px;
+                width: 100%;
+                max-width: 400px;
+                box-shadow: 0 20px 40px var(--shadow);
+            }
+            
+            .login-box .logo {
+                font-size: 2.5rem;
+                font-weight: 900;
+                background: linear-gradient(135deg, var(--primary), var(--warning));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                margin-bottom: 10px;
+                text-align: center;
+            }
+            
+            .login-box .title {
+                font-size: 1.8rem;
+                margin-bottom: 30px;
+                color: var(--text);
+                text-align: center;
+            }
+            
+            .error-message {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
+                border-radius: 10px;
+                padding: 15px;
+                margin-bottom: 20px;
+                color: var(--danger);
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
