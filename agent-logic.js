@@ -126,7 +126,7 @@ class ManualAgentSystem {
     }
   }
 
-  // FIXED: Agent logout - prevents uncontrolled refresh
+  // FIXED: Agent logout - improved version
   async handleAgentLogout(socket, data) {
     try {
       if (!socket.agentId) {
@@ -137,42 +137,27 @@ class ManualAgentSystem {
       const agentId = socket.agentId;
       const agentUsername = socket.agentData?.username || 'Unknown';
       
-      console.log(`🚪 Agent logout requested: ${agentUsername} (ID: ${agentId})`);
-      
-      // STEP 1: Send logout success to client FIRST
-      socket.emit('agent:logoutSuccess', {
-        message: 'Logged out successfully',
-        timestamp: new Date(),
-        agentId: agentId,
-        agentUsername: agentUsername
-      });
-
-      console.log(`✅ Logout success sent to client for agent ${agentUsername}`);
-
-      // STEP 2: Remove from agent sockets map AFTER sending success
+      // Remove from agent sockets map FIRST
       this.agentSockets.delete(agentId);
       
-      // STEP 3: Clear socket agent data
+      // Clear socket agent data
       socket.agentId = null;
       socket.agentData = null;
       
+      // Send success response BEFORE any disconnect
+      socket.emit('agent:logoutSuccess', {
+        message: 'Logged out successfully',
+        timestamp: new Date()
+      });
+
       console.log(`👤 Agent logged out: ${agentUsername} (ID: ${agentId})`);
       
-      // STEP 4: Force disconnect after small delay to ensure message is delivered
-      setTimeout(() => {
-        if (socket.connected) {
-          console.log(`🔌 Force disconnecting socket for agent ${agentUsername}`);
-          socket.disconnect(true); // Force disconnect
-        }
-      }, 100);
+      // IMPORTANT: Don't disconnect the socket here - let the client handle it
+      // The client will disconnect after receiving the logoutSuccess event
       
     } catch (error) {
       console.error('Agent logout error:', error);
-      
-      // Only send error if socket is still connected
-      if (socket.connected) {
-        socket.emit('agent:logoutError', 'Logout failed: ' + error.message);
-      }
+      socket.emit('agent:logoutError', 'Logout failed');
     }
   }
 
