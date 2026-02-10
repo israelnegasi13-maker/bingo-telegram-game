@@ -126,7 +126,7 @@ class ManualAgentSystem {
     }
   }
 
-  // FIXED: Agent logout - improved version
+  // NEW: Agent logout
   async handleAgentLogout(socket, data) {
     try {
       if (!socket.agentId) {
@@ -137,23 +137,19 @@ class ManualAgentSystem {
       const agentId = socket.agentId;
       const agentUsername = socket.agentData?.username || 'Unknown';
       
-      // Remove from agent sockets map FIRST
+      // Remove from agent sockets map
       this.agentSockets.delete(agentId);
       
       // Clear socket agent data
       socket.agentId = null;
       socket.agentData = null;
       
-      // Send success response BEFORE any disconnect
       socket.emit('agent:logoutSuccess', {
         message: 'Logged out successfully',
         timestamp: new Date()
       });
 
       console.log(`👤 Agent logged out: ${agentUsername} (ID: ${agentId})`);
-      
-      // IMPORTANT: Don't disconnect the socket here - let the client handle it
-      // The client will disconnect after receiving the logoutSuccess event
       
     } catch (error) {
       console.error('Agent logout error:', error);
@@ -3359,203 +3355,4 @@ class ManualAgentSystem {
   // NEW: Force refresh agent dashboard
   async forceRefreshAgentDashboard(agentId) {
     try {
-      const agentSocket = this.agentSockets.get(agentId.toString());
-      if (agentSocket) {
-        await this.handleRefreshDashboard(agentSocket);
-        return { success: true, message: 'Dashboard refreshed' };
-      }
-      return { success: false, message: 'Agent not online' };
-    } catch (error) {
-      console.error('Force refresh dashboard error:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // NEW: Get detailed referral information
-  async getDetailedReferralInfo(socket, data) {
-    try {
-      if (!socket.agentId) {
-        socket.emit('agent:error', 'Not authenticated');
-        return;
-      }
-
-      const { userId } = data;
-      if (!userId) {
-        socket.emit('agent:error', 'User ID is required');
-        return;
-      }
-
-      const user = await this.models.User.findOne({ userId });
-      if (!user) {
-        socket.emit('agent:error', 'User not found');
-        return;
-      }
-
-      const agent = await this.models.Agent.findById(socket.agentId);
-      const isAssigned = user.agentId && user.agentId.toString() === agent._id.toString();
-
-      const referralRecord = await this.models.Referral.findOne({
-        userId: user.userId,
-        agentId: agent._id
-      });
-
-      const commissions = await this.models.AgentCommission.find({
-        agentId: agent._id,
-        userId: user.userId
-      }).sort({ createdAt: -1 }).limit(20);
-
-      socket.emit('agent:detailedReferralInfo', {
-        user: {
-          userId: user.userId,
-          userName: user.userName,
-          telegramUsername: user.telegramUsername,
-          balance: user.balance,
-          totalWins: user.totalWins,
-          totalBingos: user.totalBingos,
-          totalWagered: user.totalWagered,
-          isOnline: user.isOnline,
-          joinedAt: user.joinedAt,
-          lastSeen: user.lastSeen
-        },
-        assignment: {
-          isAssigned,
-          agentId: user.agentId,
-          referredBy: user.referredBy,
-          agentReferredAt: user.agentReferredAt
-        },
-        referralRecord: referralRecord ? {
-          id: referralRecord._id,
-          referralMethod: referralRecord.referralMethod,
-          status: referralRecord.status,
-          createdAt: referralRecord.createdAt,
-          updatedAt: referralRecord.updatedAt
-        } : null,
-        commissions: commissions.map(comm => ({
-          gameType: comm.gameType,
-          stake: comm.stake,
-          winningAmount: comm.winningAmount,
-          commissionRate: comm.commissionRate,
-          commissionAmount: comm.commissionAmount,
-          createdAt: comm.createdAt
-        })),
-        totalCommissionEarned: commissions.reduce((sum, comm) => sum + comm.commissionAmount, 0)
-      });
-    } catch (error) {
-      console.error('Get detailed referral info error:', error);
-      socket.emit('agent:error', 'Failed to get detailed info');
-    }
-  }
-
-  // Handle emergency sync request from agent
-  async handleEmergencySync(socket) {
-    try {
-      if (!socket.agentId) {
-        socket.emit('agent:error', 'Not authenticated');
-        return;
-      }
-
-      const agent = await this.models.Agent.findById(socket.agentId);
-      if (!agent) {
-        socket.emit('agent:error', 'Agent not found');
-        return;
-      }
-
-      const result = await this.emergencyFixReferralSync(agent._id);
-      
-      if (result.success) {
-        socket.emit('agent:emergencySyncResult', {
-          success: true,
-          created: result.created,
-          errors: result.errors,
-          message: `Emergency sync completed: ${result.created} created, ${result.errors} errors`
-        });
-        
-        // Refresh dashboard after sync
-        setTimeout(() => {
-          this.handleRefreshDashboard(socket);
-        }, 1000);
-      } else {
-        socket.emit('agent:emergencySyncResult', {
-          success: false,
-          error: result.error,
-          message: `Emergency sync failed: ${result.error}`
-        });
-      }
-    } catch (error) {
-      console.error('Handle emergency sync error:', error);
-      socket.emit('agent:error', 'Emergency sync failed: ' + error.message);
-    }
-  }
-
-  // Handle test user database request
-  async handleTestUserDatabase(socket) {
-    try {
-      if (!socket.agentId) {
-        socket.emit('agent:error', 'Not authenticated');
-        return;
-      }
-
-      await this.testUserDatabase(socket);
-    } catch (error) {
-      console.error('Test user database error:', error);
-      socket.emit('agent:error', 'Test failed: ' + error.message);
-    }
-  }
-
-  // NEW: Check commission status for debugging
-  async checkCommissionStatus(socket, data) {
-    try {
-      const { userId, gameType, startDate, endDate } = data;
-      
-      const matchQuery = {};
-      if (userId) matchQuery.userId = userId;
-      if (gameType) matchQuery.gameType = gameType;
-      if (startDate || endDate) {
-        matchQuery.createdAt = {};
-        if (startDate) matchQuery.createdAt.$gte = new Date(startDate);
-        if (endDate) matchQuery.createdAt.$lte = new Date(endDate);
-      }
-
-      const commissions = await this.models.AgentCommission.find(matchQuery)
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .populate('agentId', 'username name')
-        .populate('userId', 'userId userName agentId');
-
-      const stats = await this.models.AgentCommission.aggregate([
-        { $match: matchQuery },
-        {
-          $group: {
-            _id: null,
-            totalCommissions: { $sum: 1 },
-            totalAmount: { $sum: '$commissionAmount' },
-            avgCommission: { $avg: '$commissionAmount' }
-          }
-        }
-      ]);
-
-      socket.emit('agent:commissionStatus', {
-        commissions: commissions.map(comm => ({
-          id: comm._id,
-          userId: comm.userId?.userId,
-          userName: comm.userId?.userName,
-          agentId: comm.agentId?._id,
-          agentName: comm.agentId?.name,
-          gameType: comm.gameType,
-          stake: comm.stake,
-          winningAmount: comm.winningAmount,
-          commissionAmount: comm.commissionAmount,
-          commissionRate: comm.commissionRate,
-          createdAt: comm.createdAt
-        })),
-        stats: stats[0] || { totalCommissions: 0, totalAmount: 0, avgCommission: 0 },
-        processedTransactions: Array.from(this.processedTransactions.entries()).slice(0, 20)
-      });
-    } catch (error) {
-      console.error('Check commission status error:', error);
-      socket.emit('agent:error', 'Failed to check commission status');
-    }
-  }
-}
-
-module.exports = ManualAgentSystem;
+      const agentSocket =
