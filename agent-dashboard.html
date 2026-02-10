@@ -112,7 +112,6 @@
             padding: 20px;
             border: 1px solid var(--border);
             transition: all 0.3s;
-            position: relative;
         }
         
         .stat-card:hover {
@@ -133,15 +132,6 @@
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .info-icon {
-            cursor: help;
-            font-size: 0.8rem;
-            color: var(--primary);
         }
         
         .stat-change {
@@ -838,26 +828,6 @@
         .align-center { align-items: center; }
         .justify-between { justify-content: space-between; }
         .gap-10 { gap: 10px; }
-        
-        /* Commission Info Tooltip */
-        .commission-info {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: help;
-            color: var(--primary);
-            font-size: 0.8rem;
-        }
-        
-        /* Net Profit Badge */
-        .net-profit-badge {
-            font-size: 0.8rem;
-            padding: 2px 6px;
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            border-radius: 6px;
-            margin-top: 2px;
-        }
     </style>
 </head>
 <body>
@@ -893,18 +863,12 @@
                     <div class="stat-change" id="activeReferrals">0 online</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">
-                        Today's Commission
-                        <span class="info-icon" title="Commission calculated on NET PROFIT (winning amount - player stake)">ℹ️</span>
-                    </div>
+                    <div class="stat-label">Today's Commission</div>
                     <div class="stat-value" id="todaysEarnings">0.00 ETB</div>
                     <div class="stat-change change-up" id="commissionChange">+0% from yesterday</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">
-                        Commission Rates
-                        <span class="info-icon" title="40% from Bingo net profit, 10% from Keno net profit">ℹ️</span>
-                    </div>
+                    <div class="stat-label">Commission Rates</div>
                     <div class="stat-value" id="commissionRates">40% / 10%</div>
                     <div class="stat-label">Bingo / Keno</div>
                 </div>
@@ -1043,34 +1007,6 @@
                         </div>
                     </div>
                     
-                    <!-- Commission Calculation Info -->
-                    <div class="section">
-                        <div class="section-title">
-                            💰 Commission Calculation
-                        </div>
-                        <div style="display: flex; flex-direction: column; gap: 15px;">
-                            <div>
-                                <strong>Bingo (40%):</strong>
-                                <div style="margin-top: 5px; font-size: 0.9rem; color: var(--text-secondary);">
-                                    Player stakes 10 ETB, wins 100 ETB pot<br>
-                                    • Net profit: 100 - 10 = 90 ETB<br>
-                                    • Your commission: 90 × 40% = 36 ETB
-                                </div>
-                            </div>
-                            <div>
-                                <strong>Keno (10%):</strong>
-                                <div style="margin-top: 5px; font-size: 0.9rem; color: var(--text-secondary);">
-                                    Player stakes 5 ETB, wins 15 ETB<br>
-                                    • Net profit: 15 - 5 = 10 ETB<br>
-                                    • Your commission: 10 × 10% = 1 ETB
-                                </div>
-                            </div>
-                            <div style="padding: 10px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.3);">
-                                <strong>💡 Important:</strong> Commission is calculated on NET PROFIT (winning amount minus player's stake).
-                            </div>
-                        </div>
-                    </div>
-                    
                     <!-- Debug Panel -->
                     <div class="debug-panel" id="debugPanel">
                         <div class="section-title" style="color: var(--danger);">
@@ -1085,8 +1021,11 @@
                         <button class="debug-btn" onclick="runEmergencySync()">
                             🔧 Run Emergency Sync
                         </button>
-                        <button class="debug-btn" onclick="testUserDatabase()" style="background: var(--secondary); margin-left: 10px;">
-                            🧪 Test Database
+                        <button class="debug-btn" onclick="fixDuplicateCommissions()" style="background: var(--secondary); margin-left: 10px;">
+                            🔄 Fix Duplicate Commissions
+                        </button>
+                        <button class="debug-btn" onclick="clearCommissionCache()" style="background: var(--warning); margin-left: 10px;">
+                            🧹 Clear Commission Cache
                         </button>
                     </div>
                 </div>
@@ -1243,7 +1182,7 @@
                                 <div style="background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">4</div>
                                 <div>
                                     <strong>Start earning</strong><br>
-                                    Earn 40% from Bingo net profit and 10% from Keno net profit
+                                    You'll earn 40% from Bingo wins and 10% from Keno wins
                                 </div>
                             </div>
                         </div>
@@ -1399,8 +1338,8 @@ player123"></textarea>
                                         <th>Game</th>
                                         <th>Stake</th>
                                         <th>Win Amount</th>
-                                        <th>Net Profit</th>
                                         <th>Commission</th>
+                                        <th>Transaction ID</th>
                                     </tr>
                                 </thead>
                                 <tbody id="commissionHistory">
@@ -1441,11 +1380,6 @@ player123"></textarea>
                                 <div style="font-size: 0.9rem; color: var(--text-secondary);">Average Commission</div>
                                 <div style="font-size: 1.2rem; font-weight: 600;" id="averageCommission">0.00 ETB</div>
                             </div>
-                            <div>
-                                <div style="font-size: 0.9rem; color: var(--text-secondary);">Commission Rate</div>
-                                <div style="font-size: 1.2rem; font-weight: 600;" id="commissionRateDisplay">40% / 10%</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Bingo / Keno (on net profit)</div>
-                            </div>
                         </div>
                     </div>
                     
@@ -1458,6 +1392,22 @@ player123"></textarea>
                             <div class="loader">
                                 <div class="spinner"></div>
                                 <div>Loading breakdown...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Commission Stats -->
+                    <div class="section">
+                        <div class="section-title">
+                            Commission Stats
+                            <button class="refresh-btn" onclick="loadCommissionStats()">
+                                📊 Stats
+                            </button>
+                        </div>
+                        <div id="commissionStats">
+                            <div class="loader">
+                                <div class="spinner"></div>
+                                <div>Loading stats...</div>
                             </div>
                         </div>
                     </div>
@@ -1515,11 +1465,12 @@ player123"></textarea>
                                         <th>Amount</th>
                                         <th>Phone</th>
                                         <th>Status</th>
+                                        <th>Transaction ID</th>
                                     </tr>
                                 </thead>
                                 <tbody id="withdrawalHistory">
                                     <tr>
-                                        <td colspan="4" class="text-center">
+                                        <td colspan="5" class="text-center">
                                             <div class="loader">
                                                 <div class="spinner"></div>
                                                 <div>Loading history...</div>
@@ -1550,9 +1501,8 @@ player123"></textarea>
                             <div>
                                 <strong>Commission Rates:</strong>
                                 <div style="margin-top: 5px;">
-                                    • Bingo: 40% of net profit<br>
-                                    • Keno: 10% of net profit<br>
-                                    <small style="color: var(--text-secondary);">(Net profit = winning amount - player stake)</small>
+                                    • Bingo wins: 40% commission<br>
+                                    • Keno wins: 10% commission
                                 </div>
                             </div>
                             <div>
@@ -1626,10 +1576,24 @@ player123"></textarea>
         </div>
     </div>
 
+    <!-- Commission Stats Modal -->
+    <div class="modal" id="commissionStatsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📊 Commission Statistics</div>
+                <button class="close-btn" onclick="closeModal('commissionStatsModal')">×</button>
+            </div>
+            <div id="commissionStatsContent" style="max-height: 500px; overflow-y: auto; padding: 10px;">
+                Loading commission statistics...
+            </div>
+        </div>
+    </div>
+
     <script>
         const socket = io();
         let currentAgent = null;
         let dashboardData = null;
+        let commissionStats = null;
         
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
@@ -1719,15 +1683,11 @@ player123"></textarea>
                 loadDashboard();
             });
             
-            // New commission notification - UPDATED
+            // New commission notification
             socket.on('agent:newCommission', function(data) {
-                const netProfit = data.netProfit || (data.winningAmount - data.stake);
-                showNotification(
-                    `💰 New commission: ${data.commissionAmount.toFixed(2)} ETB from ${data.gameType} ` +
-                    `(Net: ${netProfit.toFixed(2)} ETB)`, 
-                    'success'
-                );
+                showNotification(`💰 New commission: ${data.commissionAmount.toFixed(2)} ETB from ${data.gameType}`, 'success');
                 loadDashboard();
+                loadCommissionStats();
             });
             
             // Withdrawal requested
@@ -1739,6 +1699,12 @@ player123"></textarea>
             // Withdrawal history
             socket.on('agent:withdrawalHistory', function(data) {
                 updateWithdrawalHistory(data);
+            });
+            
+            // Commission stats
+            socket.on('agent:commissionStats', function(data) {
+                commissionStats = data;
+                updateCommissionStats(data);
             });
             
             // Error handling
@@ -1754,6 +1720,18 @@ player123"></textarea>
             // Test result
             socket.on('agent:testResult', function(data) {
                 showDebugInfo(data);
+            });
+            
+            // Duplicate commissions fixed
+            socket.on('agent:duplicatesFixed', function(data) {
+                showNotification(`✅ Fixed ${data.fixed} duplicate commission groups, deleted ${data.deleted} duplicates`, 'success');
+                loadDashboard();
+                loadCommissionStats();
+            });
+            
+            // Commission cache cleared
+            socket.on('agent:cacheCleared', function(data) {
+                showNotification(`✅ Commission cache cleared (${data.size} entries)`, 'success');
             });
         }
         
@@ -1772,6 +1750,10 @@ player123"></textarea>
             socket.emit('agent:refreshDashboard');
         }
         
+        function loadCommissionStats() {
+            socket.emit('agent:getCommissionStats');
+        }
+        
         function updateDashboard(data) {
             // Update stats
             document.getElementById('totalEarnings').textContent = 
@@ -1781,10 +1763,6 @@ player123"></textarea>
             document.getElementById('todaysEarnings').textContent = 
                 data.stats.todaysEarnings.toFixed(2) + ' ETB';
             document.getElementById('commissionRates').textContent = 
-                `${data.agent.commissionRateBingo}% / ${data.agent.commissionRateKeno}%`;
-            
-            // Update commission rate display
-            document.getElementById('commissionRateDisplay').textContent = 
                 `${data.agent.commissionRateBingo}% / ${data.agent.commissionRateKeno}%`;
             
             // Update changes
@@ -1919,7 +1897,6 @@ player123"></textarea>
             allTbody.innerHTML = allHtml;
         }
         
-        // UPDATED: Commission display with net profit
         function updateCommissions(commissions) {
             const historyTbody = document.getElementById('commissionHistory');
             const recentDiv = document.getElementById('recentCommissions');
@@ -1970,7 +1947,7 @@ player123"></textarea>
                 
                 const gameIcon = comm.gameType === 'BINGO' ? '🎱' : '🎰';
                 const gameClass = comm.gameType === 'BINGO' ? 'bingo' : 'keno';
-                const netProfit = comm.netProfit || (comm.winningAmount - comm.stake);
+                const transactionId = comm.transactionId ? comm.transactionId.substring(0, 8) + '...' : 'N/A';
                 
                 historyHtml += `
                     <tr>
@@ -1984,8 +1961,8 @@ player123"></textarea>
                         </td>
                         <td>${comm.stake} ETB</td>
                         <td>${comm.winningAmount.toFixed(2)} ETB</td>
-                        <td>${netProfit.toFixed(2)} ETB</td>
                         <td class="text-primary"><strong>${comm.commissionAmount.toFixed(2)} ETB</strong></td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${transactionId}</td>
                     </tr>`;
             });
             historyTbody.innerHTML = historyHtml;
@@ -2002,7 +1979,6 @@ player123"></textarea>
             commissions.slice(0, 5).forEach(comm => {
                 const gameIcon = comm.gameType === 'BINGO' ? '🎱' : '🎰';
                 const gameClass = comm.gameType === 'BINGO' ? 'bingo' : 'keno';
-                const netProfit = comm.netProfit || (comm.winningAmount - comm.stake);
                 
                 recentHtml += `
                     <div class="commission-item">
@@ -2010,12 +1986,7 @@ player123"></textarea>
                             <div class="game-icon ${gameClass}">${gameIcon}</div>
                             <div>
                                 <div style="font-weight: 600;">${comm.userName || comm.userId}</div>
-                                <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                                    ${comm.gameType} • ${new Date(comm.createdAt).toLocaleDateString()}
-                                </div>
-                                <div class="net-profit-badge">
-                                    Net: ${netProfit.toFixed(2)} ETB
-                                </div>
+                                <div style="font-size: 0.9rem; color: var(--text-secondary);">${comm.gameType} • ${new Date(comm.createdAt).toLocaleDateString()}</div>
                             </div>
                         </div>
                         <div class="commission-amount">${comm.commissionAmount.toFixed(2)} ETB</div>
@@ -2030,13 +2001,10 @@ player123"></textarea>
                 .reduce((sum, c) => sum + c.commissionAmount, 0);
             
             document.getElementById('gameBreakdown').innerHTML = `
-                <div style="margin-bottom: 15px; font-size: 0.9rem; color: var(--text-secondary);">
-                    Commission calculated on NET PROFIT (winning amount - player stake)
-                </div>
                 <div style="display: flex; flex-direction: column; gap: 15px;">
                     <div>
                         <div style="display: flex; justify-content: space-between;">
-                            <span>🎱 Bingo Commissions (40%):</span>
+                            <span>🎱 Bingo Commissions:</span>
                             <span class="text-primary">${bingoCommissions.toFixed(2)} ETB</span>
                         </div>
                         <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 5px; overflow: hidden;">
@@ -2045,12 +2013,61 @@ player123"></textarea>
                     </div>
                     <div>
                         <div style="display: flex; justify-content: space-between;">
-                            <span>🎰 Keno Commissions (10%):</span>
+                            <span>🎰 Keno Commissions:</span>
                             <span class="text-primary">${kenoCommissions.toFixed(2)} ETB</span>
                         </div>
                         <div style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 5px; overflow: hidden;">
                             <div style="height: 100%; width: ${totalCommissions > 0 ? (kenoCommissions / totalCommissions * 100) : 0}%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);"></div>
                         </div>
+                    </div>
+                </div>`;
+        }
+        
+        function updateCommissionStats(stats) {
+            const statsDiv = document.getElementById('commissionStats');
+            
+            if (!stats || !stats.total) {
+                statsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <div>No commission stats available</div>
+                    </div>`;
+                return;
+            }
+            
+            const today = stats.today || { count: 0, total: 0 };
+            const total = stats.total || { count: 0, total: 0 };
+            
+            let byGameTypeHtml = '';
+            if (stats.byGameType && stats.byGameType.length > 0) {
+                stats.byGameType.forEach(game => {
+                    byGameTypeHtml += `
+                        <div style="display: flex; justify-content: space-between; padding: 5px 0;">
+                            <span>${game._id}:</span>
+                            <span>${game.count} games (${game.total.toFixed(2)} ETB)</span>
+                        </div>`;
+                });
+            } else {
+                byGameTypeHtml = '<div style="color: var(--text-secondary); padding: 10px 0;">No game breakdown available</div>';
+            }
+            
+            statsDiv.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">Today's Commissions</div>
+                        <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);">
+                            ${today.total.toFixed(2)} ETB (${today.count} games)
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">Total Commissions</div>
+                        <div style="font-size: 1.2rem; font-weight: 700; color: var(--primary);">
+                            ${total.total.toFixed(2)} ETB (${total.count} games)
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 5px;">By Game Type</div>
+                        ${byGameTypeHtml}
                     </div>
                 </div>`;
         }
@@ -2491,7 +2508,7 @@ player123"></textarea>
             if (withdrawals.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="4" class="text-center">
+                        <td colspan="5" class="text-center">
                             <div class="empty-state">
                                 <div class="empty-icon">💸</div>
                                 <div>No withdrawal history</div>
@@ -2505,13 +2522,16 @@ player123"></textarea>
             withdrawals.forEach(w => {
                 const statusColor = w.status === 'completed' ? 'var(--success)' : 
                                   w.status === 'pending' ? 'var(--warning)' : 'var(--danger)';
+                const transactionId = w.id ? w.id.substring(0, 8) + '...' : '-';
+                const phone = w.description ? w.description.split('Phone: ')[1] || '-' : '-';
                 
                 html += `
                     <tr>
                         <td>${new Date(w.createdAt).toLocaleDateString()}</td>
                         <td class="text-primary"><strong>${w.amount.toFixed(2)} ETB</strong></td>
-                        <td>${w.description ? w.description.split('Phone: ')[1] || '-' : '-'}</td>
+                        <td>${phone}</td>
                         <td><span style="color: ${statusColor}; font-weight: 600;">${w.status.toUpperCase()}</span></td>
+                        <td style="font-size: 0.8rem; color: var(--text-secondary);">${transactionId}</td>
                     </tr>`;
             });
             
@@ -2533,6 +2553,18 @@ player123"></textarea>
         function runEmergencySync() {
             if (confirm('⚠️ Run emergency sync? This will fix any data mismatches between referrals and users.')) {
                 socket.emit('agent:emergencySync');
+            }
+        }
+        
+        function fixDuplicateCommissions() {
+            if (confirm('⚠️ Fix duplicate commissions? This will find and remove duplicate commission records.')) {
+                socket.emit('agent:fixDuplicates');
+            }
+        }
+        
+        function clearCommissionCache() {
+            if (confirm('🧹 Clear commission cache? This will clear the in-memory cache to prevent duplicate processing.')) {
+                socket.emit('agent:clearCommissionCache');
             }
         }
         
@@ -2568,6 +2600,7 @@ player123"></textarea>
                 loadReferrals();
             } else if (tabId === 'commissions') {
                 loadCommissions();
+                loadCommissionStats();
             } else if (tabId === 'withdraw') {
                 document.getElementById('availableBalance').textContent = 
                     currentAgent ? currentAgent.totalEarnings.toFixed(2) + ' ETB' : '0.00 ETB';
@@ -2670,6 +2703,13 @@ player123"></textarea>
             if (e.ctrlKey && e.key === 'l') {
                 e.preventDefault();
                 logout();
+            }
+            
+            // Ctrl+S for stats
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                openModal('commissionStatsModal');
+                loadCommissionStats();
             }
         });
     </script>
