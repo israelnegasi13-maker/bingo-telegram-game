@@ -14,6 +14,7 @@ class ManualAgentSystem {
     this.processingClaims = new Map(); // user-room combo -> timestamp
     this.roomWinners = new Map(); // room-stake -> winnerId
     this.processedTransactions = new Map(); // transactionId -> timestamp
+    this.commissionDebug = true; // Enable detailed commission logging
   }
 
   async initialize() {
@@ -28,10 +29,12 @@ class ManualAgentSystem {
   // Set game logic references from server.js
   setGameLogic(gameLogic) {
     this.gameLogic = gameLogic;
+    console.log('🎮 Bingo game logic connected to agent system');
   }
 
   setKenoLogic(kenoLogic) {
     this.kenoLogic = kenoLogic;
+    console.log('🎰 Keno game logic connected to agent system');
   }
 
   async ensureAdminAgent() {
@@ -1107,9 +1110,61 @@ class ManualAgentSystem {
     }
   }
 
-  // Record commission for agent - FIXED VERSION (Prevents Double Commissions)
+  // NEW: Test commission method for debugging
+  async handleTestCommission(socket, data) {
+    try {
+      if (!socket.agentId) {
+        socket.emit('agent:error', 'Not authenticated');
+        return;
+      }
+
+      const { userId, gameType, amount } = data;
+      if (!userId || !gameType || !amount) {
+        socket.emit('agent:error', 'Missing required fields: userId, gameType, amount');
+        return;
+      }
+
+      const agent = await this.models.Agent.findById(socket.agentId);
+      if (!agent) {
+        socket.emit('agent:error', 'Agent not found');
+        return;
+      }
+
+      // Check if the user exists and is assigned to this agent
+      const user = await this.models.User.findOne({ userId, agentId: agent._id });
+      if (!user) {
+        socket.emit('agent:error', `User ${userId} is not assigned to you or does not exist`);
+        return;
+      }
+
+      let commissionAmount;
+      if (gameType === 'BINGO') {
+        commissionAmount = await this.processBingoWin(userId, { stake: 10 }, amount, `test_${Date.now()}`);
+      } else if (gameType === 'KENO') {
+        commissionAmount = await this.processKenoWin(userId, 5, amount, `test_${Date.now()}`);
+      } else {
+        socket.emit('agent:error', 'Invalid game type. Use BINGO or KENO');
+        return;
+      }
+
+      socket.emit('agent:testCommissionResult', {
+        success: true,
+        commissionAmount,
+        message: `Test ${gameType} commission recorded: ${commissionAmount.toFixed(2)} ETB`
+      });
+
+      console.log(`💰 Test commission by agent ${agent.username}: ${commissionAmount.toFixed(2)} ETB from ${gameType}`);
+    } catch (error) {
+      console.error('Test commission error:', error);
+      socket.emit('agent:error', 'Test commission failed: ' + error.message);
+    }
+  }
+
+  // Record commission for agent - UPDATED WITH BETTER LOGGING
   async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null) {
     try {
+      console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}`);
+      
       // Generate a unique key for this commission to prevent duplicates
       const commissionKey = transactionId || `${userId}_${gameType}_${stake}_${winningAmount}_${Date.now()}`;
       
@@ -1121,7 +1176,7 @@ class ManualAgentSystem {
       
       const agent = await this.models.Agent.findById(agentId);
       if (!agent) {
-        console.log(`Agent not found: ${agentId}`);
+        console.log(`❌ Agent not found: ${agentId}`);
         return 0;
       }
 
@@ -1130,14 +1185,29 @@ class ManualAgentSystem {
         return 0;
       }
 
+      // Get user first to check if they have agent assigned
+      const user = await this.models.User.findOne({ userId });
+      if (!user) {
+        console.log(`❌ User not found for commission: ${userId}`);
+        return 0;
+      }
+
+      // Double check agent assignment
+      if (!user.agentId || user.agentId.toString() !== agentId.toString()) {
+        console.log(`⚠️ User ${userId} not assigned to agent ${agentId}. User agent: ${user.agentId}`);
+        return 0;
+      }
+
       let commissionRate, commissionAmount;
       
       if (gameType === 'BINGO') {
         commissionRate = agent.commissionRateBingo;
         commissionAmount = (winningAmount * commissionRate) / 100;
+        console.log(`🎱 Bingo commission: ${commissionRate}% of ${winningAmount} = ${commissionAmount}`);
       } else if (gameType === 'KENO') {
         commissionRate = agent.commissionRateKeno;
         commissionAmount = (winningAmount * commissionRate) / 100;
+        console.log(`🎰 Keno commission: ${commissionRate}% of ${winningAmount} = ${commissionAmount}`);
       } else {
         console.log(`⚠️ Unknown game type: ${gameType}`);
         return 0;
@@ -1145,6 +1215,7 @@ class ManualAgentSystem {
 
       // Minimum commission 0.01 ETB
       if (commissionAmount < 0.01) {
+        console.log(`📏 Commission below minimum: ${commissionAmount}, setting to 0.01`);
         commissionAmount = 0.01;
       }
 
@@ -1164,13 +1235,6 @@ class ManualAgentSystem {
         return 0;
       }
 
-      // Get user info for the commission record
-      const user = await this.models.User.findOne({ userId });
-      if (!user) {
-        console.log(`User not found for commission: ${userId}`);
-        return 0;
-      }
-
       // Update user's agent commission earned
       user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
       await user.save();
@@ -1179,13 +1243,15 @@ class ManualAgentSystem {
       const commission = new this.models.AgentCommission({
         agentId: agent._id,
         userId: userId,
+        userName: user.userName,
+        telegramUsername: user.telegramUsername,
         gameType: gameType,
         stake: stake,
         winningAmount: winningAmount,
         commissionRate: commissionRate,
         commissionAmount: commissionAmount,
         status: 'completed',
-        transactionKey: commissionKey, // Store the key for reference
+        transactionKey: commissionKey,
         createdAt: new Date()
       });
 
@@ -1233,59 +1299,88 @@ class ManualAgentSystem {
       // Notify agent in real-time if online
       const agentSocket = this.agentSockets.get(agentId.toString());
       if (agentSocket) {
+        console.log(`📡 Sending real-time commission to agent ${agent.username}`);
         agentSocket.emit('agent:newCommission', {
           commissionId: commission._id,
           userId: userId,
-          userName: user.userName,
+          userName: user.userName || 'Unknown',
           telegramUsername: user.telegramUsername || '',
           gameType: gameType,
+          stake: stake,
           winningAmount: winningAmount,
           commissionAmount: commissionAmount,
           commissionRate: commissionRate,
           timestamp: new Date()
         });
+        
+        // Also update dashboard immediately
+        setTimeout(() => {
+          this.handleRefreshDashboard(agentSocket);
+        }, 500);
+      } else {
+        console.log(`⚠️ Agent ${agent.username} not connected, can't send real-time notification`);
       }
 
-      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (Player: ${userId})`);
+      console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (Player: ${userId})`);
       return commissionAmount;
     } catch (error) {
-      console.error('Record commission error:', error);
+      console.error('❌ Record commission error:', error);
       return 0;
     }
   }
 
-  // Process Bingo win for agent commission - FIXED VERSION
+  // Process Bingo win for agent commission - UPDATED WITH BETTER LOGGING
   async processBingoWin(userId, room, winningAmount, gameTransactionId = null) {
     try {
+      console.log(`🎱 Processing Bingo win for ${userId}, amount: ${winningAmount}, room: ${room?.roomId}`);
+      
       const user = await this.models.User.findOne({ userId });
-      if (!user || !user.agentId) {
-        console.log(`No agent for user ${userId} or user not found`);
+      if (!user) {
+        console.log(`❌ User not found: ${userId}`);
         return 0;
       }
 
-      const stake = room.stake || 10;
+      if (!user.agentId) {
+        console.log(`ℹ️ User ${userId} has no agent, no commission`);
+        return 0;
+      }
+
+      const stake = room?.stake || 10;
       const commissionAmount = await this.recordCommission(
         user.agentId,
         userId,
         'BINGO',
         stake,
         winningAmount,
-        gameTransactionId || `bingo_${room.roomId || Date.now()}`
+        gameTransactionId || `bingo_${room?.roomId || Date.now()}`
       );
+
+      if (commissionAmount > 0) {
+        console.log(`✅ Bingo commission processed: ${commissionAmount.toFixed(2)} ETB for agent ${user.agentId}`);
+      } else {
+        console.log(`⚠️ No commission processed for Bingo win`);
+      }
 
       return commissionAmount;
     } catch (error) {
-      console.error('Process Bingo win error:', error);
+      console.error('❌ Process Bingo win error:', error);
       return 0;
     }
   }
 
-  // Process Keno win for agent commission - FIXED VERSION
+  // Process Keno win for agent commission - UPDATED WITH BETTER LOGGING
   async processKenoWin(userId, stake, winningAmount, gameTransactionId = null) {
     try {
+      console.log(`🎰 Processing Keno win for ${userId}, amount: ${winningAmount}, stake: ${stake}`);
+      
       const user = await this.models.User.findOne({ userId });
-      if (!user || !user.agentId) {
-        console.log(`No agent for user ${userId} or user not found`);
+      if (!user) {
+        console.log(`❌ User not found: ${userId}`);
+        return 0;
+      }
+
+      if (!user.agentId) {
+        console.log(`ℹ️ User ${userId} has no agent, no commission`);
         return 0;
       }
 
@@ -1298,9 +1393,35 @@ class ManualAgentSystem {
         gameTransactionId || `keno_${Date.now()}`
       );
 
+      if (commissionAmount > 0) {
+        console.log(`✅ Keno commission processed: ${commissionAmount.toFixed(2)} ETB for agent ${user.agentId}`);
+      } else {
+        console.log(`⚠️ No commission processed for Keno win`);
+      }
+
       return commissionAmount;
     } catch (error) {
-      console.error('Process Keno win error:', error);
+      console.error('❌ Process Keno win error:', error);
+      return 0;
+    }
+  }
+
+  // NEW: Process commission from game transaction directly
+  async processGameTransaction(transaction) {
+    try {
+      console.log(`🔄 Processing commission from transaction: ${transaction._id}, type: ${transaction.type}`);
+      
+      const { userId, type, amount, room, stake } = transaction;
+      
+      if (type === 'BINGO_WIN') {
+        return await this.processBingoWin(userId, { room, stake }, amount, transaction._id);
+      } else if (type === 'KENO_WIN') {
+        return await this.processKenoWin(userId, stake || 5, amount, transaction._id);
+      }
+      
+      return 0;
+    } catch (error) {
+      console.error('Process game transaction error:', error);
       return 0;
     }
   }
@@ -1905,12 +2026,10 @@ class ManualAgentSystem {
     }, 60 * 1000); // 1 minute
   }
 
-  // Calculate pending commissions for all agents - FIXED VERSION
+  // Calculate pending commissions for all agents - UPDATED VERSION
   async calculatePendingCommissions() {
     try {
       console.log('🔄 Calculating pending commissions...');
-      
-      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
       
       // Get all users with agentId
       const usersWithAgents = await this.models.User.find({ 
@@ -1918,55 +2037,64 @@ class ManualAgentSystem {
         totalWins: { $gt: 0 }
       });
 
+      console.log(`📊 Found ${usersWithAgents.length} users with agents`);
+
       for (const user of usersWithAgents) {
         // Get user's win transactions that haven't been processed for commissions
-        // AND are older than 1 minute (to avoid real-time duplicates)
-        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
         const winTransactions = await this.models.Transaction.find({
           userId: user.userId,
           type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
           commissionProcessed: { $ne: true },
-          createdAt: { $lte: oneMinuteAgo } // Only process older transactions
+          createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
         });
 
+        console.log(`📝 User ${user.userId} has ${winTransactions.length} unprocessed win transactions`);
+
         for (const transaction of winTransactions) {
-          // Skip if already processed by real-time
-          const commissionKey = `bg_${transaction._id}`;
-          if (this.processedTransactions.has(commissionKey)) {
-            console.log(`⚠️ Transaction ${transaction._id} already being processed`);
-            continue;
-          }
-          
-          // Mark as being processed
-          this.processedTransactions.set(commissionKey, Date.now());
-          
-          let gameType = '';
-          if (transaction.type === 'BINGO_WIN') {
-            gameType = 'BINGO';
-          } else if (transaction.type === 'KENO_WIN') {
-            gameType = 'KENO';
-          } else {
+          try {
+            // Skip if already processed
+            const commissionKey = `pending_${transaction._id}`;
+            if (this.processedTransactions.has(commissionKey)) {
+              continue;
+            }
+            
+            // Mark as being processed
+            this.processedTransactions.set(commissionKey, Date.now());
+            
+            let gameType = '';
+            if (transaction.type === 'BINGO_WIN') {
+              gameType = 'BINGO';
+            } else if (transaction.type === 'KENO_WIN') {
+              gameType = 'KENO';
+            } else {
+              this.processedTransactions.delete(commissionKey);
+              continue;
+            }
+
+            // Record commission with transaction ID
+            const stake = transaction.room || transaction.stake || 10;
+            const commission = await this.recordCommission(
+              user.agentId,
+              user.userId,
+              gameType,
+              stake,
+              transaction.amount,
+              commissionKey
+            );
+
+            // Mark as processed
+            if (commission > 0) {
+              transaction.commissionProcessed = true;
+              await transaction.save();
+              console.log(`✅ Marked transaction ${transaction._id} as processed`);
+            }
+            
+            // Remove from processing map
             this.processedTransactions.delete(commissionKey);
-            continue;
+            
+          } catch (transactionError) {
+            console.error(`Error processing transaction ${transaction._id}:`, transactionError);
           }
-
-          // Record commission with transaction ID
-          const stake = transaction.room ? transaction.room * 2 : 10;
-          await this.recordCommission(
-            user.agentId,
-            user.userId,
-            gameType,
-            stake,
-            transaction.amount,
-            commissionKey
-          );
-
-          // Mark as processed
-          transaction.commissionProcessed = true;
-          await transaction.save();
-          
-          // Remove from processing map
-          this.processedTransactions.delete(commissionKey);
         }
       }
 
@@ -2012,6 +2140,17 @@ class ManualAgentSystem {
       
       agent.updatedAt = new Date();
       await agent.save();
+      
+      // Notify agent if online
+      const agentSocket = this.agentSockets.get(agent._id.toString());
+      if (agentSocket) {
+        agentSocket.emit('agent:activeReferralsUpdated', {
+          activeReferrals: agent.activeReferrals,
+          userId: userId,
+          userName: user.userName,
+          isOnline: isOnline
+        });
+      }
     } catch (error) {
       console.error('Update agent active referrals error:', error);
     }
@@ -2130,10 +2269,14 @@ class ManualAgentSystem {
           { agentId: null }
         ]
       });
+      const usersWithAgents = await this.models.User.countDocuments({
+        agentId: { $exists: true, $ne: null }
+      });
       
       socket.emit('agent:testResult', {
         totalUsers,
         usersWithoutAgents,
+        usersWithAgents,
         sampleUsers: users.map(u => ({
           userId: u.userId,
           userName: u.userName,
@@ -3321,6 +3464,61 @@ class ManualAgentSystem {
     } catch (error) {
       console.error('Test user database error:', error);
       socket.emit('agent:error', 'Test failed: ' + error.message);
+    }
+  }
+
+  // NEW: Check commission status for debugging
+  async checkCommissionStatus(socket, data) {
+    try {
+      const { userId, gameType, startDate, endDate } = data;
+      
+      const matchQuery = {};
+      if (userId) matchQuery.userId = userId;
+      if (gameType) matchQuery.gameType = gameType;
+      if (startDate || endDate) {
+        matchQuery.createdAt = {};
+        if (startDate) matchQuery.createdAt.$gte = new Date(startDate);
+        if (endDate) matchQuery.createdAt.$lte = new Date(endDate);
+      }
+
+      const commissions = await this.models.AgentCommission.find(matchQuery)
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('agentId', 'username name')
+        .populate('userId', 'userId userName agentId');
+
+      const stats = await this.models.AgentCommission.aggregate([
+        { $match: matchQuery },
+        {
+          $group: {
+            _id: null,
+            totalCommissions: { $sum: 1 },
+            totalAmount: { $sum: '$commissionAmount' },
+            avgCommission: { $avg: '$commissionAmount' }
+          }
+        }
+      ]);
+
+      socket.emit('agent:commissionStatus', {
+        commissions: commissions.map(comm => ({
+          id: comm._id,
+          userId: comm.userId?.userId,
+          userName: comm.userId?.userName,
+          agentId: comm.agentId?._id,
+          agentName: comm.agentId?.name,
+          gameType: comm.gameType,
+          stake: comm.stake,
+          winningAmount: comm.winningAmount,
+          commissionAmount: comm.commissionAmount,
+          commissionRate: comm.commissionRate,
+          createdAt: comm.createdAt
+        })),
+        stats: stats[0] || { totalCommissions: 0, totalAmount: 0, avgCommission: 0 },
+        processedTransactions: Array.from(this.processedTransactions.entries()).slice(0, 20)
+      });
+    } catch (error) {
+      console.error('Check commission status error:', error);
+      socket.emit('agent:error', 'Failed to check commission status');
     }
   }
 }
