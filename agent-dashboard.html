@@ -99,6 +99,12 @@
             transform: translateY(-2px);
         }
         
+        .logout-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1632,7 +1638,7 @@ player123"></textarea>
         let currentAgent = null;
         let dashboardData = null;
         let realTimeUpdateEnabled = true;
-        let isLoggingOut = false; // Guard to prevent multiple logout attempts
+        let isLoggingOut = false;
         let autoRefreshInterval = null;
         
         // Initialize on page load
@@ -1641,7 +1647,6 @@ player123"></textarea>
             checkAutoLogin();
             setupEventListeners();
             setupRealTimeUpdates();
-            startAutoRefresh();
         });
         
         function checkAutoLogin() {
@@ -1667,17 +1672,26 @@ player123"></textarea>
             
             socket.on('disconnect', function() {
                 console.log('❌ Disconnected from server');
-                // Only show notification if we're not in the process of logging out
-                if (!isLoggingOut) {
-                    showNotification('Disconnected from server', 'error');
+                
+                // If we're logging out, this is expected
+                if (isLoggingOut) {
+                    console.log('🔄 Disconnected during logout (expected)');
+                    return;
                 }
+                
+                showNotification('Disconnected from server', 'error');
             });
             
             socket.on('connect_error', function(error) {
                 console.log('❌ Connection error:', error);
-                if (!isLoggingOut) {
-                    showNotification('Connection error: ' + error.message, 'error');
+                
+                // If we're logging out, this is expected
+                if (isLoggingOut) {
+                    console.log('🔄 Connection error during logout (expected)');
+                    return;
                 }
+                
+                showNotification('Connection error: ' + error.message, 'error');
             });
             
             // Login success
@@ -1705,55 +1719,54 @@ player123"></textarea>
                 window.location.href = '/agent';
             });
             
-            // FIXED: Logout success - prevents uncontrolled refresh
-            socket.once('agent:logoutSuccess', function(data) {
-                console.log('✅ Logout successful:', data.message);
+            // FIXED: Logout success - handle properly
+            socket.on('agent:logoutSuccess', function(data) {
+                console.log('✅ Logout successful from server');
                 
-                // Stop auto-refresh immediately
+                // Set logging out flag
+                isLoggingOut = true;
+                
+                // Clear local data
+                localStorage.removeItem('agentToken');
+                currentAgent = null;
+                dashboardData = null;
+                
+                // Disable real-time updates
+                realTimeUpdateEnabled = false;
+                
+                // Clear auto-refresh interval
                 if (autoRefreshInterval) {
                     clearInterval(autoRefreshInterval);
                     autoRefreshInterval = null;
                 }
                 
-                // Disable real-time updates
-                realTimeUpdateEnabled = false;
+                // Disconnect socket
+                socket.disconnect();
                 
                 // Show success notification
-                showNotification('✅ ' + data.message, 'success');
+                showNotification('✅ Logged out successfully', 'success');
                 
-                // Clear all local data
-                localStorage.removeItem('agentToken');
-                currentAgent = null;
-                dashboardData = null;
-                
-                // Disable socket reconnection
-                socket.io.opts.reconnection = false;
-                socket.io.opts.reconnectionAttempts = 0;
-                
-                // Disconnect the socket
+                // Redirect to login page after short delay
                 setTimeout(() => {
-                    socket.disconnect();
-                    
-                    // Redirect to login page after a short delay
-                    setTimeout(() => {
-                        window.location.replace('/agent');
-                    }, 800);
-                }, 100);
+                    console.log('🔀 Redirecting to login page...');
+                    window.location.replace('/agent');
+                }, 800);
             });
             
-            // FIXED: Logout error - re-enables logout button
-            socket.once('agent:logoutError', function(message) {
+            // FIXED: Logout error - handle properly
+            socket.on('agent:logoutError', function(message) {
                 console.log('❌ Logout error:', message);
-                
-                // Re-enable logout button
-                const logoutBtn = document.querySelector('.logout-btn');
-                logoutBtn.disabled = false;
-                logoutBtn.textContent = '🚪 Logout';
                 
                 // Reset logout flag
                 isLoggingOut = false;
                 
-                // Show error notification
+                // Re-enable logout button
+                const logoutBtn = document.querySelector('.logout-btn');
+                if (logoutBtn) {
+                    logoutBtn.disabled = false;
+                    logoutBtn.textContent = '🚪 Logout';
+                }
+                
                 showNotification('❌ Logout failed: ' + message, 'error');
             });
             
@@ -1921,47 +1934,30 @@ player123"></textarea>
         function setupRealTimeUpdates() {
             console.log('🔧 Setting up real-time updates...');
             
-            // Add real-time updates toggle to debug panel
-            const debugPanel = document.querySelector('.debug-panel');
-            if (debugPanel) {
-                const realTimeCheckbox = document.createElement('div');
-                realTimeCheckbox.innerHTML = `
-                    <div style="margin-top: 15px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="realTimeToggle" checked onchange="toggleRealTimeUpdates(this.checked)">
-                        <label for="realTimeToggle" style="font-size: 0.9rem;">Enable Real-time Updates</label>
-                    </div>`;
-                debugPanel.appendChild(realTimeCheckbox);
-            }
+            // Enable real-time updates checkbox
+            const realTimeCheckbox = document.createElement('div');
+            realTimeCheckbox.innerHTML = `
+                <div style="margin-top: 15px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-radius: 10px; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="realTimeToggle" checked onchange="toggleRealTimeUpdates(this.checked)">
+                    <label for="realTimeToggle" style="font-size: 0.9rem;">Enable Real-time Updates</label>
+                </div>`;
+            document.querySelector('.debug-panel').appendChild(realTimeCheckbox);
             
-            console.log('✅ Real-time updates setup complete');
-        }
-        
-        function startAutoRefresh() {
-            // Clear any existing interval first
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-            
-            // Start new auto-refresh interval
+            // Set up auto-refresh interval
             autoRefreshInterval = setInterval(() => {
-                if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled && !isLoggingOut) {
+                if (document.getElementById('dashboard').classList.contains('active') && realTimeUpdateEnabled) {
                     console.log('🔄 Auto-refreshing dashboard...');
                     loadDashboard();
                 }
-            }, 30000); // 30 seconds
+            }, 30000);
             
-            console.log('✅ Auto-refresh started (30s interval)');
+            console.log('✅ Real-time updates setup complete');
         }
         
         function toggleRealTimeUpdates(enabled) {
             realTimeUpdateEnabled = enabled;
             console.log(`🔄 Real-time updates ${enabled ? 'enabled' : 'disabled'}`);
             showNotification(`Real-time updates ${enabled ? 'enabled' : 'disabled'}`, 'info');
-            
-            // Restart auto-refresh if enabling
-            if (enabled) {
-                startAutoRefresh();
-            }
         }
         
         function updateAgentInfo() {
@@ -2024,7 +2020,7 @@ player123"></textarea>
                     formatTimeAgo(new Date(data.agent.lastLogin));
             }
             
-            // Update available balance for withdrawal
+            // Update available balance
             document.getElementById('availableBalance').textContent = 
                 data.agent.totalEarnings.toFixed(2) + ' ETB';
             
@@ -2059,6 +2055,11 @@ player123"></textarea>
                 document.getElementById('totalCommissions').textContent = 
                     (totalCommissions + commissionData.commissionAmount).toFixed(2) + ' ETB';
             }
+            
+            // Update available balance
+            const availableBalance = parseFloat(document.getElementById('availableBalance').textContent) || 0;
+            document.getElementById('availableBalance').textContent = 
+                (availableBalance + commissionData.commissionAmount).toFixed(2) + ' ETB';
             
             // Add to recent commissions if visible
             const recentCommissions = document.getElementById('recentCommissions');
@@ -2998,8 +2999,10 @@ player123"></textarea>
             } else if (tabId === 'commissions') {
                 loadCommissions();
             } else if (tabId === 'withdraw') {
-                document.getElementById('availableBalance').textContent = 
-                    currentAgent ? currentAgent.totalEarnings.toFixed(2) + ' ETB' : '0.00 ETB';
+                if (currentAgent) {
+                    document.getElementById('availableBalance').textContent = 
+                        currentAgent.totalEarnings.toFixed(2) + ' ETB';
+                }
                 loadWithdrawalHistory();
             } else if (tabId === 'add-referral') {
                 loadUserSuggestions();
@@ -3051,48 +3054,30 @@ player123"></textarea>
             document.getElementById(modalId).classList.remove('show');
         }
         
-        // FIXED: Logout function with guard to prevent uncontrolled refresh
+        // FIXED: Logout function
         function logout() {
-            // Prevent multiple logout attempts
             if (isLoggingOut) {
                 console.log('⚠️ Logout already in progress');
                 return;
             }
             
-            if (!confirm('Are you sure you want to logout?')) {
-                return;
+            if (confirm('Are you sure you want to logout?')) {
+                console.log('🚪 Logging out...');
+                
+                // Set logout flag
+                isLoggingOut = true;
+                
+                // Disable logout button to prevent multiple clicks
+                const logoutBtn = document.querySelector('.logout-btn');
+                logoutBtn.disabled = true;
+                logoutBtn.textContent = '⏳ Logging out...';
+                
+                // Emit logout event to server
+                socket.emit('agent:logout');
+                
+                // Show notification
+                showNotification('Logging out...', 'info');
             }
-            
-            console.log('🚪 Logging out...');
-            isLoggingOut = true;
-            
-            // Disable logout button to prevent multiple clicks
-            const logoutBtn = document.querySelector('.logout-btn');
-            logoutBtn.disabled = true;
-            logoutBtn.textContent = '⏳ Logging out...';
-            
-            // Stop auto-refresh interval
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-            }
-            
-            // Disable real-time updates
-            realTimeUpdateEnabled = false;
-            
-            // Disable socket reconnection during logout
-            socket.io.opts.reconnection = false;
-            socket.io.opts.reconnectionAttempts = 0;
-            
-            // Remove socket event listeners to prevent unwanted behavior
-            socket.off('agent:logoutSuccess');
-            socket.off('agent:logoutError');
-            
-            // Emit logout event to server
-            socket.emit('agent:logout');
-            
-            // Show notification
-            showNotification('Logging out...', 'info');
         }
         
         // Search as user types
@@ -3150,6 +3135,15 @@ player123"></textarea>
                 document.querySelectorAll('.modal.show').forEach(modal => {
                     modal.classList.remove('show');
                 });
+            }
+        });
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', function(e) {
+            // Clean up intervals if page is being unloaded
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
             }
         });
         
