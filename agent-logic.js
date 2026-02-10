@@ -1,4 +1,4 @@
-// agent-logic.js - Manual Agent/Referral System for Elite Games
+// agent-logic.js - Manual Agent/Referral System for Elite Games - FIXED VERSION
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
@@ -8,18 +8,19 @@ class ManualAgentSystem {
     this.models = models;
     this.agentSockets = new Map(); // agentId -> socket
     this.commissionRates = {
-      BINGO: 40, // 40% commission from Bingo NET PROFIT
-      KENO: 10   // 10% commission from Keno NET PROFIT
+      BINGO: 40, // 40% commission from Bingo wins
+      KENO: 10   // 10% commission from Keno wins
     };
     this.processingClaims = new Map(); // user-room combo -> timestamp
     this.roomWinners = new Map(); // room-stake -> winnerId
-    this.processedCommissions = new Map(); // transactionId -> timestamp
+    this.commissionCache = new Map(); // transactionId -> commissionId (to prevent duplicates)
   }
 
   async initialize() {
     console.log('✅ Manual Agent system initializing...');
     await this.ensureAdminAgent();
-    // REMOVED: this.startCommissionCalculationJob(); // No background job to avoid double commissions
+    // Start background jobs
+    this.startCommissionCalculationJob();
     this.startCleanupJob();
     console.log('👑 Manual Agent system ready with 40% Bingo and 10% Keno commissions');
   }
@@ -1105,23 +1106,9 @@ class ManualAgentSystem {
     }
   }
 
-  // Record commission for agent - FIXED VERSION (NO DOUBLE COMMISSIONS)
+  // FIXED: Record commission for agent - PREVENTS DUPLICATES
   async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null) {
     try {
-      // Check if commission already processed for this transaction
-      if (transactionId) {
-        const existingCommission = await this.models.AgentCommission.findOne({
-          transactionId: transactionId,
-          agentId: agentId,
-          userId: userId
-        });
-        
-        if (existingCommission) {
-          console.log(`⚠️ Commission already recorded for transaction ${transactionId}`);
-          return 0;
-        }
-      }
-
       const agent = await this.models.Agent.findById(agentId);
       if (!agent) {
         console.log(`Agent not found: ${agentId}`);
@@ -1133,36 +1120,52 @@ class ManualAgentSystem {
         return 0;
       }
 
-      let commissionRate, commissionAmount;
-      
-      // Calculate NET PROFIT (winning amount minus stake)
-      const netProfit = winningAmount - stake;
-      
-      if (netProfit <= 0) {
-        console.log(`⚠️ No commission: Net profit is ${netProfit.toFixed(2)} for ${gameType}`);
+      // 🔴 CRITICAL FIX: Check cache for duplicate processing
+      const cacheKey = transactionId ? `${transactionId}_${agentId}_${userId}` : `${gameType}_${stake}_${winningAmount}_${Date.now()}`;
+      if (this.commissionCache.has(cacheKey)) {
+        console.log(`⚠️ Commission already in cache, skipping duplicate: ${cacheKey}`);
         return 0;
       }
 
+      // 🔴 CRITICAL FIX: Check if commission already exists for this transaction
+      if (transactionId) {
+        const existingCommission = await this.models.AgentCommission.findOne({
+          agentId: agentId,
+          userId: userId,
+          gameType: gameType,
+          stake: stake,
+          winningAmount: winningAmount,
+          transactionId: transactionId
+        });
+
+        if (existingCommission) {
+          console.log(`⚠️ Commission already recorded for transaction ${transactionId}, skipping duplicate`);
+          // Add to cache to prevent future duplicates
+          this.commissionCache.set(cacheKey, existingCommission._id);
+          return existingCommission.commissionAmount;
+        }
+      }
+
+      let commissionRate, commissionAmount;
+      
       if (gameType === 'BINGO') {
         commissionRate = agent.commissionRateBingo;
-        commissionAmount = (netProfit * commissionRate) / 100;
+        commissionAmount = (winningAmount * commissionRate) / 100;
       } else if (gameType === 'KENO') {
         commissionRate = agent.commissionRateKeno;
-        commissionAmount = (netProfit * commissionRate) / 100;
+        commissionAmount = (winningAmount * commissionRate) / 100;
       } else {
         console.log(`⚠️ Unknown game type: ${gameType}`);
         return 0;
       }
 
-      // Minimum commission 0.01 ETB, but only if net profit is positive
+      // Minimum commission 0.01 ETB
       if (commissionAmount < 0.01) {
-        if (netProfit >= 0.01) {
-          commissionAmount = 0.01;
-        } else {
-          console.log(`⚠️ Commission too small: ${commissionAmount.toFixed(4)} ETB for net profit ${netProfit.toFixed(2)}`);
-          return 0;
-        }
+        commissionAmount = 0.01;
       }
+
+      // Round to 2 decimal places
+      commissionAmount = Math.round(commissionAmount * 100) / 100;
 
       // Get user info for the commission record
       const user = await this.models.User.findOne({ userId });
@@ -1171,31 +1174,38 @@ class ManualAgentSystem {
         return 0;
       }
 
-      // Update user's agent commission earned
-      user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
-      await user.save();
+      // Check if user has an agent
+      if (!user.agentId || user.agentId.toString() !== agentId.toString()) {
+        console.log(`⚠️ User ${userId} not assigned to agent ${agentId}, no commission`);
+        return 0;
+      }
 
-      // Create commission record
+      // 🔴 CRITICAL FIX: Create commission record with transaction ID
       const commission = new this.models.AgentCommission({
         agentId: agent._id,
         userId: userId,
         gameType: gameType,
         stake: stake,
         winningAmount: winningAmount,
-        netProfit: netProfit,
         commissionRate: commissionRate,
         commissionAmount: commissionAmount,
+        transactionId: transactionId, // Store the game transaction ID
         status: 'completed',
-        transactionId: transactionId,
         createdAt: new Date()
       });
 
       await commission.save();
 
+      // Add to cache to prevent duplicates
+      this.commissionCache.set(cacheKey, commission._id);
+
+      // Update user's agent commission earned
+      user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commissionAmount;
+      await user.save();
+
       // Update agent earnings
       agent.totalEarnings = (agent.totalEarnings || 0) + commissionAmount;
       agent.lastCommissionDate = new Date();
-      agent.updatedAt = new Date();
       await agent.save();
 
       // Create transaction record for agent
@@ -1203,35 +1213,26 @@ class ManualAgentSystem {
         agentId: agent._id,
         type: 'COMMISSION',
         amount: commissionAmount,
-        description: `${gameType} commission from referral ${userId.substring(0, 8)}... (Net: ${netProfit.toFixed(2)} ETB)`,
+        description: `${gameType} commission from referral ${userId.substring(0, 8)}...`,
         status: 'completed',
+        transactionId: transactionId, // Link to game transaction
         createdAt: new Date()
       });
       await agentTransaction.save();
 
-      // Update game transaction with agent commission
+      // 🔴 FIX: Update game transaction with agent commission ONCE
       if (transactionId) {
-        const gameTransaction = await this.models.Transaction.findById(transactionId);
-        if (gameTransaction) {
-          gameTransaction.agentId = agent._id;
-          gameTransaction.agentCommission = commissionAmount;
-          gameTransaction.commissionProcessed = true;
-          await gameTransaction.save();
-        }
-      } else {
-        // Fallback: find recent transaction
-        const gameTransaction = await this.models.Transaction.findOne({
-          userId: userId,
-          type: gameType === 'BINGO' ? 'BINGO_WIN' : 'KENO_WIN',
-          amount: winningAmount,
-          createdAt: { $gte: new Date(Date.now() - 60000) }
-        }).sort({ createdAt: -1 });
-
-        if (gameTransaction) {
-          gameTransaction.agentId = agent._id;
-          gameTransaction.agentCommission = commissionAmount;
-          gameTransaction.commissionProcessed = true;
-          await gameTransaction.save();
+        try {
+          const gameTransaction = await this.models.Transaction.findById(transactionId);
+          if (gameTransaction && !gameTransaction.commissionProcessed) {
+            gameTransaction.agentId = agent._id;
+            gameTransaction.agentCommission = commissionAmount;
+            gameTransaction.commissionProcessed = true;
+            gameTransaction.commissionProcessedAt = new Date();
+            await gameTransaction.save();
+          }
+        } catch (error) {
+          console.error(`Error updating transaction ${transactionId}:`, error);
         }
       }
 
@@ -1244,16 +1245,14 @@ class ManualAgentSystem {
           userName: user.userName,
           telegramUsername: user.telegramUsername || '',
           gameType: gameType,
-          stake: stake,
           winningAmount: winningAmount,
-          netProfit: netProfit,
           commissionAmount: commissionAmount,
           commissionRate: commissionRate,
           timestamp: new Date()
         });
       }
 
-      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (Player: ${userId}, Net: ${netProfit.toFixed(2)} ETB)`);
+      console.log(`💰 Agent commission: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (Player: ${userId})`);
       return commissionAmount;
     } catch (error) {
       console.error('Record commission error:', error);
@@ -1261,7 +1260,7 @@ class ManualAgentSystem {
     }
   }
 
-  // Process Bingo win for agent commission - FIXED
+  // FIXED: Process Bingo win for agent commission
   async processBingoWin(userId, room, winningAmount, transactionId = null) {
     try {
       const user = await this.models.User.findOne({ userId });
@@ -1270,10 +1269,23 @@ class ManualAgentSystem {
         return 0;
       }
 
-      // Calculate player's stake based on room configuration
-      // In Bingo, each player pays the room stake
-      const stake = room.stake || 10; // Default 10 ETB if not specified
+      const stake = room.stake || 10;
       
+      // Check if commission already processed for this transaction
+      if (transactionId) {
+        const existingCommission = await this.models.AgentCommission.findOne({
+          agentId: user.agentId,
+          userId: userId,
+          gameType: 'BINGO',
+          transactionId: transactionId
+        });
+        
+        if (existingCommission) {
+          console.log(`⚠️ Bingo commission already recorded for transaction ${transactionId}`);
+          return existingCommission.commissionAmount;
+        }
+      }
+
       const commissionAmount = await this.recordCommission(
         user.agentId,
         userId,
@@ -1290,13 +1302,28 @@ class ManualAgentSystem {
     }
   }
 
-  // Process Keno win for agent commission - FIXED
+  // FIXED: Process Keno win for agent commission
   async processKenoWin(userId, stake, winningAmount, transactionId = null) {
     try {
       const user = await this.models.User.findOne({ userId });
       if (!user || !user.agentId) {
         console.log(`No agent for user ${userId} or user not found`);
         return 0;
+      }
+
+      // Check if commission already processed for this transaction
+      if (transactionId) {
+        const existingCommission = await this.models.AgentCommission.findOne({
+          agentId: user.agentId,
+          userId: userId,
+          gameType: 'KENO',
+          transactionId: transactionId
+        });
+        
+        if (existingCommission) {
+          console.log(`⚠️ Keno commission already recorded for transaction ${transactionId}`);
+          return existingCommission.commissionAmount;
+        }
       }
 
       const commissionAmount = await this.recordCommission(
@@ -1816,7 +1843,6 @@ class ManualAgentSystem {
             totalCommission: { $sum: "$commissionAmount" },
             totalGames: { $sum: 1 },
             totalWinnings: { $sum: "$winningAmount" },
-            totalNetProfit: { $sum: "$netProfit" },
             averageCommission: { $avg: "$commissionAmount" }
           }
         },
@@ -1832,7 +1858,6 @@ class ManualAgentSystem {
             totalCommission: { $sum: "$commissionAmount" },
             totalGames: { $sum: 1 },
             totalWinnings: { $sum: "$winningAmount" },
-            totalNetProfit: { $sum: "$netProfit" },
             averageCommission: { $avg: "$commissionAmount" },
             minCommission: { $min: "$commissionAmount" },
             maxCommission: { $max: "$commissionAmount" }
@@ -1858,7 +1883,6 @@ class ManualAgentSystem {
           totalCommission: 0, 
           totalGames: 0, 
           totalWinnings: 0,
-          totalNetProfit: 0,
           averageCommission: 0,
           minCommission: 0,
           maxCommission: 0
@@ -1879,12 +1903,28 @@ class ManualAgentSystem {
     });
   }
 
-  // REMOVED: startCommissionCalculationJob() - NO BACKGROUND JOB TO AVOID DOUBLE COMMISSIONS
+  // Start commission calculation job (runs every 5 minutes)
+  startCommissionCalculationJob() {
+    setInterval(async () => {
+      try {
+        await this.calculatePendingCommissions();
+      } catch (error) {
+        console.error('Commission calculation job error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
 
   // Cleanup stale processing claims (runs every minute)
   startCleanupJob() {
     setInterval(() => {
       const now = Date.now();
+      
+      // Clean commission cache older than 1 hour
+      for (const [key, timestamp] of this.commissionCache.entries()) {
+        if (now - timestamp > 60 * 60 * 1000) {
+          this.commissionCache.delete(key);
+        }
+      }
       
       // Clean processing claims older than 10 minutes
       for (const [key, timestamp] of this.processingClaims.entries()) {
@@ -1899,17 +1939,107 @@ class ManualAgentSystem {
           this.roomWinners.delete(key);
         }
       }
-      
-      // Clean processed commissions cache older than 1 hour
-      for (const [key, timestamp] of this.processedCommissions.entries()) {
-        if (now - timestamp > 60 * 60 * 1000) {
-          this.processedCommissions.delete(key);
-        }
-      }
     }, 60 * 1000); // 1 minute
   }
 
-  // REMOVED: calculatePendingCommissions() - NOT NEEDED WITH REAL-TIME PROCESSING
+  // FIXED: Calculate pending commissions - WITH DUPLICATE PREVENTION
+  async calculatePendingCommissions() {
+    try {
+      console.log('🔄 Calculating pending commissions...');
+      
+      // Get win transactions that haven't been processed for commissions
+      const winTransactions = await this.models.Transaction.find({
+        type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
+        commissionProcessed: { $ne: true },
+        // 🔴 FIX: Only process transactions older than 30 seconds to avoid race conditions
+        createdAt: { $lt: new Date(Date.now() - 30000) }
+      }).limit(100);
+
+      console.log(`📊 Found ${winTransactions.length} unprocessed win transactions`);
+      
+      let processedCount = 0;
+      let duplicateCount = 0;
+      let errorCount = 0;
+
+      for (const transaction of winTransactions) {
+        try {
+          // Get the user
+          const user = await this.models.User.findOne({ userId: transaction.userId });
+          if (!user || !user.agentId) {
+            // Mark as processed even if no agent to prevent reprocessing
+            transaction.commissionProcessed = true;
+            transaction.commissionProcessedAt = new Date();
+            await transaction.save();
+            continue;
+          }
+
+          // Check if commission already exists for this transaction
+          const existingCommission = await this.models.AgentCommission.findOne({
+            agentId: user.agentId,
+            userId: transaction.userId,
+            transactionId: transaction._id
+          });
+
+          if (existingCommission) {
+            duplicateCount++;
+            console.log(`⚠️ Duplicate commission found for transaction ${transaction._id}, marking as processed`);
+            
+            // Mark transaction as processed
+            transaction.commissionProcessed = true;
+            transaction.commissionProcessedAt = new Date();
+            transaction.agentId = user.agentId;
+            transaction.agentCommission = existingCommission.commissionAmount;
+            await transaction.save();
+            continue;
+          }
+
+          // Determine game type
+          let gameType = '';
+          let stake = 10;
+          
+          if (transaction.type === 'BINGO_WIN') {
+            gameType = 'BINGO';
+            if (transaction.room) {
+              stake = transaction.room * 2;
+            }
+          } else if (transaction.type === 'KENO_WIN') {
+            gameType = 'KENO';
+            stake = transaction.stake || 10;
+          }
+
+          // Record commission
+          const commissionAmount = await this.recordCommission(
+            user.agentId,
+            transaction.userId,
+            gameType,
+            stake,
+            transaction.amount,
+            transaction._id
+          );
+
+          if (commissionAmount > 0) {
+            processedCount++;
+            
+            // Mark transaction as processed
+            transaction.commissionProcessed = true;
+            transaction.commissionProcessedAt = new Date();
+            transaction.agentId = user.agentId;
+            transaction.agentCommission = commissionAmount;
+            await transaction.save();
+          }
+
+        } catch (error) {
+          errorCount++;
+          console.error(`❌ Error processing transaction ${transaction._id}:`, error);
+        }
+      }
+
+      console.log(`✅ Pending commissions calculation completed: ${processedCount} processed, ${duplicateCount} duplicates, ${errorCount} errors`);
+      
+    } catch (error) {
+      console.error('Calculate pending commissions error:', error);
+    }
+  }
 
   // Get total agent earnings (for display in admin panel)
   async getTotalAgentEarnings() {
@@ -2160,7 +2290,7 @@ class ManualAgentSystem {
       this.agentSockets.clear();
       this.processingClaims.clear();
       this.roomWinners.clear();
-      this.processedCommissions.clear();
+      this.commissionCache.clear();
       
       console.log('✅ Agent system cleanup completed');
     } catch (error) {
@@ -2174,7 +2304,7 @@ class ManualAgentSystem {
       totalAgents: this.agentSockets.size,
       processingClaims: this.processingClaims.size,
       roomWinners: this.roomWinners.size,
-      processedCommissions: this.processedCommissions.size,
+      commissionCache: this.commissionCache.size,
       commissionRates: this.commissionRates,
       isInitialized: true
     };
@@ -2926,7 +3056,6 @@ class ManualAgentSystem {
           userId: comm.userId,
           stake: comm.stake,
           winningAmount: comm.winningAmount,
-          netProfit: comm.netProfit || (comm.winningAmount - comm.stake),
           commissionRate: comm.commissionRate,
           commissionAmount: comm.commissionAmount
         })),
@@ -3113,7 +3242,6 @@ class ManualAgentSystem {
           gameType: comm.gameType,
           stake: comm.stake,
           winningAmount: comm.winningAmount,
-          netProfit: comm.netProfit || (comm.winningAmount - comm.stake),
           commissionRate: comm.commissionRate,
           commissionAmount: comm.commissionAmount,
           createdAt: comm.createdAt
@@ -3123,6 +3251,119 @@ class ManualAgentSystem {
     } catch (error) {
       console.error('Get detailed referral info error:', error);
       socket.emit('agent:error', 'Failed to get detailed info');
+    }
+  }
+
+  // NEW: Emergency function to fix duplicate commissions
+  async fixDuplicateCommissions() {
+    try {
+      console.log('🔧 Fixing duplicate commissions...');
+      
+      // Find duplicate commissions
+      const duplicates = await this.models.AgentCommission.aggregate([
+        {
+          $group: {
+            _id: {
+              agentId: "$agentId",
+              userId: "$userId",
+              gameType: "$gameType",
+              winningAmount: "$winningAmount",
+              createdAt: {
+                $dateToString: { format: "%Y-%m-%d %H:%M", date: "$createdAt" }
+              }
+            },
+            count: { $sum: 1 },
+            ids: { $push: "$_id" }
+          }
+        },
+        { $match: { count: { $gt: 1 } } }
+      ]);
+
+      let fixed = 0;
+      let deleted = 0;
+      
+      for (const duplicate of duplicates) {
+        // Keep the first commission, delete the rest
+        const [keepId, ...deleteIds] = duplicate.ids;
+        
+        await this.models.AgentCommission.deleteMany({
+          _id: { $in: deleteIds }
+        });
+        
+        deleted += deleteIds.length;
+        fixed++;
+      }
+      
+      console.log(`✅ Fixed ${fixed} duplicate groups, deleted ${deleted} duplicate commissions`);
+      
+      // Recalculate agent totals
+      const agents = await this.models.Agent.find();
+      for (const agent of agents) {
+        const totalEarnings = await this.models.AgentCommission.aggregate([
+          { $match: { agentId: agent._id, status: 'completed' } },
+          { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
+        ]);
+        
+        agent.totalEarnings = totalEarnings[0]?.total || 0;
+        await agent.save();
+        console.log(`💰 Updated agent ${agent.username}: ${agent.totalEarnings.toFixed(2)} ETB`);
+      }
+      
+      return { success: true, fixed, deleted };
+      
+    } catch (error) {
+      console.error('Fix duplicate commissions error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // NEW: Clear commission cache
+  clearCommissionCache() {
+    const size = this.commissionCache.size;
+    this.commissionCache.clear();
+    console.log(`🧹 Cleared commission cache (${size} entries)`);
+    return size;
+  }
+
+  // NEW: Get commission statistics
+  async getCommissionStats() {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const stats = await this.models.AgentCommission.aggregate([
+        {
+          $facet: {
+            total: [
+              { $match: { status: 'completed' } },
+              { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$commissionAmount' } } }
+            ],
+            today: [
+              { $match: { status: 'completed', createdAt: { $gte: today } } },
+              { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$commissionAmount' } } }
+            ],
+            byGameType: [
+              { $match: { status: 'completed' } },
+              { $group: { _id: '$gameType', count: { $sum: 1 }, total: { $sum: '$commissionAmount' } } }
+            ],
+            recent: [
+              { $match: { status: 'completed' } },
+              { $sort: { createdAt: -1 } },
+              { $limit: 10 }
+            ]
+          }
+        }
+      ]);
+
+      return {
+        total: stats[0]?.total[0] || { count: 0, total: 0 },
+        today: stats[0]?.today[0] || { count: 0, total: 0 },
+        byGameType: stats[0]?.byGameType || [],
+        recent: stats[0]?.recent || []
+      };
+    } catch (error) {
+      console.error('Get commission stats error:', error);
+      return null;
     }
   }
 }
