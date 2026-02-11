@@ -977,9 +977,40 @@ io.on('connection', (socket) => {
   });
   
   // Agent verify token for auto login
-  socket.on('agent:verifyToken', (data) => {
+  socket.on('agent:verifyToken', async (data) => {
+    // If agentSystem has its own handler, use it; otherwise provide a fallback implementation
     if (agentSystem && agentSystem.handleVerifyAgentToken) {
       agentSystem.handleVerifyAgentToken(socket, data);
+    } else {
+      // Fallback token verification (simple - treat token as agent _id)
+      try {
+        const { token } = data;
+        if (!token) {
+          socket.emit('agent:tokenInvalid');
+          return;
+        }
+        const agent = await Agent.findById(token);
+        if (agent && agent.isActive) {
+          socket.agentId = agent._id.toString();
+          socket.agent = agent;
+          socket.emit('agent:tokenVerified', {
+            id: agent._id,
+            username: agent.username,
+            name: agent.name,
+            totalEarnings: agent.totalEarnings,
+            totalReferrals: agent.totalReferrals,
+            activeReferrals: agent.activeReferrals,
+            commissionRateBingo: agent.commissionRateBingo,
+            commissionRateKeno: agent.commissionRateKeno
+          });
+          console.log(`✅ Agent token verified: ${agent.username} (${socket.id})`);
+        } else {
+          socket.emit('agent:tokenInvalid');
+        }
+      } catch (err) {
+        console.error('Token verification error:', err);
+        socket.emit('agent:tokenInvalid');
+      }
     }
   });
   
@@ -1119,6 +1150,21 @@ io.on('connection', (socket) => {
     if (agentSystem && agentSystem.getSystemStatus) {
       const status = agentSystem.getSystemStatus();
       socket.emit('agent:systemStatus', status);
+    }
+  });
+
+  // ========== AGENT LOGOUT ==========
+  socket.on('agent:logout', () => {
+    if (socket.agentId) {
+      console.log(`👋 Agent logged out: ${socket.agentId} (${socket.id})`);
+      // Remove from agentSockets map if the AgentSystem tracks it
+      if (agentSystem && agentSystem.agentSockets) {
+        agentSystem.agentSockets.delete(socket.id);
+      }
+      // Clear socket flags
+      socket.agentId = null;
+      socket.agent = null;
+      socket.emit('agent:logoutSuccess');
     }
   });
   
@@ -1906,90 +1952,340 @@ app.get('/status', (req, res) => {
 });
 
 // ========== AGENT PORTAL PAGE ==========
-app.get('/agent', (req, res) => {
-  // Serve the agent-dashboard.html file
-  res.sendFile(path.join(__dirname, 'agent-dashboard.html'), (err) => {
-    if (err) {
-      console.error('Error serving agent dashboard:', err);
-      // Fallback to a simple HTML page
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Agent Portal - Bingo Elite</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
-            .container { max-width: 800px; margin: 0 auto; }
-            .login-form { background: #1e293b; padding: 30px; border-radius: 15px; margin: 30px auto; max-width: 400px; }
-            input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; }
-            button { background: #f59e0b; color: white; font-weight: bold; cursor: pointer; }
-            .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1 style="font-size: 2.5rem; margin-bottom: 10px;">👑 Agent Portal</h1>
-            <p style="color: #f59e0b; margin-bottom: 30px;">Bingo Elite - Commission Management System</p>
-            
-            <div class="login-form">
-              <h2>Agent Login</h2>
-              <input type="text" id="username" placeholder="Username">
-              <input type="password" id="password" placeholder="Password">
-              <button onclick="login()">Login</button>
-              <div id="loginError" style="color: #ef4444; margin-top: 10px; display: none;"></div>
-            </div>
-            
-            <div style="margin-top: 30px; padding: 20px; background: rgba(245, 158, 11, 0.1); border-radius: 12px;">
-              <h3>Agent System Features:</h3>
-              <p style="text-align: left; color: #94a3b8;">
-                • 40% commission from Bingo wins<br>
-                • 10% commission from Keno wins<br>
-                • Real-time commission tracking<br>
-                • Agent dashboard with statistics<br>
-                • Referral link generation<br>
-                • Withdrawal requests<br>
-                • Admin panel for agent management<br>
-              </p>
-            </div>
-            
-            <div style="margin-top: 30px;">
-              <a href="/" class="btn" style="background: #3b82f6;">← Back to Home</a>
-              <a href="/telegram" class="btn" style="background: #8b5cf6;">🤖 Telegram Entry</a>
-            </div>
-          </div>
-          
-          <script src="/socket.io/socket.io.js"></script>
-          <script>
-            const socket = io();
-            
-            function login() {
-              const username = document.getElementById('username').value;
-              const password = document.getElementById('password').value;
-              
-              socket.emit('agent:login', { username, password });
-            }
-            
-            socket.on('agent:loginSuccess', (data) => {
-              // Redirect to full agent dashboard
-              window.location.href = '/agent-dashboard.html';
-            });
-            
-            socket.on('agent:loginError', (message) => {
-              const errorDiv = document.getElementById('loginError');
-              errorDiv.textContent = message;
-              errorDiv.style.display = 'block';
-            });
-          </script>
-        </body>
-        </html>
-      `);
+// Embedded full-featured Agent Dashboard HTML (no external file needed)
+const AGENT_DASHBOARD_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Dashboard – ETHIO GAMES</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
     }
-  });
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #334155;
+    }
+    .header h1 {
+      font-size: 1.8rem;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logout-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .logout-btn:hover {
+      background: #dc2626;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #334155;
+    }
+    .stat-label {
+      color: #94a3b8;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    .commission-highlight {
+      color: #f59e0b;
+    }
+    .referral-section {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      border: 1px solid #334155;
+    }
+    .referral-link-box {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    .referral-link {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid #3b82f6;
+      padding: 12px;
+      border-radius: 8px;
+      color: #60a5fa;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+    .copy-btn, .generate-btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .copy-btn:hover, .generate-btn:hover {
+      background: #2563eb;
+    }
+    .recent-referrals {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 0;
+      border-bottom: 1px solid #334155;
+    }
+    th {
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .error {
+      color: #ef4444;
+      margin-top: 10px;
+    }
+    .success {
+      color: #10b981;
+      margin-top: 10px;
+    }
+    .loading {
+      color: #94a3b8;
+      text-align: center;
+      padding: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="dashboard" style="display: none;">
+    <!-- Header with logout -->
+    <div class="header">
+      <h1>👑 Agent Dashboard</h1>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Earnings</div>
+        <div class="stat-value commission-highlight" id="totalEarnings">0.00 ETB</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Referrals</div>
+        <div class="stat-value" id="totalReferrals">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Referrals</div>
+        <div class="stat-value" id="activeReferrals">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Commission Rate</div>
+        <div class="stat-value" id="commissionRate">40% / 10%</div>
+      </div>
+    </div>
+
+    <!-- Referral Link Management -->
+    <div class="referral-section">
+      <h2 style="margin-bottom: 10px;">🔗 Your Referral Link</h2>
+      <div class="referral-link-box">
+        <input type="text" class="referral-link" id="referralLink" readonly value="Loading...">
+        <button class="copy-btn" onclick="copyReferralLink()">Copy Link</button>
+        <button class="generate-btn" onclick="generateNewLink()">Generate New</button>
+      </div>
+      <div id="linkMessage" class="success" style="display: none;"></div>
+    </div>
+
+    <!-- Recent Referrals -->
+    <div class="recent-referrals">
+      <h2 style="margin-bottom: 10px;">📋 Recent Referrals</h2>
+      <table id="referralsTable">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Method</th>
+            <th>Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="referralsBody">
+          <tr><td colspan="4" style="text-align: center;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Login Form (initially visible) -->
+  <div class="container" id="loginForm">
+    <div style="max-width: 400px; margin: 40px auto; background: #1e293b; padding: 30px; border-radius: 16px;">
+      <h1 style="margin-bottom: 20px;">👑 Agent Login</h1>
+      <input type="text" id="username" placeholder="Username" style="width: 100%; padding: 12px; margin-bottom: 15px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: white;">
+      <input type="password" id="password" placeholder="Password" style="width: 100%; padding: 12px; margin-bottom: 20px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: white;">
+      <button onclick="login()" style="width: 100%; padding: 14px; background: #f59e0b; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Login</button>
+      <div id="loginError" class="error" style="margin-top: 15px; text-align: center; display: none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let agentData = null;
+
+    // Auto-login using stored token (agent._id)
+    (function autoLogin() {
+      const token = localStorage.getItem('agentToken');
+      if (token) {
+        socket.emit('agent:verifyToken', { token });
+      }
+    })();
+
+    function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      socket.emit('agent:login', { username, password });
+    }
+
+    function logout() {
+      socket.emit('agent:logout');
+    }
+
+    socket.on('agent:loginSuccess', (data) => {
+      localStorage.setItem('agentToken', data.id); // store agent _id as token
+      agentData = data;
+      showDashboard(data);
+    });
+
+    socket.on('agent:loginError', (error) => {
+      document.getElementById('loginError').style.display = 'block';
+      document.getElementById('loginError').textContent = error;
+    });
+
+    socket.on('agent:logoutSuccess', () => {
+      localStorage.removeItem('agentToken');
+      window.location.reload();
+    });
+
+    socket.on('agent:tokenVerified', (data) => {
+      agentData = data;
+      showDashboard(data);
+    });
+
+    socket.on('agent:tokenInvalid', () => {
+      localStorage.removeItem('agentToken');
+    });
+
+    socket.on('agent:dashboardData', (data) => {
+      updateDashboard(data);
+    });
+
+    socket.on('agent:referralLinkGenerated', (data) => {
+      document.getElementById('referralLink').value = data.referralLink;
+      document.getElementById('linkMessage').style.display = 'block';
+      document.getElementById('linkMessage').textContent = 'New referral link generated!';
+      setTimeout(() => document.getElementById('linkMessage').style.display = 'none', 3000);
+    });
+
+    socket.on('agent:error', (error) => {
+      alert(error);
+    });
+
+    function showDashboard(data) {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      
+      document.getElementById('totalEarnings').textContent = (data.totalEarnings || 0).toFixed(2) + ' ETB';
+      document.getElementById('totalReferrals').textContent = data.totalReferrals || 0;
+      document.getElementById('activeReferrals').textContent = data.activeReferrals || 0;
+      document.getElementById('commissionRate').textContent = \`\${data.commissionRateBingo || 40}% / \${data.commissionRateKeno || 10}%\`;
+      
+      socket.emit('agent:dashboard');
+    }
+
+    function updateDashboard(data) {
+      document.getElementById('totalEarnings').textContent = (data.totalEarnings || 0).toFixed(2) + ' ETB';
+      document.getElementById('totalReferrals').textContent = data.totalReferrals || 0;
+      document.getElementById('activeReferrals').textContent = data.activeReferrals || 0;
+      
+      const tbody = document.getElementById('referralsBody');
+      if (data.recentReferrals && data.recentReferrals.length > 0) {
+        tbody.innerHTML = data.recentReferrals.map(ref => \`
+          <tr>
+            <td>\${ref.userName || ref.userId}</td>
+            <td>\${ref.referralMethod || 'manual'}</td>
+            <td>\${new Date(ref.createdAt).toLocaleDateString()}</td>
+            <td><span style="color: #10b981;">Active</span></td>
+          </tr>
+        \`).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No referrals yet</td></tr>';
+      }
+    }
+
+    function copyReferralLink() {
+      const link = document.getElementById('referralLink');
+      link.select();
+      document.execCommand('copy');
+      document.getElementById('linkMessage').style.display = 'block';
+      document.getElementById('linkMessage').textContent = 'Link copied to clipboard!';
+      setTimeout(() => document.getElementById('linkMessage').style.display = 'none', 2000);
+    }
+
+    function generateNewLink() {
+      socket.emit('agent:generateReferralLink');
+    }
+  </script>
+</body>
+</html>`;
+
+// Route for /agent - serve the embedded dashboard
+app.get('/agent', (req, res) => {
+  res.send(AGENT_DASHBOARD_HTML);
 });
 
-// Serve Agent Portal HTML (fallback if file doesn't exist)
+// Route for /agent-dashboard.html - serve the same embedded dashboard (no redirect)
 app.get('/agent-dashboard.html', (req, res) => {
-  res.redirect('/agent');
+  res.send(AGENT_DASHBOARD_HTML);
 });
 
 // ========== REDESIGNED TELEGRAM ENTRY PAGE WITH WALLET AND MORE GAMES ==========
