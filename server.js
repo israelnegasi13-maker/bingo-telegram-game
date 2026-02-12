@@ -623,6 +623,14 @@ io.on('connection', (socket) => {
         socket.emit('admin:agentStats', agentStats);
       }
       
+      // Send initial player list
+      try {
+        const users = await User.find().sort({ lastSeen: -1 }).limit(100).lean();
+        socket.emit('admin:players', users);
+      } catch (err) {
+        console.error('Error fetching users for admin:', err);
+      }
+      
       console.log(`🔑 Admin authenticated: ${socket.id}`);
     } else {
       socket.emit('admin:authError', 'Invalid password');
@@ -1374,9 +1382,18 @@ io.on('connection', (socket) => {
   });
   
   // ========== EXISTING ADMIN EVENTS (DELEGATED TO GAME LOGIC) ==========
-  socket.on('admin:getData', () => {
-    if (socket.admin && gameLogic && gameLogic.handleAdminGetData) {
-      gameLogic.handleAdminGetData(socket);
+  socket.on('admin:getData', async () => {
+    if (socket.admin) {
+      if (gameLogic && gameLogic.handleAdminGetData) {
+        gameLogic.handleAdminGetData(socket);
+      }
+      // Also send player list directly to ensure it's always available
+      try {
+        const users = await User.find().sort({ lastSeen: -1 }).limit(100).lean();
+        socket.emit('admin:players', users);
+      } catch (err) {
+        console.error('Error fetching users for admin:', err);
+      }
     }
   });
   
@@ -1443,6 +1460,310 @@ io.on('connection', (socket) => {
   socket.on('admin:rejectTransaction', (transactionId) => {
     if (socket.admin && gameLogic && gameLogic.handleAdminRejectTransaction) {
       gameLogic.handleAdminRejectTransaction(socket, transactionId);
+    }
+  });
+  
+  // ========== ADDITIONAL ADMIN HANDLERS FOR FULL FUNCTIONALITY ==========
+  
+  // ---------- ADMIN BROADCAST ----------
+  socket.on('admin:broadcast', (data) => {
+    if (!socket.admin) return;
+    const { message, type = 'info' } = data;
+    if (!message) {
+      socket.emit('admin:error', 'Message cannot be empty');
+      return;
+    }
+    io.emit('broadcast', { message, type, timestamp: new Date() });
+    socket.emit('admin:success', 'Broadcast sent to all players');
+    console.log(`📢 Admin broadcast: "${message}" (${type})`);
+  });
+
+  // ---------- UPDATE GAME TIMER ----------
+  socket.on('admin:updateGameTimer', (seconds) => {
+    if (!socket.admin) return;
+    const timer = parseInt(seconds);
+    if (isNaN(timer) || timer < 3 || timer > 30) {
+      socket.emit('admin:error', 'Game timer must be between 3 and 30 seconds');
+      return;
+    }
+    if (gameLogic && gameLogic.CONFIG) {
+      gameLogic.CONFIG.GAME_TIMER = timer;
+      socket.emit('admin:success', `Game timer updated to ${timer} seconds`);
+      console.log(`⏱️ Game timer changed to ${timer}s by admin`);
+    } else {
+      socket.emit('admin:error', 'Unable to update game timer');
+    }
+  });
+
+  // ---------- UPDATE MINIMUM PLAYERS ----------
+  socket.on('admin:updateMinPlayers', (players) => {
+    if (!socket.admin) return;
+    const min = parseInt(players);
+    if (isNaN(min) || min < 1 || min > 20) {
+      socket.emit('admin:error', 'Minimum players must be between 1 and 20');
+      return;
+    }
+    if (gameLogic && gameLogic.CONFIG) {
+      gameLogic.CONFIG.MIN_PLAYERS = min;
+      socket.emit('admin:success', `Minimum players updated to ${min}`);
+      console.log(`👥 Minimum players changed to ${min} by admin`);
+    } else {
+      socket.emit('admin:error', 'Unable to update minimum players');
+    }
+  });
+
+  // ---------- AGENT PASSWORD RESET (ADMIN) ----------
+  socket.on('agent:resetAgentPassword', async (data) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const { agentId, newPassword } = data;
+      if (!agentId || !newPassword || newPassword.length < 6) {
+        socket.emit('admin:error', 'Password must be at least 6 characters');
+        return;
+      }
+      const agent = await Agent.findById(agentId);
+      if (!agent) {
+        socket.emit('admin:error', 'Agent not found');
+        return;
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      agent.password = hashedPassword;
+      await agent.save();
+      socket.emit('agent:passwordReset', { agentName: agent.name, agentId: agent._id });
+      socket.emit('admin:success', `Password reset for ${agent.name}`);
+      console.log(`🔑 Admin reset password for agent: ${agent.username}`);
+    } catch (err) {
+      console.error('Password reset error:', err);
+      socket.emit('admin:error', 'Failed to reset password');
+    }
+  });
+
+  // ---------- MANUAL REFERRAL ASSIGNMENT (ADMIN) ----------
+  socket.on('admin:manualReferralAssignment', async (data) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const { userId, referralCode, override = false } = data;
+      if (!userId || !referralCode) {
+        socket.emit('admin:error', 'User ID and referral code are required');
+        return;
+      }
+      const agent = await Agent.findOne({ referralCode, isActive: true });
+      if (!agent) {
+        socket.emit('admin:error', 'Invalid referral code or agent inactive');
+        return;
+      }
+      const user = await User.findOne({ userId });
+      if (!user) {
+        socket.emit('admin:error', 'User not found');
+        return;
+      }
+      if (user.agentId && !override) {
+        socket.emit('admin:error', 'User already has an agent. Use override to reassign.');
+        return;
+      }
+      // Update user
+      user.agentId = agent._id;
+      user.agentReferredAt = new Date();
+      user.referredBy = 'admin_assigned';
+      await user.save();
+
+      // Update referral counts
+      agent.totalReferrals = (agent.totalReferrals || 0) + 1;
+      agent.activeReferrals = (agent.activeReferrals || 0) + 1;
+      await agent.save();
+
+      // Create referral record
+      const referral = new Referral({
+        agentId: agent._id,
+        userId: user.userId,
+        userName: user.userName,
+        referralMethod: 'admin_assigned',
+        referralCode: agent.referralCode,
+        status: 'active'
+      });
+      await referral.save();
+
+      socket.emit('agent:manualAssignmentSuccess', {
+        userId: user.userId,
+        userName: user.userName,
+        agentId: agent._id,
+        agentName: agent.name,
+        referralCode: agent.referralCode
+      });
+      socket.emit('admin:success', `User ${user.userName} assigned to agent ${agent.name}`);
+      console.log(`🔗 Admin assigned user ${user.userId} to agent ${agent.username}`);
+    } catch (err) {
+      console.error('Manual referral error:', err);
+      socket.emit('admin:error', 'Assignment failed');
+    }
+  });
+
+  // ---------- GET PENDING AGENT WITHDRAWALS ----------
+  socket.on('agent:getPendingWithdrawals', async () => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const withdrawals = await AgentTransaction.find({
+        type: 'WITHDRAWAL',
+        status: 'pending'
+      })
+        .populate('agentId', 'name username phoneNumber')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const formatted = withdrawals.map(w => ({
+        _id: w._id,
+        agentId: w.agentId,
+        amount: w.amount,
+        description: w.description || '',
+        createdAt: w.createdAt,
+        status: w.status
+      }));
+      socket.emit('agent:pendingWithdrawals', formatted);
+    } catch (err) {
+      console.error('Error fetching agent withdrawals:', err);
+      socket.emit('admin:error', 'Failed to fetch withdrawals');
+    }
+  });
+
+  // ---------- APPROVE AGENT WITHDRAWAL ----------
+  socket.on('agent:approveAgentWithdrawal', async (transactionId) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const transaction = await AgentTransaction.findById(transactionId).populate('agentId');
+      if (!transaction) {
+        socket.emit('admin:error', 'Transaction not found');
+        return;
+      }
+      if (transaction.status !== 'pending') {
+        socket.emit('admin:error', 'Transaction already processed');
+        return;
+      }
+
+      transaction.status = 'completed';
+      await transaction.save();
+
+      // Optionally deduct from agent's totalEarnings or available balance
+      // (if you maintain a separate balance field, update it here)
+
+      socket.emit('agent:withdrawalApprovedAdmin', {
+        transactionId: transaction._id,
+        agentName: transaction.agentId?.name || 'Agent',
+        amount: transaction.amount,
+        status: 'completed'
+      });
+      socket.emit('admin:success', 'Withdrawal approved');
+
+      console.log(`✅ Admin approved agent withdrawal: ${transaction._id}`);
+    } catch (err) {
+      console.error('Approve withdrawal error:', err);
+      socket.emit('admin:error', 'Failed to approve withdrawal');
+    }
+  });
+
+  // ---------- REJECT AGENT WITHDRAWAL ----------
+  socket.on('agent:rejectAgentWithdrawal', async (transactionId) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const transaction = await AgentTransaction.findById(transactionId).populate('agentId');
+      if (!transaction) {
+        socket.emit('admin:error', 'Transaction not found');
+        return;
+      }
+      if (transaction.status !== 'pending') {
+        socket.emit('admin:error', 'Transaction already processed');
+        return;
+      }
+
+      transaction.status = 'failed';
+      await transaction.save();
+
+      socket.emit('agent:withdrawalRejectedAdmin', {
+        transactionId: transaction._id,
+        agentName: transaction.agentId?.name || 'Agent',
+        amount: transaction.amount,
+        status: 'failed'
+      });
+      socket.emit('admin:success', 'Withdrawal rejected');
+
+      console.log(`❌ Admin rejected agent withdrawal: ${transaction._id}`);
+    } catch (err) {
+      console.error('Reject withdrawal error:', err);
+      socket.emit('admin:error', 'Failed to reject withdrawal');
+    }
+  });
+
+  // ---------- EXPORT AGENT REPORT DATA ----------
+  socket.on('agent:exportAgentData', async (data) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const { agentId, startDate, endDate, format = 'csv' } = data;
+      if (!agentId || !startDate || !endDate) {
+        socket.emit('admin:error', 'Missing parameters');
+        return;
+      }
+
+      const agent = await Agent.findById(agentId);
+      if (!agent) {
+        socket.emit('admin:error', 'Agent not found');
+        return;
+      }
+
+      const commissions = await AgentCommission.find({
+        agentId,
+        createdAt: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate + 'T23:59:59.999Z')
+        },
+        status: 'completed'
+      }).sort({ createdAt: -1 }).lean();
+
+      if (format === 'json') {
+        socket.emit('admin:exportData', {
+          agent,
+          commissions,
+          total: commissions.reduce((sum, c) => sum + c.commissionAmount, 0),
+          format: 'json'
+        });
+      } else {
+        // CSV format
+        let csv = 'Date,Game Type,User ID,Winning Amount,Commission Rate,Commission Amount\n';
+        commissions.forEach(c => {
+          csv += `${new Date(c.createdAt).toISOString().split('T')[0]},`;
+          csv += `${c.gameType || 'BINGO'},`;
+          csv += `${c.userId},`;
+          csv += `${c.winningAmount.toFixed(2)},`;
+          csv += `${c.commissionRate}%,`;
+          csv += `${c.commissionAmount.toFixed(2)}\n`;
+        });
+        socket.emit('admin:exportData', {
+          agent,
+          csv,
+          count: commissions.length,
+          total: commissions.reduce((sum, c) => sum + c.commissionAmount, 0),
+          format: 'csv'
+        });
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      socket.emit('admin:error', 'Failed to export data');
     }
   });
   
