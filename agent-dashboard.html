@@ -484,6 +484,7 @@
             overflow-y: auto;
             border-radius: 12px;
             border: 1px solid var(--border);
+            margin-top: 15px;
         }
         
         .search-result {
@@ -898,7 +899,7 @@
         .justify-between { justify-content: space-between; }
         .gap-10 { gap: 10px; }
 
-        /* ----- LOGIN OVERLAY (NEW) ----- */
+        /* ----- LOGIN OVERLAY ----- */
         .login-overlay {
             position: fixed;
             top: 0;
@@ -995,7 +996,10 @@
     </style>
 </head>
 <body>
-    <!-- LOGIN OVERLAY (always visible until authenticated) -->
+    <!-- NOTIFICATIONS CONTAINER (FIXED) -->
+    <div class="notifications" id="notifications"></div>
+
+    <!-- LOGIN OVERLAY -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-card">
             <div class="login-logo">👑 AGENT PORTAL</div>
@@ -1010,7 +1014,7 @@
         </div>
     </div>
 
-    <!-- MAIN DASHBOARD CONTENT (hidden until authenticated) -->
+    <!-- MAIN DASHBOARD CONTENT -->
     <div id="mainContent" class="main-content container">
         <!-- Header -->
         <div class="header">
@@ -1300,14 +1304,12 @@
                             </button>
                         </div>
                         
-                        <!-- Search Results -->
+                        <!-- Search Results (LIVE) -->
                         <div id="searchSection" style="display: none;">
                             <div class="section-title">
                                 Search Results
                             </div>
-                            <div class="search-results" id="searchResults">
-                                <!-- Results will be populated here -->
-                            </div>
+                            <div class="search-results" id="searchResults"></div>
                         </div>
                     </div>
                     
@@ -1815,11 +1817,9 @@ player123"></textarea>
 
     <script>
         // ==================== ROBUST LOGIN SYSTEM ====================
-        // This section runs first and is completely self-contained.
         (function() {
             'use strict';
 
-            // Elements
             const loginOverlay = document.getElementById('loginOverlay');
             const mainContent = document.getElementById('mainContent');
             const loginBtn = document.getElementById('loginButton');
@@ -1828,7 +1828,6 @@ player123"></textarea>
             const loginError = document.getElementById('loginError');
             const socketStatus = document.getElementById('loginSocketStatus');
 
-            // Create socket connection (expose globally)
             console.log('🔌 Creating socket connection...');
             const socket = io({
                 reconnection: true,
@@ -1838,7 +1837,6 @@ player123"></textarea>
             });
             window.socket = socket;
 
-            // Socket connection events
             socket.on('connect', function() {
                 console.log('✅ Socket connected successfully');
                 socketStatus.innerHTML = '✅ Connected to server';
@@ -1857,12 +1855,9 @@ player123"></textarea>
                 socketStatus.style.color = '#f59e0b';
             });
 
-            // ---------- LOGIN FUNCTION ----------
             function submitLogin() {
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value.trim();
-
-                console.log('🔑 Login attempt - Username:', username, 'Password length:', password.length);
 
                 if (!username || !password) {
                     loginError.style.display = 'block';
@@ -1883,45 +1878,33 @@ player123"></textarea>
                     return;
                 }
 
-                console.log('📤 Emitting agent:login event...');
                 socket.emit('agent:login', { username, password });
             }
-
-            // Expose globally
             window.submitLogin = submitLogin;
 
-            // Attach event listeners
-            if (loginBtn) {
-                loginBtn.addEventListener('click', submitLogin);
-            }
+            if (loginBtn) loginBtn.addEventListener('click', submitLogin);
             [usernameInput, passwordInput].forEach(input => {
                 input.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') submitLogin();
                 });
             });
 
-            // ---------- LOGIN RESPONSE HANDLERS ----------
             socket.on('agent:loginSuccess', function(data) {
                 console.log('✅ Login SUCCESS:', data);
                 loginBtn.disabled = false;
                 loginBtn.textContent = '🔑 Login';
-                
                 localStorage.setItem('agentToken', data.id);
                 window.currentAgent = data;
 
                 loginOverlay.style.display = 'none';
                 mainContent.classList.add('authenticated');
 
-                // Initialize dashboard
                 if (typeof window.initializeDashboard === 'function') {
                     window.initializeDashboard(data);
                 } else {
                     socket.emit('agent:getDashboard');
                 }
-
-                if (typeof window.showNotification === 'function') {
-                    window.showNotification('✅ Welcome ' + data.name, 'success');
-                }
+                showNotification('✅ Welcome ' + data.name, 'success');
             });
 
             socket.on('agent:tokenVerified', function(data) {
@@ -1939,7 +1922,7 @@ player123"></textarea>
             });
 
             socket.on('agent:loginError', function(message) {
-                console.error('❌ Login error from server:', message);
+                console.error('❌ Login error:', message);
                 loginError.style.display = 'block';
                 loginError.textContent = message || 'Invalid username or password';
                 loginBtn.disabled = false;
@@ -1947,7 +1930,7 @@ player123"></textarea>
             });
 
             socket.on('agent:tokenInvalid', function() {
-                console.warn('⚠️ Token invalid, showing login form');
+                console.warn('⚠️ Token invalid');
                 localStorage.removeItem('agentToken');
                 loginOverlay.style.display = 'flex';
                 mainContent.classList.remove('authenticated');
@@ -1955,7 +1938,6 @@ player123"></textarea>
                 loginBtn.textContent = '🔑 Login';
             });
 
-            // ---------- AUTO-LOGIN ----------
             function checkAutoLogin() {
                 const savedToken = localStorage.getItem('agentToken');
                 if (savedToken) {
@@ -1973,36 +1955,30 @@ player123"></textarea>
                 }
             }
 
-            if (socket.connected) {
-                checkAutoLogin();
-            } else {
-                socket.once('connect', checkAutoLogin);
-            }
+            if (socket.connected) checkAutoLogin();
+            else socket.once('connect', checkAutoLogin);
 
-            // Fallback: show login form after 5 seconds if no token and not authenticated
             setTimeout(function() {
                 if (!window.currentAgent && !localStorage.getItem('agentToken')) {
                     loginOverlay.style.display = 'flex';
                     mainContent.classList.remove('authenticated');
                 }
             }, 5000);
-
-            console.log('✅ Login system initialized');
         })();
 
         // ==================== DASHBOARD SCRIPT ====================
-        // All original dashboard functionality, adapted to use window.socket and window.currentAgent
         (function() {
             'use strict';
 
             const socket = window.socket;
-            let currentAgent = window.currentAgent; // will be updated
+            let currentAgent = window.currentAgent;
             let dashboardData = null;
             let realTimeUpdateEnabled = true;
             let reconnectAttempts = 0;
             const MAX_RECONNECT_ATTEMPTS = 5;
             let lastHeartbeatTime = Date.now();
             let connectionCheckInterval;
+            let searchTimeout;
 
             // ---------- INITIALIZATION ----------
             function initializeDashboard(agent) {
@@ -2015,7 +1991,6 @@ player123"></textarea>
             }
             window.initializeDashboard = initializeDashboard;
 
-            // If already logged in via auto-login, initialize
             if (window.currentAgent) {
                 initializeDashboard(window.currentAgent);
             }
@@ -2031,29 +2006,19 @@ player123"></textarea>
 
             // ---------- DASHBOARD ----------
             function loadDashboard() {
-                if (!socket.connected) {
-                    showNotification('Not connected to server. Please reconnect.', 'error');
-                    return;
-                }
+                if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
                 socket.emit('agent:getDashboard');
             }
             window.loadDashboard = loadDashboard;
 
             function refreshDashboard() {
-                if (!socket.connected) {
-                    showNotification('Not connected to server. Please reconnect.', 'error');
-                    return;
-                }
+                if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
                 socket.emit('agent:refreshDashboard');
             }
             window.refreshDashboard = refreshDashboard;
 
-            // ---------- REFERRALS (FIXED) ----------
             function loadReferrals() {
-                if (!socket.connected) {
-                    showNotification('Not connected to server. Please reconnect.', 'error');
-                    return;
-                }
+                if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
                 socket.emit('agent:getDashboard');
             }
             window.loadReferrals = loadReferrals;
@@ -2070,8 +2035,6 @@ player123"></textarea>
             });
 
             function updateDashboard(data) {
-                console.log('🔄 Updating dashboard UI...');
-                
                 document.getElementById('totalEarnings').textContent = data.agent.totalEarnings.toFixed(2) + ' ETB';
                 document.getElementById('totalReferrals').textContent = data.agent.totalReferrals;
                 document.getElementById('todaysEarnings').textContent = data.stats.todaysEarnings.toFixed(2) + ' ETB';
@@ -2086,7 +2049,7 @@ player123"></textarea>
                     : 'First commission today';
                 
                 updateReferralsTable(data.referrals);
-                updateCommissions(data.commissions);
+                updateCommissionsTable(data.commissions);
                 updateRecentAdditionsList(data.referrals.slice(0, 5));
                 
                 if (data.agent.lastLogin) {
@@ -2101,8 +2064,6 @@ player123"></textarea>
                 } else {
                     document.getElementById('debugPanel').classList.remove('show');
                 }
-                
-                console.log('✅ Dashboard updated');
             }
 
             // ---------- REFERRALS TABLE ----------
@@ -2183,7 +2144,6 @@ player123"></textarea>
 
             // ---------- ACTIVE REFERRALS REAL-TIME ----------
             socket.on('agent:activeReferralsUpdated', function(data) {
-                console.log('👥 Active referrals updated:', data.activeReferrals);
                 if (realTimeUpdateEnabled) {
                     const userId = data.userId;
                     const isOnline = data.isOnline;
@@ -2214,12 +2174,98 @@ player123"></textarea>
                 }
             });
 
-            // ---------- COMMISSIONS (placeholder) ----------
-            function updateCommissions(commissions) {
-                // Keep original implementation from your file
-                console.log('Updating commissions table');
+            // ---------- COMMISSIONS TABLE ----------
+            function updateCommissionsTable(commissions) {
+                const container = document.getElementById('recentCommissions');
+                const historyBody = document.getElementById('commissionHistory');
+                
+                // Recent commissions list (compact)
+                if (!commissions || commissions.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><div>No commissions yet</div></div>';
+                    historyBody.innerHTML = '<tr><td colspan="6" class="text-center"><div class="empty-state"><div class="empty-icon">💰</div><div>No commissions yet</div></div></td></tr>';
+                    
+                    document.getElementById('totalCommissions').textContent = '0.00 ETB';
+                    document.getElementById('monthlyCommissions').textContent = '0.00 ETB';
+                    document.getElementById('weeklyCommissions').textContent = '0.00 ETB';
+                    document.getElementById('averageCommission').textContent = '0.00 ETB';
+                    return;
+                }
+                
+                // Recent 5 for dashboard
+                let html = '';
+                commissions.slice(0, 5).forEach(comm => {
+                    const gameIcon = comm.gameType === 'BINGO' ? '🎱' : '🎰';
+                    const gameClass = comm.gameType === 'BINGO' ? 'bingo' : 'keno';
+                    html += `
+                        <div class="commission-item">
+                            <div class="commission-game">
+                                <div class="game-icon ${gameClass}">${gameIcon}</div>
+                                <div>
+                                    <div><strong>${comm.userName || comm.userId}</strong></div>
+                                    <div style="font-size: 0.9rem; color: var(--text-secondary);">${formatTimeAgo(new Date(comm.createdAt))}</div>
+                                </div>
+                            </div>
+                            <div class="commission-amount">+${comm.commissionAmount.toFixed(2)} ETB</div>
+                        </div>`;
+                });
+                container.innerHTML = html;
+                
+                // Full history table
+                let historyHtml = '';
+                commissions.forEach(comm => {
+                    const gameIcon = comm.gameType === 'BINGO' ? '🎱' : '🎰';
+                    historyHtml += `
+                        <tr>
+                            <td>${formatDateTime(new Date(comm.createdAt))}</td>
+                            <td>${comm.userName || comm.userId}</td>
+                            <td>${gameIcon} ${comm.gameType}</td>
+                            <td>${comm.stake.toFixed(2)} ETB</td>
+                            <td>${comm.winningAmount.toFixed(2)} ETB</td>
+                            <td class="text-primary">+${comm.commissionAmount.toFixed(2)} ETB</td>
+                        </tr>`;
+                });
+                historyBody.innerHTML = historyHtml;
+                
+                // Summary stats
+                const total = commissions.reduce((sum, c) => sum + c.commissionAmount, 0);
+                const now = new Date();
+                const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
+                const weekAgo = new Date(now.getTime() - 7*24*60*60*1000);
+                
+                const monthly = commissions.filter(c => new Date(c.createdAt) >= monthAgo).reduce((sum, c) => sum + c.commissionAmount, 0);
+                const weekly = commissions.filter(c => new Date(c.createdAt) >= weekAgo).reduce((sum, c) => sum + c.commissionAmount, 0);
+                const avg = commissions.length ? total / commissions.length : 0;
+                
+                document.getElementById('totalCommissions').textContent = total.toFixed(2) + ' ETB';
+                document.getElementById('monthlyCommissions').textContent = monthly.toFixed(2) + ' ETB';
+                document.getElementById('weeklyCommissions').textContent = weekly.toFixed(2) + ' ETB';
+                document.getElementById('averageCommission').textContent = avg.toFixed(2) + ' ETB';
+                
+                // Game breakdown (simple)
+                const bingoTotal = commissions.filter(c => c.gameType === 'BINGO').reduce((sum, c) => sum + c.commissionAmount, 0);
+                const kenoTotal = commissions.filter(c => c.gameType === 'KENO').reduce((sum, c) => sum + c.commissionAmount, 0);
+                const bingoCount = commissions.filter(c => c.gameType === 'BINGO').length;
+                const kenoCount = commissions.filter(c => c.gameType === 'KENO').length;
+                
+                document.getElementById('gameBreakdown').innerHTML = `
+                    <div style="display: flex; flex-direction: column; gap: 15px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>🎱 Bingo</span>
+                            <span><strong>${bingoTotal.toFixed(2)} ETB</strong> (${bingoCount} games)</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>🎰 Keno</span>
+                            <span><strong>${kenoTotal.toFixed(2)} ETB</strong> (${kenoCount} games)</span>
+                        </div>
+                    </div>
+                `;
             }
-            function loadCommissions() { socket.emit('agent:getDashboard'); }
+            window.updateCommissionsTable = updateCommissionsTable;
+
+            function loadCommissions() {
+                if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
+                socket.emit('agent:getDashboard');
+            }
             window.loadCommissions = loadCommissions;
 
             // ---------- USER SUGGESTIONS ----------
@@ -2230,15 +2276,96 @@ player123"></textarea>
             window.loadUserSuggestions = loadUserSuggestions;
 
             socket.on('agent:userSuggestions', function(data) {
-                console.log('💡 User suggestions received');
-                // Your existing updateUserSuggestions function
+                updateUserSuggestions(data);
             });
 
-            // ---------- SEARCH ----------
-            socket.on('agent:searchUsersResult', function(data) {
-                console.log('🔍 Search results:', data.users.length + ' users found');
-                // Your existing updateSearchResults function
+            function updateUserSuggestions(data) {
+                const tbody = document.getElementById('userSuggestions');
+                const allUsers = [...(data.potentialUsers || []), ...(data.recentUsers || []), ...(data.highRollers || [])];
+                // Remove duplicates by userId
+                const unique = Array.from(new Map(allUsers.map(u => [u.userId, u])).values()).slice(0, 10);
+                
+                if (unique.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center"><div class="empty-state"><div class="empty-icon">👥</div><div>No available players found</div></div></td></tr>`;
+                    return;
+                }
+                
+                let html = '';
+                unique.forEach(user => {
+                    const statusClass = user.isOnline ? 'status-online' : 'status-offline';
+                    const statusText = user.isOnline ? 'Online' : 'Offline';
+                    html += `
+                        <tr>
+                            <td>
+                                <div class="user-info">
+                                    <div class="user-avatar">${user.userName ? user.userName.charAt(0).toUpperCase() : '?'}</div>
+                                    <div class="user-details">
+                                        <div class="user-name">${user.userName || 'No Name'}</div>
+                                        <div class="user-id">${user.userId}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>${user.totalWins || 0}</td>
+                            <td>${(user.totalWagered || 0).toFixed(2)} ETB</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                            <td>
+                                <button class="add-btn" onclick="window.selectUser('${user.userId}')">
+                                    ➕ Add
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+                tbody.innerHTML = html;
+            }
+
+            // ---------- SEARCH (LIVE) ----------
+            document.getElementById('userIdentifier')?.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                const query = e.target.value.trim();
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => {
+                        if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
+                        socket.emit('agent:searchUsers', { query });
+                    }, 500);
+                } else {
+                    document.getElementById('searchSection').style.display = 'none';
+                }
             });
+
+            socket.on('agent:searchUsersResult', function(data) {
+                const section = document.getElementById('searchSection');
+                const resultsDiv = document.getElementById('searchResults');
+                if (!data.users || data.users.length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+                section.style.display = 'block';
+                let html = '';
+                data.users.forEach(user => {
+                    const status = user.isOnline ? '🟢 Online' : '⚪ Offline';
+                    const hasAgent = user.hasAgent ? '❌ Already assigned' : '✅ Available';
+                    const agentInfo = user.hasAgent ? ` (Agent: ${user.currentAgentId?.substring(0,6)}...)` : '';
+                    html += `
+                        <div class="search-result" onclick="window.selectUser('${user.userId}')">
+                            <div>
+                                <strong>${user.userName || 'No name'}</strong><br>
+                                <small>ID: ${user.userId}</small><br>
+                                <small>@${user.telegramUsername || '-'}  ${user.phoneNumber ? '📞 '+user.phoneNumber : ''}</small>
+                            </div>
+                            <div>
+                                <span class="status-badge ${user.isOnline ? 'status-online' : 'status-offline'}">${status}</span><br>
+                                <span style="color: ${user.hasAgent ? 'var(--danger)' : 'var(--success)'};">${hasAgent}${agentInfo}</span>
+                            </div>
+                        </div>`;
+                });
+                resultsDiv.innerHTML = html;
+            });
+
+            window.selectUser = function(userId) {
+                document.getElementById('userIdentifier').value = userId;
+                document.getElementById('searchSection').style.display = 'none';
+                showNotification(`Selected player: ${userId}`, 'info');
+            };
 
             // ---------- MANUAL REFERRAL ----------
             function addManualReferral() {
@@ -2252,9 +2379,8 @@ player123"></textarea>
             window.addManualReferral = addManualReferral;
 
             socket.on('agent:manualReferralSuccess', function(data) {
-                console.log('✅ Manual referral added:', data.user.userName);
                 showNotification(data.message, 'success');
-                // updateRecentAdditions(data.user);
+                updateRecentAdditionsList([data.user]);
                 loadDashboard();
                 document.getElementById('userIdentifier').value = '';
                 document.getElementById('addReferralBtn').disabled = false;
@@ -2276,13 +2402,64 @@ player123"></textarea>
             window.addBulkReferrals = addBulkReferrals;
 
             socket.on('agent:bulkManualReferralResult', function(data) {
-                console.log('📦 Bulk referral result:', data.summary.success + ' added');
-                // showBulkResults(data);
+                showBulkResults(data);
                 loadDashboard();
                 document.getElementById('bulkIdentifiers').value = '';
                 document.getElementById('bulkAddBtn').disabled = false;
                 document.getElementById('bulkAddBtn').innerHTML = '📦 Add Multiple Players';
             });
+
+            function showBulkResults(data) {
+                const summary = data.summary;
+                const div = document.getElementById('bulkResults');
+                let html = `
+                    <div style="padding: 15px; background: rgba(16,185,129,0.1); border-radius: 12px;">
+                        <div style="font-size: 1.2rem; font-weight: 700; margin-bottom: 10px;">✅ Bulk Complete</div>
+                        <div>✅ Success: ${summary.success}</div>
+                        <div>⚠️ Already assigned: ${summary.alreadyAssigned}</div>
+                        <div>❌ Not found: ${summary.notFound}</div>
+                        <div>🔴 Errors: ${summary.failed}</div>
+                    </div>
+                `;
+                if (summary.details.length > 0) {
+                    html += '<div style="margin-top: 15px; max-height: 200px; overflow-y: auto;"><table style="width:100%; font-size:0.9rem;"><tr><th>Identifier</th><th>Status</th></tr>';
+                    summary.details.slice(0, 10).forEach(d => {
+                        html += `<tr><td>${d.identifier}</td><td>${d.status}</td></tr>`;
+                    });
+                    if (summary.details.length > 10) html += `<tr><td colspan="2">... and ${summary.details.length-10} more</td></tr>`;
+                    html += '</table></div>';
+                }
+                div.innerHTML = html;
+                
+                // Update bulk stats
+                document.getElementById('bulkOperations').textContent = (parseInt(document.getElementById('bulkOperations').textContent) + 1);
+                document.getElementById('bulkPlayersAdded').textContent = (parseInt(document.getElementById('bulkPlayersAdded').textContent) + summary.success);
+                const total = parseInt(document.getElementById('bulkPlayersAdded').textContent);
+                const ops = parseInt(document.getElementById('bulkOperations').textContent);
+                document.getElementById('bulkSuccessRate').textContent = ops ? ((total / (summary.totalProcessed * ops)) * 100).toFixed(1) + '%' : '100%';
+            }
+
+            // ---------- RECENT ADDITIONS ----------
+            function updateRecentAdditionsList(referrals) {
+                const container = document.getElementById('recentAdditions');
+                if (!referrals || referrals.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>No recent additions yet</div></div>';
+                    return;
+                }
+                let html = '';
+                referrals.slice(0, 5).forEach(ref => {
+                    html += `
+                        <div style="display: flex; align-items: center; gap: 15px; padding: 10px; border-bottom: 1px solid var(--border);">
+                            <div class="user-avatar">${ref.userName ? ref.userName.charAt(0).toUpperCase() : '?'}</div>
+                            <div style="flex:1;">
+                                <div><strong>${ref.userName || 'No Name'}</strong></div>
+                                <div style="font-size:0.9rem; color:var(--text-secondary);">${ref.userId}</div>
+                            </div>
+                            <div style="color: var(--success);">${formatTimeAgo(new Date(ref.referredAt))}</div>
+                        </div>`;
+                });
+                container.innerHTML = html;
+            }
 
             // ---------- CHECK REFERRAL STATUS ----------
             function checkReferralStatus() {
@@ -2301,8 +2478,22 @@ player123"></textarea>
             window.checkStatus = checkStatus;
 
             socket.on('agent:referralStatus', function(data) {
-                console.log('🔍 Referral status for:', data.user.userId);
-                // showStatusResult(data);
+                const resultDiv = document.getElementById('statusResult');
+                let html = '';
+                if (data.status === 'assigned') {
+                    html = `<div style="background: rgba(16,185,129,0.1); border-radius: 12px; padding: 15px; border:1px solid rgba(16,185,129,0.3);">
+                        <div style="color: var(--success); font-weight:700;">✅ This player is YOUR referral!</div>
+                        <div style="margin-top:10px;">Referred: ${formatTimeAgo(new Date(data.user.agentReferredAt))}</div>
+                        <div>Method: ${data.user.referredBy || 'manual'}</div>
+                    </div>`;
+                } else {
+                    html = `<div style="background: rgba(239,68,68,0.1); border-radius: 12px; padding: 15px; border:1px solid rgba(239,68,68,0.3);">
+                        <div style="color: var(--danger); font-weight:700;">❌ This player is NOT your referral.</div>
+                        <div style="margin-top:10px;">Has agent: ${data.user.hasAgent ? 'Yes' : 'No'}</div>
+                        ${data.user.agentId ? `<div>Assigned to: ${data.user.agentId}</div>` : ''}
+                    </div>`;
+                }
+                resultDiv.innerHTML = html;
             });
 
             // ---------- TEST COMMISSION ----------
@@ -2326,25 +2517,19 @@ player123"></textarea>
             window.submitTestCommission = submitTestCommission;
 
             socket.on('agent:testCommissionResult', function(data) {
-                console.log('🧪 Test commission result:', data);
                 const resultDiv = document.getElementById('testCommissionResult');
                 if (data.success) {
                     resultDiv.innerHTML = `
-                        <div style="background: rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 15px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <div style="color: var(--success); font-weight: 600;">✅ Test Successful!</div>
-                            <div style="margin-top: 10px;">
-                                Commission recorded: <strong>${data.commissionAmount.toFixed(2)} ETB</strong><br>
-                                Message: ${data.message}
-                            </div>
+                        <div style="background: rgba(16,185,129,0.1); border-radius: 12px; padding: 15px; border:1px solid rgba(16,185,129,0.3);">
+                            <div style="color: var(--success); font-weight:600;">✅ Test Successful!</div>
+                            <div style="margin-top:10px;">Commission recorded: <strong>${data.commissionAmount.toFixed(2)} ETB</strong></div>
                         </div>`;
                     setTimeout(() => loadDashboard(), 1000);
                 } else {
                     resultDiv.innerHTML = `
-                        <div style="background: rgba(239, 68, 68, 0.1); border-radius: 12px; padding: 15px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                            <div style="color: var(--danger); font-weight: 600;">❌ Test Failed</div>
-                            <div style="margin-top: 10px;">
-                                Error: ${data.message}
-                            </div>
+                        <div style="background: rgba(239,68,68,0.1); border-radius: 12px; padding: 15px; border:1px solid rgba(239,68,68,0.3);">
+                            <div style="color: var(--danger); font-weight:600;">❌ Test Failed</div>
+                            <div style="margin-top:10px;">Error: ${data.message}</div>
                         </div>`;
                 }
             });
@@ -2367,8 +2552,23 @@ player123"></textarea>
             window.searchCommissionStatus = searchCommissionStatus;
 
             socket.on('agent:commissionStatus', function(data) {
-                console.log('📊 Commission status received:', data.commissions.length + ' commissions');
-                // updateCommissionStatus(data);
+                const container = document.getElementById('commissionStatusContent');
+                let html = `<div style="margin-bottom:15px;">Stats: ${data.stats.totalCommissions} commissions, total ${data.stats.totalAmount.toFixed(2)} ETB, avg ${data.stats.avgCommission.toFixed(2)} ETB</div>`;
+                if (data.commissions.length === 0) {
+                    html += '<div class="empty-state"><div class="empty-icon">💰</div><div>No commissions found</div></div>';
+                } else {
+                    html += '<table style="width:100%;"><tr><th>Date</th><th>User</th><th>Game</th><th>Amount</th></tr>';
+                    data.commissions.forEach(c => {
+                        html += `<tr>
+                            <td>${formatTimeAgo(new Date(c.createdAt))}</td>
+                            <td>${c.userName || c.userId}</td>
+                            <td>${c.gameType}</td>
+                            <td class="text-primary">${c.commissionAmount.toFixed(2)} ETB</td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                }
+                container.innerHTML = html;
             });
 
             // ---------- WITHDRAWAL ----------
@@ -2395,7 +2595,6 @@ player123"></textarea>
             window.requestWithdrawal = requestWithdrawal;
 
             socket.on('agent:withdrawRequested', function(data) {
-                console.log('💸 Withdrawal requested:', data.amount);
                 showNotification('✅ Withdrawal request submitted!', 'success');
                 loadWithdrawalHistory();
                 document.getElementById('withdrawBtn').disabled = false;
@@ -2415,11 +2614,30 @@ player123"></textarea>
             window.loadWithdrawalHistory = loadWithdrawalHistory;
 
             socket.on('agent:withdrawalHistory', function(data) {
-                console.log('📋 Withdrawal history:', data.length + ' records');
-                // updateWithdrawalHistory(data);
+                const tbody = document.getElementById('withdrawalHistory');
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center"><div class="empty-state"><div class="empty-icon">📋</div><div>No withdrawals yet</div></div></td></tr>`;
+                    return;
+                }
+                let html = '';
+                data.forEach(w => {
+                    let statusClass = '';
+                    let statusText = w.status;
+                    if (w.status === 'completed') { statusClass = 'status-online'; statusText = '✅ Completed'; }
+                    else if (w.status === 'pending') { statusClass = 'status-connecting'; statusText = '⏳ Pending'; }
+                    else { statusClass = 'status-offline'; statusText = '❌ Failed'; }
+                    
+                    html += `<tr>
+                        <td>${formatDateTime(new Date(w.createdAt))}</td>
+                        <td>${w.amount.toFixed(2)} ETB</td>
+                        <td>${w.description?.match(/to (09[0-9]{8})/)?.[1] || '-'}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
             });
 
-            // ---------- PHONE NUMBER UPDATE (FIXED) ----------
+            // ---------- PHONE NUMBER UPDATE ----------
             function updatePhoneNumber() {
                 if (!socket.connected) {
                     showNotification('Not connected to server. Please reconnect.', 'error');
@@ -2437,7 +2655,6 @@ player123"></textarea>
             window.updatePhoneNumber = updatePhoneNumber;
 
             socket.on('agent:phoneUpdated', function(data) {
-                console.log('📱 Phone number updated:', data.phoneNumber);
                 if (currentAgent) currentAgent.phoneNumber = data.phoneNumber;
                 showNotification('✅ Phone number updated successfully!', 'success');
             });
@@ -2452,7 +2669,6 @@ player123"></textarea>
             window.runEmergencySync = runEmergencySync;
 
             socket.on('agent:emergencySyncResult', function(data) {
-                console.log('🚨 Emergency sync result:', data);
                 showNotification(`Emergency sync: ${data.created} created, ${data.errors} errors`, data.success ? 'success' : 'error');
                 loadDashboard();
             });
@@ -2464,7 +2680,6 @@ player123"></textarea>
             window.testUserDatabase = testUserDatabase;
 
             socket.on('agent:testResult', function(data) {
-                console.log('🧪 Test result received');
                 openModal('debugModal');
                 document.getElementById('debugContent').innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
             });
@@ -2480,7 +2695,6 @@ player123"></textarea>
 
             function toggleRealTimeUpdates(enabled) {
                 realTimeUpdateEnabled = enabled;
-                console.log(`🔄 Real-time updates ${enabled ? 'enabled' : 'disabled'}`);
                 showNotification(`Real-time updates ${enabled ? 'enabled' : 'disabled'}`, 'info');
                 document.getElementById('refreshToggleBtn').textContent = enabled ? '⏸️ Pause Auto-refresh' : '▶️ Resume Auto-refresh';
             }
@@ -2575,14 +2789,12 @@ player123"></textarea>
             window.showNotification = showNotification;
 
             socket.on('agent:notification', function(data) {
-                console.log('🔔 Notification:', data.message);
                 showNotification(data.message, data.type || 'info');
             });
 
             socket.on('agent:error', function(message) {
                 console.error('❌ Agent error:', message);
                 showNotification(`❌ Error: ${message}`, 'error');
-                // Re-enable buttons
                 const addBtn = document.getElementById('addReferralBtn');
                 if (addBtn) { addBtn.disabled = false; addBtn.innerHTML = '➕ Add Player as Referral'; }
                 const bulkBtn = document.getElementById('bulkAddBtn');
@@ -2650,21 +2862,9 @@ player123"></textarea>
                 if (days < 7) return `${days}d ago`;
                 return date.toLocaleDateString();
             }
-
-            // ---------- SEARCH INPUT DEBOUNCE ----------
-            let searchTimeout;
-            document.getElementById('userIdentifier')?.addEventListener('input', function(e) {
-                clearTimeout(searchTimeout);
-                const query = e.target.value.trim();
-                if (query.length >= 2) {
-                    searchTimeout = setTimeout(() => {
-                        if (!socket.connected) { showNotification('Not connected to server. Please reconnect.', 'error'); return; }
-                        socket.emit('agent:searchUsers', { query });
-                    }, 500);
-                } else {
-                    document.getElementById('searchSection').style.display = 'none';
-                }
-            });
+            function formatDateTime(date) {
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
 
             // ---------- WITHDRAW AMOUNT VALIDATION ----------
             document.getElementById('withdrawAmount')?.addEventListener('input', function(e) {
@@ -2696,18 +2896,6 @@ player123"></textarea>
                     loadDashboard();
                 }
             }, 60000);
-
-            // ---------- PLACEHOLDER FUNCTIONS (to avoid errors) ----------
-            function updateRecentAdditionsList(referrals) { /* implement if needed */ }
-            function updateDashboardRealTime(data) { /* implement if needed */ }
-            function updateUserSuggestions(data) { console.log('User suggestions', data); }
-            function updateSearchResults(users) { console.log('Search results', users); }
-            function showBulkResults(data) { console.log('Bulk results', data); }
-            function showStatusResult(data) { console.log('Status result', data); }
-            function updateCommissionStatus(data) { console.log('Commission status', data); }
-            function updateWithdrawalHistory(data) { console.log('Withdrawal history', data); }
-
-            console.log('✅ Dashboard script fully loaded');
         })();
     </script>
 </body>
