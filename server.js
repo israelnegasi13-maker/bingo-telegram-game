@@ -770,6 +770,13 @@ io.on('connection', (socket) => {
       agentSystem.handleVerifyAgentToken(socket, data);
     }
   });
+
+  // Agent logout
+  socket.on('agent:logout', () => {
+    if (agentSystem && agentSystem.handleAgentLogout) {
+      agentSystem.handleAgentLogout(socket);
+    }
+  });
   
   // Agent dashboard data
   socket.on('agent:dashboard', () => {
@@ -782,6 +789,13 @@ io.on('connection', (socket) => {
   socket.on('agent:getDashboard', () => {
     if (agentSystem && agentSystem.handleAgentDashboard) {
       agentSystem.handleAgentDashboard(socket);
+    }
+  });
+  
+  // Manual refresh dashboard
+  socket.on('agent:refreshDashboard', () => {
+    if (agentSystem && agentSystem.handleRefreshDashboard) {
+      agentSystem.handleRefreshDashboard(socket);
     }
   });
   
@@ -907,6 +921,41 @@ io.on('connection', (socket) => {
     if (agentSystem && agentSystem.getSystemStatus) {
       const status = agentSystem.getSystemStatus();
       socket.emit('agent:systemStatus', status);
+    }
+  });
+  
+  // Check referral status (used in "Check Referral Status" modal)
+  socket.on('agent:checkReferralStatus', (data) => {
+    if (agentSystem && agentSystem.handleCheckReferralStatus) {
+      agentSystem.handleCheckReferralStatus(socket, data);
+    }
+  });
+  
+  // Emergency sync – fixes referral/user mismatches
+  socket.on('agent:emergencySync', () => {
+    if (agentSystem && agentSystem.handleEmergencySync) {
+      agentSystem.handleEmergencySync(socket);
+    }
+  });
+  
+  // Test commission (debug)
+  socket.on('agent:testCommission', (data) => {
+    if (agentSystem && agentSystem.handleTestCommission) {
+      agentSystem.handleTestCommission(socket, data);
+    }
+  });
+  
+  // Check commission status (debug / admin)
+  socket.on('agent:checkCommissionStatus', (data) => {
+    if (agentSystem && agentSystem.checkCommissionStatus) {
+      agentSystem.checkCommissionStatus(socket, data);
+    }
+  });
+  
+  // Heartbeat acknowledgement – keeps connection health accurate
+  socket.on('agent:heartbeat_ack', (data) => {
+    if (agentSystem && agentSystem.handleHeartbeatAck) {
+      agentSystem.handleHeartbeatAck(socket, data);
     }
   });
   
