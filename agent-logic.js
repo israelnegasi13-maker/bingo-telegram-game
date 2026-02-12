@@ -1,10 +1,40 @@
 // agent-logic.js - Manual Agent/Referral System for Elite Games (FULLY UPDATED & FIXED)
+// Changelog:
+// - Commission now uses the agentId stored at win time (Transaction.agentId) – critical fairness fix.
+// - Added phone number normalization for consistent search.
+// - Added retry limit and date filter in pending commission job.
+// - Fixed duplicate key not stored in memory.
+// - Added validation for commission rates (0-100).
+// - Better error handling when updating transaction.
+// - Normalize phone numbers before save and search.
+
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 // Helper to escape regex special characters
 function escapeRegex(text) {
     return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
+// Normalize Ethiopian phone numbers to 09xxxxxxxx format
+function normalizePhone(phone) {
+    if (!phone) return null;
+    // Remove any non-digit characters
+    let cleaned = phone.replace(/\D/g, '');
+    // Handle +2519... -> 09...
+    if (cleaned.startsWith('251') && cleaned.length === 12) {
+        cleaned = '0' + cleaned.slice(3);
+    }
+    // If it's 9xxxxxxxx (10 digits starting with 9), add leading 0
+    if (cleaned.length === 9 && cleaned.startsWith('9')) {
+        cleaned = '0' + cleaned;
+    }
+    // Valid Ethiopian mobile: starts with 09 and 10 digits total
+    if (cleaned.length === 10 && cleaned.startsWith('09')) {
+        return cleaned;
+    }
+    // Otherwise return as is (might not be valid)
+    return phone;
 }
 
 class ManualAgentSystem {
@@ -438,27 +468,33 @@ class ManualAgentSystem {
             const cleanId = identifier.replace(/^@/, '').trim();
             console.log(`🔍 [FIND USER] Searching for identifier: "${cleanId}"`);
 
+            // Normalize phone number if it looks like one
+            let normalizedPhone = null;
+            if (cleanId.match(/^(\+?251|0)?9[0-9]{8}$/)) {
+                normalizedPhone = normalizePhone(cleanId);
+            }
+
             // ----- 1. EXACT MATCHES (multiple formats) -----
             const exactQueries = [];
 
             // userId – try both raw numeric and tg_ prefixed
             if (/^\d+$/.test(cleanId)) {
-                exactQueries.push({ userId: cleanId });                     // "123456"
-                exactQueries.push({ userId: `tg_${cleanId}` });             // "tg_123456"
+                exactQueries.push({ userId: cleanId });
+                exactQueries.push({ userId: `tg_${cleanId}` });
             } else {
-                exactQueries.push({ userId: cleanId });                    // as entered
+                exactQueries.push({ userId: cleanId });
             }
 
             // telegramUsername – try with and without @
-            exactQueries.push({ telegramUsername: cleanId });              // without @
-            exactQueries.push({ telegramUsername: `@${cleanId}` });        // with @
+            exactQueries.push({ telegramUsername: cleanId });
+            exactQueries.push({ telegramUsername: `@${cleanId}` });
 
             // userName – exact match
             exactQueries.push({ userName: cleanId });
 
-            // phoneNumber – exact match (Ethiopian format)
-            if (/^09[0-9]{8}$/.test(cleanId) || /^\+?2519[0-9]{8}$/.test(cleanId)) {
-                exactQueries.push({ phoneNumber: cleanId });
+            // phoneNumber – exact match using normalized form
+            if (normalizedPhone) {
+                exactQueries.push({ phoneNumber: normalizedPhone });
             }
 
             for (const query of exactQueries) {
@@ -478,7 +514,7 @@ class ManualAgentSystem {
             ];
 
             const users = await this.models.User.find({ $or: partialConditions })
-                .limit(5)   // get top 5 for ranking
+                .limit(5)
                 .lean();
 
             if (users.length === 0) {
@@ -497,7 +533,7 @@ class ManualAgentSystem {
                 return { ...u, score, lastSeen: u.lastSeen || new Date(0) };
             }).sort((a, b) => {
                 if (a.score !== b.score) return b.score - a.score;
-                return b.lastSeen - a.lastSeen;  // more recent first
+                return b.lastSeen - a.lastSeen;
             });
 
             console.log(`✅ [FIND USER] Best partial match: ${ranked[0].userId} (score ${ranked[0].score})`);
@@ -950,11 +986,17 @@ class ManualAgentSystem {
                 return;
             }
 
+            const normalizedPhone = normalizePhone(phoneNumber);
+            if (!normalizedPhone) {
+                socket.emit('agent:error', 'Invalid phone number format');
+                return;
+            }
+
             const withdrawal = new this.models.AgentTransaction({
                 agentId: agent._id,
                 type: 'WITHDRAWAL',
                 amount: -amount,
-                description: `Withdrawal request to ${phoneNumber}`,
+                description: `Withdrawal request to ${normalizedPhone}`,
                 status: 'pending',
                 createdAt: new Date()
             });
@@ -964,7 +1006,7 @@ class ManualAgentSystem {
                 agentId: agent._id,
                 agentName: agent.name,
                 amount,
-                phoneNumber,
+                phoneNumber: normalizedPhone,
                 transactionId: withdrawal._id
             });
 
@@ -1014,13 +1056,14 @@ class ManualAgentSystem {
                 return;
             }
             const { phoneNumber } = data;
-            if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+            const normalized = normalizePhone(phoneNumber);
+            if (!normalized) {
                 socket.emit('agent:error', 'Invalid phone number format');
                 return;
             }
             const agent = await this.models.Agent.findByIdAndUpdate(
                 socket.agentId,
-                { $set: { phoneNumber, updatedAt: new Date() } },
+                { $set: { phoneNumber: normalized, updatedAt: new Date() } },
                 { new: true }
             );
             if (!agent) {
@@ -1032,7 +1075,7 @@ class ManualAgentSystem {
                 message: 'Phone number updated successfully',
                 phoneNumber: agent.phoneNumber
             });
-            console.log(`📱 Agent ${agent.username} updated phone to ${phoneNumber}`);
+            console.log(`📱 Agent ${agent.username} updated phone to ${agent.phoneNumber}`);
         } catch (error) {
             console.error('Update phone error:', error);
             socket.emit('agent:error', 'Failed to update phone number');
@@ -1193,6 +1236,12 @@ class ManualAgentSystem {
                 return;
             }
 
+            // Validate commission rates
+            if (bingoRate < 0 || bingoRate > 100 || kenoRate < 0 || kenoRate > 100) {
+                socket.emit('agent:error', 'Commission rates must be between 0 and 100');
+                return;
+            }
+
             const existing = await this.models.Agent.findOne({ username: username.toLowerCase() });
             if (existing) {
                 socket.emit('agent:error', 'Username already exists');
@@ -1205,7 +1254,7 @@ class ManualAgentSystem {
                 username: username.toLowerCase(),
                 password: hashedPassword,
                 name,
-                phoneNumber,
+                phoneNumber: normalizePhone(phoneNumber) || phoneNumber,
                 commissionRateBingo: bingoRate,
                 commissionRateKeno: kenoRate,
                 referralCode: `${username}_${Date.now().toString(36)}`.toUpperCase(),
@@ -1248,9 +1297,21 @@ class ManualAgentSystem {
             const { agentId, name, phoneNumber, bingoRate, kenoRate, isActive, password } = data;
             const update = { updatedAt: new Date() };
             if (name) update.name = name;
-            if (phoneNumber) update.phoneNumber = phoneNumber;
-            if (bingoRate) update.commissionRateBingo = bingoRate;
-            if (kenoRate) update.commissionRateKeno = kenoRate;
+            if (phoneNumber) update.phoneNumber = normalizePhone(phoneNumber) || phoneNumber;
+            if (bingoRate !== undefined) {
+                if (bingoRate < 0 || bingoRate > 100) {
+                    socket.emit('agent:error', 'Bingo commission rate must be between 0 and 100');
+                    return;
+                }
+                update.commissionRateBingo = bingoRate;
+            }
+            if (kenoRate !== undefined) {
+                if (kenoRate < 0 || kenoRate > 100) {
+                    socket.emit('agent:error', 'Keno commission rate must be between 0 and 100');
+                    return;
+                }
+                update.commissionRateKeno = kenoRate;
+            }
             if (typeof isActive === 'boolean') update.isActive = isActive;
             if (password) {
                 update.password = await bcrypt.hash(password, 10);
@@ -1309,28 +1370,55 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== COMMISSION SYSTEM (DUPLICATE PROTECTION) ==========
+    // ========== COMMISSION SYSTEM – FULLY FIXED ==========
+    /**
+     * Record a commission for an agent based on a player win.
+     * @param {ObjectId|string} agentId - The agent ID (if known directly, otherwise from transaction)
+     * @param {string} userId - Player's userId
+     * @param {string} gameType - 'BINGO' or 'KENO'
+     * @param {number} stake - Amount wagered
+     * @param {number} winningAmount - Amount won by player
+     * @param {string} transactionId - Optional: the transaction ID that caused this win (used for duplicate prevention and to fetch stored agentId)
+     */
     async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null) {
         try {
-            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}`);
+            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}, tx: ${transactionId}`);
 
+            // --- 1. Duplicate check using in-memory store ---
             if (transactionId && this.processedTransactions.has(transactionId)) {
-                console.log(`⏭️ Skipping already processed transaction ${transactionId}`);
+                console.log(`⏭️ Skipping already processed transaction ${transactionId} (in-memory)`);
                 return 0;
             }
 
-            const agent = await this.models.Agent.findById(agentId);
+            // --- 2. Determine the correct agentId ---
+            let finalAgentId = agentId;
+            if (transactionId) {
+                // Always prefer the agentId stored in the Transaction document at win time
+                const transaction = await this.models.Transaction.findById(transactionId).select('agentId').lean();
+                if (transaction && transaction.agentId) {
+                    finalAgentId = transaction.agentId;
+                    console.log(`✅ Using agentId ${finalAgentId} from transaction ${transactionId}`);
+                } else {
+                    console.log(`⚠️ Transaction ${transactionId} has no agentId stored, falling back to provided agentId ${agentId}`);
+                }
+            }
+
+            // --- 3. Verify agent exists and is active ---
+            const agent = await this.models.Agent.findById(finalAgentId);
             if (!agent || !agent.isActive) {
-                console.log(`⚠️ Agent not found or inactive: ${agentId}`);
+                console.log(`⚠️ Agent not found or inactive: ${finalAgentId}`);
                 return 0;
             }
 
+            // --- 4. Verify user is still assigned to this agent (optional, for stats) ---
             const user = await this.models.User.findOne({ userId });
-            if (!user || !user.agentId || user.agentId.toString() !== agentId.toString()) {
-                console.log(`⚠️ User ${userId} not assigned to agent ${agentId}`);
-                return 0;
+            if (!user || !user.agentId || user.agentId.toString() !== finalAgentId.toString()) {
+                console.log(`⚠️ User ${userId} is no longer assigned to agent ${finalAgentId}. Commission still recorded because it was earned at win time.`);
+                // Do not reject – the commission was earned at the moment of win.
+                // We still record it, but we log the discrepancy.
             }
 
+            // --- 5. Calculate commission ---
             let commissionRate, commissionAmount;
             if (gameType === 'BINGO') {
                 commissionRate = agent.commissionRateBingo;
@@ -1342,15 +1430,17 @@ class ManualAgentSystem {
                 return 0;
             }
 
+            // Enforce minimum commission of 0.01 ETB
             if (commissionAmount < 0.01) commissionAmount = 0.01;
 
-            const transactionKey = transactionId || `${userId}_${gameType}_${Date.now()}`;
+            // --- 6. Create commission record ---
+            const transactionKey = transactionId || `${userId}_${gameType}_${Date.now()}_${Math.random().toString(36).substring(2)}`;
 
             const commission = new this.models.AgentCommission({
                 agentId: agent._id,
                 userId,
-                userName: user.userName,
-                telegramUsername: user.telegramUsername,
+                userName: user?.userName,
+                telegramUsername: user?.telegramUsername,
                 gameType,
                 stake,
                 winningAmount,
@@ -1363,20 +1453,32 @@ class ManualAgentSystem {
 
             await commission.save();
 
+            // --- 7. Store transaction ID in memory to prevent duplicates ---
             if (transactionId) {
                 this.processedTransactions.set(transactionId, Date.now());
-                setTimeout(() => this.processedTransactions.delete(transactionId), 30 * 60 * 1000);
+                // Also store auto-generated key if we created one
+                if (transactionKey !== transactionId) {
+                    this.processedTransactions.set(transactionKey, Date.now());
+                }
+            } else {
+                // For calls without transactionId, store the generated key
+                this.processedTransactions.set(transactionKey, Date.now());
             }
 
-            await this.models.User.findByIdAndUpdate(user._id, {
-                $inc: { agentCommissionEarned: commissionAmount }
-            });
+            // --- 8. Update user's total commission earned (optional) ---
+            if (user) {
+                await this.models.User.findByIdAndUpdate(user._id, {
+                    $inc: { agentCommissionEarned: commissionAmount }
+                });
+            }
 
+            // --- 9. Update agent's total earnings ---
             await this.models.Agent.findByIdAndUpdate(agent._id, {
                 $inc: { totalEarnings: commissionAmount },
                 $set: { lastCommissionDate: new Date(), updatedAt: new Date() }
             });
 
+            // --- 10. Record transaction in agent's ledger ---
             await this.models.AgentTransaction.create({
                 agentId: agent._id,
                 type: 'COMMISSION',
@@ -1386,19 +1488,25 @@ class ManualAgentSystem {
                 createdAt: new Date()
             });
 
+            // --- 11. Update the original transaction with commission info (non-blocking) ---
             if (transactionId && transactionId.toString().length > 10) {
-                await this.models.Transaction.findByIdAndUpdate(transactionId, {
-                    $set: { agentId: agent._id, agentCommission: commissionAmount, commissionProcessed: true }
-                }).catch(err => console.log('⚠️ Could not update transaction:', err.message));
+                this.models.Transaction.findByIdAndUpdate(transactionId, {
+                    $set: {
+                        agentId: agent._id,
+                        agentCommission: commissionAmount,
+                        commissionProcessed: true
+                    }
+                }).catch(err => console.log('⚠️ Could not update transaction (non-critical):', err.message));
             }
 
-            const agentSocket = this.agentSockets.get(agentId.toString());
+            // --- 12. Notify agent in real-time ---
+            const agentSocket = this.agentSockets.get(agent._id.toString());
             if (agentSocket) {
                 agentSocket.emit('agent:newCommission', {
                     commissionId: commission._id,
                     userId,
-                    userName: user.userName || 'Unknown',
-                    telegramUsername: user.telegramUsername || '',
+                    userName: user?.userName || 'Unknown',
+                    telegramUsername: user?.telegramUsername || '',
                     gameType,
                     stake,
                     winningAmount,
@@ -1409,7 +1517,7 @@ class ManualAgentSystem {
                 setTimeout(() => this.handleRefreshDashboard(agentSocket), 500);
             }
 
-            console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType}`);
+            console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (win: ${winningAmount})`);
             return commissionAmount;
         } catch (error) {
             if (error.code === 11000) {
@@ -1421,18 +1529,32 @@ class ManualAgentSystem {
         }
     }
 
+    /**
+     * Process a Bingo win. The game logic should have stored the agentId in the Transaction.
+     */
     async processBingoWin(userId, room, winningAmount, gameTransactionId = null) {
         try {
-            const user = await this.models.User.findOne({ userId });
-            if (!user || !user.agentId) return 0;
+            // If we don't have a transaction ID, we cannot reliably get the agent at win time.
+            // In that case, we fall back to current agent (but we should always have transaction ID)
+            let agentId = null;
+            if (gameTransactionId) {
+                const tx = await this.models.Transaction.findById(gameTransactionId).select('agentId').lean();
+                agentId = tx?.agentId;
+            }
+            if (!agentId) {
+                const user = await this.models.User.findOne({ userId }).select('agentId').lean();
+                agentId = user?.agentId;
+            }
+            if (!agentId) return 0;
+
             const stake = room?.stake || 10;
             return await this.recordCommission(
-                user.agentId,
+                agentId,
                 userId,
                 'BINGO',
                 stake,
                 winningAmount,
-                gameTransactionId || `bingo_${room?.roomId || Date.now()}`
+                gameTransactionId
             );
         } catch (error) {
             console.error('❌ Process Bingo win error:', error);
@@ -1440,17 +1562,29 @@ class ManualAgentSystem {
         }
     }
 
+    /**
+     * Process a Keno win. The game logic should have stored the agentId in the Transaction.
+     */
     async processKenoWin(userId, stake, winningAmount, gameTransactionId = null) {
         try {
-            const user = await this.models.User.findOne({ userId });
-            if (!user || !user.agentId) return 0;
+            let agentId = null;
+            if (gameTransactionId) {
+                const tx = await this.models.Transaction.findById(gameTransactionId).select('agentId').lean();
+                agentId = tx?.agentId;
+            }
+            if (!agentId) {
+                const user = await this.models.User.findOne({ userId }).select('agentId').lean();
+                agentId = user?.agentId;
+            }
+            if (!agentId) return 0;
+
             return await this.recordCommission(
-                user.agentId,
+                agentId,
                 userId,
                 'KENO',
-                stake,
+                stake || 5,
                 winningAmount,
-                gameTransactionId || `keno_${Date.now()}`
+                gameTransactionId
             );
         } catch (error) {
             console.error('❌ Process Keno win error:', error);
@@ -1458,13 +1592,16 @@ class ManualAgentSystem {
         }
     }
 
+    /**
+     * Process a game transaction (called from game logic after win is recorded).
+     */
     async processGameTransaction(transaction) {
         try {
-            const { userId, type, amount, room, stake } = transaction;
+            const { userId, type, amount, room, stake, _id } = transaction;
             if (type === 'BINGO_WIN') {
-                return await this.processBingoWin(userId, { room, stake }, amount, transaction._id);
+                return await this.processBingoWin(userId, { room, stake }, amount, _id);
             } else if (type === 'KENO_WIN') {
-                return await this.processKenoWin(userId, stake || 5, amount, transaction._id);
+                return await this.processKenoWin(userId, stake || 5, amount, _id);
             }
             return 0;
         } catch (error) {
@@ -1476,28 +1613,53 @@ class ManualAgentSystem {
     // ========== PENDING COMMISSIONS – FALLBACK JOB (FIXED) ==========
     async calculatePendingCommissions() {
         try {
-            console.log('🔄 Calculating pending commissions for ALL unprocessed wins...');
+            console.log('🔄 Calculating pending commissions for unprocessed wins (last 7 days)...');
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
             const winTransactions = await this.models.Transaction.find({
                 type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
-                commissionProcessed: { $ne: true }
+                commissionProcessed: { $ne: true },
+                createdAt: { $gte: sevenDaysAgo } // avoid infinite backlog
             }).limit(200);
 
-            console.log(`📝 Found ${winTransactions.length} unprocessed win transactions`);
+            console.log(`📝 Found ${winTransactions.length} unprocessed win transactions from last 7 days`);
 
             for (const tx of winTransactions) {
                 try {
-                    const user = await this.models.User.findOne({ userId: tx.userId });
-                    if (!user || !user.agentId) {
+                    // Retry count logic: if it's been retried too many times, skip
+                    const retryCount = tx.commissionRetryCount || 0;
+                    if (retryCount >= 5) {
+                        console.log(`⏭️ Transaction ${tx._id} exceeded retry limit (5), marking as skipped`);
                         tx.commissionProcessed = true;
+                        tx.commissionSkippedReason = 'Max retries exceeded';
                         await tx.save();
                         continue;
                     }
+
                     const gameType = tx.type === 'BINGO_WIN' ? 'BINGO' : 'KENO';
                     const stake = tx.room || tx.stake || (gameType === 'BINGO' ? 10 : 5);
                     
+                    // Use the agentId stored at win time (if any)
+                    let agentId = tx.agentId;
+                    if (!agentId) {
+                        // Fallback: try to get current agent (should not happen if game logic stores it)
+                        const user = await this.models.User.findOne({ userId: tx.userId }).select('agentId').lean();
+                        agentId = user?.agentId;
+                    }
+
+                    if (!agentId) {
+                        // No agent assigned – mark as processed but with note
+                        console.log(`⏭️ Transaction ${tx._id} has no agent, skipping`);
+                        tx.commissionProcessed = true;
+                        tx.commissionSkippedReason = 'No agent at win time';
+                        await tx.save();
+                        continue;
+                    }
+
                     const commissionAmount = await this.recordCommission(
-                        user.agentId,
-                        user.userId,
+                        agentId,
+                        tx.userId,
                         gameType,
                         stake,
                         tx.amount,
@@ -1506,12 +1668,19 @@ class ManualAgentSystem {
                     
                     if (commissionAmount > 0) {
                         tx.commissionProcessed = true;
+                        tx.commissionRetryCount = 0; // reset on success
                         await tx.save();
                     } else {
-                        console.log(`⚠️ Commission not recorded for transaction ${tx._id}, will retry later`);
+                        // Increment retry count
+                        tx.commissionRetryCount = (tx.commissionRetryCount || 0) + 1;
+                        await tx.save();
+                        console.log(`⚠️ Commission not recorded for transaction ${tx._id}, retry count: ${tx.commissionRetryCount}`);
                     }
                 } catch (txError) {
                     console.error(`Error processing transaction ${tx._id}:`, txError);
+                    // Increment retry count on error as well
+                    tx.commissionRetryCount = (tx.commissionRetryCount || 0) + 1;
+                    await tx.save().catch(e => console.log('Failed to update retry count', e));
                 }
             }
             console.log('✅ Pending commissions calculation completed');
@@ -1579,7 +1748,7 @@ class ManualAgentSystem {
                 { userId: { $regex: escaped, $options: 'i' } },
                 { telegramUsername: { $regex: escaped, $options: 'i' } },
                 { userName: { $regex: escaped, $options: 'i' } },
-                { phoneNumber: { $regex: escaped, $options: 'i' } }  // ← ADDED PHONE
+                { phoneNumber: { $regex: escaped, $options: 'i' } }
             ];
 
             // Additional exact numeric/tg_ variants
@@ -2177,12 +2346,20 @@ class ManualAgentSystem {
     // ========== UPDATE COMMISSION RATES ==========
     async updateAgentCommissionRates(agentId, bingoRate, kenoRate) {
         try {
+            // Validate
+            if (bingoRate !== undefined && (bingoRate < 0 || bingoRate > 100)) {
+                throw new Error('Bingo rate must be between 0 and 100');
+            }
+            if (kenoRate !== undefined && (kenoRate < 0 || kenoRate > 100)) {
+                throw new Error('Keno rate must be between 0 and 100');
+            }
+
             const agent = await this.models.Agent.findByIdAndUpdate(
                 agentId,
                 {
                     $set: {
-                        commissionRateBingo: bingoRate || 40,
-                        commissionRateKeno: kenoRate || 10,
+                        commissionRateBingo: bingoRate ?? 40,
+                        commissionRateKeno: kenoRate ?? 10,
                         updatedAt: new Date()
                     }
                 },
