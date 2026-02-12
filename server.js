@@ -300,6 +300,10 @@ const agentSchema = new mongoose.Schema({
 const agentCommissionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   userId: { type: String, required: true },
+  // 🛠️ FIXED: Added transactionKey with unique sparse index to prevent duplicate commissions
+  transactionKey: { type: String, sparse: true, unique: true },
+  userName: { type: String },
+  telegramUsername: { type: String },
   gameType: { type: String, enum: ['BINGO', 'KENO'], required: true },
   stake: { type: Number, required: true },
   winningAmount: { type: Number, required: true },
@@ -309,6 +313,9 @@ const agentCommissionSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// 🛠️ FIXED: Ensure unique index on transactionKey (already defined with unique:true, but explicit index is safer)
+agentCommissionSchema.index({ transactionKey: 1 }, { unique: true, sparse: true });
+
 // Agent Transaction Schema
 const agentTransactionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
@@ -316,7 +323,10 @@ const agentTransactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   description: { type: String },
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  // 🛠️ FIXED: Added fields for withdrawal audit trail
+  processedAt: { type: Date },
+  processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent' }
 });
 
 // Referral Schema (for tracking referral methods)
@@ -968,10 +978,76 @@ io.on('connection', (socket) => {
   // Get agent leaderboard (super admin only)
   socket.on('admin:getAgentLeaderboard', async (data) => {
     if (socket.admin && agentSystem && agentSystem.getAgentLeaderboard) {
-      const limit = data.limit || 10;
-      const period = data.period || 'month';
-      const leaderboard = await agentSystem.getAgentLeaderboard(limit, period);
-      socket.emit('admin:agentLeaderboard', leaderboard);
+      try {
+        const limit = data.limit || 10;
+        const period = data.period || 'month';
+        const leaderboard = await agentSystem.getAgentLeaderboard(limit, period);
+        socket.emit('admin:agentLeaderboard', leaderboard);
+      } catch (error) {
+        console.error('Error getting agent leaderboard:', error);
+        socket.emit('admin:error', 'Failed to get agent leaderboard');
+      }
+    }
+  });
+
+  // 🛠️ FIXED: Added admin events for agent withdrawal approval
+  // ========== AGENT WITHDRAWAL APPROVAL (ADMIN) ==========
+  socket.on('admin:getPendingAgentWithdrawals', async () => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    if (agentSystem && typeof agentSystem.getPendingAgentWithdrawals === 'function') {
+      try {
+        const withdrawals = await agentSystem.getPendingAgentWithdrawals();
+        socket.emit('admin:pendingAgentWithdrawals', withdrawals);
+      } catch (error) {
+        console.error('Error getting pending agent withdrawals:', error);
+        socket.emit('admin:error', 'Failed to get pending withdrawals');
+      }
+    } else {
+      // Fallback if method not yet implemented in agent-logic.js
+      socket.emit('admin:error', 'Agent withdrawal system not fully implemented');
+    }
+  });
+
+  socket.on('admin:approveAgentWithdrawal', async (transactionId) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    if (agentSystem && typeof agentSystem.approveAgentWithdrawal === 'function') {
+      try {
+        const result = await agentSystem.approveAgentWithdrawal(transactionId, socket.agentData?._id);
+        socket.emit('admin:agentWithdrawalApproved', result);
+        // Optionally refresh agent dashboard for the affected agent
+        if (result.agentId) {
+          agentSystem.forceRefreshAgentDashboard(result.agentId).catch(console.error);
+        }
+      } catch (error) {
+        console.error('Error approving agent withdrawal:', error);
+        socket.emit('admin:error', error.message || 'Failed to approve withdrawal');
+      }
+    } else {
+      socket.emit('admin:error', 'Approve method not available – please update agent-logic.js');
+    }
+  });
+
+  socket.on('admin:rejectAgentWithdrawal', async (transactionId) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    if (agentSystem && typeof agentSystem.rejectAgentWithdrawal === 'function') {
+      try {
+        const result = await agentSystem.rejectAgentWithdrawal(transactionId, socket.agentData?._id);
+        socket.emit('admin:agentWithdrawalRejected', result);
+      } catch (error) {
+        console.error('Error rejecting agent withdrawal:', error);
+        socket.emit('admin:error', error.message || 'Failed to reject withdrawal');
+      }
+    } else {
+      socket.emit('admin:error', 'Reject method not available – please update agent-logic.js');
     }
   });
   
@@ -1211,9 +1287,11 @@ io.on('connection', (socket) => {
   
   // ========== GAME EVENTS (FORWARDED TO GAME LOGIC) ==========
   socket.on('join', (data) => {
-    // Process referral if present
+    // 🛠️ FIXED: Added .catch() to handle promise rejection
     if (data.referralCode && agentSystem && agentSystem.processReferral) {
-      agentSystem.processReferral(data.userId, data.referralCode);
+      agentSystem.processReferral(data.userId, data.referralCode).catch(err => {
+        console.error('❌ Error processing referral:', err);
+      });
     }
     
     if (gameLogic && gameLogic.handleJoin) {
