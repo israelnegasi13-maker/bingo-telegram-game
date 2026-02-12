@@ -179,7 +179,6 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Handle logout
     async handleAgentLogout(socket) {
         try {
             if (!socket.agentId) {
@@ -433,47 +432,83 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== USER SEARCH & HELPERS ==========
+    // ========== USER SEARCH & HELPERS – FULLY FIXED ==========
     async findUserByIdentifier(identifier) {
         try {
             const cleanId = identifier.replace(/^@/, '').trim();
             console.log(`🔍 [FIND USER] Searching for identifier: "${cleanId}"`);
 
-            let user = await this.models.User.findOne({ userId: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
-            if (user) return user;
+            // ----- 1. EXACT MATCHES (multiple formats) -----
+            const exactQueries = [];
 
-            user = await this.models.User.findOne({ telegramUsername: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
-            if (user) return user;
-
-            user = await this.models.User.findOne({ userName: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
-            if (user) return user;
-
+            // userId – try both raw numeric and tg_ prefixed
             if (/^\d+$/.test(cleanId)) {
-                const telegramId = `tg_${cleanId}`;
-                user = await this.models.User.findOne({ userId: telegramId });
-                if (user) return user;
+                exactQueries.push({ userId: cleanId });                     // "123456"
+                exactQueries.push({ userId: `tg_${cleanId}` });             // "tg_123456"
+            } else {
+                exactQueries.push({ userId: cleanId });                    // as entered
             }
 
-            const partialUsers = await this.models.User.find({
-                $or: [
-                    { userId: { $regex: escapeRegex(cleanId), $options: 'i' } },
-                    { telegramUsername: { $regex: escapeRegex(cleanId), $options: 'i' } },
-                    { userName: { $regex: escapeRegex(cleanId), $options: 'i' } }
-                ]
-            }).limit(5);
-            if (partialUsers.length > 0) {
-                return partialUsers[0];
+            // telegramUsername – try with and without @
+            exactQueries.push({ telegramUsername: cleanId });              // without @
+            exactQueries.push({ telegramUsername: `@${cleanId}` });        // with @
+
+            // userName – exact match
+            exactQueries.push({ userName: cleanId });
+
+            // phoneNumber – exact match (Ethiopian format)
+            if (/^09[0-9]{8}$/.test(cleanId) || /^\+?2519[0-9]{8}$/.test(cleanId)) {
+                exactQueries.push({ phoneNumber: cleanId });
             }
 
-            console.log(`❌ [FIND USER] No user found for identifier: "${cleanId}"`);
-            return null;
+            for (const query of exactQueries) {
+                const user = await this.models.User.findOne(query);
+                if (user) {
+                    console.log(`✅ [FIND USER] Exact match found via`, query);
+                    return user;
+                }
+            }
+
+            // ----- 2. PARTIAL / FUZZY SEARCH (last resort) -----
+            const partialConditions = [
+                { userId: { $regex: escapeRegex(cleanId), $options: 'i' } },
+                { telegramUsername: { $regex: escapeRegex(cleanId), $options: 'i' } },
+                { userName: { $regex: escapeRegex(cleanId), $options: 'i' } },
+                { phoneNumber: { $regex: escapeRegex(cleanId), $options: 'i' } }
+            ];
+
+            const users = await this.models.User.find({ $or: partialConditions })
+                .limit(5)   // get top 5 for ranking
+                .lean();
+
+            if (users.length === 0) {
+                console.log(`❌ [FIND USER] No user found for identifier: "${cleanId}"`);
+                return null;
+            }
+
+            // Rank: exact substring match in userId > telegramUsername > userName > phoneNumber
+            // Then sort by lastSeen desc (active users first)
+            const ranked = users.map(u => {
+                let score = 0;
+                if (u.userId?.toLowerCase().includes(cleanId.toLowerCase())) score += 100;
+                if (u.telegramUsername?.toLowerCase().includes(cleanId.toLowerCase())) score += 80;
+                if (u.userName?.toLowerCase().includes(cleanId.toLowerCase())) score += 60;
+                if (u.phoneNumber?.toLowerCase().includes(cleanId.toLowerCase())) score += 40;
+                return { ...u, score, lastSeen: u.lastSeen || new Date(0) };
+            }).sort((a, b) => {
+                if (a.score !== b.score) return b.score - a.score;
+                return b.lastSeen - a.lastSeen;  // more recent first
+            });
+
+            console.log(`✅ [FIND USER] Best partial match: ${ranked[0].userId} (score ${ranked[0].score})`);
+            return ranked[0];
         } catch (error) {
             console.error('❌ [FIND USER] Error:', error);
             return null;
         }
     }
 
-    // ========== MANUAL REFERRAL ASSIGNMENT ==========
+    // ========== MANUAL REFERRAL ASSIGNMENT BY AGENT ==========
     async handleManualReferralAssignmentByAgent(socket, data) {
         try {
             if (!socket.agentId) {
@@ -496,6 +531,21 @@ class ManualAgentSystem {
             const user = await this.findUserByIdentifier(userIdentifier);
             if (!user) {
                 socket.emit('agent:error', `Player not found: "${userIdentifier}"`);
+                return;
+            }
+
+            // ----- AMBIGUITY CHECK (optional but helpful) -----
+            const possibleMatches = await this.models.User.find({
+                $or: [
+                    { userId: { $regex: escapeRegex(userIdentifier), $options: 'i' } },
+                    { telegramUsername: { $regex: escapeRegex(userIdentifier), $options: 'i' } },
+                    { userName: { $regex: escapeRegex(userIdentifier), $options: 'i' } },
+                    { phoneNumber: { $regex: escapeRegex(userIdentifier), $options: 'i' } }
+                ]
+            }).limit(3).lean();
+
+            if (possibleMatches.length > 1 && !possibleMatches.find(u => u.userId === user.userId)) {
+                socket.emit('agent:error', `Multiple players match "${userIdentifier}". Please use a more exact identifier (User ID or Telegram username).`);
                 return;
             }
 
@@ -884,7 +934,7 @@ class ManualAgentSystem {
             }
 
             const { amount, phoneNumber } = data;
-            if (!amount || amount < 100) {  // ✅ Minimum 100 ETB (aligned with frontend)
+            if (!amount || amount < 100) {
                 socket.emit('agent:error', 'Minimum withdrawal is 100 ETB');
                 return;
             }
@@ -918,7 +968,6 @@ class ManualAgentSystem {
                 transactionId: withdrawal._id
             });
 
-            // 🛠️ FIXED: event name changed to 'agent:withdrawRequested' and includes amount
             socket.emit('agent:withdrawRequested', {
                 message: 'Withdrawal request submitted. Admin will process it within 24 hours.',
                 transactionId: withdrawal._id,
@@ -958,7 +1007,6 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Update agent phone number
     async handleUpdateAgentPhone(socket, data) {
         try {
             if (!socket.agentId) {
@@ -1447,7 +1495,6 @@ class ManualAgentSystem {
                     const gameType = tx.type === 'BINGO_WIN' ? 'BINGO' : 'KENO';
                     const stake = tx.room || tx.stake || (gameType === 'BINGO' ? 10 : 5);
                     
-                    // 🛠️ FIXED: only mark as processed if commission was successfully recorded
                     const commissionAmount = await this.recordCommission(
                         user.agentId,
                         user.userId,
@@ -1510,7 +1557,7 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== SEARCH USERS FOR ASSIGNMENT ==========
+    // ========== SEARCH USERS FOR ASSIGNMENT – FIXED ==========
     async handleSearchUsers(socket, data) {
         try {
             if (!socket.agentId) {
@@ -1531,8 +1578,11 @@ class ManualAgentSystem {
             const searchConditions = [
                 { userId: { $regex: escaped, $options: 'i' } },
                 { telegramUsername: { $regex: escaped, $options: 'i' } },
-                { userName: { $regex: escaped, $options: 'i' } }
+                { userName: { $regex: escaped, $options: 'i' } },
+                { phoneNumber: { $regex: escaped, $options: 'i' } }  // ← ADDED PHONE
             ];
+
+            // Additional exact numeric/tg_ variants
             if (cleanQuery.startsWith('tg_') || /^\d+$/.test(cleanQuery)) {
                 const telegramId = cleanQuery.startsWith('tg_') ? cleanQuery : `tg_${cleanQuery}`;
                 searchConditions.push({ userId: new RegExp('^' + escapeRegex(telegramId) + '$', 'i') });
@@ -1544,7 +1594,7 @@ class ManualAgentSystem {
                     { $or: [{ agentId: { $exists: false } }, { agentId: null }, { agentId: { $ne: agent._id } }] }
                 ]
             })
-                .select('userId userName telegramUsername balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentId phoneNumber referredBy agentReferredAt')
+                .select('userId userName telegramUsername phoneNumber balance totalWagered totalWins totalBingos isOnline joinedAt lastSeen agentId referredBy agentReferredAt')
                 .limit(parseInt(limit))
                 .sort({ isOnline: -1, totalWins: -1, joinedAt: -1 });
 
@@ -1554,12 +1604,12 @@ class ManualAgentSystem {
                     userId: user.userId,
                     userName: user.userName || 'No Name',
                     telegramUsername: user.telegramUsername || '',
+                    phoneNumber: user.phoneNumber || '',
                     balance: user.balance || 0,
                     totalWins: user.totalWins || 0,
                     totalBingos: user.totalBingos || 0,
                     totalWagered: user.totalWagered || 0,
                     isOnline: user.isOnline || false,
-                    phoneNumber: user.phoneNumber || '',
                     joinedAt: user.joinedAt,
                     lastSeen: user.lastSeen,
                     hasAgent: !!user.agentId,
@@ -1676,7 +1726,7 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Test commission (debug)
+    // ========== TEST COMMISSION (debug) ==========
     async handleTestCommission(socket, data) {
         try {
             if (!socket.agentId) {
@@ -1776,7 +1826,7 @@ class ManualAgentSystem {
     async testUserDatabase(socket) {
         try {
             const users = await this.models.User.find({})
-                .select('userId userName telegramUsername agentId totalWins totalBingos joinedAt isOnline referredBy agentReferredAt')
+                .select('userId userName telegramUsername phoneNumber agentId totalWins totalBingos joinedAt isOnline referredBy agentReferredAt')
                 .limit(20)
                 .sort({ joinedAt: -1 });
             const totalUsers = await this.models.User.countDocuments();
