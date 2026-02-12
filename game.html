@@ -279,7 +279,7 @@
             line-height: 1.4;
         }
 
-        /* UPDATED: Cleaner rooms grid */
+        /* ===== CLEANER, DARKER ROOM CARDS ===== */
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -287,73 +287,58 @@
             margin-bottom: 20px;
         }
 
-        /* UPDATED: Cleaner room cards without Bronze/Silver labels */
         .room-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 15px 12px;
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.95));
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 14px 12px;
             display: flex;
             flex-direction: column;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
-            overflow: hidden;
-            min-height: 130px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
         }
 
         .room-card:hover {
-            transform: translateY(-3px);
-            box-shadow: var(--shadow-lg);
-            border-color: var(--primary);
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 28px -8px rgba(0, 0, 0, 0.7);
         }
 
         .room-card.locked {
-            opacity: 0.7;
+            opacity: 0.5;
             cursor: not-allowed;
+            filter: grayscale(0.8);
+            pointer-events: none;
         }
 
-        .room-card.locked:hover {
-            transform: none;
-            box-shadow: none;
-            border-color: var(--card-border);
-        }
-
-        /* REMOVED: Room badges (Bronze, Silver, etc.) */
-        .room-badge {
-            display: none;
-        }
-
-        /* UPDATED: Cleaner stake amount */
+        /* Stake amount – hero element */
         .room-stake {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 800;
-            color: white;
-            margin-bottom: 4px;
-            text-align: center;
-            letter-spacing: 0.5px;
+            line-height: 1;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+            text-align: left;
+            display: flex;
+            align-items: baseline;
         }
 
         .room-stake-currency {
             font-size: 14px;
-            color: var(--gray-light);
             font-weight: 600;
-            margin-left: 3px;
+            margin-left: 4px;
+            color: rgba(255, 255, 255, 0.6);
         }
 
-        /* REMOVED: Room name (Bronze Arena, etc.) */
-        .room-name {
-            display: none;
-        }
-
-        /* UPDATED: Simplified room info */
+        /* Bottom row – players & prize + status */
         .room-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: auto;
-            padding-top: 15px;
-            border-top: 1px solid var(--card-border);
+            margin-top: 4px;
         }
 
         .room-players {
@@ -361,10 +346,11 @@
             align-items: center;
             gap: 6px;
             font-size: 12px;
-            color: var(--gray);
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 500;
         }
 
-        .player-icon {
+        .room-players i {
             color: var(--success);
             font-size: 11px;
         }
@@ -372,102 +358,65 @@
         .room-prize {
             font-size: 14px;
             font-weight: 700;
-            color: var(--secondary);
-            text-align: right;
+            color: var(--primary-light);
+            letter-spacing: 0.3px;
         }
 
-        /* UPDATED: Status position */
+        /* Status badge – now inline, no absolute positioning */
         .room-status {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 9px;
-            padding: 3px 8px;
-            border-radius: 12px;
+            font-size: 10px;
             font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 30px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(4px);
+            display: inline-block;
+            margin-left: 8px;
         }
 
-        /* Color coding based on stake amount */
-        .room-card:nth-child(1) .room-stake { /* 10 ETB */
-            color: #d97706; /* Bronze color */
-        }
-
-        .room-card:nth-child(2) .room-stake { /* 20 ETB */
-            color: #9ca3af; /* Silver color */
-        }
-
-        .room-card:nth-child(3) .room-stake { /* 50 ETB */
-            color: #fbbf24; /* Gold color */
-        }
-
-        .room-card:nth-child(4) .room-stake { /* 100 ETB */
-            color: #8b5cf6; /* Elite color */
-        }
-
-        /* Add subtle border effect based on stake */
-        .room-card:nth-child(1) {
-            border-left: 3px solid #d97706;
-        }
-
-        .room-card:nth-child(2) {
-            border-left: 3px solid #9ca3af;
-        }
-
-        .room-card:nth-child(3) {
-            border-left: 3px solid #fbbf24;
-        }
-
-        .room-card:nth-child(4) {
-            border-left: 3px solid #8b5cf6;
-        }
-
-        /* Status colors */
         .status-waiting {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.12);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.2);
         }
 
         .status-starting {
-            background: rgba(245, 158, 11, 0.2);
-            color: var(--warning);
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.12);
+            color: #fcd34d;
+            border: 1px solid rgba(245, 158, 11, 0.2);
         }
 
         .status-playing, .status-locked {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.12);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
-        /* Add a subtle indicator for each room */
-        .room-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary-dark), var(--primary-light));
-            opacity: 0.3;
+        /* ===== STAKE‑SPECIFIC DARK ACCENTS ===== */
+        .room-card[data-stake="10"] {
+            border-left: 4px solid #7b5e4b;
+        }
+        .room-card[data-stake="20"] {
+            border-left: 4px solid #5a6268;
+        }
+        .room-card[data-stake="50"] {
+            border-left: 4px solid #b68a3c;
+        }
+        .room-card[data-stake="100"] {
+            border-left: 4px solid #6d5a8c;
         }
 
-        .room-card:nth-child(1)::before {
-            background: linear-gradient(90deg, #92400e, #b45309);
-        }
+        .room-card[data-stake="10"]:hover { border-left-color: #a07b5c; }
+        .room-card[data-stake="20"]:hover { border-left-color: #7a848c; }
+        .room-card[data-stake="50"]:hover { border-left-color: #d4a017; }
+        .room-card[data-stake="100"]:hover { border-left-color: #8f77b5; }
 
-        .room-card:nth-child(2)::before {
-            background: linear-gradient(90deg, #374151, #6b7280);
-        }
-
-        .room-card:nth-child(3)::before {
-            background: linear-gradient(90deg, #b45309, #d97706);
-        }
-
-        .room-card:nth-child(4)::before {
-            background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+        @media (max-width: 480px) {
+            .rooms-grid { grid-template-columns: 1fr; }
+            .room-card { padding: 12px; }
+            .room-stake { font-size: 24px; }
         }
 
         .wallet-section {
@@ -1361,7 +1310,6 @@
         }
 
         /* ========== WINNING PATTERN DISPLAY ========== */
-        /* Exact replica of game interface but smaller */
         .winning-card-replica {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -1577,25 +1525,6 @@
 
         /* Responsive Design */
         @media (max-width: 480px) {
-            .rooms-grid {
-                grid-template-columns: 1fr;
-                gap: 10px;
-            }
-            
-            .room-card {
-                min-height: 120px;
-                padding: 12px 10px;
-            }
-            
-            .room-stake {
-                font-size: 22px;
-            }
-            
-            .room-status {
-                top: 8px;
-                right: 8px;
-            }
-            
             .ball {
                 width: 65px;
                 height: 65px;
@@ -1659,22 +1588,6 @@
             
             .balance-amount {
                 font-size: 14px;
-            }
-            
-            .room-stake {
-                font-size: 20px;
-            }
-            
-            .room-card {
-                min-height: 110px;
-                padding: 10px 8px;
-            }
-            
-            .room-status {
-                top: 6px;
-                right: 6px;
-                font-size: 8px;
-                padding: 2px 6px;
             }
             
             .boxes-grid {
@@ -2006,7 +1919,6 @@
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
             
-            <!-- Add EXACT game interface replica -->
             <div class="winning-card-replica" id="winningCardReplicaWin" style="display: none;">
                 <div class="replica-header">
                     <div class="replica-letter-cell">B</div>
@@ -2040,7 +1952,6 @@
                 <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
             
-            <!-- Add EXACT game interface replica -->
             <div class="winning-card-replica" id="winningCardReplicaLose" style="display: none;">
                 <div class="replica-header">
                     <div class="replica-letter-cell">B</div>
@@ -2675,6 +2586,8 @@
                 
                 const roomCard = document.createElement('div');
                 roomCard.className = 'room-card' + (isLocked ? ' locked' : '');
+                // ADD DATASET STAKE FOR COLOR ACCENTS
+                roomCard.dataset.stake = room.stake;
                 roomCard.onclick = isLocked ? null : () => selectStake(room.stake);
                 
                 let statusClass = 'status-waiting';
@@ -2691,7 +2604,6 @@
                     statusText = 'PLAYING';
                 }
                 
-                // Cleaner HTML without "Bronze Arena" etc.
                 roomCard.innerHTML = `
                     <div class="room-stake">${room.stake}<span class="room-stake-currency">ETB</span></div>
                     <div class="room-info">
