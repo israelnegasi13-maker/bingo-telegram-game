@@ -1,4 +1,5 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
+// ========== FULLY UPDATED – FIXED PLAYER STUCK ROOM BUG ==========
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -206,7 +207,7 @@ function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = 
   // Update admin panels
   adminSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
+    if (socket && socket.connected) {
       socket.emit('admin:boxesUpdate', {
         room: roomStake,
         takenBoxes: takenBoxes,
@@ -584,7 +585,7 @@ async function updateAdminPanel() {
     
     adminSockets.forEach(socketId => {
       const socket = io.sockets.sockets.get(socketId);
-      if (socket) {
+      if (socket && socket.connected) {
         socket.emit('admin:update', adminData);
         socket.emit('admin:players', userArray);
         socket.emit('admin:rooms', roomsData);
@@ -620,7 +621,7 @@ function logActivity(type, details, adminSocketId = null) {
   // Send to admin panels
   adminSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
+    if (socket && socket.connected) {
       socket.emit('admin:activity', activity);
     }
   });
@@ -671,7 +672,7 @@ async function cleanupLongRunningGames() {
           for (const [socketId, uId] of socketToUser.entries()) {
             if (uId === userId) {
               const socket = io.sockets.sockets.get(socketId);
-              if (socket) {
+              if (socket && socket.connected) {
                 socket.emit('gameTimeout', {
                   room: room.stake,
                   reason: `Game auto-ended after ${CONFIG.GAME_TIMEOUT_MINUTES} minutes`,
@@ -829,7 +830,7 @@ async function startGameTimer(room) {
       // Send to admin panels
       adminSockets.forEach(socketId => {
         const socket = io.sockets.sockets.get(socketId);
-        if (socket) {
+        if (socket && socket.connected) {
           socket.emit('admin:ballDrawn', {
             room: room.stake,
             ball: ball,
@@ -950,7 +951,7 @@ async function endGameWithNoWinner(room) {
         for (const [socketId, uId] of socketToUser.entries()) {
           if (uId === userId) {
             const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
+            if (socket && socket.connected) {
               socket.emit('gameOver', {
                 room: room.stake,
                 winnerId: 'HOUSE',
@@ -1083,7 +1084,7 @@ async function startCountdownForRoom(room) {
         // Broadcast to admin
         adminSockets.forEach(socketId => {
           const socket = io.sockets.sockets.get(socketId);
-          if (socket) {
+          if (socket && socket.connected) {
             socket.emit('admin:countdownUpdate', {
               room: room.stake,
               timer: countdown,
@@ -1271,7 +1272,7 @@ function broadcastGameOver(roomStake, playerIds, gameOverData) {
   // Broadcast to admin panels
   adminSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
+    if (socket && socket.connected) {
       socket.emit('admin:gameOver', {
         room: roomStake,
         winnerId: gameOverData.winnerId,
@@ -1635,7 +1636,7 @@ async function cleanupStuckCountdowns() {
           const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
           socketsToSend.forEach(socketId => {
             const socket = io.sockets.sockets.get(socketId);
-            if (socket) {
+            if (socket && socket.connected) {
               socket.emit('gameCountdown', {
                 room: room.stake,
                 timer: 0
@@ -2031,7 +2032,7 @@ function setupSocketHandlers() {
       for (const [sId, uId] of socketToUser.entries()) {
         if (uId === userId) {
           const playerSocket = io.sockets.sockets.get(sId);
-          if (playerSocket) {
+          if (playerSocket && playerSocket.connected) {
             playerSocket.emit('balanceUpdate', user.balance);
             playerSocket.emit('fundsAdded', {
               amount: amount,
@@ -2082,7 +2083,7 @@ function setupSocketHandlers() {
         for (const [sId, uId] of socketToUser.entries()) {
           if (uId === transaction.userId) {
             const playerSocket = io.sockets.sockets.get(sId);
-            if (playerSocket) {
+            if (playerSocket && playerSocket.connected) {
               playerSocket.emit('balanceUpdate', user.balance);
               playerSocket.emit('wallet:depositApproved', {
                 amount: transaction.amount,
@@ -2167,7 +2168,7 @@ function setupSocketHandlers() {
         for (const [sId, uId] of socketToUser.entries()) {
           if (uId === transaction.userId) {
             const playerSocket = io.sockets.sockets.get(sId);
-            if (playerSocket) {
+            if (playerSocket && playerSocket.connected) {
               playerSocket.emit('balanceUpdate', user.balance);
               playerSocket.emit('wallet:withdrawalApproved', {
                 amount: Math.abs(transaction.amount),
@@ -2219,7 +2220,7 @@ function setupSocketHandlers() {
         for (const [sId, uId] of socketToUser.entries()) {
           if (uId === transaction.userId) {
             const playerSocket = io.sockets.sockets.get(sId);
-            if (playerSocket) {
+            if (playerSocket && playerSocket.connected) {
               if (transaction.type === 'DEPOSIT_REQUEST') {
                 playerSocket.emit('wallet:depositRejected', {
                   amount: transaction.amount,
@@ -2301,7 +2302,7 @@ function setupSocketHandlers() {
           for (const [sId, uId] of socketToUser.entries()) {
             if (uId === userId) {
               const s = io.sockets.sockets.get(sId);
-              if (s) {
+              if (s && s.connected) {
                 s.emit('ballDrawn', ballData);
               }
             }
@@ -2331,7 +2332,7 @@ function setupSocketHandlers() {
       for (const [sId, uId] of socketToUser.entries()) {
         if (uId === userId) {
           const playerSocket = io.sockets.sockets.get(sId);
-          if (playerSocket) {
+          if (playerSocket && playerSocket.connected) {
             playerSocket.emit('banned');
             playerSocket.disconnect();
           }
@@ -2385,7 +2386,7 @@ function setupSocketHandlers() {
         // Send game started event
         socketsToSend.forEach(socketId => {
           const s = io.sockets.sockets.get(socketId);
-          if (s) {
+          if (s && s.connected) {
             s.emit('gameStarted', { 
               room: roomStake,
               players: room.players.length
@@ -2437,7 +2438,7 @@ function setupSocketHandlers() {
             for (const [sId, uId] of socketToUser.entries()) {
               if (uId === userId) {
                 const s = io.sockets.sockets.get(sId);
-                if (s) {
+                if (s && s.connected) {
                   s.emit('gameOver', {
                     room: roomStake,
                     winnerId: 'ADMIN',
@@ -2517,7 +2518,7 @@ function setupSocketHandlers() {
           for (const [sId, uId] of socketToUser.entries()) {
             if (uId === userId) {
               const s = io.sockets.sockets.get(sId);
-              if (s) {
+              if (s && s.connected) {
                 s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
                 s.emit('balanceUpdate', user.balance);
                 s.emit('lobbyUpdate', { room: roomStake, count: 0 });
@@ -2587,7 +2588,7 @@ function setupSocketHandlers() {
         // Notify admin
         adminSockets.forEach(socketId => {
           const adminSocket = io.sockets.sockets.get(socketId);
-          if (adminSocket) {
+          if (adminSocket && adminSocket.connected) {
             adminSocket.emit('admin:newDepositRequest', {
               userId,
               userName,
@@ -2663,7 +2664,7 @@ function setupSocketHandlers() {
         // Notify admin
         adminSockets.forEach(socketId => {
           const adminSocket = io.sockets.sockets.get(socketId);
-          if (adminSocket) {
+          if (adminSocket && adminSocket.connected) {
             adminSocket.emit('admin:newWithdrawRequest', {
               userId,
               userName,
@@ -2692,7 +2693,7 @@ function setupSocketHandlers() {
       }
     });
     
-    // Player events
+    // ========== PLAYER EVENTS ==========
     socket.on('init', async (data, callback) => {
       try {
         const { userId, userName } = data;
@@ -2705,6 +2706,26 @@ function setupSocketHandlers() {
         const user = await getUser(userId, userName);
         
         if (user) {
+          // 🔥 FIX 2: Validate and auto-repair stale room status on init
+          if (user.currentRoom) {
+            try {
+              const room = await getRoomWithCache(user.currentRoom);
+              // If room doesn't exist OR user is not in room.players, clear stale state
+              if (!room || !room.players.includes(user.userId)) {
+                console.log(`🧹 Cleaning stale room status for ${user.userName} (${user.userId}) on init`);
+                user.currentRoom = null;
+                user.box = null;
+                await user.save();
+              }
+            } catch (error) {
+              console.error('Error validating room on init:', error);
+              // On error, clear to be safe
+              user.currentRoom = null;
+              user.box = null;
+              await user.save();
+            }
+          }
+          
           // Store in socketToUser map
           socketToUser.set(socket.id, userId);
           
@@ -2930,15 +2951,27 @@ function setupSocketHandlers() {
           return;
         }
         
+        // 🔥 FIX 3: Strengthen joinRoom with consistency check
         if (user.currentRoom) {
           if (user.currentRoom === room) {
-            socket.emit('joinedRoom');
-            if (callback) callback({ success: true, message: 'Already in room' });
+            // Verify the user is actually in the room's player list
+            if (roomData.players.includes(userId)) {
+              socket.emit('joinedRoom');
+              if (callback) callback({ success: true, message: 'Already in room' });
+              return;
+            } else {
+              // Inconsistent state – fix it and continue with join
+              console.log(`🧹 Repairing stale room status for ${user.userName} in joinRoom`);
+              user.currentRoom = null;
+              user.box = null;
+              await user.save();
+              // Fall through to normal join logic
+            }
+          } else {
+            socket.emit('error', 'Already in a different room');
+            if (callback) callback({ success: false, message: 'Already in different room' });
             return;
           }
-          socket.emit('error', 'Already in a different room');
-          if (callback) callback({ success: false, message: 'Already in different room' });
-          return;
         }
         
         // Update user balance and room info
@@ -2990,7 +3023,7 @@ function setupSocketHandlers() {
           for (const [sId, uId] of socketToUser.entries()) {
             if (uId === playerUserId) {
               const s = io.sockets.sockets.get(sId);
-              if (s) {
+              if (s && s.connected) {
                 s.emit('lobbyUpdate', {
                   room: room,
                   count: onlinePlayers.length
@@ -3101,7 +3134,7 @@ function setupSocketHandlers() {
       
       // Disable the claim button on client side immediately
       const playerSocket = io.sockets.sockets.get(socket.id);
-      if (playerSocket) {
+      if (playerSocket && playerSocket.connected) {
         playerSocket.emit('claimProcessing', { claimId });
       }
       
@@ -3246,7 +3279,7 @@ function setupSocketHandlers() {
           for (const [sId, uId] of socketToUser.entries()) {
             if (uId === playerUserId) {
               const s = io.sockets.sockets.get(sId);
-              if (s) {
+              if (s && s.connected) {
                 s.emit('lobbyUpdate', {
                   room: roomStake,
                   count: onlinePlayers.length
@@ -3370,19 +3403,28 @@ function setupSocketHandlers() {
                 updateRoomCache(roomStake, room);
                 onlinePlayersCache.delete(`online_${roomStake}`);
                 
+                // 🔥 FIX 1: Clear the user's own room status on disconnect
+                user.currentRoom = null;
+                user.box = null;
+                await user.save();
+                
                 // Broadcast updated boxes
                 broadcastTakenBoxes(roomStake, room.takenBoxes);
                 
-                console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect`);
+                console.log(`👤 User ${user.userName} removed from room ${roomStake} due to disconnect and user state cleared`);
               } else {
                 console.log(`⚠️ User ${user.userName} disconnected during gameplay in room ${roomStake}, keeping in game`);
+                // Only update online status, not room status
+                user.isOnline = false;
+                user.lastSeen = new Date();
+                await user.save();
               }
+            } else {
+              // Just update online status
+              user.isOnline = false;
+              user.lastSeen = new Date();
+              await user.save();
             }
-            
-            // Update user status
-            user.isOnline = false;
-            user.lastSeen = new Date();
-            await user.save();
           } else {
             // Just update last seen
             await models.User.findOneAndUpdate(
