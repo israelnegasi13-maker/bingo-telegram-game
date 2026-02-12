@@ -1770,1249 +1770,678 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE WITH WALLET AND MORE GAMES ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - CLEAN LOOK + CUSTOM ICONS ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
-    
+
+    // --- Load custom icons from disk (base64) ---
+    let bingoIconBase64 = '';
+    let kenoIconBase64 = '';
+    try {
+      const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
+      const bingoBuffer = fs.readFileSync(bingoPath);
+      bingoIconBase64 = bingoBuffer.toString('base64');
+      console.log('✅ Bingo icon loaded');
+    } catch (e) {
+      console.log('ℹ️ Bingo icon file not found, using CSS fallback');
+    }
+    try {
+      const kenoPath = path.join(__dirname, 'keno-icon.png.jpg');
+      const kenoBuffer = fs.readFileSync(kenoPath);
+      kenoIconBase64 = kenoBuffer.toString('base64');
+      console.log('✅ Keno icon loaded');
+    } catch (e) {
+      console.log('ℹ️ Keno icon file not found, using CSS fallback');
+    }
+
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
       <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-          <title>ETHIO GAMES - Telegram Mini App</title>
-          <script src="https://telegram.org/js/telegram-web-app.js"></script>
-          <style>
-              :root {
-                  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                  --accent-color: #fbbf24;
-                  --dark-bg: #0f172a;
-                  --card-bg: rgba(30, 41, 59, 0.8);
-                  --card-border: rgba(255, 255, 255, 0.1);
-                  --text-primary: #f8fafc;
-                  --text-secondary: #94a3b8;
-                  --success: #10b981;
-                  --warning: #f59e0b;
-                  --keno-color: #8b5cf6;
-                  --bingo-color: #3b82f6;
-                  --lottery-color: #ec4899;
-                  --slots-color: #06b6d4;
-                  --glass-bg: rgba(15, 23, 42, 0.7);
-                  --glass-border: rgba(255, 255, 255, 0.08);
-              }
-              
-              * {
-                  margin: 0;
-                  padding: 0;
-                  box-sizing: border-box;
-                  -webkit-tap-highlight-color: transparent;
-              }
-              
-              body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-                  background: var(--dark-bg);
-                  color: var(--text-primary);
-                  min-height: 100vh;
-                  overflow-x: hidden;
-                  background-image: 
-                      radial-gradient(at 40% 20%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
-                      radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
-                      radial-gradient(at 0% 50%, rgba(239, 68, 68, 0.1) 0px, transparent 50%),
-                      radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
-                  backdrop-filter: blur(20px);
-                  -webkit-backdrop-filter: blur(20px);
-              }
-              
-              .container {
-                  min-height: 100vh;
-                  padding: 16px;
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: space-between;
-              }
-              
-              .header {
-                  width: 100%;
-                  text-align: center;
-                  padding: 20px 0;
-                  margin-bottom: 12px;
-                  position: relative;
-              }
-              
-              .logo-container {
-                  margin-bottom: 12px;
-                  position: relative;
-              }
-              
-              .logo {
-                  font-size: 2.2rem;
-                  background: var(--primary-gradient);
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-                  background-clip: text;
-                  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
-                  animation: float 6s ease-in-out infinite;
-              }
-              
-              .welcome-text {
-                  font-size: 1.4rem;
-                  font-weight: 700;
-                  margin-bottom: 4px;
-                  background: var(--primary-gradient);
-                  -webkit-background-clip: text;
-                  -webkit-text-fill-color: transparent;
-                  background-clip: text;
-                  letter-spacing: -0.5px;
-              }
-              
-              .subtitle {
-                  color: var(--text-secondary);
-                  font-size: 0.75rem;
-                  font-weight: 400;
-                  letter-spacing: 0.5px;
-                  max-width: 280px;
-                  margin: 0 auto;
-                  line-height: 1.3;
-              }
-              
-              .wallet-section {
-                  width: 100%;
-                  max-width: 360px;
-                  margin: 0 auto 16px;
-                  background: rgba(59, 130, 246, 0.1);
-                  backdrop-filter: blur(10px);
-                  border: 1px solid rgba(59, 130, 246, 0.2);
-                  border-radius: 16px;
-                  padding: 16px;
-                  text-align: center;
-              }
-              
-              .wallet-title {
-                  font-size: 0.85rem;
-                  font-weight: 600;
-                  color: #60a5fa;
-                  margin-bottom: 8px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 6px;
-              }
-              
-              .wallet-balance {
-                  font-size: 2rem;
-                  font-weight: 900;
-                  color: white;
-                  margin-bottom: 12px;
-                  letter-spacing: 1px;
-              }
-              
-              .wallet-actions {
-                  display: flex;
-                  gap: 8px;
-                  justify-content: center;
-              }
-              
-              .wallet-btn {
-                  padding: 8px 16px;
-                  border-radius: 10px;
-                  border: none;
-                  font-size: 0.75rem;
-                  font-weight: 700;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                  flex: 1;
-                  max-width: 120px;
-              }
-              
-              .deposit-btn {
-                  background: linear-gradient(135deg, #10b981, #059669);
-                  color: white;
-                  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
-              }
-              
-              .withdraw-btn {
-                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                  color: white;
-                  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-              }
-              
-              .wallet-btn:hover {
-                  transform: translateY(-2px);
-                  opacity: 0.9;
-              }
-              
-              .wallet-btn:active {
-                  transform: translateY(0);
-              }
-              
-              .games-section {
-                  width: 100%;
-                  max-width: 360px;
-                  margin: 0 auto 20px;
-              }
-              
-              .section-label {
-                  font-size: 0.85rem;
-                  font-weight: 600;
-                  color: var(--text-secondary);
-                  text-transform: uppercase;
-                  letter-spacing: 1px;
-                  margin-bottom: 12px;
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-              }
-              
-              .section-label::after {
-                  content: '';
-                  flex: 1;
-                  height: 1px;
-                  background: linear-gradient(90deg, transparent, var(--text-secondary), transparent);
-              }
-              
-              .games-grid {
-                  display: grid;
-                  grid-template-columns: repeat(2, 1fr);
-                  gap: 12px;
-                  margin-bottom: 20px;
-              }
-              
-              .game-card {
-                  background: var(--card-bg);
-                  backdrop-filter: blur(10px);
-                  -webkit-backdrop-filter: blur(10px);
-                  border: 1px solid var(--card-border);
-                  border-radius: 16px;
-                  padding: 16px;
-                  display: flex;
-                  flex-direction: column;
-                  cursor: pointer;
-                  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                  position: relative;
-                  overflow: hidden;
-                  height: 180px;
-              }
-              
-              .game-card::before {
-                  content: '';
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  right: 0;
-                  height: 1px;
-                  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-              }
-              
-              .game-card:hover {
-                  transform: translateY(-2px);
-                  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-              }
-              
-              .game-card:active {
-                  transform: translateY(0);
-              }
-              
-              .game-icon {
-                  width: 48px;
-                  height: 48px;
-                  border-radius: 12px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-size: 1.8rem;
-                  margin-bottom: 12px;
-                  position: relative;
-                  overflow: hidden;
-              }
-              
-              .game-icon::before {
-                  content: '';
-                  position: absolute;
-                  inset: 0;
-                  background: inherit;
-                  opacity: 0.2;
-              }
-              
-              .bingo-icon {
-                  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                  color: #60a5fa;
-              }
-              
-              .keno-icon {
-                  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                  color: #a78bfa;
-              }
-              
-              .lottery-icon {
-                  background: linear-gradient(135deg, #ec4899, #be185d);
-                  color: #f472b6;
-              }
-              
-              .slots-icon {
-                  background: linear-gradient(135deg, #06b6d4, #0891b2);
-                  color: #67e8f9;
-              }
-              
-              .game-content {
-                  flex: 1;
-                  display: flex;
-                  flex-direction: column;
-              }
-              
-              .game-title {
-                  font-size: 1rem;
-                  font-weight: 700;
-                  margin-bottom: 4px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: space-between;
-              }
-              
-              .game-description {
-                  color: var(--text-secondary);
-                  font-size: 0.7rem;
-                  line-height: 1.2;
-                  margin-bottom: 8px;
-                  flex: 1;
-              }
-              
-              .game-features {
-                  display: flex;
-                  gap: 4px;
-                  flex-wrap: wrap;
-                  margin-bottom: 8px;
-              }
-              
-              .feature-tag {
-                  background: rgba(255, 255, 255, 0.05);
-                  color: var(--text-secondary);
-                  padding: 2px 6px;
-                  border-radius: 6px;
-                  font-size: 0.6rem;
-                  font-weight: 500;
-                  border: 1px solid rgba(255, 255, 255, 0.1);
-              }
-              
-              .coming-soon-badge {
-                  background: rgba(148, 163, 184, 0.1);
-                  color: #94a3b8;
-                  padding: 2px 8px;
-                  border-radius: 10px;
-                  font-size: 0.6rem;
-                  font-weight: 700;
-                  letter-spacing: 0.5px;
-                  opacity: 0.8;
-              }
-              
-              .game-action {
-                  margin-top: auto;
-              }
-              
-              .play-btn {
-                  width: 100%;
-                  background: var(--primary-gradient);
-                  color: white;
-                  border: none;
-                  padding: 8px 0;
-                  border-radius: 10px;
-                  font-size: 0.75rem;
-                  font-weight: 700;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-                  letter-spacing: 0.5px;
-              }
-              
-              .play-btn.coming-soon {
-                  background: linear-gradient(135deg, #64748b, #475569);
-                  cursor: not-allowed;
-                  opacity: 0.7;
-              }
-              
-              .play-btn.keno {
-                  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
-              }
-              
-              .play-btn.lottery {
-                  background: linear-gradient(135deg, #ec4899, #be185d);
-                  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.25);
-              }
-              
-              .play-btn.slots {
-                  background: linear-gradient(135deg, #06b6d4, #0891b2);
-                  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.25);
-              }
-              
-              .play-btn:hover:not(.coming-soon) {
-                  transform: translateY(-1px);
-                  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
-              }
-              
-              .play-btn.keno:hover:not(.coming-soon) {
-                  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
-              }
-              
-              .features-highlight {
-                  width: 100%;
-                  max-width: 360px;
-                  margin: 0 auto 20px;
-                  background: var(--glass-bg);
-                  backdrop-filter: blur(10px);
-                  border: 1px solid var(--glass-border);
-                  border-radius: 16px;
-                  padding: 16px;
-              }
-              
-              .features-title {
-                  font-size: 0.9rem;
-                  font-weight: 700;
-                  margin-bottom: 10px;
-                  color: var(--accent-color);
-                  display: flex;
-                  align-items: center;
-                  gap: 6px;
-              }
-              
-              .features-grid {
-                  display: grid;
-                  grid-template-columns: repeat(2, 1fr);
-                  gap: 8px;
-              }
-              
-              .feature-item {
-                  display: flex;
-                  align-items: center;
-                  gap: 6px;
-                  font-size: 0.7rem;
-                  color: var(--text-secondary);
-              }
-              
-              .feature-icon {
-                  color: var(--success);
-                  font-size: 0.8rem;
-              }
-              
-              .footer {
-                  width: 100%;
-                  max-width: 360px;
-                  text-align: center;
-                  padding: 16px 0;
-                  color: var(--text-secondary);
-                  font-size: 0.7rem;
-                  border-top: 1px solid rgba(255, 255, 255, 0.05);
-                  margin-top: auto;
-              }
-              
-              .footer-links {
-                  display: flex;
-                  justify-content: center;
-                  gap: 16px;
-                  margin-top: 8px;
-              }
-              
-              .footer-link {
-                  color: var(--text-secondary);
-                  text-decoration: none;
-                  font-size: 0.65rem;
-                  transition: color 0.2s;
-              }
-              
-              .footer-link:hover {
-                  color: var(--text-primary);
-              }
-              
-              .status-badge {
-                  display: inline-flex;
-                  align-items: center;
-                  gap: 4px;
-                  padding: 2px 8px;
-                  background: rgba(16, 185, 129, 0.1);
-                  color: var(--success);
-                  border-radius: 20px;
-                  font-size: 0.6rem;
-                  font-weight: 600;
-              }
-              
-              .status-badge.keno {
-                  background: rgba(139, 92, 246, 0.1);
-                  color: #a78bfa;
-              }
-              
-              .status-badge.lottery {
-                  background: rgba(236, 72, 153, 0.1);
-                  color: #f472b6;
-              }
-              
-              .status-badge.slots {
-                  background: rgba(6, 182, 212, 0.1);
-                  color: #67e8f9;
-              }
-              
-              @keyframes float {
-                  0%, 100% { transform: translateY(0px); }
-                  50% { transform: translateY(-5px); }
-              }
-              
-              @keyframes slideIn {
-                  from { opacity: 0; transform: translateY(10px); }
-                  to { opacity: 1; transform: translateY(0); }
-              }
-              
-              @keyframes pulse {
-                  0%, 100% { opacity: 1; }
-                  50% { opacity: 0.7; }
-              }
-              
-              .user-greeting {
-                  position: absolute;
-                  top: 16px;
-                  right: 16px;
-                  font-size: 0.75rem;
-                  color: var(--text-secondary);
-                  display: flex;
-                  align-items: center;
-                  gap: 4px;
-              }
-              
-              .modal {
-                  display: none;
-                  position: fixed;
-                  top: 0;
-                  left: 0;
-                  width: 100%;
-                  height: 100%;
-                  background: rgba(0, 0, 0, 0.8);
-                  backdrop-filter: blur(10px);
-                  z-index: 1000;
-                  align-items: center;
-                  justify-content: center;
-                  padding: 20px;
-              }
-              
-              .modal-content {
-                  background: var(--dark-bg);
-                  border: 1px solid var(--card-border);
-                  border-radius: 20px;
-                  padding: 24px;
-                  width: 100%;
-                  max-width: 320px;
-                  max-height: 90vh;
-                  overflow-y: auto;
-                  animation: slideIn 0.3s ease;
-              }
-              
-              .modal-header {
-                  display: flex;
-                  align-items: center;
-                  justify-content: space-between;
-                  margin-bottom: 20px;
-              }
-              
-              .modal-title {
-                  font-size: 1.2rem;
-                  font-weight: 700;
-                  color: white;
-              }
-              
-              .close-btn {
-                  background: none;
-                  border: none;
-                  color: var(--text-secondary);
-                  font-size: 1.5rem;
-                  cursor: pointer;
-                  padding: 4px;
-              }
-              
-              .form-group {
-                  margin-bottom: 16px;
-              }
-              
-              .form-label {
-                  display: block;
-                  font-size: 0.85rem;
-                  font-weight: 600;
-                  color: var(--text-secondary);
-                  margin-bottom: 8px;
-              }
-              
-              .form-input {
-                  width: 100%;
-                  padding: 12px 16px;
-                  background: rgba(255, 255, 255, 0.05);
-                  border: 1px solid var(--card-border);
-                  border-radius: 10px;
-                  color: white;
-                  font-size: 0.9rem;
-                  transition: all 0.2s;
-              }
-              
-              .form-input:focus {
-                  outline: none;
-                  border-color: #3b82f6;
-                  background: rgba(59, 130, 246, 0.05);
-              }
-              
-              .form-hint {
-                  font-size: 0.75rem;
-                  color: var(--text-secondary);
-                  margin-top: 6px;
-              }
-              
-              .telebirr-info {
-                  background: rgba(59, 130, 246, 0.1);
-                  border: 1px solid rgba(59, 130, 246, 0.2);
-                  border-radius: 10px;
-                  padding: 12px;
-                  margin: 16px 0;
-                  text-align: center;
-              }
-              
-              .telebirr-number {
-                  font-size: 1.1rem;
-                  font-weight: 700;
-                  color: #60a5fa;
-                  margin: 8px 0;
-              }
-              
-              .submit-btn {
-                  width: 100%;
-                  padding: 14px;
-                  background: linear-gradient(135deg, #10b981, #059669);
-                  color: white;
-                  border: none;
-                  border-radius: 10px;
-                  font-size: 0.9rem;
-                  font-weight: 700;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                  margin-top: 8px;
-              }
-              
-              .submit-btn:hover {
-                  transform: translateY(-2px);
-                  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
-              }
-              
-              .submit-btn:active {
-                  transform: translateY(0);
-              }
-              
-              .submit-btn:disabled {
-                  background: #64748b;
-                  cursor: not-allowed;
-                  transform: none;
-                  box-shadow: none;
-              }
-              
-              .error-message {
-                  color: #ef4444;
-                  font-size: 0.8rem;
-                  margin-top: 8px;
-                  text-align: center;
-                  display: none;
-              }
-              
-              .success-message {
-                  color: #10b981;
-                  font-size: 0.8rem;
-                  margin-top: 8px;
-                  text-align: center;
-                  display: none;
-              }
-              
-              @media (max-width: 360px) {
-                  .container {
-                      padding: 12px;
-                  }
-                  
-                  .game-card {
-                      padding: 12px;
-                      height: 170px;
-                  }
-                  
-                  .games-grid {
-                      grid-template-columns: 1fr;
-                  }
-              }
-          </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        <title>ETHIO GAMES · Telegram Mini App</title>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
+        <style>
+          /* Clean, minimal dark theme */
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+          }
+
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+            background: #0a0c10;
+            color: #f0f4fa;
+            line-height: 1.4;
+          }
+
+          .container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+          }
+
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #20262e;
+          }
+
+          .logo-text {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+          }
+          .logo-text span {
+            color: #8b5cf6;
+          }
+
+          .user-greeting {
+            font-size: 14px;
+            color: #8e9aaf;
+          }
+
+          .wallet-card {
+            background: #13171c;
+            border-radius: 24px;
+            padding: 20px;
+            border: 1px solid #262d36;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+
+          .wallet-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #8e9aaf;
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+          }
+
+          .balance {
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+          }
+          .balance small {
+            font-size: 16px;
+            font-weight: 400;
+            color: #8e9aaf;
+            margin-left: 6px;
+          }
+
+          .wallet-actions {
+            display: flex;
+            gap: 12px;
+          }
+
+          .btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 40px;
+            border: none;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #20262e;
+            color: white;
+            transition: background 0.2s;
+            cursor: pointer;
+          }
+          .btn-primary {
+            background: #3b82f6;
+          }
+          .btn-primary:active { background: #2563eb; }
+          .btn:active { background: #2d343e; }
+
+          .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #f0f4fa;
+          }
+
+          .games-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+          }
+
+          .game-card {
+            background: #13171c;
+            border: 1px solid #262d36;
+            border-radius: 24px;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.1s;
+          }
+          .game-card:active {
+            background: #1a1f26;
+          }
+
+          .game-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 18px;
+            margin-bottom: 12px;
+            object-fit: cover;
+            border: 1px solid #3b82f6;
+          }
+          .keno-icon {
+            border-color: #8b5cf6;
+          }
+
+          /* Fallback CSS icons (if image missing) */
+          .bingo-icon-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: #1e293b;
+            border-radius: 18px;
+            border: 1px solid #3b82f6;
+            box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
+          }
+          .bingo-numbers-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 6px;
+          }
+          .bingo-number {
+            background: #0f172a;
+            color: #60a5fa;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+          }
+          .bingo-word {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: #fbbf24;
+            margin-top: 2px;
+          }
+          .keno-icon-fallback {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #2d2b55, #1e1a3a);
+            border-radius: 18px;
+            border: 1px solid #8b5cf6;
+          }
+          .keno-word {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+            text-shadow: 0 2px 0 #5b21b6;
+            letter-spacing: 4px;
+          }
+
+          .game-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 4px;
+          }
+
+          .game-desc {
+            font-size: 12px;
+            color: #8e9aaf;
+            margin-bottom: 16px;
+          }
+
+          .play-btn {
+            background: transparent;
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 13px;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.2s;
+            cursor: pointer;
+          }
+          .play-btn.keno {
+            border-color: #8b5cf6;
+            color: #c4b5fd;
+          }
+          .play-btn:active {
+            background: rgba(59,130,246,0.1);
+          }
+
+          .coming-soon {
+            opacity: 0.6;
+            pointer-events: none;
+          }
+          .coming-soon .play-btn {
+            border-color: #5a6573;
+            color: #8e9aaf;
+          }
+
+          .footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #20262e;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            font-size: 12px;
+            color: #5a6573;
+          }
+          .footer a {
+            color: #8e9aaf;
+            text-decoration: none;
+          }
+          .footer a:active { color: white; }
+
+          .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+          }
+          .modal-content {
+            background: #13171c;
+            border: 1px solid #262d36;
+            border-radius: 32px;
+            padding: 24px;
+            width: 100%;
+            max-width: 360px;
+          }
+          .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+          .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+          }
+          .close-btn {
+            background: none;
+            border: none;
+            color: #8e9aaf;
+            font-size: 24px;
+            cursor: pointer;
+          }
+          .form-group {
+            margin-bottom: 16px;
+          }
+          .form-label {
+            display: block;
+            font-size: 13px;
+            color: #8e9aaf;
+            margin-bottom: 6px;
+          }
+          .form-input {
+            width: 100%;
+            padding: 14px;
+            background: #0a0c10;
+            border: 1px solid #262d36;
+            border-radius: 16px;
+            color: white;
+            font-size: 16px;
+          }
+          .telebirr-info {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid #3b82f6;
+          }
+          .telebirr-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #60a5fa;
+          }
+          .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 40px;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            margin-top: 8px;
+            cursor: pointer;
+          }
+          .message {
+            margin-top: 12px;
+            text-align: center;
+            font-size: 13px;
+            display: none;
+          }
+        </style>
       </head>
       <body>
-          <div class="container">
-              <div class="header">
-                  <div class="user-greeting" id="userGreeting" style="display: none;">
-                      👋 <span id="userName">User</span>
-                  </div>
-                  
-                  <div class="logo-container">
-                      <div class="logo">🎮</div>
-                  </div>
-                  
-                  <h1 class="welcome-text">ETHIO GAMES</h1>
-                  <p class="subtitle">Premium gaming experience on Telegram</p>
-              </div>
-              
-              <!-- Wallet Section -->
-              <div class="wallet-section">
-                  <div class="wallet-title">
-                      <span>💰</span>
-                      <span>YOUR WALLET</span>
-                  </div>
-                  <div class="wallet-balance" id="walletBalance">0.00 ETB</div>
-                  <div class="wallet-actions">
-                      <button class="wallet-btn deposit-btn" onclick="openDepositModal()">
-                          💳 Deposit
-                      </button>
-                      <button class="wallet-btn withdraw-btn" onclick="openWithdrawModal()">
-                          💸 Withdraw
-                      </button>
-                  </div>
-              </div>
-              
-              <div class="games-section">
-                  <div class="section-label">
-                      <span>🎯 ALL GAMES</span>
-                  </div>
-                  
-                  <div class="games-grid">
-                      <!-- Bingo Card -->
-                      <div class="game-card" onclick="launchGame('bingo')">
-                          <div class="game-icon bingo-icon">
-                              🎱
-                          </div>
-                          <div class="game-content">
-                              <h3 class="game-title">
-                                  BINGO ELITE
-                                  <span class="status-badge">🔥 HOT</span>
-                              </h3>
-                              <p class="game-description">
-                                  Real-time multiplayer bingo with big wins
-                              </p>
-                              <div class="game-features">
-                                  <span class="feature-tag">🎯 50 ETB Bonus</span>
-                                  <span class="feature-tag">💰 Real Money</span>
-                              </div>
-                          </div>
-                          <div class="game-action">
-                              <button class="play-btn" id="bingoBtn">
-                                  PLAY NOW
-                              </button>
-                          </div>
-                      </div>
-                      
-                      <!-- Keno Card -->
-                      <div class="game-card" onclick="launchGame('keno')">
-                          <div class="game-icon keno-icon">
-                              🎲
-                          </div>
-                          <div class="game-content">
-                              <h3 class="game-title">
-                                  KENO ULTRA
-                                  <span class="status-badge keno">NEW</span>
-                              </h3>
-                              <p class="game-description">
-                                  Fast number selection with instant wins
-                              </p>
-                              <div class="game-features">
-                                  <span class="feature-tag">🎰 5 Numbers</span>
-                                  <span class="feature-tag">⚡ 30s Rounds</span>
-                              </div>
-                          </div>
-                          <div class="game-action">
-                              <button class="play-btn keno" id="kenoBtn">
-                                  PLAY NOW
-                              </button>
-                          </div>
-                      </div>
-                      
-                      <!-- Lottery Card (Coming Soon) -->
-                      <div class="game-card" onclick="showComingSoon('Lottery')">
-                          <div class="game-icon lottery-icon">
-                              🎫
-                          </div>
-                          <div class="game-content">
-                              <h3 class="game-title">
-                                  ETHIO LOTTERY
-                                  <span class="coming-soon-badge">SOON</span>
-                              </h3>
-                              <p class="game-description">
-                                  Daily draws with massive jackpots
-                              </p>
-                              <div class="game-features">
-                                  <span class="feature-tag">🏆 Big Jackpots</span>
-                                  <span class="feature-tag">📅 Daily Draws</span>
-                              </div>
-                          </div>
-                          <div class="game-action">
-                              <button class="play-btn lottery coming-soon">
-                                  COMING SOON
-                              </button>
-                          </div>
-                      </div>
-                      
-                      <!-- Slots Card (Coming Soon) -->
-                      <div class="game-card" onclick="showComingSoon('Slots')">
-                          <div class="game-icon slots-icon">
-                              🎰
-                          </div>
-                          <div class="game-content">
-                              <h3 class="game-title">
-                                  SLOTS GALAXY
-                                  <span class="coming-soon-badge">SOON</span>
-                              </h3>
-                              <p class="game-description">
-                                  Exciting slot machines with bonuses
-                              </p>
-                              <div class="game-features">
-                                  <span class="feature-tag">✨ Free Spins</span>
-                                  <span class="feature-tag">💰 Progressive</span>
-                              </div>
-                          </div>
-                          <div class="game-action">
-                              <button class="play-btn slots coming-soon">
-                                  COMING SOON
-                              </button>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-              
-              <div class="features-highlight">
-                  <div class="features-title">
-                      ⭐ PREMIUM FEATURES
-                  </div>
-                  <div class="features-grid">
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Real-time Multiplayer</span>
-                      </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Instant Withdrawals</span>
-                      </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>24/7 Support</span>
-                      </div>
-                      <div class="feature-item">
-                          <span class="feature-icon">✓</span>
-                          <span>Telebirr Payments</span>
-                      </div>
-                  </div>
-              </div>
-              
-              <div class="footer">
-                  <p>Powered by Telegram • Play responsibly</p>
-                  <div class="footer-links">
-                      <a href="#" class="footer-link" onclick="showHelp()">Help</a>
-                      <a href="#" class="footer-link" onclick="showTerms()">Terms</a>
-                      <a href="#" class="footer-link" onclick="showAgentInfo()">Agent</a>
-                  </div>
-              </div>
+        <div class="container">
+          <!-- Header -->
+          <div class="header">
+            <div class="logo-text">ETHIO<span>GAMES</span></div>
+            <div class="user-greeting" id="userGreeting" style="display: none;">
+              👋 <span id="userName">User</span>
+            </div>
           </div>
-          
-          <!-- Deposit Modal -->
-          <div class="modal" id="depositModal">
-              <div class="modal-content">
-                  <div class="modal-header">
-                      <h2 class="modal-title">💳 Deposit Funds</h2>
-                      <button class="close-btn" onclick="closeDepositModal()">×</button>
-                  </div>
-                  <div class="telebirr-info">
-                      <div style="font-size: 0.8rem; color: #94a3b8;">Send money to:</div>
-                      <div class="telebirr-number">${telebirrNumber}</div>
-                      <div style="font-size: 0.7rem; color: #94a3b8;">Min deposit: ${minDeposit} ETB</div>
-                  </div>
-                  <div class="form-group">
-                      <label class="form-label">Receipt Number</label>
-                      <input type="text" class="form-input" id="depositReceipt" placeholder="Enter receipt number">
-                      <div class="form-hint">Receipt number from Telebirr payment</div>
-                  </div>
-                  <div class="form-group">
-                      <label class="form-label">Amount (ETB)</label>
-                      <input type="number" class="form-input" id="depositAmount" placeholder="Enter amount" min="${minDeposit}" max="10000">
-                      <div class="form-hint">Minimum: ${minDeposit} ETB, Maximum: 10,000 ETB</div>
-                  </div>
-                  <div class="error-message" id="depositError"></div>
-                  <div class="success-message" id="depositSuccess"></div>
-                  <button class="submit-btn" onclick="submitDeposit()" id="depositSubmit">
-                      Submit Deposit
-                  </button>
-              </div>
+
+          <!-- Wallet Card -->
+          <div class="wallet-card">
+            <div class="wallet-label"><span>💰</span> YOUR WALLET</div>
+            <div class="balance"><span id="walletBalance">0.00</span><small>ETB</small></div>
+            <div class="wallet-actions">
+              <button class="btn" onclick="openDepositModal()">💳 Deposit</button>
+              <button class="btn btn-primary" onclick="openWithdrawModal()">💸 Withdraw</button>
+            </div>
           </div>
-          
-          <!-- Withdraw Modal -->
-          <div class="modal" id="withdrawModal">
-              <div class="modal-content">
-                  <div class="modal-header">
-                      <h2 class="modal-title">💸 Withdraw Funds</h2>
-                      <button class="close-btn" onclick="closeWithdrawModal()">×</button>
-                  </div>
-                  <div class="form-group">
-                      <label class="form-label">Amount (ETB)</label>
-                      <input type="number" class="form-input" id="withdrawAmount" placeholder="Enter amount" min="${minWithdrawal}" max="5000">
-                      <div class="form-hint">Minimum: ${minWithdrawal} ETB, Maximum: 5,000 ETB</div>
-                  </div>
-                  <div class="form-group">
-                      <label class="form-label">Phone Number</label>
-                      <input type="text" class="form-input" id="withdrawPhone" placeholder="09XXXXXXXXX" value="">
-                      <div class="form-hint">Enter your Telebirr phone number</div>
-                  </div>
-                  <div class="error-message" id="withdrawError"></div>
-                  <div class="success-message" id="withdrawSuccess"></div>
-                  <button class="submit-btn" onclick="submitWithdraw()" id="withdrawSubmit">
-                      Request Withdrawal
-                  </button>
+
+          <!-- Active Games -->
+          <div>
+            <div class="section-title"><span>🎮 PLAY NOW</span></div>
+            <div class="games-grid">
+              <!-- BINGO card -->
+              <div class="game-card" onclick="launchGame('bingo')">
+                ${bingoIconBase64 
+                  ? `<img src="data:image/png;base64,${bingoIconBase64}" class="game-icon" alt="Bingo">`
+                  : `<div class="bingo-icon-fallback">
+                       <div class="bingo-numbers-row">
+                         <span class="bingo-number">12</span>
+                         <span class="bingo-number">28</span>
+                         <span class="bingo-number">45</span>
+                         <span class="bingo-number">60</span>
+                         <span class="bingo-number">77</span>
+                       </div>
+                       <div class="bingo-word">BINGO</div>
+                     </div>`
+                }
+                <div class="game-title">Bingo Elite</div>
+                <div class="game-desc">Real‑time multiplayer</div>
+                <button class="play-btn">Play</button>
               </div>
+
+              <!-- KENO card -->
+              <div class="game-card" onclick="launchGame('keno')">
+                ${kenoIconBase64 
+                  ? `<img src="data:image/png;base64,${kenoIconBase64}" class="game-icon keno-icon" alt="Keno">`
+                  : `<div class="keno-icon-fallback">
+                       <div class="keno-word">KENO</div>
+                     </div>`
+                }
+                <div class="game-title">Keno Ultra</div>
+                <div class="game-desc">Fast number draws</div>
+                <button class="play-btn keno">Play</button>
+              </div>
+
+              <!-- COMING SOON: Lottery -->
+              <div class="game-card coming-soon">
+                <div style="width:80px;height:80px;background:#20262e;border-radius:18px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:32px;">🎫</div>
+                <div class="game-title">Ethio Lottery</div>
+                <div class="game-desc">Daily jackpots</div>
+                <button class="play-btn" disabled>Soon</button>
+              </div>
+
+              <!-- COMING SOON: Slots -->
+              <div class="game-card coming-soon">
+                <div style="width:80px;height:80px;background:#20262e;border-radius:18px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:32px;">🎰</div>
+                <div class="game-title">Slots Galaxy</div>
+                <div class="game-desc">Spin & win</div>
+                <button class="play-btn" disabled>Soon</button>
+              </div>
+            </div>
           </div>
-          
-          <script src="/socket.io/socket.io.js"></script>
-          <script>
-              const tg = window.Telegram.WebApp;
-              const socket = io();
-              let currentUserId = null;
-              let currentBalance = 0;
-              
-              if (tg) {
-                  tg.ready();
-                  tg.expand();
-                  
-                  tg.setHeaderColor('#3b82f6');
-                  tg.setBackgroundColor('#0f172a');
-                  
-                  const user = tg.initDataUnsafe?.user;
-                  
-                  if (user) {
-                      document.getElementById('userGreeting').style.display = 'flex';
-                      document.getElementById('userName').textContent = user.first_name || 'User';
-                      
-                      currentUserId = 'tg_' + user.id;
-                      
-                      // Store user info
-                      localStorage.setItem('telegramUser', JSON.stringify({
-                          id: user.id,
-                          firstName: user.first_name,
-                          username: user.username,
-                          languageCode: user.language_code
-                      }));
-                      
-                      // Initialize user with game logic
-                      socket.emit('init', {
-                          userId: currentUserId,
-                          userName: user.first_name || 'Telegram User'
-                      });
-                      
-                      // Load user balance
-                      loadUserBalance();
-                      
-                      // Set withdrawal phone from Telegram if available
-                      if (user.phone) {
-                          document.getElementById('withdrawPhone').value = user.phone;
-                      }
-                  }
-              }
-              
-              async function loadUserBalance() {
-                  if (!currentUserId) return;
-                  
-                  try {
-                      const response = await fetch('/api/user/' + currentUserId + '/balance');
-                      const data = await response.json();
-                      
-                      if (data.balance !== undefined) {
-                          currentBalance = data.balance;
-                          document.getElementById('walletBalance').textContent = data.balance.toFixed(2) + ' ETB';
-                      }
-                  } catch (error) {
-                      console.error('Error loading balance:', error);
-                      // Try via socket as fallback
-                      socket.emit('refreshBalance');
-                  }
-              }
-              
-              // Listen for balance updates from game logic
-              socket.on('balanceUpdate', (balance) => {
-                  currentBalance = balance;
-                  document.getElementById('walletBalance').textContent = balance.toFixed(2) + ' ETB';
-              });
-              
-              // Listen for wallet notifications
-              socket.on('wallet:depositApproved', (data) => {
-                  currentBalance = data.newBalance;
-                  document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
-                  if (tg && tg.showPopup) {
-                      tg.showPopup({
-                          title: '✅ Deposit Approved',
-                          message: \`Your deposit of \${data.amount} ETB has been approved! New balance: \${data.newBalance.toFixed(2)} ETB\`,
-                          buttons: [{ type: 'ok' }]
-                      });
-                  }
-              });
-              
-              socket.on('wallet:withdrawalApproved', (data) => {
-                  currentBalance = data.newBalance;
-                  document.getElementById('walletBalance').textContent = data.newBalance.toFixed(2) + ' ETB';
-                  if (tg && tg.showPopup) {
-                      tg.showPopup({
-                          title: '✅ Withdrawal Approved',
-                          message: \`Your withdrawal of \${data.amount} ETB has been sent to \${data.phoneNumber}\`,
-                          buttons: [{ type: 'ok' }]
-                      });
-                  }
-              });
-              
-              function launchGame(game) {
-                  if (tg && tg.HapticFeedback) {
-                      tg.HapticFeedback.impactOccurred('light');
-                  }
-                  
-                  if (game === 'bingo') {
-                      window.location.href = '/game';
-                  } else if (game === 'keno') {
-                      window.location.href = '/keno';
-                  }
-              }
-              
-              function showComingSoon(gameName) {
-                  if (tg) {
-                      tg.showPopup({
-                          title: 'Coming Soon!',
-                          message: \`\${gameName} is under development and will be available soon!\\n\\nStay tuned for updates!\\n\\n🎮 Play our current games while you wait!\`,
-                          buttons: [{ type: 'ok' }]
-                      });
-                  } else {
-                      alert(\`\${gameName} is coming soon!\\n\\nPlay our current games while you wait!\`);
-                  }
-              }
-              
-              function openDepositModal() {
-                  document.getElementById('depositModal').style.display = 'flex';
-                  document.getElementById('depositError').style.display = 'none';
-                  document.getElementById('depositSuccess').style.display = 'none';
-                  document.getElementById('depositReceipt').value = '';
-                  document.getElementById('depositAmount').value = '';
-              }
-              
-              function closeDepositModal() {
-                  document.getElementById('depositModal').style.display = 'none';
-              }
-              
-              function openWithdrawModal() {
-                  if (currentBalance < ${minWithdrawal}) {
-                      showError('withdrawError', \`Minimum withdrawal is \${${minWithdrawal}} ETB. Your balance is \${currentBalance.toFixed(2)} ETB.\`);
-                      return;
-                  }
-                  
-                  document.getElementById('withdrawModal').style.display = 'flex';
-                  document.getElementById('withdrawError').style.display = 'none';
-                  document.getElementById('withdrawSuccess').style.display = 'none';
-                  document.getElementById('withdrawAmount').value = '';
-                  document.getElementById('withdrawAmount').max = currentBalance;
-              }
-              
-              function closeWithdrawModal() {
-                  document.getElementById('withdrawModal').style.display = 'none';
-              }
-              
-              function submitDeposit() {
-                  const receipt = document.getElementById('depositReceipt').value.trim();
-                  const amount = parseFloat(document.getElementById('depositAmount').value);
-                  
-                  if (!receipt) {
-                      showError('depositError', 'Please enter receipt number');
-                      return;
-                  }
-                  
-                  if (!amount || amount < ${minDeposit} || amount > 10000) {
-                      showError('depositError', \`Amount must be between \${${minDeposit}} and 10,000 ETB\`);
-                      return;
-                  }
-                  
-                  // Disable submit button
-                  const submitBtn = document.getElementById('depositSubmit');
-                  submitBtn.disabled = true;
-                  submitBtn.textContent = 'Processing...';
-                  
-                  // Send deposit request via socket
-                  socket.emit('wallet:depositRequest', {
-                      receiptNumber: receipt,
-                      amount: amount,
-                      userId: currentUserId,
-                      userName: document.getElementById('userName').textContent
-                  });
-                  
-                  // Handle response from server
-                  socket.once('wallet:depositRequestSuccess', (response) => {
-                      showSuccess('depositSuccess', response.message || 'Deposit submitted! Admin will approve within 24 hours.');
-                      setTimeout(() => {
-                          closeDepositModal();
-                          loadUserBalance(); // Refresh balance
-                      }, 2000);
-                      submitBtn.disabled = false;
-                      submitBtn.textContent = 'Submit Deposit';
-                  });
-                  
-                  // Handle error
-                  socket.once('wallet:error', (errorMessage) => {
-                      showError('depositError', errorMessage || 'Deposit failed');
-                      submitBtn.disabled = false;
-                      submitBtn.textContent = 'Submit Deposit';
-                  });
-                  
-                  // Timeout fallback
-                  setTimeout(() => {
-                      if (submitBtn.disabled) {
-                          submitBtn.disabled = false;
-                          submitBtn.textContent = 'Submit Deposit';
-                          showError('depositError', 'Request timeout. Please try again.');
-                      }
-                  }, 10000);
-              }
-              
-              function submitWithdraw() {
-                  const amount = parseFloat(document.getElementById('withdrawAmount').value);
-                  const phone = document.getElementById('withdrawPhone').value.trim();
-                  
-                  if (!amount || amount < ${minWithdrawal} || amount > 5000) {
-                      showError('withdrawError', \`Amount must be between \${${minWithdrawal}} and 5,000 ETB\`);
-                      return;
-                  }
-                  
-                  if (amount > currentBalance) {
-                      showError('withdrawError', \`Insufficient balance. Available: \${currentBalance.toFixed(2)} ETB\`);
-                      return;
-                  }
-                  
-                  if (!phone || !/^09[0-9]{8}$/.test(phone)) {
-                      showError('withdrawError', 'Please enter valid Ethiopian phone number (09xxxxxxxx)');
-                      return;
-                  }
-                  
-                  // Disable submit button
-                  const submitBtn = document.getElementById('withdrawSubmit');
-                  submitBtn.disabled = true;
-                  submitBtn.textContent = 'Processing...';
-                  
-                  // Send withdrawal request via socket
-                  socket.emit('wallet:withdrawRequest', {
-                      amount: amount,
-                      phoneNumber: phone,
-                      userId: currentUserId,
-                      userName: document.getElementById('userName').textContent
-                  });
-                  
-                  // Handle response from server
-                  socket.once('wallet:withdrawRequestSuccess', (response) => {
-                      showSuccess('withdrawSuccess', response.message || 'Withdrawal submitted! Admin will process within 24 hours.');
-                      setTimeout(() => {
-                          closeWithdrawModal();
-                          loadUserBalance(); // Refresh balance
-                      }, 2000);
-                      submitBtn.disabled = false;
-                      submitBtn.textContent = 'Request Withdrawal';
-                  });
-                  
-                  // Handle error
-                  socket.once('wallet:error', (errorMessage) => {
-                      showError('withdrawError', errorMessage || 'Withdrawal failed');
-                      submitBtn.disabled = false;
-                      submitBtn.textContent = 'Request Withdrawal';
-                  });
-                  
-                  // Timeout fallback
-                  setTimeout(() => {
-                      if (submitBtn.disabled) {
-                          submitBtn.disabled = false;
-                          submitBtn.textContent = 'Request Withdrawal';
-                          showError('withdrawError', 'Request timeout. Please try again.');
-                      }
-                  }, 10000);
-              }
-              
-              function showError(elementId, message) {
-                  const element = document.getElementById(elementId);
-                  element.textContent = message;
-                  element.style.display = 'block';
-                  element.style.color = '#ef4444';
-              }
-              
-              function showSuccess(elementId, message) {
-                  const element = document.getElementById(elementId);
-                  element.textContent = message;
-                  element.style.display = 'block';
-                  element.style.color = '#10b981';
-              }
-              
-              function showHelp() {
-                  if (tg) {
-                      tg.showPopup({
-                          title: 'How to Play',
-                          message: 'BINGO:\\n1. Select room (10-100 ETB)\\n2. Choose available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!\\n\\n💳 WALLET:\\nDeposit to: ${telebirrNumber}\\nMin withdrawal: ${minWithdrawal} ETB',
-                          buttons: [{ type: 'ok' }]
-                      });
-                  } else {
-                      alert('How to Play\\n\\nBINGO:\\n1. Select room (10-100 ETB)\\n2. Choose available ticket\\n3. Wait for countdown\\n4. Mark numbers as called\\n5. Claim BINGO to win!\\n\\nKENO:\\n1. Select 5 numbers from 1-80\\n2. Choose bet amount (5-100 ETB)\\n3. 20 numbers drawn per round\\n4. Match 3-5 numbers to win!\\n\\n💳 WALLET:\\nDeposit to: ${telebirrNumber}\\nMin withdrawal: ${minWithdrawal} ETB');
-                  }
-              }
-              
-              function showAgentInfo() {
-                  if (tg) {
-                      tg.showPopup({
-                          title: 'Agent System',
-                          message: '👑 Become an agent and earn commissions!\\n\\n• 40% commission from Bingo wins\\n• 10% commission from Keno wins\\n• Real-time commission tracking\\n• Weekly withdrawals\\n\\nContact @Ethio_elite_games_bot to become an agent!',
-                          buttons: [{ type: 'ok' }]
-                      });
-                  } else {
-                      alert('Agent System\\n\\n👑 Become an agent and earn commissions!\\n\\n• 40% commission from Bingo wins\\n• 10% commission from Keno wins\\n• Real-time commission tracking\\n• Weekly withdrawals\\n\\nContact @Ethio_elite_games_bot to become an agent!');
-                  }
-              }
-              
-              function showTerms() {
-                  if (tg) {
-                      tg.showPopup({
-                          title: 'Terms & Conditions',
-                          message: '• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @Ethio_elite_games_bot for support\\n• Telebirr number: ${telebirrNumber}\\n• Min withdrawal: ${minWithdrawal} ETB',
-                          buttons: [{ type: 'ok' }]
-                      });
-                  } else {
-                      alert('Terms & Conditions\\n\\n• Must be 18+ to play\\n• Play responsibly\\n• Admin decisions are final\\n• Contact @Ethio_elite_games_bot for support\\n• Telebirr number: ${telebirrNumber}\\n• Min withdrawal: ${minWithdrawal} ETB');
-                  }
-              }
-              
-              document.getElementById('bingoBtn').addEventListener('click', () => launchGame('bingo'));
-              document.getElementById('kenoBtn').addEventListener('click', () => launchGame('keno'));
-              
-              // Close modals when clicking outside
-              window.onclick = function(event) {
-                  const depositModal = document.getElementById('depositModal');
-                  const withdrawModal = document.getElementById('withdrawModal');
-                  
-                  if (event.target === depositModal) {
-                      closeDepositModal();
-                  }
-                  if (event.target === withdrawModal) {
-                      closeWithdrawModal();
-                  }
-              };
-              
-              // Add entrance animations
-              document.querySelectorAll('.game-card').forEach((card, index) => {
-                  card.style.animation = \`slideIn 0.4s ease \${index * 0.1}s both\`;
-              });
-              
-              // Auto load balance every 30 seconds
-              setInterval(loadUserBalance, 30000);
-          </script>
+
+          <!-- Footer Links -->
+          <div class="footer">
+            <a href="#" onclick="showHelp()">Help</a>
+            <a href="#" onclick="showAgentInfo()">Agent</a>
+            <a href="#" onclick="showTerms()">Terms</a>
+          </div>
+        </div>
+
+        <!-- Deposit Modal -->
+        <div class="modal" id="depositModal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="modal-title">💳 Deposit</div>
+              <button class="close-btn" onclick="closeDepositModal()">×</button>
+            </div>
+            <div class="telebirr-info">
+              <div style="color:#8e9aaf; margin-bottom:8px;">Send money to</div>
+              <div class="telebirr-number">${telebirrNumber}</div>
+              <div style="color:#8e9aaf; margin-top:8px;">Min: ${minDeposit} ETB</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Receipt number</label>
+              <input type="text" class="form-input" id="depositReceipt" placeholder="e.g. RT123456789">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Amount (ETB)</label>
+              <input type="number" class="form-input" id="depositAmount" placeholder="0.00" min="${minDeposit}" max="10000">
+            </div>
+            <div class="message" id="depositMessage"></div>
+            <button class="submit-btn" onclick="submitDeposit()">Submit deposit</button>
+          </div>
+        </div>
+
+        <!-- Withdraw Modal -->
+        <div class="modal" id="withdrawModal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="modal-title">💸 Withdraw</div>
+              <button class="close-btn" onclick="closeWithdrawModal()">×</button>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Amount (ETB)</label>
+              <input type="number" class="form-input" id="withdrawAmount" placeholder="0.00" min="${minWithdrawal}" max="5000">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telebirr number</label>
+              <input type="tel" class="form-input" id="withdrawPhone" placeholder="09XXXXXXXX">
+            </div>
+            <div class="message" id="withdrawMessage"></div>
+            <button class="submit-btn" onclick="submitWithdraw()">Request withdrawal</button>
+          </div>
+        </div>
+
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+          // --- Telegram WebApp init ---
+          const tg = window.Telegram.WebApp;
+          const socket = io();
+          let currentUserId = null;
+          let currentBalance = 0;
+
+          tg?.ready();
+          tg?.expand();
+          tg?.setHeaderColor('#0a0c10');
+          tg?.setBackgroundColor('#0a0c10');
+
+          // --- User from Telegram ---
+          const user = tg?.initDataUnsafe?.user;
+          if (user) {
+            document.getElementById('userGreeting').style.display = 'flex';
+            document.getElementById('userName').textContent = user.first_name || 'User';
+            currentUserId = 'tg_' + user.id;
+            localStorage.setItem('telegramUser', JSON.stringify(user));
+            socket.emit('init', { userId: currentUserId, userName: user.first_name });
+            loadBalance();
+          }
+
+          // --- Balance ---
+          async function loadBalance() {
+            if (!currentUserId) return;
+            try {
+              const res = await fetch('/api/user/' + currentUserId + '/balance');
+              const data = await res.json();
+              currentBalance = data.balance || 0;
+              document.getElementById('walletBalance').textContent = currentBalance.toFixed(2);
+            } catch (e) {
+              socket.emit('refreshBalance');
+            }
+          }
+
+          socket.on('balanceUpdate', (bal) => {
+            currentBalance = bal;
+            document.getElementById('walletBalance').textContent = bal.toFixed(2);
+          });
+
+          // --- Games ---
+          function launchGame(game) {
+            tg?.HapticFeedback?.impactOccurred('light');
+            if (game === 'bingo') window.location.href = '/game';
+            if (game === 'keno') window.location.href = '/keno';
+          }
+
+          // --- Modals ---
+          function openDepositModal() {
+            document.getElementById('depositModal').style.display = 'flex';
+          }
+          function closeDepositModal() {
+            document.getElementById('depositModal').style.display = 'none';
+          }
+          function openWithdrawModal() {
+            if (currentBalance < ${minWithdrawal}) {
+              alert('Minimum withdrawal: ' + ${minWithdrawal} + ' ETB');
+              return;
+            }
+            document.getElementById('withdrawModal').style.display = 'flex';
+          }
+          function closeWithdrawModal() {
+            document.getElementById('withdrawModal').style.display = 'none';
+          }
+
+          // --- Deposit submission ---
+          function submitDeposit() {
+            const receipt = document.getElementById('depositReceipt').value.trim();
+            const amount = parseFloat(document.getElementById('depositAmount').value);
+            if (!receipt) return showMessage('depositMessage', 'Enter receipt number');
+            if (amount < ${minDeposit} || amount > 10000) return showMessage('depositMessage', 'Amount must be between ${minDeposit} and 10000 ETB');
+
+            const btn = document.querySelector('#depositModal .submit-btn');
+            btn.disabled = true; btn.textContent = 'Sending...';
+
+            socket.emit('wallet:depositRequest', {
+              receiptNumber: receipt,
+              amount: amount,
+              userId: currentUserId,
+              userName: user?.first_name || 'User'
+            });
+
+            socket.once('wallet:depositRequestSuccess', (resp) => {
+              showMessage('depositMessage', resp.message || 'Submitted! Admin will approve soon.', 'success');
+              setTimeout(closeDepositModal, 2000);
+              btn.disabled = false; btn.textContent = 'Submit deposit';
+              loadBalance();
+            });
+            socket.once('wallet:error', (err) => {
+              showMessage('depositMessage', err || 'Request failed', 'error');
+              btn.disabled = false; btn.textContent = 'Submit deposit';
+            });
+          }
+
+          // --- Withdrawal submission ---
+          function submitWithdraw() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const phone = document.getElementById('withdrawPhone').value.trim();
+            if (!amount || amount < ${minWithdrawal} || amount > 5000) return showMessage('withdrawMessage', 'Invalid amount');
+            if (!/^09[0-9]{8}$/.test(phone)) return showMessage('withdrawMessage', 'Enter valid 09XXXXXXXX');
+
+            const btn = document.querySelector('#withdrawModal .submit-btn');
+            btn.disabled = true; btn.textContent = 'Processing...';
+
+            socket.emit('wallet:withdrawRequest', {
+              amount: amount,
+              phoneNumber: phone,
+              userId: currentUserId,
+              userName: user?.first_name || 'User'
+            });
+
+            socket.once('wallet:withdrawRequestSuccess', (resp) => {
+              showMessage('withdrawMessage', resp.message || 'Withdrawal requested!', 'success');
+              setTimeout(closeWithdrawModal, 2000);
+              btn.disabled = false; btn.textContent = 'Request withdrawal';
+              loadBalance();
+            });
+            socket.once('wallet:error', (err) => {
+              showMessage('withdrawMessage', err || 'Request failed', 'error');
+              btn.disabled = false; btn.textContent = 'Request withdrawal';
+            });
+          }
+
+          function showMessage(elId, text, type = 'error') {
+            const el = document.getElementById(elId);
+            el.textContent = text;
+            el.style.display = 'block';
+            el.style.color = type === 'success' ? '#10b981' : '#ef4444';
+          }
+
+          // --- Helper popups ---
+          function showHelp() {
+            tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
+          }
+          function showAgentInfo() {
+            tg?.showPopup({ title: 'Agent System', message: '👑 Earn 40% Bingo, 10% Keno commissions.\\nOpen /agent portal or contact @Ethio_elite_games_bot' });
+          }
+          function showTerms() {
+            tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
+          }
+
+          // --- Close modal on outside click ---
+          window.onclick = (e) => {
+            if (e.target === document.getElementById('depositModal')) closeDepositModal();
+            if (e.target === document.getElementById('withdrawModal')) closeWithdrawModal();
+          };
+
+          // --- Auto refresh balance ---
+          setInterval(loadBalance, 30000);
+        </script>
       </body>
       </html>
     `);
   } catch (error) {
+    console.error('Error serving Telegram page:', error);
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
