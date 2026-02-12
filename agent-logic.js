@@ -1,8 +1,8 @@
-// agent-logic.js - Manual Agent/Referral System for Elite Games (FULLY UPDATED)
+// agent-logic.js - Manual Agent/Referral System for Elite Games (FULLY UPDATED & FIXED)
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-// 🛠️ FIXED: Helper to escape regex special characters
+// Helper to escape regex special characters
 function escapeRegex(text) {
     return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 }
@@ -12,7 +12,6 @@ class ManualAgentSystem {
         this.io = io;
         this.models = models;
         this.agentSockets = new Map();          // agentId -> socket
-        // 🛠️ FIXED: removed unused this.commissionRates – rates come from agent document
         this.processingClaims = new Map();      // user-room combo -> timestamp
         this.processedTransactions = new Map(); // transactionId -> timestamp
         this.commissionDebug = true;
@@ -45,7 +44,6 @@ class ManualAgentSystem {
             const adminExists = await this.models.Agent.findOne({ username: 'admin' });
             if (!adminExists) {
                 const hashedPassword = await bcrypt.hash('admin123', 10);
-                // 🛠️ FIXED: generate a secure authToken
                 const authToken = crypto.randomBytes(32).toString('hex');
                 const adminAgent = await this.models.Agent.create({
                     username: 'admin',
@@ -60,7 +58,7 @@ class ManualAgentSystem {
                     isSuperAdmin: true,
                     phoneNumber: '0962577855',
                     referralCode: 'ADMIN001',
-                    authToken,                 // 🛠️ FIXED: store secure token
+                    authToken,
                     createdAt: new Date(),
                     updatedAt: new Date()
                 });
@@ -95,7 +93,6 @@ class ManualAgentSystem {
                 return;
             }
 
-            // 🛠️ FIXED: ensure authToken exists, generate if missing
             if (!agent.authToken) {
                 agent.authToken = crypto.randomBytes(32).toString('hex');
                 await agent.save();
@@ -127,7 +124,7 @@ class ManualAgentSystem {
                 activeReferrals: agent.activeReferrals,
                 isSuperAdmin: agent.isSuperAdmin,
                 phoneNumber: agent.phoneNumber || '',
-                authToken: agent.authToken   // send token for auto‑login
+                authToken: agent.authToken
             });
 
             console.log(`👤 Agent logged in: ${agent.username} (Super Admin: ${agent.isSuperAdmin})`);
@@ -137,7 +134,6 @@ class ManualAgentSystem {
         }
     }
 
-    // 🛠️ FIXED: token verification now uses stored authToken
     async handleVerifyAgentToken(socket, data) {
         try {
             const { token } = data;
@@ -183,6 +179,30 @@ class ManualAgentSystem {
         }
     }
 
+    // 🆕 NEW: Handle logout
+    async handleAgentLogout(socket) {
+        try {
+            if (!socket.agentId) {
+                socket.emit('agent:logoutError', 'Not authenticated');
+                return;
+            }
+            const agent = await this.models.Agent.findById(socket.agentId);
+            if (agent) {
+                agent.lastLogout = new Date();
+                await agent.save();
+            }
+            this.agentSockets.delete(socket.agentId);
+            this.agentHeartbeats.delete(socket.agentId);
+            socket.agentId = null;
+            socket.agentData = null;
+            socket.emit('agent:logoutSuccess', { message: 'Logged out successfully' });
+            console.log(`👤 Agent logged out: ${agent?.username || 'Unknown'}`);
+        } catch (error) {
+            console.error('Logout error:', error);
+            socket.emit('agent:logoutError', 'Logout failed');
+        }
+    }
+
     // ========== DASHBOARD & REFRESH ==========
     async handleAgentDashboard(socket) {
         try {
@@ -197,19 +217,16 @@ class ManualAgentSystem {
                 return;
             }
 
-            // All users with this agentId are referrals
             const userReferrals = await this.models.User.find({ agentId: agent._id })
                 .sort({ agentReferredAt: -1 })
                 .limit(50)
                 .select('userId userName telegramUsername balance totalWagered totalWins totalBingos joinedAt lastSeen isOnline agentReferredAt referredBy agentCommissionEarned');
 
-            // Recent commissions
             const commissions = await this.models.AgentCommission.find({ agentId: agent._id })
                 .sort({ createdAt: -1 })
                 .limit(50)
                 .populate('userId', 'userId userName telegramUsername');
 
-            // Today's earnings
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todaysEarnings = await this.models.AgentCommission.aggregate([
@@ -217,7 +234,6 @@ class ManualAgentSystem {
                 { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
             ]);
 
-            // Yesterday's earnings
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayEarnings = await this.models.AgentCommission.aggregate([
@@ -225,23 +241,19 @@ class ManualAgentSystem {
                 { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
             ]);
 
-            // Monthly earnings
             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             const monthlyEarnings = await this.models.AgentCommission.aggregate([
                 { $match: { agentId: agent._id, createdAt: { $gte: startOfMonth }, status: 'completed' } },
                 { $group: { _id: null, total: { $sum: '$commissionAmount' } } }
             ]);
 
-            // Active referrals count
             const activeReferrals = await this.models.User.countDocuments({
                 agentId: agent._id,
                 isOnline: true
             });
 
-            // Total referrals count (direct from User collection)
             const actualReferralCount = await this.models.User.countDocuments({ agentId: agent._id });
 
-            // Update agent stats atomically
             await this.models.Agent.findByIdAndUpdate(agent._id, {
                 $set: {
                     activeReferrals,
@@ -250,10 +262,8 @@ class ManualAgentSystem {
                 }
             });
 
-            // Re-fetch updated agent
             const updatedAgent = await this.models.Agent.findById(agent._id);
 
-            // Earnings growth
             const todayTotal = todaysEarnings[0]?.total || 0;
             const yesterdayTotal = yesterdayEarnings[0]?.total || 0;
             const earningsGrowth = yesterdayTotal > 0
@@ -423,33 +433,27 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== USER SEARCH & HELPERS (IMPROVED) ==========
-    // 🛠️ FIXED: robust search with exact matches first, escaped regex
+    // ========== USER SEARCH & HELPERS ==========
     async findUserByIdentifier(identifier) {
         try {
             const cleanId = identifier.replace(/^@/, '').trim();
             console.log(`🔍 [FIND USER] Searching for identifier: "${cleanId}"`);
 
-            // 1. Exact match on userId (case-insensitive, but exact string)
             let user = await this.models.User.findOne({ userId: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
             if (user) return user;
 
-            // 2. Exact match on telegramUsername (case-insensitive)
             user = await this.models.User.findOne({ telegramUsername: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
             if (user) return user;
 
-            // 3. Exact match on userName
             user = await this.models.User.findOne({ userName: { $regex: `^${escapeRegex(cleanId)}$`, $options: 'i' } });
             if (user) return user;
 
-            // 4. If cleanId is numeric, try tg_ prefix
             if (/^\d+$/.test(cleanId)) {
                 const telegramId = `tg_${cleanId}`;
                 user = await this.models.User.findOne({ userId: telegramId });
                 if (user) return user;
             }
 
-            // 5. Partial matches (only as fallback, limited to 5)
             const partialUsers = await this.models.User.find({
                 $or: [
                     { userId: { $regex: escapeRegex(cleanId), $options: 'i' } },
@@ -469,7 +473,7 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== MANUAL REFERRAL ASSIGNMENT (ATOMIC) ==========
+    // ========== MANUAL REFERRAL ASSIGNMENT ==========
     async handleManualReferralAssignmentByAgent(socket, data) {
         try {
             if (!socket.agentId) {
@@ -871,7 +875,7 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== AGENT WITHDRAWAL SYSTEM (FULLY FIXED) ==========
+    // ========== AGENT WITHDRAWAL SYSTEM ==========
     async handleAgentWithdrawRequest(socket, data) {
         try {
             if (!socket.agentId) {
@@ -880,7 +884,7 @@ class ManualAgentSystem {
             }
 
             const { amount, phoneNumber } = data;
-            if (!amount || amount < 100) {
+            if (!amount || amount < 100) {  // ✅ Minimum 100 ETB (aligned with frontend)
                 socket.emit('agent:error', 'Minimum withdrawal is 100 ETB');
                 return;
             }
@@ -914,9 +918,11 @@ class ManualAgentSystem {
                 transactionId: withdrawal._id
             });
 
-            socket.emit('agent:withdrawRequestSuccess', {
+            // 🛠️ FIXED: event name changed to 'agent:withdrawRequested' and includes amount
+            socket.emit('agent:withdrawRequested', {
                 message: 'Withdrawal request submitted. Admin will process it within 24 hours.',
-                transactionId: withdrawal._id
+                transactionId: withdrawal._id,
+                amount
             });
 
             console.log(`💰 Agent withdrawal request: ${agent.username} - ${amount} ETB`);
@@ -952,7 +958,40 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Get all pending agent withdrawals (admin only)
+    // 🆕 NEW: Update agent phone number
+    async handleUpdateAgentPhone(socket, data) {
+        try {
+            if (!socket.agentId) {
+                socket.emit('agent:error', 'Not authenticated');
+                return;
+            }
+            const { phoneNumber } = data;
+            if (!phoneNumber || !/^09[0-9]{8}$/.test(phoneNumber)) {
+                socket.emit('agent:error', 'Invalid phone number format');
+                return;
+            }
+            const agent = await this.models.Agent.findByIdAndUpdate(
+                socket.agentId,
+                { $set: { phoneNumber, updatedAt: new Date() } },
+                { new: true }
+            );
+            if (!agent) {
+                socket.emit('agent:error', 'Agent not found');
+                return;
+            }
+            socket.emit('agent:phoneUpdated', {
+                success: true,
+                message: 'Phone number updated successfully',
+                phoneNumber: agent.phoneNumber
+            });
+            console.log(`📱 Agent ${agent.username} updated phone to ${phoneNumber}`);
+        } catch (error) {
+            console.error('Update phone error:', error);
+            socket.emit('agent:error', 'Failed to update phone number');
+        }
+    }
+
+    // ========== GET PENDING WITHDRAWALS (admin) ==========
     async getPendingAgentWithdrawals() {
         try {
             const withdrawals = await this.models.AgentTransaction.find({
@@ -978,7 +1017,7 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Approve withdrawal – deduct earnings, mark completed
+    // ========== APPROVE/REJECT WITHDRAWAL (admin) ==========
     async approveAgentWithdrawal(transactionId, adminId) {
         const session = await this.models.AgentTransaction.startSession();
         session.startTransaction();
@@ -993,7 +1032,7 @@ class ManualAgentSystem {
             }
 
             const agent = withdrawal.agentId;
-            const amount = -withdrawal.amount; // positive
+            const amount = -withdrawal.amount;
 
             if (agent.totalEarnings < amount) {
                 await session.abortTransaction();
@@ -1001,7 +1040,6 @@ class ManualAgentSystem {
                 throw new Error('Agent has insufficient earnings now');
             }
 
-            // Deduct earnings
             agent.totalEarnings -= amount;
             await agent.save({ session });
 
@@ -1014,8 +1052,6 @@ class ManualAgentSystem {
             session.endSession();
 
             console.log(`💰 Withdrawal approved: ${agent.username} - ${amount} ETB`);
-
-            // Notify agent
             this.sendAgentNotification(agent._id, `✅ Your withdrawal of ${amount} ETB has been approved.`, 'success');
             this.forceRefreshAgentDashboard(agent._id);
 
@@ -1028,7 +1064,6 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Reject withdrawal – mark failed, no deduction
     async rejectAgentWithdrawal(transactionId, adminId) {
         try {
             const withdrawal = await this.models.AgentTransaction.findById(transactionId);
@@ -1042,8 +1077,6 @@ class ManualAgentSystem {
             await withdrawal.save();
 
             console.log(`❌ Withdrawal rejected: ${withdrawal.agentId} - ${-withdrawal.amount} ETB`);
-
-            // Notify agent
             this.sendAgentNotification(withdrawal.agentId, `❌ Your withdrawal of ${-withdrawal.amount} ETB has been rejected.`, 'error');
 
             return { success: true, agentId: withdrawal.agentId };
@@ -1053,7 +1086,6 @@ class ManualAgentSystem {
         }
     }
 
-    // 🆕 NEW: Force refresh an agent's dashboard if online
     async forceRefreshAgentDashboard(agentId) {
         try {
             const agentSocket = this.agentSockets.get(agentId.toString());
@@ -1092,7 +1124,7 @@ class ManualAgentSystem {
                 createdAt: a.createdAt,
                 lastLogin: a.lastLogin,
                 referralCode: a.referralCode,
-                authToken: a.authToken // only visible to super admin
+                authToken: a.authToken
             })));
         } catch (error) {
             console.error('Get all agents error:', error);
@@ -1234,7 +1266,6 @@ class ManualAgentSystem {
         try {
             console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}`);
 
-            // 🛠️ FIXED: Check if this transaction was already processed
             if (transactionId && this.processedTransactions.has(transactionId)) {
                 console.log(`⏭️ Skipping already processed transaction ${transactionId}`);
                 return 0;
@@ -1265,10 +1296,8 @@ class ManualAgentSystem {
 
             if (commissionAmount < 0.01) commissionAmount = 0.01;
 
-            // 🛠️ FIXED: Use transactionKey to enforce uniqueness at DB level
             const transactionKey = transactionId || `${userId}_${gameType}_${Date.now()}`;
 
-            // Try to create commission record – duplicate key error will be caught
             const commission = new this.models.AgentCommission({
                 agentId: agent._id,
                 userId,
@@ -1286,24 +1315,20 @@ class ManualAgentSystem {
 
             await commission.save();
 
-            // Mark transaction as processed in memory
             if (transactionId) {
                 this.processedTransactions.set(transactionId, Date.now());
                 setTimeout(() => this.processedTransactions.delete(transactionId), 30 * 60 * 1000);
             }
 
-            // Update user's total commission earned
             await this.models.User.findByIdAndUpdate(user._id, {
                 $inc: { agentCommissionEarned: commissionAmount }
             });
 
-            // Update agent earnings
             await this.models.Agent.findByIdAndUpdate(agent._id, {
                 $inc: { totalEarnings: commissionAmount },
                 $set: { lastCommissionDate: new Date(), updatedAt: new Date() }
             });
 
-            // Create transaction record for agent
             await this.models.AgentTransaction.create({
                 agentId: agent._id,
                 type: 'COMMISSION',
@@ -1313,14 +1338,12 @@ class ManualAgentSystem {
                 createdAt: new Date()
             });
 
-            // Update game transaction with agent info if applicable
             if (transactionId && transactionId.toString().length > 10) {
                 await this.models.Transaction.findByIdAndUpdate(transactionId, {
                     $set: { agentId: agent._id, agentCommission: commissionAmount, commissionProcessed: true }
                 }).catch(err => console.log('⚠️ Could not update transaction:', err.message));
             }
 
-            // Real-time notification
             const agentSocket = this.agentSockets.get(agentId.toString());
             if (agentSocket) {
                 agentSocket.emit('agent:newCommission', {
@@ -1402,7 +1425,7 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== PENDING COMMISSIONS – FALLBACK JOB ==========
+    // ========== PENDING COMMISSIONS – FALLBACK JOB (FIXED) ==========
     async calculatePendingCommissions() {
         try {
             console.log('🔄 Calculating pending commissions for ALL unprocessed wins...');
@@ -1423,7 +1446,9 @@ class ManualAgentSystem {
                     }
                     const gameType = tx.type === 'BINGO_WIN' ? 'BINGO' : 'KENO';
                     const stake = tx.room || tx.stake || (gameType === 'BINGO' ? 10 : 5);
-                    await this.recordCommission(
+                    
+                    // 🛠️ FIXED: only mark as processed if commission was successfully recorded
+                    const commissionAmount = await this.recordCommission(
                         user.agentId,
                         user.userId,
                         gameType,
@@ -1431,8 +1456,13 @@ class ManualAgentSystem {
                         tx.amount,
                         tx._id.toString()
                     );
-                    tx.commissionProcessed = true;
-                    await tx.save();
+                    
+                    if (commissionAmount > 0) {
+                        tx.commissionProcessed = true;
+                        await tx.save();
+                    } else {
+                        console.log(`⚠️ Commission not recorded for transaction ${tx._id}, will retry later`);
+                    }
                 } catch (txError) {
                     console.error(`Error processing transaction ${tx._id}:`, txError);
                 }
@@ -1447,21 +1477,18 @@ class ManualAgentSystem {
     startCommissionCalculationJob() {
         setInterval(() => {
             this.calculatePendingCommissions();
-        }, 2 * 60 * 1000); // 2 minutes
+        }, 2 * 60 * 1000);
     }
 
     startCleanupJob() {
         setInterval(() => {
             const now = Date.now();
-            // Clean processed transactions older than 30 minutes
             for (const [key, timestamp] of this.processedTransactions.entries()) {
                 if (now - timestamp > 30 * 60 * 1000) this.processedTransactions.delete(key);
             }
-            // Clean stale heartbeats older than 5 minutes
             for (const [agentId, timestamp] of this.agentHeartbeats.entries()) {
                 if (now - timestamp > 5 * 60 * 1000) this.agentHeartbeats.delete(agentId);
             }
-            // Clean processing claims older than 10 minutes
             for (const [key, timestamp] of this.processingClaims.entries()) {
                 if (now - timestamp > 10 * 60 * 1000) this.processingClaims.delete(key);
             }
@@ -1649,7 +1676,57 @@ class ManualAgentSystem {
         }
     }
 
-    // ========== UPDATE AGENT ACTIVE REFERRALS (CALL FROM GAME LOGIC) ==========
+    // 🆕 NEW: Test commission (debug)
+    async handleTestCommission(socket, data) {
+        try {
+            if (!socket.agentId) {
+                socket.emit('agent:testCommissionResult', { success: false, message: 'Not authenticated' });
+                return;
+            }
+            const { userId, gameType, amount } = data;
+            if (!userId || !gameType || !amount) {
+                socket.emit('agent:testCommissionResult', { success: false, message: 'Missing parameters' });
+                return;
+            }
+            const agent = await this.models.Agent.findById(socket.agentId);
+            if (!agent) {
+                socket.emit('agent:testCommissionResult', { success: false, message: 'Agent not found' });
+                return;
+            }
+            const user = await this.models.User.findOne({ userId, agentId: agent._id });
+            if (!user) {
+                socket.emit('agent:testCommissionResult', { success: false, message: 'User is not your referral' });
+                return;
+            }
+            const stake = gameType === 'BINGO' ? 10 : 5;
+            const transactionKey = `test_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+            const commissionAmount = await this.recordCommission(
+                agent._id,
+                userId,
+                gameType,
+                stake,
+                amount,
+                transactionKey
+            );
+            if (commissionAmount > 0) {
+                socket.emit('agent:testCommissionResult', {
+                    success: true,
+                    commissionAmount,
+                    message: 'Test commission recorded successfully'
+                });
+            } else {
+                socket.emit('agent:testCommissionResult', {
+                    success: false,
+                    message: 'Failed to record commission (possibly duplicate or error)'
+                });
+            }
+        } catch (error) {
+            console.error('Test commission error:', error);
+            socket.emit('agent:testCommissionResult', { success: false, message: error.message });
+        }
+    }
+
+    // ========== UPDATE AGENT ACTIVE REFERRALS ==========
     async updateAgentActiveReferrals(userId, isOnline) {
         try {
             const user = await this.models.User.findOne({ userId });
@@ -1693,7 +1770,7 @@ class ManualAgentSystem {
 
     // ========== DEBUG FUNCTIONS ==========
     async debugFindUser(identifier) {
-        return this.findUserByIdentifier(identifier); // reuse the improved method
+        return this.findUserByIdentifier(identifier);
     }
 
     async testUserDatabase(socket) {
