@@ -7,6 +7,8 @@
 // - Added validation for commission rates (0-100).
 // - Better error handling when updating transaction.
 // - Normalize phone numbers before save and search.
+// - [NEW] Keno commission only paid when house wins (round-based net profit calculation).
+// - Added processKenoRound(roundData) method.
 
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -55,7 +57,7 @@ class ManualAgentSystem {
         this.startCommissionCalculationJob();
         this.startCleanupJob();
         this.startHeartbeatJob();
-        console.log('👑 Manual Agent system ready with 40% Bingo and 10% Keno commissions');
+        console.log('👑 Manual Agent system ready with 40% Bingo and 10% Keno commissions (Keno commissions only on house wins)');
     }
 
     setGameLogic(gameLogic) {
@@ -1563,31 +1565,127 @@ class ManualAgentSystem {
     }
 
     /**
-     * Process a Keno win. The game logic should have stored the agentId in the Transaction.
+     * Process a Keno win – DEPRECATED. Use processKenoRound instead.
+     * Kept for backward compatibility but will not be called.
      */
     async processKenoWin(userId, stake, winningAmount, gameTransactionId = null) {
-        try {
-            let agentId = null;
-            if (gameTransactionId) {
-                const tx = await this.models.Transaction.findById(gameTransactionId).select('agentId').lean();
-                agentId = tx?.agentId;
-            }
-            if (!agentId) {
-                const user = await this.models.User.findOne({ userId }).select('agentId').lean();
-                agentId = user?.agentId;
-            }
-            if (!agentId) return 0;
+        console.warn('⚠️ processKenoWin is deprecated. Use processKenoRound for round-based commission.');
+        return 0; // No commission from individual wins anymore
+    }
 
-            return await this.recordCommission(
-                agentId,
-                userId,
-                'KENO',
-                stake || 5,
-                winningAmount,
-                gameTransactionId
-            );
+    /**
+     * Process a Keno round and pay commissions only if house wins.
+     * @param {Object} roundData - Contains:
+     *   roundId: unique round identifier
+     *   totalStakes: total amount wagered in the round
+     *   totalPayouts: total amount paid to winners
+     *   netProfit: totalStakes - totalPayouts (can be negative)
+     *   agentContributions: array of { agentId, agentStake } for each agent whose referrals participated
+     */
+    async processKenoRound(roundData) {
+        try {
+            const { roundId, totalStakes, totalPayouts, netProfit, agentContributions } = roundData;
+            console.log(`🎰 [KENO ROUND] Round ${roundId}: stakes=${totalStakes}, payouts=${totalPayouts}, net=${netProfit}`);
+
+            if (netProfit <= 0) {
+                console.log(`⏭️ Keno round ${roundId} net profit <= 0, no commission paid.`);
+                return 0;
+            }
+
+            if (!agentContributions || agentContributions.length === 0) {
+                console.log(`⏭️ No agents contributed to round ${roundId}, skipping.`);
+                return 0;
+            }
+
+            let totalCommissionPaid = 0;
+
+            for (const contrib of agentContributions) {
+                const { agentId, agentStake } = contrib;
+                const agent = await this.models.Agent.findById(agentId);
+                if (!agent || !agent.isActive) continue;
+
+                // Use agent's Keno commission rate
+                const commissionRate = agent.commissionRateKeno; // 10% default
+                const commissionPool = netProfit * (commissionRate / 100);
+                const agentShare = (agentStake / totalStakes) * commissionPool;
+
+                if (agentShare < 0.01) continue; // skip tiny amounts
+
+                const transactionKey = `keno_round_${roundId}_${agentId}`;
+
+                // Check duplicate (in-memory)
+                if (this.processedTransactions.has(transactionKey)) {
+                    console.log(`⏭️ Duplicate Keno round commission for agent ${agentId}, skipping.`);
+                    continue;
+                }
+
+                // Create aggregated commission record
+                const commission = new this.models.AgentCommission({
+                    agentId: agent._id,
+                    userId: null, // aggregated, not tied to a single user
+                    userName: null,
+                    telegramUsername: null,
+                    gameType: 'KENO',
+                    stake: totalStakes,
+                    winningAmount: totalPayouts,
+                    commissionRate,
+                    commissionAmount: agentShare,
+                    status: 'completed',
+                    transactionKey,
+                    createdAt: new Date()
+                });
+
+                await commission.save();
+
+                // Mark as processed
+                this.processedTransactions.set(transactionKey, Date.now());
+
+                // Update agent total earnings
+                await this.models.Agent.findByIdAndUpdate(agent._id, {
+                    $inc: { totalEarnings: agentShare }
+                });
+
+                // Create transaction record in agent's ledger
+                await this.models.AgentTransaction.create({
+                    agentId: agent._id,
+                    type: 'COMMISSION',
+                    amount: agentShare,
+                    description: `Keno round ${roundId} commission (house profit)`,
+                    status: 'completed',
+                    createdAt: new Date()
+                });
+
+                // Notify agent if online
+                const agentSocket = this.agentSockets.get(agent._id.toString());
+                if (agentSocket) {
+                    agentSocket.emit('agent:newCommission', {
+                        commissionId: commission._id,
+                        userId: null,
+                        userName: null,
+                        telegramUsername: null,
+                        gameType: 'KENO (round)',
+                        stake: totalStakes,
+                        winningAmount: totalPayouts,
+                        commissionAmount: agentShare,
+                        commissionRate,
+                        timestamp: new Date()
+                    });
+                    // Optionally refresh dashboard
+                    setTimeout(() => this.handleRefreshDashboard(agentSocket), 500);
+                }
+
+                totalCommissionPaid += agentShare;
+                console.log(`✅ Agent ${agent.username} earned ${agentShare.toFixed(2)} ETB from Keno round ${roundId}`);
+            }
+
+            console.log(`✅ Keno round ${roundId} net profit ${netProfit}, paid total commission ${totalCommissionPaid.toFixed(2)} ETB`);
+            return totalCommissionPaid;
         } catch (error) {
-            console.error('❌ Process Keno win error:', error);
+            if (error.code === 11000) {
+                console.log(`⚠️ Duplicate Keno round commission detected, skipping.`);
+                return 0;
+            }
+            console.error('❌ processKenoRound error:', error);
             return 0;
         }
     }
@@ -1601,7 +1699,10 @@ class ManualAgentSystem {
             if (type === 'BINGO_WIN') {
                 return await this.processBingoWin(userId, { room, stake }, amount, _id);
             } else if (type === 'KENO_WIN') {
-                return await this.processKenoWin(userId, stake || 5, amount, _id);
+                // For Keno, commission is handled via round-level processing, not per win.
+                // Return 0 (no commission recorded per win)
+                console.log(`ℹ️ Keno win detected, but commission will be processed at round level.`);
+                return 0;
             }
             return 0;
         } catch (error) {
@@ -1657,6 +1758,17 @@ class ManualAgentSystem {
                         continue;
                     }
 
+                    // For KENO_WIN, we skip because commission should be handled at round level.
+                    // Mark as processed to avoid infinite loop, but note that it's skipped.
+                    if (gameType === 'KENO') {
+                        console.log(`⏭️ Transaction ${tx._id} is a KENO_WIN, skipping (commission handled at round level).`);
+                        tx.commissionProcessed = true;
+                        tx.commissionSkippedReason = 'Keno commission handled at round level';
+                        await tx.save();
+                        continue;
+                    }
+
+                    // For BINGO, proceed with commission recording
                     const commissionAmount = await this.recordCommission(
                         agentId,
                         tx.userId,
@@ -1919,6 +2031,11 @@ class ManualAgentSystem {
             }
             const stake = gameType === 'BINGO' ? 10 : 5;
             const transactionKey = `test_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+            // For Keno, we simulate a round instead of per win? But test method likely expects recordCommission.
+            // We'll keep it as is for now, but note that Keno commissions are not per win.
+            if (gameType === 'KENO') {
+                console.warn('Test commission for Keno: This will not be used in production because Keno commissions are round-based.');
+            }
             const commissionAmount = await this.recordCommission(
                 agent._id,
                 userId,
