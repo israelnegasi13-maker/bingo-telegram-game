@@ -615,6 +615,8 @@ io.on('connection', (socket) => {
   socket.on('admin:auth', async (password) => {
     if (password === (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
       socket.admin = true;
+      // 👇 FIX #1: Give admin super‑admin privileges in agent system
+      socket.agentData = { isSuperAdmin: true, username: 'admin' };
       socket.emit('admin:authSuccess');
       
       // Send current Telebirr number on successful auth
@@ -1207,38 +1209,52 @@ io.on('connection', (socket) => {
   });
   
   // ========== HOUSE EARNINGS ==========
-  // Reset house earnings (admin only)
+  // 👇 FIX #2: Completely rewritten reset handler
   socket.on('admin:resetHouseEarnings', async () => {
-    if (socket.admin) {
-      try {
-        // Get current total from all transactions
-        const houseEarningsTransactions = await Transaction.find({ 
-          type: 'HOUSE_EARNINGS' 
+    if (!socket.admin) return;
+
+    try {
+      // 1. Calculate current total house earnings
+      const houseEarningsTransactions = await Transaction.find({ type: 'HOUSE_EARNINGS' });
+      const currentTotal = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+      if (currentTotal === 0) {
+        socket.emit('admin:houseEarningsReset', {
+          previousAmount: 0,
+          message: 'House earnings are already zero.'
         });
-        const previousAmount = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
-        
-        // Create a reset transaction
-        const resetTransaction = new Transaction({
-          type: 'HOUSE_EARNINGS_RESET',
-          userId: 'system',
-          userName: 'System',
-          amount: -previousAmount,
-          admin: true,
-          description: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
-        });
-        await resetTransaction.save();
-        
-        socket.emit('admin:houseEarningsReset', { 
-          previousAmount,
-          resetAmount: 0,
-          message: `House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`
-        });
-        
-        console.log(`🔄 House earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
-      } catch (error) {
-        console.error('Error resetting house earnings:', error);
-        socket.emit('admin:houseEarningsResetError', error.message);
+        return;
       }
+
+      // 2. Create a negative HOUSE_EARNINGS transaction to zero out
+      const resetTransaction = new Transaction({
+        type: 'HOUSE_EARNINGS',               // 👈 Keep the same type
+        userId: 'system',
+        userName: 'System',
+        amount: -currentTotal,                 // 👈 Negative amount
+        admin: true,
+        description: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
+      });
+      await resetTransaction.save();
+
+      // 3. Notify the requesting admin
+      socket.emit('admin:houseEarningsReset', {
+        previousAmount: currentTotal,
+        resetAmount: 0,
+        message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
+      });
+
+      // 4. Immediately refresh stats for all admin sockets
+      if (gameLogic && gameLogic.handleAdminGetData) {
+        io.sockets.sockets.forEach(s => {
+          if (s.admin) gameLogic.handleAdminGetData(s);
+        });
+      }
+
+      console.log(`🔄 House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`);
+    } catch (error) {
+      console.error('Error resetting house earnings:', error);
+      socket.emit('admin:houseEarningsResetError', error.message);
     }
   });
   
