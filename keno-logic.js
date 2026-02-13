@@ -1,4 +1,6 @@
 // keno-logic.js - KENO GAME LOGIC MODULE WITH BALANCED PROFIT CONTROL
+// ========== ADDED AGENT COMMISSION (10% on Keno wins) ==========
+
 module.exports = {
     // Game configuration - UPDATED for better player experience
     CONFIG: {
@@ -73,6 +75,10 @@ module.exports = {
         this.Transaction = models.Transaction;
         this.Stats = models.Stats;
         this.WalletTransaction = models.WalletTransaction;
+        // ========== ADDED: Agent models ==========
+        this.Agent = models.Agent;
+        this.AgentCommission = models.AgentCommission;
+        // =========================================
         
         // Active Keno games state
         this.activeKenoGames = new Map();
@@ -116,6 +122,7 @@ module.exports = {
         console.log('   1 Number:  1 hit = 3x');
         console.log('💰 House target: 25% profit (balanced for player retention)');
         console.log('🎯 RANDOMNESS: 20% truly random draws');
+        console.log('👑 Agent commission: 10% on Keno wins');
         
         // Load existing stats
         this.loadKenoStats();
@@ -2803,6 +2810,41 @@ module.exports = {
                         user.totalWins += winnings;
                         user.kenoWins = (user.kenoWins || 0) + 1;
                         await user.save();
+                        
+                        // ========== AGENT COMMISSION RECORDING (10%) ==========
+                        if (user.agentId) {
+                            const commissionRate = 10; // 10% for Keno
+                            const commissionAmount = winnings * commissionRate / 100;
+                            const transactionKey = `KENO_${activeGame.roundNumber}_${playerId}`;
+
+                            try {
+                                await self.AgentCommission.create({
+                                    agentId: user.agentId,
+                                    userId: playerId,
+                                    transactionKey: transactionKey,
+                                    userName: user.userName,
+                                    gameType: 'KENO',
+                                    stake: bet.amount,
+                                    winningAmount: winnings,
+                                    commissionRate: commissionRate,
+                                    commissionAmount: commissionAmount,
+                                    status: 'completed'
+                                });
+
+                                await self.Agent.findByIdAndUpdate(
+                                    user.agentId,
+                                    { $inc: { totalEarnings: commissionAmount } }
+                                );
+
+                                console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${user.agentId} from player ${user.userName}`);
+                            } catch (err) {
+                                if (err.code === 11000) {
+                                    console.log('Agent commission already recorded, skipping');
+                                } else {
+                                    console.error('Error recording agent commission:', err);
+                                }
+                            }
+                        }
                         
                         // Create win transaction
                         const transaction = new self.Transaction({
