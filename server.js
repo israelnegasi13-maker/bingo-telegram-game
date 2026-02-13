@@ -918,10 +918,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Get all agents (for agent admin panel)
-  socket.on('agent:getAllAgents', () => {
-    if (socket.admin && agentSystem && agentSystem.handleGetAllAgents) {
+  // Get all agents (for agent admin panel) - FIXED: Admin bypass added
+  socket.on('agent:getAllAgents', async () => {
+    if (socket.admin) {
+      try {
+        const agents = await Agent.find().sort({ createdAt: -1 });
+        socket.emit('agent:allAgents', agents);
+      } catch (error) {
+        console.error('Error fetching agents:', error);
+        socket.emit('agent:error', 'Failed to fetch agents');
+      }
+    } else if (agentSystem && agentSystem.handleGetAllAgents) {
       agentSystem.handleGetAllAgents(socket);
+    } else {
+      socket.emit('agent:error', 'Unauthorized');
     }
   });
   
