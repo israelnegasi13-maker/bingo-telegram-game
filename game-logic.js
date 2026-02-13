@@ -1,5 +1,6 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 // ========== FULLY UPDATED – FIXED PLAYER STUCK ROOM BUG ==========
+// ========== ADDED AGENT COMMISSION (40% on Bingo wins) ==========
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -1471,6 +1472,41 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       if (!updatedUser) {
         console.log(`❌ User ${userId} update failed`);
         return { success: false, reason: 'user_update_failed' };
+      }
+      
+      // ========== AGENT COMMISSION RECORDING (40%) ==========
+      if (updatedUser.agentId) {
+        const commissionRate = 40; // 40% for Bingo
+        const commissionAmount = totalPrize * commissionRate / 100;
+        const transactionKey = `BINGO_${roomData._id}_${userId}`;
+
+        try {
+          await models.AgentCommission.create({
+            agentId: updatedUser.agentId,
+            userId: userId,
+            transactionKey: transactionKey,
+            userName: userName,
+            gameType: 'BINGO',
+            stake: roomStake,
+            winningAmount: totalPrize,
+            commissionRate: commissionRate,
+            commissionAmount: commissionAmount,
+            status: 'completed'
+          });
+
+          await models.Agent.findByIdAndUpdate(
+            updatedUser.agentId,
+            { $inc: { totalEarnings: commissionAmount } }
+          );
+
+          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName}`);
+        } catch (err) {
+          if (err.code === 11000) {
+            console.log('Agent commission already recorded, skipping');
+          } else {
+            console.error('Error recording agent commission:', err);
+          }
+        }
       }
       
       // 9. CREATE TRANSACTIONS (BATCH)
