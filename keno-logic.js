@@ -1,5 +1,5 @@
 // keno-logic.js - KENO GAME LOGIC MODULE WITH BALANCED PROFIT CONTROL
-// ========== ADDED AGENT COMMISSION (10% on Keno wins) ==========
+// ========== FIXED: Player bonuses now correctly applied ==========
 
 module.exports = {
     // Game configuration - UPDATED for better player experience
@@ -60,9 +60,9 @@ module.exports = {
             HIGH_BET_ADJUSTMENT: 0.95,    // 5% less profit when big bets detected
             JACKPOT_PROTECTION: true,
             BALANCE_PROTECTION: true,
-            // NEW: Player retention features
-            NEW_PLAYER_BONUS: 0.90,       // New players get 10% better odds for first 5 rounds
-            LOSING_STREAK_BOOST: 0.85,    // Players on losing streak get 15% better odds
+            // FIXED: Corrected bonus multipliers (now >1 for better odds)
+            NEW_PLAYER_BONUS: 1.10,        // 10% better odds for new players
+            LOSING_STREAK_BOOST: 1.15,     // 15% better odds for players on a losing streak
             MINIMUM_WIN_RATE: 0.40,       // At least 40% of players should win something each round
             MINIMUM_WIN_FREQUENCY: 0.70,  // At least 70% of rounds should have winners
         }
@@ -2211,13 +2211,13 @@ module.exports = {
         
         // New player bonus (first 5 bets)
         if (sessionData?.isNewPlayer && sessionData.totalBets <= 5) {
-            adjustment *= pc.NEW_PLAYER_BONUS; // 10% better odds
+            adjustment *= pc.NEW_PLAYER_BONUS; // 10% better odds (now correctly 1.10)
             console.log(`🎁 Applying new player bonus for ${player.userName}: ${adjustment.toFixed(2)}x odds`);
         }
         
         // Losing streak boost
         if (player.consecutiveLosses >= 3) {
-            adjustment *= pc.LOSING_STREAK_BOOST; // 15% better odds
+            adjustment *= pc.LOSING_STREAK_BOOST; // 15% better odds (now correctly 1.15)
             console.log(`🎁 Applying losing streak boost for ${player.userName} (${player.consecutiveLosses} losses): ${adjustment.toFixed(2)}x odds`);
         }
         
@@ -2769,17 +2769,16 @@ module.exports = {
     // Process Keno results with balanced profit control
     processKenoResults: async function(activeGame) {
         const self = this;
-        
         console.log('🎰 Processing Keno results...');
-        
+
         // Clear any existing timeout to prevent conflicts
         if (self.roundTransitionTimeout) {
             clearTimeout(self.roundTransitionTimeout);
             self.roundTransitionTimeout = null;
         }
-        
+
         let totalWinners = 0;
-        
+
         // Calculate winnings for each player
         for (const [playerId, bet] of Object.entries(activeGame.bets)) {
             try {
@@ -2787,22 +2786,21 @@ module.exports = {
                 const matches = bet.numbers.filter(num => 
                     activeGame.drawnNumbers.includes(num)
                 ).length;
-                
-                // Calculate winnings based on number of selections
-                let winnings = 0;
+
+                // Base payout from table
                 const selectionCount = bet.selectionCount || bet.numbers.length;
-                
-                if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
-                    const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
-                    if (payout !== undefined && payout > 0) {
-                        winnings = bet.amount * payout;
-                        console.log(`   ${bet.userName}: ${selectionCount} numbers, ${matches} matches, ${payout}x, ${bet.amount} ETB bet = ${winnings} ETB win`);
-                    }
-                }
-                
+                let basePayout = self.CONFIG.PAYOUT_TABLE[selectionCount]?.[matches] || 0;
+
+                // Get player-specific odds adjustment
+                const sessionData = self.playerSessionData.get(playerId);
+                const oddsAdjustment = self.calculatePlayerOddsAdjustment(playerId, sessionData);
+                const adjustedPayout = basePayout * oddsAdjustment;
+
+                const winnings = bet.amount * adjustedPayout;
+
                 if (winnings > 0) {
                     totalWinners++;
-                    
+
                     // Update user balance
                     const user = await self.User.findOne({ userId: playerId });
                     if (user) {
@@ -2810,7 +2808,7 @@ module.exports = {
                         user.totalWins += winnings;
                         user.kenoWins = (user.kenoWins || 0) + 1;
                         await user.save();
-                        
+
                         // ========== AGENT COMMISSION RECORDING (10%) ==========
                         if (user.agentId) {
                             const commissionRate = 10; // 10% for Keno
@@ -2845,14 +2843,14 @@ module.exports = {
                                 }
                             }
                         }
-                        
-                        // Create win transaction
+
+                        // Create win transaction with adjusted amount
                         const transaction = new self.Transaction({
                             type: 'KENO_WIN',
                             userId: playerId,
                             userName: user.userName,
                             amount: winnings,
-                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB on ${selectionCount} numbers, matched ${matches})`,
+                            description: `Keno win: ${winnings.toFixed(2)} ETB (bet ${bet.amount} ETB on ${selectionCount} numbers, matched ${matches}) with ${(oddsAdjustment*100-100).toFixed(0)}% bonus`,
                             game: 'keno',
                             status: 'completed',
                             details: {
@@ -2861,11 +2859,13 @@ module.exports = {
                                 matches: matches,
                                 selectionCount: selectionCount,
                                 round: activeGame.roundNumber,
-                                payoutMultiplier: winnings / bet.amount
+                                payoutMultiplier: basePayout,
+                                oddsAdjustment: oddsAdjustment,
+                                finalMultiplier: adjustedPayout
                             }
                         });
                         await transaction.save();
-                        
+
                         // Add to winners list
                         activeGame.winners.push({
                             playerId: playerId,
@@ -2875,11 +2875,11 @@ module.exports = {
                             selectionCount: selectionCount,
                             matches: matches,
                             winnings: winnings,
-                            payoutMultiplier: winnings / bet.amount
+                            payoutMultiplier: adjustedPayout
                         });
-                        
+
                         activeGame.totalPayout += winnings;
-                        
+
                         // Update player state
                         const player = self.kenoPlayers.get(playerId);
                         if (player) {
@@ -2896,10 +2896,10 @@ module.exports = {
                             player.pendingBet = null;
                             self.kenoPlayers.set(playerId, player);
                         }
-                        
+
                         // Update player session data
                         self.updatePlayerSessionData(playerId, true, winnings, bet.amount);
-                        
+
                         // Send personal result
                         const playerSocket = self.getKenoSocketByUserId(playerId);
                         if (playerSocket) {
@@ -2912,11 +2912,11 @@ module.exports = {
                                 winnings: winnings,
                                 newBalance: user.balance,
                                 bet: bet.amount,
-                                message: `You won ${winnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
+                                message: `You won ${winnings.toFixed(2)} ETB! (${(oddsAdjustment*100-100).toFixed(0)}% bonus applied)`
                             });
                         }
-                        
-                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (matched ${matches}/${selectionCount} numbers, ${winnings/bet.amount}x)`);
+
+                        console.log(`🎰 Winner: ${user.userName} won ${winnings.toFixed(2)} ETB (matched ${matches}/${selectionCount} numbers, base ${basePayout}x, bonus ${(oddsAdjustment*100-100).toFixed(0)}%)`);
                     }
                 } else {
                     // Send loss result
@@ -2934,7 +2934,7 @@ module.exports = {
                             message: `Matched ${matches} of ${selectionCount} numbers. Better luck next round!`
                         });
                     }
-                    
+
                     // Update player state
                     const player = self.kenoPlayers.get(playerId);
                     if (player) {
@@ -2949,7 +2949,7 @@ module.exports = {
                         player.pendingBet = null;
                         self.kenoPlayers.set(playerId, player);
                     }
-                    
+
                     // Update player session data
                     self.updatePlayerSessionData(playerId, false, 0, bet.amount);
                 }
@@ -2957,20 +2957,20 @@ module.exports = {
                 console.error(`Error processing result for player ${playerId}:`, error);
             }
         }
-        
+
         // Mark results as processed
         activeGame.processedResults = true;
-        
+
         // Calculate house commission (0% now, profit built into odds)
         const totalWagered = activeGame.totalBetAmount;
         const commission = (totalWagered * self.CONFIG.COMMISSION_PERCENTAGE) / 100;
         activeGame.commissionCollected = commission;
         self.totalKenoEarnings += (totalWagered - activeGame.totalPayout); // Total profit, not just commission
-        
+
         // Update game stats
         activeGame.endTime = new Date();
         activeGame.status = 'completed';
-        
+
         // Add to history
         self.kenoRoundHistory.unshift({
             round: activeGame.roundNumber,
@@ -2986,24 +2986,24 @@ module.exports = {
                 Object.values(activeGame.bets).reduce((sum, bet) => sum + (bet.selectionCount || bet.numbers.length), 0) / activeGame.players.length : 0,
             houseProfitPercentage: ((totalWagered - activeGame.totalPayout) / totalWagered) * 100
         });
-        
+
         // Keep only last 20 rounds in history
         if (self.kenoRoundHistory.length > 20) {
             self.kenoRoundHistory = self.kenoRoundHistory.slice(0, 20);
         }
-        
+
         // Update database stats
         await self.updateKenoStats(totalWagered, activeGame.totalPayout, 0, 0, 1);
-        
+
         // Increment round number
         self.kenoRoundNumber++;
-        
+
         console.log(`🎰 Round ${activeGame.roundNumber-1} completed. Total wagered: ${totalWagered} ETB, Total payout: ${activeGame.totalPayout} ETB, House profit: ${totalWagered - activeGame.totalPayout} ETB (${((totalWagered - activeGame.totalPayout) / totalWagered * 100).toFixed(1)}%)`);
-        
+
         // Clear all disconnected players and pending states after round completion
         self.disconnectedPlayers.clear();
         self.playerReconnectAttempts.clear();
-        
+
         // Reset the current game to waiting state after a delay
         self.roundTransitionTimeout = setTimeout(() => {
             // Set game back to waiting state for next round
@@ -3019,22 +3019,22 @@ module.exports = {
             activeGame.commissionCollected = 0;
             activeGame.drawComplete = false;
             activeGame.processedResults = false;
-            
+
             // Check if we have players for next round
             const onlinePlayers = self.getOnlinePlayersCount();
-            
+
             console.log(`🎰 Players online after round: ${onlinePlayers}`);
-            
+
             if (onlinePlayers >= self.minimumPlayers) {
                 // Start next round after 5 seconds
                 console.log('🎰 Scheduling next round in 5 seconds...');
-                
+
                 // Clear any existing timeout
                 if (self.roundTransitionTimeout) {
                     clearTimeout(self.roundTransitionTimeout);
                     self.roundTransitionTimeout = null;
                 }
-                
+
                 self.roundTransitionTimeout = setTimeout(() => {
                     console.log('🎰 Starting next round now...');
                     self.startGameIfReady();
@@ -3049,7 +3049,7 @@ module.exports = {
             }
         }, 3000);
     },
-    
+
     // Update Keno stats in database
     updateKenoStats: async function(wagered, payout, depositAmount, withdrawalAmount, games) {
         try {
@@ -3081,7 +3081,7 @@ module.exports = {
             console.error('Error updating Keno stats:', error);
         }
     },
-    
+
     // Helper methods
     getActiveKenoGame: function() {
         let game = this.activeKenoGames.get('current');
@@ -3108,7 +3108,7 @@ module.exports = {
         }
         return game;
     },
-    
+
     getKenoSocketByUserId: function(userId) {
         const player = this.kenoPlayers.get(userId);
         if (player && player.isOnline) {
@@ -3119,11 +3119,11 @@ module.exports = {
         }
         return null;
     },
-    
+
     broadcastKenoPlayersUpdate: function() {
         const activeGame = this.getActiveKenoGame();
         const onlinePlayers = this.getOnlinePlayersCount();
-        
+
         this.io.to('keno').emit('keno:players_update', {
             count: onlinePlayers,
             totalBets: activeGame.totalBets,
@@ -3131,21 +3131,21 @@ module.exports = {
             disconnectedPlayers: this.disconnectedPlayers.size
         });
     },
-    
+
     getUserBalance: async function(userId) {
         const user = await this.User.findOne({ userId: userId });
         return user ? user.balance : 0;
     },
-    
+
     // Start Keno server
     startKenoServer: function() {
         const self = this;
-        
+
         console.log('🎰 Starting Keno game server...');
-        
+
         // Start first round if we have players
         const onlinePlayers = self.getOnlinePlayersCount();
-        
+
         if (onlinePlayers >= self.minimumPlayers) {
             setTimeout(() => {
                 self.startGameIfReady();
@@ -3154,22 +3154,22 @@ module.exports = {
             console.log('🎰 Waiting for players to start first round...');
         }
     },
-    
+
     // Get Keno players count
     getKenoPlayersCount: function() {
         return this.kenoPlayers.size;
     },
-    
+
     // Get online players count
     getOnlinePlayersCount: function() {
         return Array.from(this.kenoPlayers.values()).filter(p => p.isOnline).length;
     },
-    
+
     // Get all Keno players
     getAllKenoPlayers: function() {
         return Array.from(this.kenoPlayers.values());
     },
-    
+
     // Force start Keno round (admin)
     forceStartKenoRound: function() {
         const onlinePlayers = this.getOnlinePlayersCount();
@@ -3179,12 +3179,12 @@ module.exports = {
         }
         return false;
     },
-    
+
     // Get Keno game stats
     getKenoGameStats: function() {
         const activeGame = this.getActiveKenoGame();
         const onlinePlayers = this.getOnlinePlayersCount();
-        
+
         // Calculate average selection count
         let avgSelectionCount = 0;
         if (activeGame && activeGame.bets) {
@@ -3194,14 +3194,14 @@ module.exports = {
                 avgSelectionCount = totalSelections / bets.length;
             }
         }
-        
+
         // Calculate house profit percentage from last round
         let lastRoundProfit = 0;
         if (this.kenoRoundHistory.length > 0) {
             const lastRound = this.kenoRoundHistory[0];
             lastRoundProfit = lastRound.houseProfitPercentage || 0;
         }
-        
+
         return {
             roundNumber: this.kenoRoundNumber,
             isRoundActive: this.isKenoRoundActive,
@@ -3235,19 +3235,19 @@ module.exports = {
             }
         };
     },
-    
+
     // Get detailed Keno stats for admin
     getKenoDetailedStats: function() {
         const stats = this.getKenoGameStats();
         const recentHistory = this.kenoRoundHistory.slice(0, 5);
-        
+
         // Count ready players
         const readyPlayers = Array.from(this.kenoPlayers.values()).filter(p => p.isReadyForNextRound).length;
-        
+
         // Calculate wallet stats
         const totalDeposits = Array.from(this.kenoPlayers.values()).reduce((sum, p) => sum + (p.totalDeposits || 0), 0);
         const totalWithdrawals = Array.from(this.kenoPlayers.values()).reduce((sum, p) => sum + (p.totalWithdrawals || 0), 0);
-        
+
         // Get disconnected players info
         const disconnectedPlayers = Array.from(this.disconnectedPlayers.entries()).map(([userId, time]) => {
             const player = this.kenoPlayers.get(userId);
@@ -3260,13 +3260,13 @@ module.exports = {
                 hasPendingSelections: player?.pendingSelections?.length > 0 || false
             };
         });
-        
+
         // Calculate average house profit from last 10 rounds
         const last10Rounds = this.kenoRoundHistory.slice(0, 10);
         const avgHouseProfit = last10Rounds.length > 0 
             ? last10Rounds.reduce((sum, r) => sum + (r.houseProfitPercentage || 0), 0) / last10Rounds.length
             : 0;
-        
+
         return {
             ...stats,
             recentHistory: recentHistory,
@@ -3283,20 +3283,20 @@ module.exports = {
             config: this.CONFIG
         };
     },
-    
+
     // Get Profit Control System stats
     getProfitControlStats: function() {
         const recentHistory = this.profitControlHistory.slice(0, 10);
         const averageHouseKeep = recentHistory.length > 0 ? 
             recentHistory.reduce((sum, h) => sum + h.houseKeepPercentage, 0) / recentHistory.length : 0;
-        
+
         // Calculate player win rates
         const playerSessions = Array.from(this.playerSessionData.values());
         const activePlayers = playerSessions.filter(p => p.totalBets > 0);
         const avgPlayerWinRate = activePlayers.length > 0 
             ? (activePlayers.reduce((sum, p) => sum + (p.totalWins / Math.max(1, p.totalWagered)), 0) / activePlayers.length) * 100
             : 0;
-        
+
         return {
             enabled: this.PROFIT_CONTROL.ENABLED,
             targetHouseKeep: this.PROFIT_CONTROL.TARGET_HOUSE_KEEP_PERCENTAGE,
@@ -3310,13 +3310,13 @@ module.exports = {
                 .slice(0, 10)
         };
     },
-    
+
     // Admin: Reset Keno earnings
     resetKenoEarnings: async function() {
         try {
             const previousAmount = this.totalKenoEarnings;
             this.totalKenoEarnings = 0;
-            
+
             // Create reset transaction
             const transaction = new this.Transaction({
                 type: 'KENO_EARNINGS_RESET',
@@ -3328,16 +3328,16 @@ module.exports = {
                 status: 'completed'
             });
             await transaction.save();
-            
+
             console.log(`🔄 Keno earnings reset from ${previousAmount.toFixed(2)} to 0 ETB`);
             return { success: true, previousAmount, newAmount: 0 };
-            
+
         } catch (error) {
             console.error('Error resetting Keno earnings:', error);
             return { success: false, error: error.message };
         }
     },
-    
+
     // Admin: Get Keno player list
     getKenoPlayerList: function() {
         const players = [];
@@ -3380,13 +3380,13 @@ module.exports = {
         }
         return players;
     },
-    
+
     // Clean up old data
     cleanupOldKenoData: function() {
         // Remove players who haven't been online for more than 24 hours
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         let removedCount = 0;
-        
+
         for (const [userId, player] of this.kenoPlayers) {
             if (player.lastSeen < twentyFourHoursAgo && !player.isOnline) {
                 this.kenoPlayers.delete(userId);
@@ -3397,7 +3397,7 @@ module.exports = {
                 removedCount++;
             }
         }
-        
+
         // Clean up expired reconnect tokens
         const now = Date.now();
         for (const [userId, tokenData] of this.playerReconnectTokens) {
@@ -3406,11 +3406,11 @@ module.exports = {
                 this.playerReconnectAttempts.delete(userId);
             }
         }
-        
+
         if (removedCount > 0) {
             console.log(`🧹 Cleaned up ${removedCount} inactive Keno players`);
         }
-        
+
         // Clean up old active games
         const currentGame = this.getActiveKenoGame();
         if (currentGame.status === 'completed' && currentGame.endTime) {
@@ -3421,13 +3421,13 @@ module.exports = {
             }
         }
     },
-    
+
     // Check if game should be active
     checkGameStatus: function() {
         const onlinePlayers = this.getOnlinePlayersCount();
         const activeGame = this.getActiveKenoGame();
         const gameStatus = activeGame.status || 'waiting';
-        
+
         // Detect if countdown is stuck (not changing)
         if (this.kenoCountdownInterval && this.kenoCountdown <= 0 && !this.isDrawing && this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, forcing draw...');
@@ -3436,25 +3436,25 @@ module.exports = {
             this.drawKenoNumbers();
             return;
         }
-        
+
         // Detect if game is stuck in active state with no players
         if (this.isKenoRoundActive && onlinePlayers === 0) {
             console.log('🎰 Stuck game detected: Round active but no players online');
             const hasBets = activeGame && activeGame.totalBets > 0;
-            
+
             if (!hasBets) {
                 console.log('🎰 No bets placed, resetting game...');
                 this.resetStuckKenoGame();
                 return;
             }
         }
-        
+
         // Detect if countdown is stuck at zero but not progressing
         if (this.kenoCountdown <= 0 && !this.isDrawing && !this.isKenoRoundActive) {
             console.log('🎰 Stuck countdown detected, resetting...');
             this.kenoCountdown = this.CONFIG.KENO_GAME_TIMER;
         }
-        
+
         if (onlinePlayers === 0 && this.isKenoRoundActive) {
             console.log('🎰 No players online, pausing game...');
             this.pauseKenoGame();
@@ -3468,7 +3468,7 @@ module.exports = {
             this.startGameIfReady();
         }
     },
-    
+
     // Get player's ready status
     getPlayerReadyStatus: function(userId) {
         const player = this.kenoPlayers.get(userId);
@@ -3489,7 +3489,7 @@ module.exports = {
         }
         return null;
     },
-    
+
     // Force player ready status (admin)
     forcePlayerReady: function(userId, numbers) {
         const player = this.kenoPlayers.get(userId);
@@ -3497,7 +3497,7 @@ module.exports = {
             player.preSelectedNumbers = numbers || player.selectedNumbers;
             player.isReadyForNextRound = true;
             this.kenoPlayers.set(userId, player);
-            
+
             // Notify player
             const playerSocket = this.getKenoSocketByUserId(userId);
             if (playerSocket) {
@@ -3506,16 +3506,16 @@ module.exports = {
                     message: 'Admin has marked you as ready for next round'
                 });
             }
-            
+
             return { success: true, message: `Player ${player.userName} marked as ready` };
         }
         return { success: false, message: 'Player not found' };
     },
-    
+
     // Toggle pre-selection feature
     togglePreSelectionFeature: function(enabled) {
         this.CONFIG.ALLOW_PRE_SELECTION = enabled;
-        
+
         // Broadcast to all players
         this.io.to('keno').emit('keno:featureUpdate', {
             feature: 'preSelection',
@@ -3524,23 +3524,23 @@ module.exports = {
                 'Number pre-selection is now enabled!' : 
                 'Number pre-selection is now disabled.'
         });
-        
+
         return { success: true, enabled: enabled };
     },
-    
+
     // Toggle Profit Control System (admin)
     toggleProfitControl: function(enabled) {
         this.PROFIT_CONTROL.ENABLED = enabled;
-        
+
         console.log(`🎯 Balanced Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
-        
+
         return { 
             success: true, 
             enabled: enabled,
             message: `Profit Control System ${enabled ? 'enabled' : 'disabled'}`
         };
     },
-    
+
     // Adjust Profit Control settings (admin)
     adjustProfitControlSettings: function(settings) {
         Object.keys(settings).forEach(key => {
@@ -3548,16 +3548,16 @@ module.exports = {
                 this.PROFIT_CONTROL[key] = settings[key];
             }
         });
-        
+
         console.log('🎯 Profit Control settings updated:', settings);
-        
+
         return { 
             success: true, 
             settings: this.PROFIT_CONTROL,
             message: 'Profit Control settings updated'
         };
     },
-    
+
     // Get pending wallet transactions for admin
     getPendingWalletTransactions: async function() {
         try {
@@ -3565,12 +3565,12 @@ module.exports = {
                 type: 'DEPOSIT_REQUEST',
                 status: 'pending'
             }).sort({ timestamp: -1 }).limit(50);
-            
+
             const pendingWithdrawals = await this.WalletTransaction.find({
                 type: 'WITHDRAWAL_REQUEST',
                 status: 'pending'
             }).sort({ timestamp: -1 }).limit(50);
-            
+
             return {
                 deposits: pendingDeposits,
                 withdrawals: pendingWithdrawals,
@@ -3581,32 +3581,32 @@ module.exports = {
             return { deposits: [], withdrawals: [], total: 0 };
         }
     },
-    
+
     // Get wallet stats
     getWalletStats: async function() {
         try {
             const today = new Date().toISOString().split('T')[0];
-            
+
             // Today's transactions
             const todayTransactions = await this.WalletTransaction.find({
                 timestamp: { $gte: new Date(today) },
                 status: 'completed'
             });
-            
+
             const todayDeposits = todayTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
             const todayWithdrawals = todayTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
-            
+
             // Total transactions
             const totalDeposits = await this.WalletTransaction.aggregate([
                 { $match: { type: 'DEPOSIT', status: 'completed' } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]);
-            
+
             const totalWithdrawals = await this.WalletTransaction.aggregate([
                 { $match: { type: 'WITHDRAWAL', status: 'completed' } },
                 { $group: { _id: null, total: { $sum: { $abs: '$amount' } } } }
             ]);
-            
+
             return {
                 today: {
                     deposits: todayDeposits,
@@ -3624,7 +3624,7 @@ module.exports = {
             return { today: { deposits: 0, withdrawals: 0, transactions: 0 }, total: { deposits: 0, withdrawals: 0, netFlow: 0 } };
         }
     },
-    
+
     // Manual balance adjustment (admin)
     adjustUserBalance: async function(userId, amount, reason, adminId) {
         try {
@@ -3632,18 +3632,18 @@ module.exports = {
             if (!user) {
                 return { success: false, message: 'User not found' };
             }
-            
+
             const oldBalance = user.balance;
             user.balance += amount;
-            
+
             if (amount > 0) {
                 user.totalDeposits = (user.totalDeposits || 0) + amount;
             } else {
                 user.totalWithdrawals = (user.totalWithdrawals || 0) + Math.abs(amount);
             }
-            
+
             await user.save();
-            
+
             // Create transaction record
             const transaction = new this.WalletTransaction({
                 type: amount > 0 ? 'MANUAL_DEPOSIT' : 'MANUAL_WITHDRAWAL',
@@ -3661,7 +3661,7 @@ module.exports = {
                 }
             });
             await transaction.save();
-            
+
             // Update player state if online
             const player = this.kenoPlayers.get(userId);
             if (player) {
@@ -3672,7 +3672,7 @@ module.exports = {
                     player.totalWithdrawals = (player.totalWithdrawals || 0) + Math.abs(amount);
                 }
                 this.kenoPlayers.set(userId, player);
-                
+
                 // Notify player
                 const playerSocket = this.getKenoSocketByUserId(userId);
                 if (playerSocket) {
@@ -3684,12 +3684,12 @@ module.exports = {
                     });
                 }
             }
-            
+
             // Update stats
             await this.updateKenoStats(0, 0, amount > 0 ? amount : 0, amount < 0 ? Math.abs(amount) : 0, 0);
-            
+
             console.log(`💰 Manual balance adjustment: ${user.userName} ${amount > 0 ? '+' : ''}${amount} ETB (${oldBalance} → ${user.balance})`);
-            
+
             return { 
                 success: true, 
                 oldBalance, 
@@ -3697,32 +3697,32 @@ module.exports = {
                 adjustment: amount,
                 userName: user.userName 
             };
-            
+
         } catch (error) {
             console.error('Error adjusting user balance:', error);
             return { success: false, error: error.message };
         }
     },
-    
+
     // Admin: Force player reconnection
     forcePlayerReconnect: function(userId) {
         const player = this.kenoPlayers.get(userId);
         if (!player) {
             return { success: false, message: 'Player not found' };
         }
-        
+
         // Remove from disconnected players
         this.disconnectedPlayers.delete(userId);
-        
+
         // Clear reconnect token and attempts
         this.playerReconnectTokens.delete(userId);
         this.playerReconnectAttempts.delete(userId);
-        
+
         console.log(`🔄 Admin forced reconnection cleanup for player ${player.userName}`);
-        
+
         return { success: true, message: `Reconnection state cleared for ${player.userName}` };
     },
-    
+
     // Get disconnected players for admin
     getDisconnectedPlayers: function() {
         const disconnected = [];
@@ -3741,23 +3741,23 @@ module.exports = {
                 });
             }
         }
-        
+
         return disconnected;
     },
-    
+
     // Clear all reconnection data for a player
     clearPlayerReconnectionData: function(userId) {
         this.disconnectedPlayers.delete(userId);
         this.playerReconnectTokens.delete(userId);
         this.playerReconnectAttempts.delete(userId);
-        
+
         const player = this.kenoPlayers.get(userId);
         if (player) {
             player.pendingSelections = [];
             player.pendingBet = null;
             this.kenoPlayers.set(userId, player);
         }
-        
+
         return { success: true, message: `Reconnection data cleared for ${userId}` };
     }
 };
