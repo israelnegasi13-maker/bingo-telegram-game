@@ -11,6 +11,7 @@ const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
+const crypto = require('crypto');  // added for generating app user IDs
 
 // Import game logic modules
 const gameLogic = require('./game-logic');
@@ -176,6 +177,7 @@ Object.entries(requiredFiles).forEach(([filePath, content]) => {
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   userName: { type: String, required: true },
+  password: { type: String, select: false }, // Added for app login (hashed)
   balance: { type: Number, default: 0.00 },
   referralCode: { type: String, unique: true },
   currentRoom: { type: Number, default: null },
@@ -609,6 +611,61 @@ io.on('connection', (socket) => {
   
   socket.once('authenticated', () => {
     clearTimeout(authTimeout);
+  });
+  
+  // ========== INIT EVENT FOR APP/TELEGRAM USERS ==========
+  socket.on('init', async (data) => {
+    const { userId, userName } = data;
+    if (!userId) {
+      console.log('Init without userId, disconnecting');
+      socket.disconnect();
+      return;
+    }
+
+    try {
+      // Find or create user
+      let user = await User.findOne({ userId });
+      if (!user) {
+        // Create new user (should normally exist from registration, but just in case)
+        user = new User({
+          userId,
+          userName: userName || 'AppUser',
+          balance: 0,
+          referralCode: `APP${Date.now()}`,
+          joinedAt: new Date(),
+          lastSeen: new Date()
+        });
+        await user.save();
+        console.log(`✅ New app user created: ${userName} (${userId})`);
+      } else {
+        // Update existing user
+        user.lastSeen = new Date();
+        user.isOnline = true;
+        if (userName) user.userName = userName; // update display name if changed
+        await user.save();
+      }
+
+      // Associate socket with user
+      socket.userId = userId;
+      // Optionally add to game logic's user tracking
+      if (gameLogic && gameLogic.addUserSocket) {
+        gameLogic.addUserSocket(socket, userId);
+      }
+
+      // Send current balance and data back
+      socket.emit('initSuccess', {
+        userId: user.userId,
+        userName: user.userName,
+        balance: user.balance,
+        message: 'User initialized'
+      });
+
+      // Also broadcast to admin that user came online
+      io.emit('userOnline', { userId, userName: user.userName });
+    } catch (error) {
+      console.error('Error in init:', error);
+      socket.emit('error', 'Failed to initialize user');
+    }
   });
   
   // ========== ADMIN AUTHENTICATION ==========
@@ -1768,7 +1825,6 @@ app.get('/', async (req, res) => {
 
 // ========== MOBILE APP LOGIN PAGE ==========
 app.get('/app', (req, res) => {
-  // Serve a simple login page for the mobile app
   res.send(`
     <!DOCTYPE html>
     <html lang="en">
@@ -1779,7 +1835,7 @@ app.get('/app', (req, res) => {
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           background: #0a0c10;
           color: #f0f4fa;
           display: flex;
@@ -1788,29 +1844,47 @@ app.get('/app', (req, res) => {
           min-height: 100vh;
           padding: 20px;
         }
-        .login-container {
+        .container {
           background: #13171c;
           border: 1px solid #262d36;
           border-radius: 32px;
           padding: 32px 24px;
           width: 100%;
           max-width: 360px;
-          text-align: center;
         }
         .logo {
           font-size: 28px;
           font-weight: 700;
-          margin-bottom: 8px;
+          margin-bottom: 24px;
+          text-align: center;
         }
         .logo span { color: #8b5cf6; }
-        .subtitle {
+        .tab-bar {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 24px;
+          border-bottom: 1px solid #262d36;
+        }
+        .tab {
+          flex: 1;
+          text-align: center;
+          padding: 8px 0;
           color: #8e9aaf;
-          font-size: 14px;
-          margin-bottom: 32px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+        .tab.active {
+          color: #3b82f6;
+          border-bottom: 2px solid #3b82f6;
+        }
+        .form {
+          display: none;
+        }
+        .form.active {
+          display: block;
         }
         .form-group {
           margin-bottom: 20px;
-          text-align: left;
         }
         label {
           display: block;
@@ -1840,71 +1914,173 @@ app.get('/app', (req, res) => {
           color: white;
           font-weight: 600;
           font-size: 16px;
-          margin-top: 12px;
+          margin-top: 8px;
           cursor: pointer;
-          transition: background 0.2s;
         }
         .btn:active { background: #2563eb; }
         .error {
           color: #ef4444;
           font-size: 13px;
-          margin-top: 16px;
+          margin-top: 8px;
+          display: none;
+        }
+        .success {
+          color: #10b981;
+          font-size: 13px;
+          margin-top: 8px;
           display: none;
         }
         .info {
           color: #8e9aaf;
           font-size: 12px;
           margin-top: 24px;
-          padding-top: 16px;
-          border-top: 1px solid #262d36;
+          text-align: center;
         }
       </style>
     </head>
     <body>
-      <div class="login-container">
+      <div class="container">
         <div class="logo">ETHIO<span>GAMES</span></div>
-        <div class="subtitle">Mobile App Login</div>
 
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="username" placeholder="Enter username" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="password" placeholder="Enter password">
+        <div class="tab-bar">
+          <div class="tab active" onclick="switchTab('login')">Login</div>
+          <div class="tab" onclick="switchTab('register')">Register</div>
         </div>
 
-        <button class="btn" onclick="login()">Login to Games</button>
-        <div class="error" id="loginError">Invalid credentials</div>
+        <!-- Login Form -->
+        <div id="loginForm" class="form active">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="loginUsername" placeholder="Enter username">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter password">
+          </div>
+          <div class="error" id="loginError"></div>
+          <button class="btn" onclick="login()">Login</button>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="form">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="regUsername" placeholder="Choose a username (min 3 chars)">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPassword" placeholder="Min 6 characters">
+          </div>
+          <div class="form-group">
+            <label>Referral Code (optional)</label>
+            <input type="text" id="regReferral" placeholder="Enter agent referral code">
+          </div>
+          <div class="error" id="regError"></div>
+          <div class="success" id="regSuccess"></div>
+          <button class="btn" onclick="register()">Register</button>
+        </div>
 
         <div class="info">
-          👤 Demo: use any username (min 3 chars)<br>
-          🔐 Password can be anything for demo
+          Create an account to play Bingo and Keno.
         </div>
       </div>
 
       <script>
-        function login() {
-          const username = document.getElementById('username').value.trim();
-          const password = document.getElementById('password').value;
+        function switchTab(tab) {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.form').forEach(f => f.classList.remove('active'));
+          if (tab === 'login') {
+            document.querySelector('.tab[onclick="switchTab(\'login\')"]').classList.add('active');
+            document.getElementById('loginForm').classList.add('active');
+          } else {
+            document.querySelector('.tab[onclick="switchTab(\'register\')"]').classList.add('active');
+            document.getElementById('registerForm').classList.add('active');
+          }
+        }
 
-          // Simple validation
-          if (username.length < 3) {
-            document.getElementById('loginError').style.display = 'block';
-            document.getElementById('loginError').textContent = 'Username must be at least 3 characters';
+        async function login() {
+          const username = document.getElementById('loginUsername').value.trim();
+          const password = document.getElementById('loginPassword').value;
+          const errorDiv = document.getElementById('loginError');
+
+          if (!username || !password) {
+            errorDiv.textContent = 'Username and password required';
+            errorDiv.style.display = 'block';
             return;
           }
 
-          // Generate a consistent user ID based on username
-          // This simulates a real login - in production you'd validate against a database
-          const userId = 'app_' + btoa(username).replace(/=/g, '').substring(0, 12);
+          errorDiv.style.display = 'none';
 
-          // Store in sessionStorage so the Telegram page can access it
-          sessionStorage.setItem('appUserId', userId);
-          sessionStorage.setItem('appUserName', username);
+          try {
+            const res = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              errorDiv.textContent = data.error || 'Login failed';
+              errorDiv.style.display = 'block';
+            } else {
+              // Login successful – redirect to main Telegram entry page with userId
+              window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
+            }
+          } catch (err) {
+            errorDiv.textContent = 'Network error';
+            errorDiv.style.display = 'block';
+          }
+        }
 
-          // Redirect to the main Telegram entry page (the game hub)
-          window.location.href = '/telegram?source=app&userId=' + encodeURIComponent(userId) + '&name=' + encodeURIComponent(username);
+        async function register() {
+          const username = document.getElementById('regUsername').value.trim();
+          const password = document.getElementById('regPassword').value;
+          const referral = document.getElementById('regReferral').value.trim();
+          const errorDiv = document.getElementById('regError');
+          const successDiv = document.getElementById('regSuccess');
+
+          if (!username || !password) {
+            errorDiv.textContent = 'Username and password required';
+            errorDiv.style.display = 'block';
+            successDiv.style.display = 'none';
+            return;
+          }
+          if (username.length < 3) {
+            errorDiv.textContent = 'Username must be at least 3 characters';
+            errorDiv.style.display = 'block';
+            successDiv.style.display = 'none';
+            return;
+          }
+          if (password.length < 6) {
+            errorDiv.textContent = 'Password must be at least 6 characters';
+            errorDiv.style.display = 'block';
+            successDiv.style.display = 'none';
+            return;
+          }
+
+          errorDiv.style.display = 'none';
+
+          try {
+            const res = await fetch('/api/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password, referralCode: referral })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              errorDiv.textContent = data.error || 'Registration failed';
+              errorDiv.style.display = 'block';
+            } else {
+              successDiv.textContent = 'Registration successful! Redirecting...';
+              successDiv.style.display = 'block';
+              // Redirect after short delay
+              setTimeout(() => {
+                window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
+              }, 1500);
+            }
+          } catch (err) {
+            errorDiv.textContent = 'Network error';
+            errorDiv.style.display = 'block';
+          }
         }
       </script>
     </body>
@@ -2954,6 +3130,113 @@ app.get('/api/referral-stats', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== MOBILE APP REGISTRATION & LOGIN API ==========
+function generateAppUserId(username) {
+  const randomPart = crypto.randomBytes(4).toString('hex'); // 8 random hex chars
+  return `app_${username}_${randomPart}`;
+}
+
+// Registration endpoint
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password, referralCode } = req.body;
+
+    // Basic validation
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+    if (username.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Check if username already exists (case‑insensitive)
+    const existingUser = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a unique userId for this app user
+    const userId = generateAppUserId(username);
+
+    // Create the user document
+    const newUser = new User({
+      userId,
+      userName: username,
+      password: hashedPassword,
+      balance: 0,
+      referralCode: `APP${Date.now()}`,
+      joinedAt: new Date(),
+      lastSeen: new Date()
+    });
+
+    await newUser.save();
+
+    // If a referral code was provided, process it (optional)
+    if (referralCode && agentSystem && agentSystem.processReferral) {
+      await agentSystem.processReferral(userId, referralCode).catch(console.error);
+    }
+
+    res.json({
+      success: true,
+      message: 'Registration successful',
+      userId,
+      userName: username
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Login endpoint
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // Find user (case‑insensitive)
+    const user = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } }).select('+password');
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // If the user doesn't have a password field (old users), you may need to handle that
+    if (!user.password) {
+      return res.status(401).json({ error: 'Account not set up for app login' });
+    }
+
+    // Compare password
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Update last seen
+    user.lastSeen = new Date();
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      userId: user.userId,
+      userName: user.userName,
+      balance: user.balance
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
