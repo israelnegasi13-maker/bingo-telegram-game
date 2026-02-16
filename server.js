@@ -1999,15 +1999,16 @@ app.get('/app', (req, res) => {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('.form').forEach(f => f.classList.remove('active'));
           if (tab === 'login') {
-            document.querySelector('.tab[onclick="switchTab(\'login\')"]').classList.add('active');
+            document.querySelector('.tab[onclick="switchTab(\\'login\\')"]').classList.add('active');
             document.getElementById('loginForm').classList.add('active');
           } else {
-            document.querySelector('.tab[onclick="switchTab(\'register\')"]').classList.add('active');
+            document.querySelector('.tab[onclick="switchTab(\\'register\\')"]').classList.add('active');
             document.getElementById('registerForm').classList.add('active');
           }
         }
 
         async function login() {
+          console.log('Login clicked');
           const username = document.getElementById('loginUsername').value.trim();
           const password = document.getElementById('loginPassword').value;
           const errorDiv = document.getElementById('loginError');
@@ -2042,7 +2043,8 @@ app.get('/app', (req, res) => {
               window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
             }
           } catch (err) {
-            errorDiv.textContent = 'Network error – check your connection';
+            console.error('Login fetch error:', err);
+            errorDiv.textContent = err.message || 'Network error – check your connection';
             errorDiv.style.display = 'block';
             btn.disabled = false;
             btn.textContent = 'Login';
@@ -2050,6 +2052,7 @@ app.get('/app', (req, res) => {
         }
 
         async function register() {
+          console.log('Register clicked');
           const username = document.getElementById('regUsername').value.trim();
           const password = document.getElementById('regPassword').value;
           const referral = document.getElementById('regReferral').value.trim();
@@ -2088,6 +2091,7 @@ app.get('/app', (req, res) => {
               body: JSON.stringify({ username, password, referralCode: referral })
             });
             const data = await res.json();
+            console.log('Registration response:', data);
             if (!res.ok) {
               errorDiv.textContent = data.error || 'Registration failed';
               errorDiv.style.display = 'block';
@@ -2106,7 +2110,8 @@ app.get('/app', (req, res) => {
               }, 1500);
             }
           } catch (err) {
-            errorDiv.textContent = 'Network error – please try again';
+            console.error('Registration fetch error:', err);
+            errorDiv.textContent = err.message || 'Network error – please try again';
             errorDiv.style.display = 'block';
             btn.disabled = false;
             btn.textContent = 'Register';
@@ -3212,6 +3217,7 @@ app.post('/api/register', async (req, res) => {
     });
 
     await newUser.save();
+    console.log(`✅ New app user registered: ${username} (${userId})`);
 
     // If a referral code was provided, process it (optional) – run in background
     if (referralCode && agentSystem && typeof agentSystem.processReferral === 'function') {
@@ -3220,8 +3226,6 @@ app.post('/api/register', async (req, res) => {
       });
     }
 
-    console.log(`✅ New app user registered: ${username} (${userId})`);
-
     res.json({
       success: true,
       message: 'Registration successful',
@@ -3229,7 +3233,7 @@ app.post('/api/register', async (req, res) => {
       userName: username
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error details:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
