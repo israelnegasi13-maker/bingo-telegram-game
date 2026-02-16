@@ -1766,6 +1766,152 @@ app.get('/', async (req, res) => {
   }
 });
 
+// ========== MOBILE APP LOGIN PAGE ==========
+app.get('/app', (req, res) => {
+  // Serve a simple login page for the mobile app
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <title>ETHIO GAMES · App Login</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+          background: #0a0c10;
+          color: #f0f4fa;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 100vh;
+          padding: 20px;
+        }
+        .login-container {
+          background: #13171c;
+          border: 1px solid #262d36;
+          border-radius: 32px;
+          padding: 32px 24px;
+          width: 100%;
+          max-width: 360px;
+          text-align: center;
+        }
+        .logo {
+          font-size: 28px;
+          font-weight: 700;
+          margin-bottom: 8px;
+        }
+        .logo span { color: #8b5cf6; }
+        .subtitle {
+          color: #8e9aaf;
+          font-size: 14px;
+          margin-bottom: 32px;
+        }
+        .form-group {
+          margin-bottom: 20px;
+          text-align: left;
+        }
+        label {
+          display: block;
+          font-size: 13px;
+          color: #8e9aaf;
+          margin-bottom: 6px;
+        }
+        input {
+          width: 100%;
+          padding: 14px;
+          background: #0a0c10;
+          border: 1px solid #262d36;
+          border-radius: 16px;
+          color: white;
+          font-size: 16px;
+          outline: none;
+        }
+        input:focus {
+          border-color: #3b82f6;
+        }
+        .btn {
+          width: 100%;
+          padding: 14px;
+          background: #3b82f6;
+          border: none;
+          border-radius: 40px;
+          color: white;
+          font-weight: 600;
+          font-size: 16px;
+          margin-top: 12px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .btn:active { background: #2563eb; }
+        .error {
+          color: #ef4444;
+          font-size: 13px;
+          margin-top: 16px;
+          display: none;
+        }
+        .info {
+          color: #8e9aaf;
+          font-size: 12px;
+          margin-top: 24px;
+          padding-top: 16px;
+          border-top: 1px solid #262d36;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="login-container">
+        <div class="logo">ETHIO<span>GAMES</span></div>
+        <div class="subtitle">Mobile App Login</div>
+
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="Enter username" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Enter password">
+        </div>
+
+        <button class="btn" onclick="login()">Login to Games</button>
+        <div class="error" id="loginError">Invalid credentials</div>
+
+        <div class="info">
+          👤 Demo: use any username (min 3 chars)<br>
+          🔐 Password can be anything for demo
+        </div>
+      </div>
+
+      <script>
+        function login() {
+          const username = document.getElementById('username').value.trim();
+          const password = document.getElementById('password').value;
+
+          // Simple validation
+          if (username.length < 3) {
+            document.getElementById('loginError').style.display = 'block';
+            document.getElementById('loginError').textContent = 'Username must be at least 3 characters';
+            return;
+          }
+
+          // Generate a consistent user ID based on username
+          // This simulates a real login - in production you'd validate against a database
+          const userId = 'app_' + btoa(username).replace(/=/g, '').substring(0, 12);
+
+          // Store in sessionStorage so the Telegram page can access it
+          sessionStorage.setItem('appUserId', userId);
+          sessionStorage.setItem('appUserName', username);
+
+          // Redirect to the main Telegram entry page (the game hub)
+          window.location.href = '/telegram?source=app&userId=' + encodeURIComponent(userId) + '&name=' + encodeURIComponent(username);
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
 // ========== HEALTH CHECK ENDPOINTS ==========
 app.get('/health', async (req, res) => {
   try {
@@ -2453,14 +2599,31 @@ app.get('/telegram', async (req, res) => {
           tg?.setHeaderColor('#0a0c10');
           tg?.setBackgroundColor('#0a0c10');
 
-          // --- User from Telegram ---
-          const user = tg?.initDataUnsafe?.user;
-          if (user) {
+          // --- Check if we came from the mobile app login (with userId in URL) ---
+          const urlParams = new URLSearchParams(window.location.search);
+          const appUserId = urlParams.get('userId');
+          const appUserName = urlParams.get('name');
+
+          if (appUserId && appUserName) {
+            // Use app-provided credentials
+            currentUserId = appUserId;
             document.getElementById('userGreeting').style.display = 'flex';
-            document.getElementById('userName').textContent = user.first_name || 'User';
-            currentUserId = 'tg_' + user.id;
-            localStorage.setItem('telegramUser', JSON.stringify(user));
-            socket.emit('init', { userId: currentUserId, userName: user.first_name });
+            document.getElementById('userName').textContent = appUserName;
+            sessionStorage.setItem('appUserId', appUserId);
+            sessionStorage.setItem('appUserName', appUserName);
+          } else {
+            // Fallback to Telegram user
+            const user = tg?.initDataUnsafe?.user;
+            if (user) {
+              document.getElementById('userGreeting').style.display = 'flex';
+              document.getElementById('userName').textContent = user.first_name || 'User';
+              currentUserId = 'tg_' + user.id;
+              localStorage.setItem('telegramUser', JSON.stringify(user));
+            }
+          }
+
+          if (currentUserId) {
+            socket.emit('init', { userId: currentUserId, userName: appUserName || user?.first_name || 'User' });
             loadBalance();
           }
 
@@ -2521,7 +2684,7 @@ app.get('/telegram', async (req, res) => {
               receiptNumber: receipt,
               amount: amount,
               userId: currentUserId,
-              userName: user?.first_name || 'User'
+              userName: appUserName || user?.first_name || 'User'
             });
 
             socket.once('wallet:depositRequestSuccess', (resp) => {
@@ -2550,7 +2713,7 @@ app.get('/telegram', async (req, res) => {
               amount: amount,
               phoneNumber: phone,
               userId: currentUserId,
-              userName: user?.first_name || 'User'
+              userName: appUserName || user?.first_name || 'User'
             });
 
             socket.once('wallet:withdrawRequestSuccess', (resp) => {
