@@ -829,10 +829,11 @@ class ManualAgentSystem {
     async processReferral(userId, referralCode) {
         try {
             console.log(`🔍 Processing referral for ${userId} with code ${referralCode}`);
+            const upperCode = referralCode.toUpperCase(); // ← FIX: case‑insensitive match
 
-            const agent = await this.models.Agent.findOne({ referralCode, isActive: true });
+            const agent = await this.models.Agent.findOne({ referralCode: upperCode, isActive: true });
             if (!agent) {
-                console.log(`⚠️ No active agent found for referral code: ${referralCode}`);
+                console.log(`⚠️ No active agent found for referral code: ${referralCode} (searched as ${upperCode})`);
                 return false;
             }
 
