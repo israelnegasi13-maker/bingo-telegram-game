@@ -1918,17 +1918,29 @@ app.get('/app', (req, res) => {
           cursor: pointer;
         }
         .btn:active { background: #2563eb; }
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
         .error {
           color: #ef4444;
           font-size: 13px;
           margin-top: 8px;
           display: none;
+          background: rgba(239,68,68,0.1);
+          padding: 8px;
+          border-radius: 8px;
+          border-left: 3px solid #ef4444;
         }
         .success {
           color: #10b981;
           font-size: 13px;
           margin-top: 8px;
           display: none;
+          background: rgba(16,185,129,0.1);
+          padding: 8px;
+          border-radius: 8px;
+          border-left: 3px solid #10b981;
         }
         .info {
           color: #8e9aaf;
@@ -1958,7 +1970,7 @@ app.get('/app', (req, res) => {
             <input type="password" id="loginPassword" placeholder="Enter password">
           </div>
           <div class="error" id="loginError"></div>
-          <button class="btn" onclick="login()">Login</button>
+          <button class="btn" onclick="login()" id="loginBtn">Login</button>
         </div>
 
         <!-- Register Form -->
@@ -1977,7 +1989,7 @@ app.get('/app', (req, res) => {
           </div>
           <div class="error" id="regError"></div>
           <div class="success" id="regSuccess"></div>
-          <button class="btn" onclick="register()">Register</button>
+          <button class="btn" onclick="register()" id="registerBtn">Register</button>
         </div>
 
         <div class="info">
@@ -1986,6 +1998,15 @@ app.get('/app', (req, res) => {
       </div>
 
       <script>
+        // Auto-redirect if already logged in
+        (function() {
+          const storedUserId = localStorage.getItem('appUserId');
+          const storedUserName = localStorage.getItem('appUserName');
+          if (storedUserId && storedUserName) {
+            window.location.href = '/telegram?userId=' + encodeURIComponent(storedUserId) + '&name=' + encodeURIComponent(storedUserName);
+          }
+        })();
+
         function switchTab(tab) {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('.form').forEach(f => f.classList.remove('active'));
@@ -2002,6 +2023,10 @@ app.get('/app', (req, res) => {
           const username = document.getElementById('loginUsername').value.trim();
           const password = document.getElementById('loginPassword').value;
           const errorDiv = document.getElementById('loginError');
+          const btn = document.getElementById('loginBtn');
+
+          // Reset
+          errorDiv.style.display = 'none';
 
           if (!username || !password) {
             errorDiv.textContent = 'Username and password required';
@@ -2009,7 +2034,8 @@ app.get('/app', (req, res) => {
             return;
           }
 
-          errorDiv.style.display = 'none';
+          btn.disabled = true;
+          btn.textContent = 'Logging in...';
 
           try {
             const res = await fetch('/api/login', {
@@ -2021,13 +2047,21 @@ app.get('/app', (req, res) => {
             if (!res.ok) {
               errorDiv.textContent = data.error || 'Login failed';
               errorDiv.style.display = 'block';
+              btn.disabled = false;
+              btn.textContent = 'Login';
             } else {
-              // Login successful – redirect to main Telegram entry page with userId
+              // Store in localStorage for auto‑login
+              localStorage.setItem('appUserId', data.userId);
+              localStorage.setItem('appUserName', data.userName);
+              // Redirect
               window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
             }
           } catch (err) {
-            errorDiv.textContent = 'Network error';
+            console.error('Login error:', err);
+            errorDiv.textContent = 'Network error. Please try again.';
             errorDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Login';
           }
         }
 
@@ -2037,27 +2071,30 @@ app.get('/app', (req, res) => {
           const referral = document.getElementById('regReferral').value.trim();
           const errorDiv = document.getElementById('regError');
           const successDiv = document.getElementById('regSuccess');
+          const btn = document.getElementById('registerBtn');
+
+          // Reset displays
+          errorDiv.style.display = 'none';
+          successDiv.style.display = 'none';
 
           if (!username || !password) {
             errorDiv.textContent = 'Username and password required';
             errorDiv.style.display = 'block';
-            successDiv.style.display = 'none';
             return;
           }
           if (username.length < 3) {
             errorDiv.textContent = 'Username must be at least 3 characters';
             errorDiv.style.display = 'block';
-            successDiv.style.display = 'none';
             return;
           }
           if (password.length < 6) {
             errorDiv.textContent = 'Password must be at least 6 characters';
             errorDiv.style.display = 'block';
-            successDiv.style.display = 'none';
             return;
           }
 
-          errorDiv.style.display = 'none';
+          btn.disabled = true;
+          btn.textContent = 'Registering...';
 
           try {
             const res = await fetch('/api/register', {
@@ -2066,20 +2103,29 @@ app.get('/app', (req, res) => {
               body: JSON.stringify({ username, password, referralCode: referral })
             });
             const data = await res.json();
+            console.log('Registration response:', data);
+
             if (!res.ok) {
               errorDiv.textContent = data.error || 'Registration failed';
               errorDiv.style.display = 'block';
+              btn.disabled = false;
+              btn.textContent = 'Register';
             } else {
               successDiv.textContent = 'Registration successful! Redirecting...';
               successDiv.style.display = 'block';
-              // Redirect after short delay
+              // Store in localStorage
+              localStorage.setItem('appUserId', data.userId);
+              localStorage.setItem('appUserName', data.userName);
               setTimeout(() => {
                 window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
               }, 1500);
             }
           } catch (err) {
-            errorDiv.textContent = 'Network error';
+            console.error('Fetch error:', err);
+            errorDiv.textContent = 'Network error. Please try again.';
             errorDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Register';
           }
         }
       </script>
@@ -3167,13 +3213,27 @@ app.post('/api/register', async (req, res) => {
     // Create a unique userId for this app user
     const userId = generateAppUserId(username);
 
+    // Generate a truly unique referralCode with retry
+    let referralCodeUser;
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 5) {
+      referralCodeUser = `APP${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const existing = await User.findOne({ referralCode: referralCodeUser });
+      if (!existing) isUnique = true;
+      attempts++;
+    }
+    if (!isUnique) {
+      return res.status(500).json({ error: 'Could not generate unique referral code, please try again.' });
+    }
+
     // Create the user document
     const newUser = new User({
       userId,
       userName: username,
       password: hashedPassword,
       balance: 0,
-      referralCode: `APP${Date.now()}`,
+      referralCode: referralCodeUser,
       joinedAt: new Date(),
       lastSeen: new Date()
     });
@@ -3182,9 +3242,12 @@ app.post('/api/register', async (req, res) => {
 
     // If a referral code was provided, process it (optional)
     if (referralCode && agentSystem && agentSystem.processReferral) {
-      await agentSystem.processReferral(userId, referralCode).catch(console.error);
+      agentSystem.processReferral(userId, referralCode).catch(err => {
+        console.error('Referral processing error (non‑blocking):', err);
+      });
     }
 
+    console.log(`✅ New app registration: ${username} (${userId})`);
     res.json({
       success: true,
       message: 'Registration successful',
@@ -3227,6 +3290,7 @@ app.post('/api/login', async (req, res) => {
     user.lastSeen = new Date();
     await user.save();
 
+    console.log(`✅ App login: ${username} (${user.userId})`);
     res.json({
       success: true,
       message: 'Login successful',
