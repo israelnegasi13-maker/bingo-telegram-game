@@ -2039,6 +2039,12 @@
 
         // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
         const SERVER_URL = "https://bingo-telegram-game.onrender.com";
+
+        // ========== NEW: Helper to get URL parameters ==========
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
         
         const socket = io(SERVER_URL, {
             reconnectionAttempts: 10,
@@ -2132,12 +2138,21 @@
             }
         }
 
+        // ========== MODIFIED: generateUserId() with URL priority ==========
         function generateUserId() {
+            // 1. Check if userId was passed in URL (from app login)
+            const urlUserId = getUrlParameter('userId');
+            if (urlUserId) {
+                return urlUserId;
+            }
+
+            // 2. Check Telegram user
             const telegramUser = tg.initDataUnsafe?.user;
             if (telegramUser && telegramUser.id) {
                 return `tg_${telegramUser.id}`;
             }
-            
+
+            // 3. Fallback to guest ID in localStorage
             let guestId = localStorage.getItem('bingo_guest_id');
             if (!guestId) {
                 guestId = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -2146,20 +2161,30 @@
             return guestId;
         }
 
+        // ========== MODIFIED: getUserName() with URL priority ==========
         function getUserName() {
+            // 1. URL parameter
+            const urlName = getUrlParameter('name');
+            if (urlName) {
+                return urlName;
+            }
+
+            // 2. Telegram user
             const telegramUser = tg.initDataUnsafe?.user;
             if (telegramUser && telegramUser.first_name) {
                 return telegramUser.first_name;
             }
-            
+
+            // 3. Stored guest name
             const savedName = localStorage.getItem('bingo_user_name');
             if (savedName) return savedName;
-            
+
+            // 4. Random fallback
             return `Player${Math.floor(Math.random() * 1000)}`;
         }
 
         function saveUserInfo() {
-            if (state.userId && !state.userId.startsWith('tg_')) {
+            if (state.userId && !state.userId.startsWith('tg_') && !state.userId.startsWith('app_')) {
                 localStorage.setItem('bingo_guest_id', state.userId);
             }
             if (state.userName) {
