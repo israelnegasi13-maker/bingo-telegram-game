@@ -1918,29 +1918,17 @@ app.get('/app', (req, res) => {
           cursor: pointer;
         }
         .btn:active { background: #2563eb; }
-        .btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
         .error {
           color: #ef4444;
           font-size: 13px;
           margin-top: 8px;
           display: none;
-          background: rgba(239,68,68,0.1);
-          padding: 8px;
-          border-radius: 8px;
-          border-left: 3px solid #ef4444;
         }
         .success {
           color: #10b981;
           font-size: 13px;
           margin-top: 8px;
           display: none;
-          background: rgba(16,185,129,0.1);
-          padding: 8px;
-          border-radius: 8px;
-          border-left: 3px solid #10b981;
         }
         .info {
           color: #8e9aaf;
@@ -1970,7 +1958,7 @@ app.get('/app', (req, res) => {
             <input type="password" id="loginPassword" placeholder="Enter password">
           </div>
           <div class="error" id="loginError"></div>
-          <button class="btn" onclick="login()" id="loginBtn">Login</button>
+          <button class="btn" onclick="login()">Login</button>
         </div>
 
         <!-- Register Form -->
@@ -1989,7 +1977,7 @@ app.get('/app', (req, res) => {
           </div>
           <div class="error" id="regError"></div>
           <div class="success" id="regSuccess"></div>
-          <button class="btn" onclick="register()" id="registerBtn">Register</button>
+          <button class="btn" onclick="register()">Register</button>
         </div>
 
         <div class="info">
@@ -1998,7 +1986,7 @@ app.get('/app', (req, res) => {
       </div>
 
       <script>
-        // Auto-redirect if already logged in
+        // --- Auto‑redirect if already logged in ---
         (function() {
           const storedUserId = localStorage.getItem('appUserId');
           const storedUserName = localStorage.getItem('appUserName');
@@ -2023,10 +2011,7 @@ app.get('/app', (req, res) => {
           const username = document.getElementById('loginUsername').value.trim();
           const password = document.getElementById('loginPassword').value;
           const errorDiv = document.getElementById('loginError');
-          const btn = document.getElementById('loginBtn');
-
-          // Reset
-          errorDiv.style.display = 'none';
+          const btn = document.querySelector('#loginForm .btn');
 
           if (!username || !password) {
             errorDiv.textContent = 'Username and password required';
@@ -2034,6 +2019,7 @@ app.get('/app', (req, res) => {
             return;
           }
 
+          errorDiv.style.display = 'none';
           btn.disabled = true;
           btn.textContent = 'Logging in...';
 
@@ -2050,15 +2036,13 @@ app.get('/app', (req, res) => {
               btn.disabled = false;
               btn.textContent = 'Login';
             } else {
-              // Store in localStorage for auto‑login
+              // Store credentials for auto‑login
               localStorage.setItem('appUserId', data.userId);
               localStorage.setItem('appUserName', data.userName);
-              // Redirect
               window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
             }
           } catch (err) {
-            console.error('Login error:', err);
-            errorDiv.textContent = 'Network error. Please try again.';
+            errorDiv.textContent = 'Network error – check your connection';
             errorDiv.style.display = 'block';
             btn.disabled = false;
             btn.textContent = 'Login';
@@ -2071,12 +2055,13 @@ app.get('/app', (req, res) => {
           const referral = document.getElementById('regReferral').value.trim();
           const errorDiv = document.getElementById('regError');
           const successDiv = document.getElementById('regSuccess');
-          const btn = document.getElementById('registerBtn');
+          const btn = document.querySelector('#registerForm .btn');
 
-          // Reset displays
+          // Clear previous messages
           errorDiv.style.display = 'none';
           successDiv.style.display = 'none';
 
+          // Validation
           if (!username || !password) {
             errorDiv.textContent = 'Username and password required';
             errorDiv.style.display = 'block';
@@ -2103,8 +2088,6 @@ app.get('/app', (req, res) => {
               body: JSON.stringify({ username, password, referralCode: referral })
             });
             const data = await res.json();
-            console.log('Registration response:', data);
-
             if (!res.ok) {
               errorDiv.textContent = data.error || 'Registration failed';
               errorDiv.style.display = 'block';
@@ -2113,16 +2096,17 @@ app.get('/app', (req, res) => {
             } else {
               successDiv.textContent = 'Registration successful! Redirecting...';
               successDiv.style.display = 'block';
-              // Store in localStorage
+
+              // Store credentials for auto‑login
               localStorage.setItem('appUserId', data.userId);
               localStorage.setItem('appUserName', data.userName);
+
               setTimeout(() => {
                 window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
               }, 1500);
             }
           } catch (err) {
-            console.error('Fetch error:', err);
-            errorDiv.textContent = 'Network error. Please try again.';
+            errorDiv.textContent = 'Network error – please try again';
             errorDiv.style.display = 'block';
             btn.disabled = false;
             btn.textContent = 'Register';
@@ -3185,7 +3169,7 @@ function generateAppUserId(username) {
   return `app_${username}_${randomPart}`;
 }
 
-// Registration endpoint
+// Registration endpoint (improved)
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, referralCode } = req.body;
@@ -3213,19 +3197,8 @@ app.post('/api/register', async (req, res) => {
     // Create a unique userId for this app user
     const userId = generateAppUserId(username);
 
-    // Generate a truly unique referralCode with retry
-    let referralCodeUser;
-    let isUnique = false;
-    let attempts = 0;
-    while (!isUnique && attempts < 5) {
-      referralCodeUser = `APP${Date.now()}${Math.floor(Math.random() * 1000)}`;
-      const existing = await User.findOne({ referralCode: referralCodeUser });
-      if (!existing) isUnique = true;
-      attempts++;
-    }
-    if (!isUnique) {
-      return res.status(500).json({ error: 'Could not generate unique referral code, please try again.' });
-    }
+    // Generate a truly unique referral code for the new user (optional, but used for referral tracking)
+    const userReferralCode = 'APP' + crypto.randomBytes(4).toString('hex').toUpperCase();
 
     // Create the user document
     const newUser = new User({
@@ -3233,21 +3206,22 @@ app.post('/api/register', async (req, res) => {
       userName: username,
       password: hashedPassword,
       balance: 0,
-      referralCode: referralCodeUser,
+      referralCode: userReferralCode,
       joinedAt: new Date(),
       lastSeen: new Date()
     });
 
     await newUser.save();
 
-    // If a referral code was provided, process it (optional)
-    if (referralCode && agentSystem && agentSystem.processReferral) {
+    // If a referral code was provided, process it (optional) – run in background
+    if (referralCode && agentSystem && typeof agentSystem.processReferral === 'function') {
       agentSystem.processReferral(userId, referralCode).catch(err => {
-        console.error('Referral processing error (non‑blocking):', err);
+        console.error('❌ Error processing referral during registration:', err);
       });
     }
 
-    console.log(`✅ New app registration: ${username} (${userId})`);
+    console.log(`✅ New app user registered: ${username} (${userId})`);
+
     res.json({
       success: true,
       message: 'Registration successful',
@@ -3290,7 +3264,6 @@ app.post('/api/login', async (req, res) => {
     user.lastSeen = new Date();
     await user.save();
 
-    console.log(`✅ App login: ${username} (${user.userId})`);
     res.json({
       success: true,
       message: 'Login successful',
