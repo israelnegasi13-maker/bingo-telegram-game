@@ -2856,11 +2856,13 @@ app.get('/telegram', async (req, res) => {
             document.getElementById('walletBalance').textContent = bal.toFixed(2);
           });
 
-          // --- Games ---
+          // ========== MODIFIED: launchGame includes userId and name in URL ==========
           function launchGame(game) {
             tg?.HapticFeedback?.impactOccurred('light');
-            if (game === 'bingo') window.location.href = '/game';
-            if (game === 'keno') window.location.href = '/keno';
+            const userId = encodeURIComponent(currentUserId);
+            const name = encodeURIComponent(appUserName || user?.first_name || 'User');
+            if (game === 'bingo') window.location.href = '/game?userId=' + userId + '&name=' + name;
+            if (game === 'keno') window.location.href = '/keno?userId=' + userId + '&name=' + name;
           }
 
           // --- Modals ---
