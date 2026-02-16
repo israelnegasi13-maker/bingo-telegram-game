@@ -1417,30 +1417,38 @@
             
             // Setup Telegram Back Button
             setupTelegramBackButton();
-            
-            // Get user data from Telegram
-            const user = tg.initDataUnsafe?.user;
-            if (user) {
-                gameState.playerId = `tg_${user.id}`;
-                gameState.userName = user.first_name || 'Player';
-                
-                // Store in localStorage for persistence
-                localStorage.setItem('telegramUser', JSON.stringify({
-                    id: user.id,
-                    firstName: user.first_name,
-                    username: user.username
-                }));
+
+            // --- FIX: Check for app user from sessionStorage (set by /telegram page) ---
+            const appUserId = sessionStorage.getItem('appUserId');
+            const appUserName = sessionStorage.getItem('appUserName');
+            if (appUserId) {
+                gameState.playerId = appUserId;
+                gameState.userName = appUserName || 'App User';
             } else {
-                // Fallback to localStorage or random ID
-                const savedUser = localStorage.getItem('telegramUser');
-                if (savedUser) {
-                    const userData = JSON.parse(savedUser);
-                    gameState.playerId = `tg_${userData.id}`;
-                    gameState.userName = userData.firstName || 'Player';
+                // Fallback to Telegram user
+                const user = tg.initDataUnsafe?.user;
+                if (user) {
+                    gameState.playerId = `tg_${user.id}`;
+                    gameState.userName = user.first_name || 'Player';
+                    
+                    // Store in localStorage for persistence
+                    localStorage.setItem('telegramUser', JSON.stringify({
+                        id: user.id,
+                        firstName: user.first_name,
+                        username: user.username
+                    }));
                 } else {
-                    // Generate random ID for testing
-                    gameState.playerId = 'test_' + Math.random().toString(36).substr(2, 9);
-                    gameState.userName = 'Test Player';
+                    // Fallback to localStorage or random ID
+                    const savedUser = localStorage.getItem('telegramUser');
+                    if (savedUser) {
+                        const userData = JSON.parse(savedUser);
+                        gameState.playerId = `tg_${userData.id}`;
+                        gameState.userName = userData.firstName || 'Player';
+                    } else {
+                        // Generate random ID for testing
+                        gameState.playerId = 'test_' + Math.random().toString(36).substr(2, 9);
+                        gameState.userName = 'Test Player';
+                    }
                 }
             }
             
