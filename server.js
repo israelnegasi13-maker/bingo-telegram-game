@@ -105,7 +105,26 @@ const requiredFiles = {
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    console.log('Bingo game loading...');
+    // Read userId and name from URL (passed from /telegram or /app)
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId');
+    const name = urlParams.get('name') || 'Player';
+
+    if (userId) {
+      socket.emit('init', { userId, userName: name });
+      console.log('Sent init for', userId);
+    } else {
+      console.warn('No userId in URL – please log in via /telegram or /app');
+    }
+
+    socket.on('initSuccess', (data) => {
+      console.log('User initialized:', data);
+      document.querySelector('h1').textContent = 'Welcome, ' + data.userName;
+    });
+
+    socket.on('error', (err) => {
+      console.error('Socket error:', err);
+    });
   </script>
 </body>
 </html>`,
@@ -128,7 +147,19 @@ const requiredFiles = {
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    console.log('Keno game loading...');
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('userId');
+    const name = urlParams.get('name') || 'Player';
+
+    if (userId) {
+      socket.emit('init', { userId, userName: name });
+      console.log('Sent init for', userId);
+    }
+
+    socket.on('initSuccess', (data) => {
+      console.log('User initialized:', data);
+      document.querySelector('h1').textContent = 'Welcome, ' + data.userName;
+    });
   </script>
 </body>
 </html>`,
@@ -2282,32 +2313,25 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE - CLEAN LOOK + CUSTOM ICONS ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH FALLBACK FOR TELEGRAM USERS ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
-    // --- Load custom icons from disk (base64) ---
-    let bingoIconBase64 = '';
-    let kenoIconBase64 = '';
+    // Load custom icons if present
+    let bingoIconBase64 = '', kenoIconBase64 = '';
     try {
       const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
       const bingoBuffer = fs.readFileSync(bingoPath);
       bingoIconBase64 = bingoBuffer.toString('base64');
-      console.log('✅ Bingo icon loaded');
-    } catch (e) {
-      console.log('ℹ️ Bingo icon file not found, using CSS fallback');
-    }
+    } catch (e) {}
     try {
       const kenoPath = path.join(__dirname, 'keno-icon.png.jpg');
       const kenoBuffer = fs.readFileSync(kenoPath);
       kenoIconBase64 = kenoBuffer.toString('base64');
-      console.log('✅ Keno icon loaded');
-    } catch (e) {
-      console.log('ℹ️ Keno icon file not found, using CSS fallback');
-    }
+    } catch (e) {}
 
     res.send(`
       <!DOCTYPE html>
@@ -2667,6 +2691,22 @@ app.get('/telegram', async (req, res) => {
             font-size: 13px;
             display: none;
           }
+
+          /* Fallback banner */
+          .fallback-banner {
+            background: #1e293b;
+            border: 1px solid #f59e0b;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-size: 14px;
+          }
+          .fallback-banner a {
+            color: #f59e0b;
+            font-weight: bold;
+            text-decoration: none;
+          }
         </style>
       </head>
       <body>
@@ -2677,6 +2717,11 @@ app.get('/telegram', async (req, res) => {
             <div class="user-greeting" id="userGreeting" style="display: none;">
               👋 <span id="userName">User</span>
             </div>
+          </div>
+
+          <!-- Fallback message (hidden by default) -->
+          <div id="fallbackMessage" class="fallback-banner" style="display: none;">
+            ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
           </div>
 
           <!-- Wallet Card -->
@@ -2800,42 +2845,54 @@ app.get('/telegram', async (req, res) => {
         <script src="/socket.io/socket.io.js"></script>
         <script>
           // --- Telegram WebApp init ---
-          const tg = window.Telegram.WebApp;
+          const tg = window.Telegram?.WebApp;
           const socket = io();
           let currentUserId = null;
           let currentBalance = 0;
+          let fallbackTimer = null;
 
-          tg?.ready();
-          tg?.expand();
-          tg?.setHeaderColor('#0a0c10');
-          tg?.setBackgroundColor('#0a0c10');
-
-          // --- Check if we came from the mobile app login (with userId in URL) ---
+          // Try to get user from URL first (app login)
           const urlParams = new URLSearchParams(window.location.search);
           const appUserId = urlParams.get('userId');
           const appUserName = urlParams.get('name');
 
           if (appUserId && appUserName) {
-            // Use app-provided credentials
+            // Mobile app user – skip Telegram
             currentUserId = appUserId;
             document.getElementById('userGreeting').style.display = 'flex';
             document.getElementById('userName').textContent = appUserName;
             sessionStorage.setItem('appUserId', appUserId);
             sessionStorage.setItem('appUserName', appUserName);
+            startApp();
           } else {
-            // Fallback to Telegram user
-            const user = tg?.initDataUnsafe?.user;
-            if (user) {
-              document.getElementById('userGreeting').style.display = 'flex';
-              document.getElementById('userName').textContent = user.first_name || 'User';
-              currentUserId = 'tg_' + user.id;
-              localStorage.setItem('telegramUser', JSON.stringify(user));
+            // Try Telegram user
+            if (tg) {
+              tg.ready(); // Tell Telegram we are ready
+              const user = tg.initDataUnsafe?.user;
+              if (user) {
+                currentUserId = 'tg_' + user.id;
+                document.getElementById('userGreeting').style.display = 'flex';
+                document.getElementById('userName').textContent = user.first_name || 'User';
+                localStorage.setItem('telegramUser', JSON.stringify(user));
+                startApp();
+              } else {
+                // No user data yet – wait a bit, then show fallback
+                fallbackTimer = setTimeout(() => {
+                  document.getElementById('fallbackMessage').style.display = 'block';
+                }, 2000);
+              }
+            } else {
+              // No Telegram object at all – show fallback immediately
+              document.getElementById('fallbackMessage').style.display = 'block';
             }
           }
 
-          if (currentUserId) {
-            socket.emit('init', { userId: currentUserId, userName: appUserName || user?.first_name || 'User' });
-            loadBalance();
+          function startApp() {
+            if (fallbackTimer) clearTimeout(fallbackTimer);
+            if (currentUserId) {
+              socket.emit('init', { userId: currentUserId, userName: appUserName || (tg?.initDataUnsafe?.user?.first_name) || 'User' });
+              loadBalance();
+            }
           }
 
           // --- Balance ---
@@ -2860,7 +2917,7 @@ app.get('/telegram', async (req, res) => {
           function launchGame(game) {
             tg?.HapticFeedback?.impactOccurred('light');
             const userId = encodeURIComponent(currentUserId);
-            const name = encodeURIComponent(appUserName || user?.first_name || 'User');
+            const name = encodeURIComponent(appUserName || tg?.initDataUnsafe?.user?.first_name || 'User');
             if (game === 'bingo') window.location.href = '/game?userId=' + userId + '&name=' + name;
             if (game === 'keno') window.location.href = '/keno?userId=' + userId + '&name=' + name;
           }
@@ -2897,7 +2954,7 @@ app.get('/telegram', async (req, res) => {
               receiptNumber: receipt,
               amount: amount,
               userId: currentUserId,
-              userName: appUserName || user?.first_name || 'User'
+              userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
             });
 
             socket.once('wallet:depositRequestSuccess', (resp) => {
@@ -2926,7 +2983,7 @@ app.get('/telegram', async (req, res) => {
               amount: amount,
               phoneNumber: phone,
               userId: currentUserId,
-              userName: appUserName || user?.first_name || 'User'
+              userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
             });
 
             socket.once('wallet:withdrawRequestSuccess', (resp) => {
@@ -3831,6 +3888,8 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Node:         ${process.version}                                           ║
 ║  Environment:  ${process.env.NODE_ENV || 'development'}                     ║
 ║  Bot Username: @Ethio_elite_games_bot                                       ║
+║  Telegram entry: /telegram                                                   ║
+║  Mobile app:   /app                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
