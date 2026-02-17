@@ -2094,6 +2094,12 @@
         let lastClaimTime = 0;
         let currentClaimId = null;
 
+        // ========== SAFE PARSING HELPER ==========
+        function safeParseInt(value, fallback = 0) {
+            const parsed = parseInt(value);
+            return isNaN(parsed) ? fallback : parsed;
+        }
+
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
             const displayElement = document.getElementById('telebirrNumberDisplay');
@@ -2526,16 +2532,23 @@
             console.log('User data received:', data);
             state.userId = data.userId || state.userId;
             state.userName = data.userName || state.userName;
-            
+
             document.getElementById('userName').textContent = data.userName.toUpperCase();
             document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
-            
+
             saveUserInfo();
 
             // NEW: If user has a current room and we haven't already tried restoring, do it
             if (data.currentRoom && !state.isRestoring) {
                 state.isRestoring = true;
-                restoreGameState(data.currentRoom);
+                console.log('🔍 Attempting to restore game state for room', data.currentRoom);
+                try {
+                    restoreGameState(data.currentRoom);
+                } catch (e) {
+                    console.error('❌ Error during restoreGameState:', e);
+                    state.isRestoring = false;
+                    resetToLobby();
+                }
             }
         });
 
@@ -2975,7 +2988,8 @@
                 }
             }
 
-            const random = seededRandom(seed * 777);
+            const safeSeed = safeParseInt(seed, 1);
+            const random = seededRandom(safeSeed * 777);
             state.grid = [];
             
             const availableNumbers = {};
@@ -3228,9 +3242,9 @@
             }
         });
 
-        // NEW: Restore game state after refresh
+        // NEW: Restore game state after refresh (with error handling)
         function restoreGameState(roomStake) {
-            console.log(`🔄 Attempting to restore game state for room ${roomStake}`);
+            console.log(`🔄 Restoring game state for room ${roomStake}`);
 
             if (!state.isConnected) {
                 console.log('⏳ Not connected, will retry later');
@@ -3241,104 +3255,119 @@
             socket.emit('getRoomDetails', { room: roomStake });
 
             socket.once('roomDetails', (details) => {
-                state.isRestoring = false;
+                console.log('📦 Room details received:', details);
 
-                if (!details.success) {
-                    console.log('❌ Failed to get room details:', details.message);
+                if (!details || !details.success) {
+                    console.log('❌ Failed to get room details:', details?.message);
+                    state.isRestoring = false;
                     resetToLobby();
                     return;
                 }
 
-                console.log('📦 Room details received:', details);
+                if (!details.playerBox) {
+                    console.log('❌ No player box in details');
+                    state.isRestoring = false;
+                    resetToLobby();
+                    return;
+                }
 
                 // Set common state
-                state.stake = roomStake;
-                state.selectedBox = details.playerBox;
+                state.stake = safeParseInt(roomStake, 0);
+                state.selectedBox = safeParseInt(details.playerBox, 0);
 
                 // Handle based on room status
-                if (details.status === 'playing') {
-                    // Generate the same bingo card using the box as seed
-                    generateTraditionalBingoCard(details.playerBox);
-
-                    // Mark called numbers that appear on the card
-                    state.calledNumbers = new Set(details.calledNumbers);
-                    state.markedNumbers = new Set(['FREE']); // FREE always marked
-
-                    details.calledNumbers.forEach(num => {
-                        if (state.grid.includes(num)) {
-                            state.markedNumbers.add(num);
+                try {
+                    if (details.status === 'playing') {
+                        // Generate the same bingo card using the box as seed
+                        if (!state.selectedBox) {
+                            throw new Error('No box selected for card generation');
                         }
-                    });
+                        generateTraditionalBingoCard(state.selectedBox);
 
-                    // Set history (last 8 called numbers)
-                    state.history = details.calledNumbers.slice(-8).map(num => ({
-                        num,
-                        letter: getBingoLetter(num)
-                    })).reverse();
+                        // Mark called numbers that appear on the card
+                        state.calledNumbers = new Set(details.calledNumbers || []);
+                        state.markedNumbers = new Set(['FREE']); // FREE always marked
 
-                    // Show game screen and render
-                    showScreen('gameScreen');
-                    initGameBoard(); // This renders the grid and marks cells based on state.markedNumbers
+                        (details.calledNumbers || []).forEach(num => {
+                            if (state.grid.includes(num)) {
+                                state.markedNumbers.add(num);
+                            }
+                        });
 
-                    // Set last ball display if any
-                    if (details.currentBall) {
-                        const letter = getBingoLetter(details.currentBall);
-                        document.getElementById('ballLetter').textContent = letter;
-                        document.getElementById('ballNumber').textContent = details.currentBall;
-                    }
+                        // Set history (last 8 called numbers)
+                        state.history = (details.calledNumbers || []).slice(-8).map(num => ({
+                            num,
+                            letter: getBingoLetter(num)
+                        })).reverse();
 
-                    // Update history UI
-                    const historyContainer = document.getElementById('ballHistory');
-                    historyContainer.innerHTML = '';
-                    state.history.slice(0, 8).forEach(ball => {
-                        const historyBall = document.createElement('div');
-                        historyBall.className = 'history-ball';
-                        historyBall.innerHTML = `<div class="history-letter">${ball.letter}</div><div class="history-number">${ball.num}</div>`;
-                        historyContainer.appendChild(historyBall);
-                    });
+                        // Show game screen and render
+                        showScreen('gameScreen');
+                        initGameBoard();
 
-                    // Enable claim button if winning pattern already exists
-                    if (checkWinningPattern()) {
-                        document.getElementById('claimBingoButton').disabled = false;
-                    }
+                        // Set last ball display if any
+                        if (details.currentBall) {
+                            const letter = getBingoLetter(details.currentBall);
+                            document.getElementById('ballLetter').textContent = letter;
+                            document.getElementById('ballNumber').textContent = details.currentBall;
+                        }
 
-                    // Resubscribe to room updates (though ballDrawn will be sent automatically)
-                    socket.emit('subscribeToRoom', { room: roomStake });
+                        // Update history UI
+                        const historyContainer = document.getElementById('ballHistory');
+                        historyContainer.innerHTML = '';
+                        state.history.slice(0, 8).forEach(ball => {
+                            const historyBall = document.createElement('div');
+                            historyBall.className = 'history-ball';
+                            historyBall.innerHTML = `<div class="history-letter">${ball.letter}</div><div class="history-number">${ball.num}</div>`;
+                            historyContainer.appendChild(historyBall);
+                        });
 
-                } else if (details.status === 'starting' || details.status === 'waiting') {
-                    // Go to discovery screen
-                    document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
-                    document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
-                    showScreen('discoveryScreen');
+                        // Enable claim button if winning pattern already exists
+                        if (checkWinningPattern()) {
+                            document.getElementById('claimBingoButton').disabled = false;
+                        }
 
-                    // Render boxes with taken boxes
-                    renderBoxes(details.takenBoxes);
-                    updateBoxCounters(details.takenBoxes);
+                        // Resubscribe to room updates
+                        socket.emit('subscribeToRoom', { room: roomStake });
+                        state.roomSubscribed = true;
 
-                    // Highlight the player's box
-                    const boxElement = document.querySelector(`.box-item[data-number="${details.playerBox}"]`);
-                    if (boxElement && !boxElement.classList.contains('taken')) {
-                        boxElement.classList.add('selected');
-                        showPlatePreview(details.playerBox);
-                        document.getElementById('confirmBoxButton').disabled = false;
-                        document.getElementById('confirmBoxButton').textContent = `Select Box ${details.playerBox}`;
-                    }
+                    } else if (details.status === 'starting' || details.status === 'waiting') {
+                        // Go to discovery screen
+                        document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
+                        document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
+                        showScreen('discoveryScreen');
 
-                    // If starting, start countdown display
-                    if (details.status === 'starting' && details.countdownRemaining > 0) {
-                        updateDiscoveryTimer(details.countdownRemaining, details.onlinePlayers);
-                        // Also start a local countdown interval
-                        startDiscoveryCountdown(roomStake, details.countdownRemaining);
+                        // Render boxes with taken boxes
+                        renderBoxes(details.takenBoxes || []);
+                        updateBoxCounters(details.takenBoxes || []);
+
+                        // Highlight the player's box
+                        const boxElement = document.querySelector(`.box-item[data-number="${details.playerBox}"]`);
+                        if (boxElement && !boxElement.classList.contains('taken')) {
+                            boxElement.classList.add('selected');
+                            showPlatePreview(details.playerBox);
+                            document.getElementById('confirmBoxButton').disabled = false;
+                            document.getElementById('confirmBoxButton').textContent = `Select Box ${details.playerBox}`;
+                        }
+
+                        // If starting, start countdown display
+                        if (details.status === 'starting' && details.countdownRemaining > 0) {
+                            updateDiscoveryTimer(details.countdownRemaining, details.onlinePlayers || 1);
+                            startDiscoveryCountdown(roomStake, details.countdownRemaining);
+                        } else {
+                            document.getElementById('timerContainer').style.display = 'none';
+                        }
+
+                        // Subscribe to real-time box updates
+                        socket.emit('subscribeToRoom', { room: roomStake });
+                        state.roomSubscribed = true;
+
                     } else {
-                        document.getElementById('timerContainer').style.display = 'none';
+                        // Any other status (ended, etc.) -> lobby
+                        resetToLobby();
                     }
-
-                    // Subscribe to real-time box updates
-                    socket.emit('subscribeToRoom', { room: roomStake });
-                    state.roomSubscribed = true;
-
-                } else {
-                    // Any other status (ended, etc.) -> lobby
+                } catch (error) {
+                    console.error('❌ Error during state restoration:', error);
+                    state.isRestoring = false;
                     resetToLobby();
                 }
             });
