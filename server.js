@@ -650,10 +650,10 @@ io.on('connection', (socket) => {
   });
   
   // ========== INIT EVENT FOR APP/TELEGRAM USERS ==========
-  socket.on('init', async (data) => {
+  socket.on('init', async (data, callback) => {
     const { userId, userName } = data;
     if (!userId) {
-      console.log('Init without userId, disconnecting');
+      if (callback && typeof callback === 'function') callback({ success: false, message: 'No userId provided' });
       socket.disconnect();
       return;
     }
@@ -683,7 +683,7 @@ io.on('connection', (socket) => {
 
       // Associate socket with user
       socket.userId = userId;
-      // Optionally add to game logic's user tracking
+      // Add to game logic's user tracking
       if (gameLogic && gameLogic.addUserSocket) {
         gameLogic.addUserSocket(socket, userId);
       }
@@ -696,11 +696,19 @@ io.on('connection', (socket) => {
         message: 'User initialized'
       });
 
+      // 👇 IMPORTANT: Call the callback so the bot knows init succeeded
+      if (callback && typeof callback === 'function') {
+        callback({ success: true, message: 'User initialized', userId: user.userId });
+      }
+
       // Also broadcast to admin that user came online
       io.emit('userOnline', { userId, userName: user.userName });
     } catch (error) {
       console.error('Error in init:', error);
       socket.emit('error', 'Failed to initialize user');
+      if (callback && typeof callback === 'function') {
+        callback({ success: false, message: 'Server error' });
+      }
     }
   });
   
