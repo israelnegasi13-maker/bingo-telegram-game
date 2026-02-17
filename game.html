@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* ========== ALL EXISTING STYLES (unchanged) ========== */
         :root {
             --primary: #6366f1;
             --primary-dark: #4f46e5;
@@ -59,6 +58,7 @@
             flex-direction: column;
         }
 
+        /* Background Effects */
         .bg-effects {
             position: fixed;
             top: 0;
@@ -90,6 +90,7 @@
             background: var(--secondary);
         }
 
+        /* Header */
         .app-header {
             padding: 16px 20px;
             display: flex;
@@ -215,12 +216,14 @@
             transform: rotate(90deg);
         }
 
+        /* Main Container */
         .main-container {
             flex: 1;
             overflow: hidden;
             position: relative;
         }
 
+        /* Screens */
         .screen {
             position: absolute;
             top: 0;
@@ -241,6 +244,7 @@
             pointer-events: all;
         }
 
+        /* Lobby Screen */
         .lobby-header {
             text-align: center;
             margin-bottom: 20px;
@@ -275,6 +279,7 @@
             line-height: 1.4;
         }
 
+        /* ===== CLEANER, DARKER ROOM CARDS ===== */
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -309,6 +314,7 @@
             pointer-events: none;
         }
 
+        /* Stake amount – hero element */
         .room-stake {
             font-size: 28px;
             font-weight: 800;
@@ -327,6 +333,7 @@
             color: rgba(255, 255, 255, 0.6);
         }
 
+        /* Bottom row – players & prize + status */
         .room-info {
             display: flex;
             justify-content: space-between;
@@ -355,6 +362,7 @@
             letter-spacing: 0.3px;
         }
 
+        /* Status badge – now inline, no absolute positioning */
         .room-status {
             font-size: 10px;
             font-weight: 700;
@@ -386,6 +394,7 @@
             border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
+        /* ===== STAKE‑SPECIFIC DARK ACCENTS ===== */
         .room-card[data-stake="10"] {
             border-left: 4px solid #7b5e4b;
         }
@@ -468,6 +477,7 @@
             margin-left: 3px;
         }
 
+        /* Game Info */
         .game-info {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -512,6 +522,7 @@
             color: var(--gray);
         }
 
+        /* Discovery Screen */
         .discovery-header {
             text-align: center;
             margin-bottom: 12px;
@@ -598,6 +609,7 @@
             color: var(--gray);
         }
 
+        /* Even smaller boxes grid */
         .boxes-grid {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
@@ -655,6 +667,7 @@
             font-size: 11px;
         }
 
+        /* Plate Preview Section */
         .plate-preview-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -715,6 +728,7 @@
             color: var(--primary);
         }
 
+        /* Compact game screen elements */
         .game-header {
             display: flex;
             justify-content: space-between;
@@ -932,6 +946,7 @@
             color: var(--secondary);
         }
 
+        /* Loading state for buttons */
         .confirm-button.loading {
             position: relative;
             color: transparent;
@@ -970,6 +985,7 @@
             animation: spin 0.8s linear infinite;
         }
 
+        /* Updated confirm button and back button */
         .action-buttons {
             display: flex;
             flex-direction: column;
@@ -1047,6 +1063,7 @@
             box-shadow: none;
         }
 
+        /* Wait Screen */
         .wait-container {
             display: flex;
             flex-direction: column;
@@ -1102,6 +1119,7 @@
             background: rgba(239, 68, 68, 0.3);
         }
 
+        /* Overlays */
         .overlay {
             position: fixed;
             top: 0;
@@ -1192,6 +1210,7 @@
             box-shadow: var(--shadow);
         }
 
+        /* Wallet Overlay */
         .wallet-tabs {
             display: flex;
             background: rgba(30, 41, 59, 0.5);
@@ -1279,6 +1298,7 @@
             color: var(--primary-light);
         }
 
+        /* Loading Overlay */
         .loading-spinner {
             width: 45px;
             height: 45px;
@@ -1289,6 +1309,7 @@
             margin-bottom: 12px;
         }
 
+        /* ========== WINNING PATTERN DISPLAY ========== */
         .winning-card-replica {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -1432,6 +1453,7 @@
             }
         }
 
+        /* For pattern lines */
         .pattern-line {
             position: absolute;
             background: var(--secondary);
@@ -1478,6 +1500,9 @@
             background: transparent;
         }
 
+        /* ========== END WINNING PATTERN DISPLAY ========== */
+
+        /* Animations */
         @keyframes spin {
             100% { transform: rotate(360deg); }
         }
@@ -1498,6 +1523,7 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Responsive Design */
         @media (max-width: 480px) {
             .ball {
                 width: 65px;
@@ -2060,14 +2086,19 @@
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
             selectedWithdrawAmount: 0,
-            // New flag to prevent multiple restore attempts
-            restoringGame: false
+            isRestoring: false // NEW: prevent multiple restore attempts
         };
 
         // 🚨 FAST BINGO CLAIMING VARIABLES
         let isClaiming = false; // Global flag to prevent double-click
         let lastClaimTime = 0;
         let currentClaimId = null;
+
+        // ========== SAFE PARSING HELPER ==========
+        function safeParseInt(value, fallback = 0) {
+            const parsed = parseInt(value);
+            return isNaN(parsed) ? fallback : parsed;
+        }
 
         // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
@@ -2501,15 +2532,23 @@
             console.log('User data received:', data);
             state.userId = data.userId || state.userId;
             state.userName = data.userName || state.userName;
-            
+
             document.getElementById('userName').textContent = data.userName.toUpperCase();
             document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
-            
+
             saveUserInfo();
 
-            // ========== RESTORE GAME SESSION ==========
-            if (data.currentRoom && data.box) {
-                restoreGameState(data.currentRoom, data.box);
+            // NEW: If user has a current room and we haven't already tried restoring, do it
+            if (data.currentRoom && !state.isRestoring) {
+                state.isRestoring = true;
+                console.log('🔍 Attempting to restore game state for room', data.currentRoom);
+                try {
+                    restoreGameState(data.currentRoom);
+                } catch (e) {
+                    console.error('❌ Error during restoreGameState:', e);
+                    state.isRestoring = false;
+                    resetToLobby();
+                }
             }
         });
 
@@ -2901,6 +2940,12 @@
                 state.roomSubscribed = false;
             }
             
+            // Clear discovery timer if any
+            if (state.discoveryTimerInterval) {
+                clearInterval(state.discoveryTimerInterval);
+                state.discoveryTimerInterval = null;
+            }
+            
             // Clear selected box
             state.selectedBox = null;
             
@@ -2943,7 +2988,8 @@
                 }
             }
 
-            const random = seededRandom(seed * 777);
+            const safeSeed = safeParseInt(seed, 1);
+            const random = seededRandom(safeSeed * 777);
             state.grid = [];
             
             const availableNumbers = {};
@@ -3014,16 +3060,6 @@
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
             state.history.unshift({ num, letter });
-            updateBallHistoryUI();
-
-            state.calledNumbers.add(num);
-            
-            console.log(`📌 Number ${letter}-${num} added to called numbers.`);
-            
-            state.lastActivityTime = Date.now();
-        }
-
-        function updateBallHistoryUI() {
             const historyContainer = document.getElementById('ballHistory');
             historyContainer.innerHTML = '';
             
@@ -3036,6 +3072,12 @@
                 `;
                 historyContainer.appendChild(historyBall);
             });
+            
+            state.calledNumbers.add(num);
+            
+            console.log(`📌 Number ${letter}-${num} added to called numbers.`);
+            
+            state.lastActivityTime = Date.now();
         }
 
         // 🚀 OPTIMIZED BINGO PATTERN CHECKING
@@ -3200,41 +3242,204 @@
             }
         });
 
+        // NEW: Restore game state after refresh (with error handling)
+        function restoreGameState(roomStake) {
+            console.log(`🔄 Restoring game state for room ${roomStake}`);
+
+            if (!state.isConnected) {
+                console.log('⏳ Not connected, will retry later');
+                state.isRestoring = false;
+                return;
+            }
+
+            socket.emit('getRoomDetails', { room: roomStake });
+
+            socket.once('roomDetails', (details) => {
+                console.log('📦 Room details received:', details);
+
+                if (!details || !details.success) {
+                    console.log('❌ Failed to get room details:', details?.message);
+                    state.isRestoring = false;
+                    resetToLobby();
+                    return;
+                }
+
+                if (!details.playerBox) {
+                    console.log('❌ No player box in details');
+                    state.isRestoring = false;
+                    resetToLobby();
+                    return;
+                }
+
+                // Set common state
+                state.stake = safeParseInt(roomStake, 0);
+                state.selectedBox = safeParseInt(details.playerBox, 0);
+
+                // Handle based on room status
+                try {
+                    if (details.status === 'playing') {
+                        // Generate the same bingo card using the box as seed
+                        if (!state.selectedBox) {
+                            throw new Error('No box selected for card generation');
+                        }
+                        generateTraditionalBingoCard(state.selectedBox);
+
+                        // Mark called numbers that appear on the card
+                        state.calledNumbers = new Set(details.calledNumbers || []);
+                        state.markedNumbers = new Set(['FREE']); // FREE always marked
+
+                        (details.calledNumbers || []).forEach(num => {
+                            if (state.grid.includes(num)) {
+                                state.markedNumbers.add(num);
+                            }
+                        });
+
+                        // Set history (last 8 called numbers)
+                        state.history = (details.calledNumbers || []).slice(-8).map(num => ({
+                            num,
+                            letter: getBingoLetter(num)
+                        })).reverse();
+
+                        // Show game screen and render
+                        showScreen('gameScreen');
+                        initGameBoard();
+
+                        // Set last ball display if any
+                        if (details.currentBall) {
+                            const letter = getBingoLetter(details.currentBall);
+                            document.getElementById('ballLetter').textContent = letter;
+                            document.getElementById('ballNumber').textContent = details.currentBall;
+                        }
+
+                        // Update history UI
+                        const historyContainer = document.getElementById('ballHistory');
+                        historyContainer.innerHTML = '';
+                        state.history.slice(0, 8).forEach(ball => {
+                            const historyBall = document.createElement('div');
+                            historyBall.className = 'history-ball';
+                            historyBall.innerHTML = `<div class="history-letter">${ball.letter}</div><div class="history-number">${ball.num}</div>`;
+                            historyContainer.appendChild(historyBall);
+                        });
+
+                        // Enable claim button if winning pattern already exists
+                        if (checkWinningPattern()) {
+                            document.getElementById('claimBingoButton').disabled = false;
+                        }
+
+                        // Resubscribe to room updates
+                        socket.emit('subscribeToRoom', { room: roomStake });
+                        state.roomSubscribed = true;
+
+                    } else if (details.status === 'starting' || details.status === 'waiting') {
+                        // Go to discovery screen
+                        document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
+                        document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
+                        showScreen('discoveryScreen');
+
+                        // Render boxes with taken boxes
+                        renderBoxes(details.takenBoxes || []);
+                        updateBoxCounters(details.takenBoxes || []);
+
+                        // Highlight the player's box
+                        const boxElement = document.querySelector(`.box-item[data-number="${details.playerBox}"]`);
+                        if (boxElement && !boxElement.classList.contains('taken')) {
+                            boxElement.classList.add('selected');
+                            showPlatePreview(details.playerBox);
+                            document.getElementById('confirmBoxButton').disabled = false;
+                            document.getElementById('confirmBoxButton').textContent = `Select Box ${details.playerBox}`;
+                        }
+
+                        // If starting, start countdown display
+                        if (details.status === 'starting' && details.countdownRemaining > 0) {
+                            updateDiscoveryTimer(details.countdownRemaining, details.onlinePlayers || 1);
+                            startDiscoveryCountdown(roomStake, details.countdownRemaining);
+                        } else {
+                            document.getElementById('timerContainer').style.display = 'none';
+                        }
+
+                        // Subscribe to real-time box updates
+                        socket.emit('subscribeToRoom', { room: roomStake });
+                        state.roomSubscribed = true;
+
+                    } else {
+                        // Any other status (ended, etc.) -> lobby
+                        resetToLobby();
+                    }
+                } catch (error) {
+                    console.error('❌ Error during state restoration:', error);
+                    state.isRestoring = false;
+                    resetToLobby();
+                }
+            });
+        }
+
+        // Helper to keep discovery countdown ticking after reconnect
+        function startDiscoveryCountdown(roomStake, initialSeconds) {
+            let seconds = initialSeconds;
+            const timerContainer = document.getElementById('timerContainer');
+            const discoveryTimer = document.getElementById('discoveryTimer');
+            const timerSeconds = document.getElementById('timerSeconds');
+
+            timerContainer.style.display = 'block';
+
+            if (state.discoveryTimerInterval) clearInterval(state.discoveryTimerInterval);
+            state.discoveryTimerInterval = setInterval(() => {
+                seconds--;
+                if (seconds >= 0) {
+                    discoveryTimer.textContent = seconds;
+                    timerSeconds.textContent = seconds;
+                    if (seconds <= 5) discoveryTimer.style.color = '#ef4444';
+                    else if (seconds <= 10) discoveryTimer.style.color = '#f59e0b';
+                    else discoveryTimer.style.color = '#f59e0b';
+                } else {
+                    clearInterval(state.discoveryTimerInterval);
+                    state.discoveryTimerInterval = null;
+                    // Optionally refresh room details when timer hits zero
+                    socket.emit('getRoomDetails', { room: roomStake });
+                }
+            }, 1000);
+        }
+
+        // Modified initGameBoard – does NOT reset marked numbers (uses existing)
         function initGameBoard() {
             const target = document.getElementById('bingoGrid');
             target.innerHTML = '';
-            state.markedNumbers = new Set(['FREE']);
-            
+
             state.grid.forEach((val, index) => {
                 const cell = document.createElement('div');
                 const isFree = val === 'FREE';
                 const isCorner = [0, 4, 20, 24].includes(index);
-                
+
                 cell.className = 'cell' + (isFree ? ' free' : '');
                 if (isCorner) {
                     cell.classList.add('corner');
                 }
-                
+
                 cell.textContent = isFree ? 'FREE' : val;
                 cell.dataset.index = index;
                 cell.dataset.value = val;
-                
+
                 if (!isFree) {
                     cell.style.color = '#6366f1';
                 }
-                
+
+                // Mark the cell if it's in markedNumbers
+                if (state.markedNumbers.has(val) || (isFree && state.markedNumbers.has('FREE'))) {
+                    cell.classList.add('marked');
+                }
+
                 cell.onclick = () => {
                     if (state.calledNumbers.has(val) || isFree) {
                         if(!cell.classList.contains('marked')) {
                             cell.classList.add('marked');
                             state.markedNumbers.add(isFree ? 'FREE' : val);
-                            
+
                             try { 
                                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                                     tg.HapticFeedback.impactOccurred('light'); 
                                 }
                             } catch(e){}
-                            
+
                             if(checkWinningPattern()) {
                                 document.getElementById('claimBingoButton').disabled = false;
                                 showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
@@ -3244,15 +3449,15 @@
                             state.markedNumbers.delete(isFree ? 'FREE' : val);
                         }
                     }
-                    
+
                     state.lastActivityTime = Date.now();
                 };
                 target.appendChild(cell);
             });
-            
+
             console.log('✅ Game board initialized');
             console.log('Grid:', state.grid);
-            
+
             state.lastActivityTime = Date.now();
         }
 
@@ -3419,7 +3624,13 @@
             }
             
             state.isResettingLobby = true;
-            state.restoringGame = false; // Clear any ongoing restore
+            state.isRestoring = false; // clear restore flag
+            
+            // Clear discovery timer if any
+            if (state.discoveryTimerInterval) {
+                clearInterval(state.discoveryTimerInterval);
+                state.discoveryTimerInterval = null;
+            }
             
             // Reset claiming state
             isClaiming = false;
@@ -3483,126 +3694,6 @@
             state.isResettingLobby = false;
             
             console.log('✅ Lobby reset complete');
-        }
-
-        // ========== RESTORE GAME STATE FUNCTION (FIXED FOR FREEZING) ==========
-        function restoreGameState(roomStake, boxNumber) {
-            // Prevent multiple concurrent restores
-            if (state.restoringGame) {
-                console.log('⏳ Restore already in progress, skipping...');
-                return;
-            }
-            state.restoringGame = true;
-
-            console.log(`🔄 Restoring game state for room ${roomStake}, box ${boxNumber}`);
-            state.stake = roomStake;
-            state.selectedBox = boxNumber;
-            document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
-            document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
-            
-            // Generate the bingo card based on the saved box
-            generateTraditionalBingoCard(boxNumber);
-            
-            if (!state.isConnected) {
-                console.log('❌ Not connected, cannot restore');
-                state.restoringGame = false;
-                resetToLobby();
-                return;
-            }
-            
-            // Subscribe to room updates
-            socket.emit('subscribeToRoom', { room: roomStake });
-            state.roomSubscribed = true;
-            
-            // Set a timeout for the restore operation
-            const restoreTimeout = setTimeout(() => {
-                console.log('⏰ Restore timeout - falling back to lobby');
-                state.restoringGame = false;
-                resetToLobby();
-            }, 8000); // 8 seconds timeout
-            
-            // Request full room state
-            socket.emit('getRoomState', { room: roomStake }, (roomState) => {
-                clearTimeout(restoreTimeout);
-                
-                if (!roomState || !roomState.success) {
-                    console.log('Failed to get room state, returning to lobby');
-                    state.restoringGame = false;
-                    resetToLobby();
-                    return;
-                }
-                
-                // Restore called numbers and history
-                state.calledNumbers = new Set(roomState.calledNumbers || []);
-                state.history = (roomState.calledNumbers || []).map(num => ({
-                    num: num,
-                    letter: getBingoLetter(num)
-                })).reverse(); // most recent first
-                
-                // Update history UI
-                updateBallHistoryUI();
-                
-                if (roomState.status === 'playing') {
-                    // Show game screen
-                    showScreen('gameScreen');
-                    initGameBoard(); // this recreates the grid
-                    
-                    // Mark numbers that have been called and are on the card
-                    roomState.calledNumbers.forEach(num => {
-                        if (state.grid.includes(num)) {
-                            const index = state.grid.indexOf(num);
-                            if (index !== -1) {
-                                const cell = document.querySelector(`.cell[data-index="${index}"]`);
-                                if (cell) {
-                                    cell.classList.add('marked');
-                                    state.markedNumbers.add(num);
-                                }
-                            }
-                        }
-                    });
-                    // Always mark the FREE space
-                    const freeCell = document.querySelector('.cell.free');
-                    if (freeCell) freeCell.classList.add('marked');
-                    
-                    // Update current ball display
-                    if (roomState.currentBall) {
-                        const letter = getBingoLetter(roomState.currentBall);
-                        triggerNewBall(roomState.currentBall, letter);
-                    }
-                    
-                    // Check if Bingo is already possible
-                    if (checkWinningPattern()) {
-                        document.getElementById('claimBingoButton').disabled = false;
-                    }
-                } 
-                else if (roomState.status === 'waiting' || roomState.status === 'starting') {
-                    // Show wait screen
-                    showScreen('waitScreen');
-                    
-                    // Update player count and timer
-                    document.getElementById('waitMessage').textContent = 
-                        roomState.onlinePlayers >= 1 ? "Game starting soon!" : "Waiting for players...";
-                    document.getElementById('waitDetails').innerHTML = 
-                        roomState.onlinePlayers >= 1
-                            ? `✅ <span style="color: #10b981;">${roomState.onlinePlayers} online player${roomState.onlinePlayers > 1 ? 's' : ''}</span> - Game will start when timer reaches 0`
-                            : `Need at least 1 player to start`;
-                    
-                    // If starting, set initial timer
-                    if (roomState.status === 'starting' && roomState.countdownStartTime) {
-                        const elapsed = Date.now() - new Date(roomState.countdownStartTime).getTime();
-                        const remaining = Math.max(0, roomState.countdownTimer - Math.floor(elapsed / 1000));
-                        document.getElementById('waitTimer').textContent = remaining;
-                    } else {
-                        document.getElementById('waitTimer').textContent = '30';
-                    }
-                } 
-                else {
-                    // Room ended or locked – go to lobby
-                    resetToLobby();
-                }
-                
-                state.restoringGame = false;
-            });
         }
 
         // lobbyUpdate event handler
@@ -3686,6 +3777,9 @@
             if(d.room === state.stake) {
                 console.log(`✅ Game started in our room ${state.stake}`);
                 
+                // Reset marked numbers for fresh game
+                state.markedNumbers = new Set(['FREE']);
+                
                 showScreen('gameScreen');
                 initGameBoard();
                 
@@ -3704,6 +3798,7 @@
         socket.on('admin:forceStartGame', (data) => {
             if (data.room === state.stake) {
                 console.log('🎮 Admin force starting game');
+                state.markedNumbers = new Set(['FREE']);
                 showScreen('gameScreen');
                 initGameBoard();
                 showNotification('🎮 Game starting now by admin!', 'success', 3000);
