@@ -1,6 +1,7 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 // ========== FULLY UPDATED – FIXED PLAYER STUCK ROOM BUG ==========
 // ========== ADDED AGENT COMMISSION (40% on Bingo wins) ==========
+// ========== ADDED RECONNECT SUPPORT (getRoomDetails) ==========
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -2782,8 +2783,8 @@ function setupSocketHandlers() {
             balance: user.balance,
             referralCode: user.referralCode,
             phoneNumber: user.phoneNumber || '',
-            currentRoom: user.currentRoom,   // <-- ADDED for refresh resume
-            box: user.box                    // <-- ADDED for refresh resume
+            currentRoom: user.currentRoom,   // 👈 ADD THIS LINE
+            box: user.box                     // 👈 ADD THIS LINE
           });
           
           // Send Telebirr number to player
@@ -2818,7 +2819,7 @@ function setupSocketHandlers() {
     });
     
     socket.on('refreshBalance', async () => {
-      const userId = socketToUser.get(socket.id);
+      const userId = socketToUser.get(socket.id) || socket.userId;
       if (userId) {
         const user = await models.User.findOne({ userId: userId });
         if (user) {
@@ -2860,42 +2861,58 @@ function setupSocketHandlers() {
       }
     });
     
-    // ========== NEW: Get full room state for reconnection ==========
-    socket.on('getRoomState', async ({ room }, callback) => {
+    // ========== GET FULL ROOM DETAILS FOR RECONNECT ==========
+    socket.on('getRoomDetails', async ({ room }) => {
+      const userId = socketToUser.get(socket.id) || socket.userId;
+      if (!userId) {
+        socket.emit('roomDetails', { success: false, message: 'User not identified' });
+        return;
+      }
+
       try {
-        const userId = socketToUser.get(socket.id) || socket.userId;
-        if (!userId) {
-          if (callback) callback({ success: false, message: 'Not authenticated' });
-          return;
-        }
         const roomData = await getRoomWithCache(parseInt(room));
         if (!roomData) {
-          if (callback) callback({ success: false, message: 'Room not found' });
+          socket.emit('roomDetails', { success: false, message: 'Room not found' });
           return;
         }
-        // Verify user is in this room
+
+        // Verify user is actually in this room
         if (!roomData.players.includes(userId)) {
-          if (callback) callback({ success: false, message: 'User not in this room' });
+          socket.emit('roomDetails', { success: false, message: 'User not in this room' });
           return;
         }
+
+        const user = await models.User.findOne({ userId });
+        if (!user) {
+          socket.emit('roomDetails', { success: false, message: 'User not found' });
+          return;
+        }
+
         const onlinePlayers = await getOnlinePlayersInRoomWithCache(room);
-        const roomState = {
+        const countdownRemaining = roomData.status === 'starting' && roomData.countdownStartTime
+          ? Math.max(0, CONFIG.COUNTDOWN_TIMER - Math.floor((Date.now() - roomData.countdownStartTime) / 1000))
+          : 0;
+
+        const response = {
           success: true,
           status: roomData.status,
+          players: roomData.players.length,
+          onlinePlayers: onlinePlayers.length,
+          takenBoxes: roomData.takenBoxes || [],
           calledNumbers: roomData.calledNumbers || [],
           currentBall: roomData.currentBall,
           ballsDrawn: roomData.ballsDrawn,
-          players: roomData.players,
-          onlinePlayers: onlinePlayers.length,
-          takenBoxes: roomData.takenBoxes,
+          startTime: roomData.startTime,
           countdownStartTime: roomData.countdownStartTime,
-          countdownTimer: CONFIG.COUNTDOWN_TIMER,
-          startTime: roomData.startTime
+          countdownRemaining,
+          playerBox: user.box
         };
-        if (callback) callback(roomState);
+
+        socket.emit('roomDetails', response);
+        console.log(`📤 Room details sent to ${user.userName} for room ${room}: ${roomData.status}`);
       } catch (error) {
-        console.error('Error in getRoomState:', error);
-        if (callback) callback({ success: false, message: error.message });
+        console.error('Error in getRoomDetails:', error);
+        socket.emit('roomDetails', { success: false, message: error.message });
       }
     });
     
