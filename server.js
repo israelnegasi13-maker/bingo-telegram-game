@@ -20,6 +20,9 @@ const kenoLogic = require('./keno-logic');
 // Import Agent System
 const AgentSystem = require('./agent-logic');
 
+// Import Bot Manager (new)
+const BotManager = require('./bot-manager');
+
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -44,6 +47,14 @@ async function connectWithRetry(retries = MAX_RETRIES) {
     });
     console.log('✅ MongoDB Connected');
     await initializeTelebirrNumber();
+
+    // After DB is connected, initialize bot manager (if enabled)
+    if (process.env.ENABLE_BOT_MANAGER === 'true') {
+      botManager = new BotManager(`http://localhost:${PORT}`, models);
+      await botManager.initialize();
+      console.log('🤖 Bot manager initialized and ready');
+    }
+
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
     
@@ -228,7 +239,9 @@ const userSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
   referredBy: { type: String, default: null }, // 'telegram_link', 'manual', 'bulk_manual', 'admin_assigned'
-  agentCommissionEarned: { type: Number, default: 0 }
+  agentCommissionEarned: { type: Number, default: 0 },
+  // Bot flag (optional, for internal use)
+  isBot: { type: Boolean, default: false }
 });
 
 // Room Schema
@@ -619,6 +632,9 @@ if (agentSystem && agentSystem.setKenoLogic) {
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
 })();
 
+// ========== BOT MANAGER (optional) ==========
+let botManager; // will be initialized after DB connection
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`🔌 New connection: ${socket.id}`);
@@ -726,6 +742,39 @@ io.on('connection', (socket) => {
       console.log(`🔑 Admin authenticated: ${socket.id}`);
     } else {
       socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  
+  // ========== BOT MANAGER ADMIN CONTROLS (NEW) ==========
+  socket.on('admin:startBots', () => {
+    if (socket.admin && botManager) {
+      botManager.start();
+      socket.emit('admin:success', 'Bot manager started');
+      console.log('🤖 Bot manager started by admin');
+    } else {
+      socket.emit('admin:error', 'Bot manager not available');
+    }
+  });
+
+  socket.on('admin:stopBots', () => {
+    if (socket.admin && botManager) {
+      botManager.stop();
+      socket.emit('admin:success', 'Bot manager stopped');
+      console.log('🤖 Bot manager stopped by admin');
+    } else {
+      socket.emit('admin:error', 'Bot manager not available');
+    }
+  });
+
+  socket.on('admin:botStatus', () => {
+    if (socket.admin && botManager) {
+      socket.emit('admin:botStatus', {
+        total: botManager.bots.length,
+        active: botManager.activeBots.size,
+        running: botManager.running
+      });
+    } else {
+      socket.emit('admin:error', 'Bot manager not available');
     }
   });
   
