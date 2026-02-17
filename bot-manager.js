@@ -1,6 +1,6 @@
 // bot-manager.js – 20 human‑like bots for Bingo Elite
 const { io } = require('socket.io-client');
-const { v4: uuidv4 } = require('uuid');  // optional, for unique IDs
+// Optional: const { v4: uuidv4 } = require('uuid');
 
 // Ethiopian names (8 male, 2 female) – same as in bot-squad.html
 const NAMES = [
@@ -45,6 +45,15 @@ class BotManager {
         });
         await user.save();
         console.log(`✅ Created bot user: ${name} (${userId})`);
+      } else {
+        // Ensure bot has enough balance to play
+        if (user.balance < 100) {
+          user.balance = START_BALANCE;
+          await user.save();
+          console.log(`💰 Refilled balance for bot ${name} to ${START_BALANCE} ETB`);
+        } else {
+          console.log(`✅ Found existing bot: ${name} (${userId}) balance: ${user.balance}`);
+        }
       }
       this.bots.push({
         index: i,
@@ -108,26 +117,26 @@ class BotManager {
     const bot = this.bots[index];
     if (bot.connected) return;
 
-    console.log(`🔌 Connecting bot ${bot.name} (${bot.userId})`);
+    console.log(`🔌 Connecting bot ${bot.name} (${bot.userId}) – attempt`);
     const socket = io(this.serverUrl, {
       transports: ['websocket'],
-      reconnection: false,
-      query: { userId: bot.userId, isBot: 'true' }  // optional flag
+      reconnection: false, // we handle reconnection manually
+      query: { userId: bot.userId, isBot: 'true' }
     });
 
     bot.socket = socket;
     bot.connected = false; // will be set true after init
 
     socket.on('connect', () => {
-      console.log(`✅ Bot ${bot.name} socket connected`);
-      // Send init
+      console.log(`✅ Bot ${bot.name} socket connected, emitting init...`);
       socket.emit('init', { userId: bot.userId, userName: bot.name }, (resp) => {
+        console.log(`📩 Bot ${bot.name} init response:`, resp);
         if (resp && resp.success) {
           bot.connected = true;
           this.activeBots.add(index);
-          console.log(`🎮 Bot ${bot.name} initialized`);
+          console.log(`🎮 Bot ${bot.name} initialized successfully`);
         } else {
-          console.log(`❌ Bot ${bot.name} init failed`);
+          console.log(`❌ Bot ${bot.name} init failed – disconnecting`);
           socket.disconnect();
         }
       });
@@ -137,8 +146,8 @@ class BotManager {
       console.log(`⚠️ Bot ${bot.name} connection error: ${err.message}`);
     });
 
-    socket.on('disconnect', () => {
-      console.log(`🔌 Bot ${bot.name} disconnected`);
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Bot ${bot.name} disconnected (${reason})`);
       bot.connected = false;
       bot.currentRoom = null;
       bot.currentBox = null;
@@ -171,6 +180,7 @@ class BotManager {
         if (this.checkBingo(bot.grid, bot.markedNumbers)) {
           // Simulate human reaction delay
           const delay = this.getClaimDelay(bot);
+          console.log(`⚡ Bot ${bot.name} has BINGO! Claiming in ${delay}ms`);
           setTimeout(() => {
             if (bot.inGame && bot.currentRoom === data.room) {
               this.claimBingo(bot, data.room);
@@ -182,6 +192,7 @@ class BotManager {
 
     socket.on('gameOver', (data) => {
       if (data.room === bot.currentRoom) {
+        console.log(`🏁 Bot ${bot.name} game over in room ${data.room}`);
         bot.inGame = false;
         bot.currentRoom = null;
         bot.currentBox = null;
@@ -191,10 +202,16 @@ class BotManager {
 
     socket.on('boxesCleared', (data) => {
       if (data.room === bot.currentRoom) {
+        console.log(`🧹 Bot ${bot.name} boxes cleared for room ${data.room}`);
         bot.currentRoom = null;
         bot.currentBox = null;
         bot.inGame = false;
       }
+    });
+
+    // Error handling
+    socket.on('error', (err) => {
+      console.log(`⚠️ Bot ${bot.name} socket error:`, err);
     });
   }
 
@@ -238,23 +255,28 @@ class BotManager {
     if (!bot.socket || !bot.connected) return;
     // Get taken boxes for this room
     bot.socket.emit('getTakenBoxes', { room: stake }, (taken) => {
-      if (!Array.isArray(taken)) return;
+      if (!Array.isArray(taken)) taken = [];
       // Find an available box (1–100 not in taken)
       let available = null;
-      for (let attempt = 0; attempt < 20; attempt++) {
+      for (let attempt = 0; attempt < 50; attempt++) {
         const box = Math.floor(Math.random() * 100) + 1;
         if (!taken.includes(box)) {
           available = box;
           break;
         }
       }
-      if (!available) return; // room full
+      if (!available) {
+        console.log(`⚠️ Bot ${bot.name} – no free box in ${stake} ETB room, trying later`);
+        return;
+      }
 
       bot.socket.emit('joinRoom', { room: stake, box: available, userName: bot.name }, (resp) => {
         if (resp && resp.success) {
           bot.currentRoom = stake;
           bot.currentBox = available;
           console.log(`🎯 Bot ${bot.name} joined ${stake} ETB room, box ${available}`);
+        } else {
+          console.log(`❌ Bot ${bot.name} failed to join room:`, resp?.message || 'unknown error');
         }
       });
     });
@@ -279,9 +301,10 @@ class BotManager {
       marked: bot.markedNumbers
     }, (resp) => {
       if (resp && resp.success) {
-        console.log(`🏆 Bot ${bot.name} claimed BINGO!`);
+        console.log(`🏆 Bot ${bot.name} claimed BINGO in room ${room}!`);
       } else {
         // claim failed – maybe someone else won first
+        console.log(`❌ Bot ${bot.name} BINGO claim rejected:`, resp?.message || 'unknown');
       }
     });
   }
@@ -329,11 +352,11 @@ class BotManager {
   }
 
   checkBingo(grid, marked) {
-    // Simple check – you can reuse the same logic from game-logic.js
+    // Standard bingo patterns: rows, columns, diagonals
     const patterns = [
-      [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24],
-      [0,5,10,15,20], [1,6,11,16,21], [2,7,12,17,22], [3,8,13,18,23], [4,9,14,19,24],
-      [0,6,12,18,24], [4,8,12,16,20]
+      [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24], // rows
+      [0,5,10,15,20], [1,6,11,16,21], [2,7,12,17,22], [3,8,13,18,23], [4,9,14,19,24], // columns
+      [0,6,12,18,24], [4,8,12,16,20] // diagonals
     ];
     for (const pat of patterns) {
       if (pat.every(idx => {
