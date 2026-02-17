@@ -2089,6 +2089,46 @@
             isRestoring: false // NEW: prevent multiple restore attempts
         };
 
+        // ========== TEXT‑TO‑SPEECH FOR BALL DRAWS ==========
+        let speechEnabled = false;
+
+        function enableSpeech() {
+            if (window.speechSynthesis) {
+                // Create a dummy utterance to request permission on iOS
+                const utter = new SpeechSynthesisUtterance('');
+                window.speechSynthesis.speak(utter);
+                speechEnabled = true;
+                console.log('🔊 Speech enabled');
+            } else {
+                console.warn('⚠️ Speech synthesis not supported');
+            }
+        }
+
+        // Enable speech on first user interaction
+        document.addEventListener('click', function once() {
+            enableSpeech();
+            document.removeEventListener('click', once);
+        }, { once: true });
+
+        function speakBall(letter, number) {
+            if (!speechEnabled || !window.speechSynthesis) return;
+            
+            // Cancel any ongoing speech to avoid overlapping
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(`${letter} ${number}`);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0;      // speed (0.1 to 10)
+            utterance.pitch = 1.0;     // pitch (0 to 2)
+            utterance.volume = 1.0;    // volume (0 to 1)
+            
+            // Optionally select a specific voice (e.g., female)
+            // const voices = window.speechSynthesis.getVoices();
+            // utterance.voice = voices.find(v => v.name.includes('Google UK Female')) || voices[0];
+            
+            window.speechSynthesis.speak(utterance);
+        }
+
         // 🚨 FAST BINGO CLAIMING VARIABLES
         let isClaiming = false; // Global flag to prevent double-click
         let lastClaimTime = 0;
@@ -3041,6 +3081,9 @@
 
         function triggerNewBall(num, letter) {
             console.log(`🎱 Ball drawn: ${letter}-${num}`);
+            
+            // 👇 Speak the ball number
+            speakBall(letter, num);
             
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
