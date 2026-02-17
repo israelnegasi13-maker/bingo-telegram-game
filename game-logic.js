@@ -3647,6 +3647,11 @@ module.exports = {
   getRoomTimers: () => roomTimers,
   getRoomWinners: () => roomWinners,
   
+  // Add user socket mapping (required for bot manager)
+  addUserSocket: (socket, userId) => {
+    socketToUser.set(socket.id, userId);
+  },
+  
   // Game logic functions
   getBingoLetter,
   generateReferralCode,
