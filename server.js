@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE + KENO ULTRA + AGENT SYSTEM - TELEGRAM MINI APP - MAIN SERVER FILE
+// server.js - BINGO ELITE + KENO ULTRA + AGENT SYSTEM + BOT MANAGER (20 human‑like bots)
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -19,6 +19,9 @@ const kenoLogic = require('./keno-logic');
 
 // Import Agent System
 const AgentSystem = require('./agent-logic');
+
+// ========== BOT MANAGER ==========
+const BotManager = require('./bot-manager');   // 👈 NEW
 
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
@@ -204,7 +207,7 @@ Object.entries(requiredFiles).forEach(([filePath, content]) => {
 });
 
 // ========== MONGODB MODELS ==========
-// User Schema
+// User Schema (add isBot flag)
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   userName: { type: String, required: true },
@@ -228,7 +231,9 @@ const userSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
   referredBy: { type: String, default: null }, // 'telegram_link', 'manual', 'bulk_manual', 'admin_assigned'
-  agentCommissionEarned: { type: Number, default: 0 }
+  agentCommissionEarned: { type: Number, default: 0 },
+  // Bot flag (optional, for admin filtering)
+  isBot: { type: Boolean, default: false }    // 👈 NEW
 });
 
 // Room Schema
@@ -3737,7 +3742,8 @@ app.get('/debug-users', async (req, res) => {
         agentId: u.agentId || null,
         referredBy: u.referredBy || null,
         agentReferredAt: u.agentReferredAt || null,
-        agentCommissionEarned: u.agentCommissionEarned || 0
+        agentCommissionEarned: u.agentCommissionEarned || 0,
+        isBot: u.isBot || false  // 👈 NEW
       }))
     });
   } catch (error) {
@@ -3892,11 +3898,27 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Mobile app:   /app                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
+
+  // ========== BOT MANAGER INITIALIZATION ==========
+  // Wait a bit for everything to settle, then start the bots
+  setTimeout(async () => {
+    try {
+      const botManager = new BotManager(`http://localhost:${PORT}`, models);
+      await botManager.initialize();
+      botManager.start();
+      // Attach to global for graceful shutdown (optional)
+      global.botManager = botManager;
+      console.log('🤖 Bot manager started – 20 human‑like bots are now playing');
+    } catch (err) {
+      console.error('❌ Failed to start bot manager:', err);
+    }
+  }, 10000); // 10 seconds delay
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  if (global.botManager) global.botManager.stop();
   httpServer.close(() => {
     console.log('HTTP server closed');
     mongoose.connection.close(false, () => {
@@ -3908,6 +3930,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server');
+  if (global.botManager) global.botManager.stop();
   httpServer.close(() => {
     console.log('HTTP server closed');
     mongoose.connection.close(false, () => {
