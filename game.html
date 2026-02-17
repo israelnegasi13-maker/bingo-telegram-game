@@ -2530,6 +2530,11 @@
             document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
             
             saveUserInfo();
+
+            // ========== RESTORE GAME SESSION ==========
+            if (data.currentRoom && data.box) {
+                restoreGameState(data.currentRoom, data.box);
+            }
         });
 
         // ✅ Handle Telebirr number received from server
@@ -3033,6 +3038,16 @@
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
             state.history.unshift({ num, letter });
+            updateBallHistoryUI();
+
+            state.calledNumbers.add(num);
+            
+            console.log(`📌 Number ${letter}-${num} added to called numbers.`);
+            
+            state.lastActivityTime = Date.now();
+        }
+
+        function updateBallHistoryUI() {
             const historyContainer = document.getElementById('ballHistory');
             historyContainer.innerHTML = '';
             
@@ -3045,12 +3060,6 @@
                 `;
                 historyContainer.appendChild(historyBall);
             });
-            
-            state.calledNumbers.add(num);
-            
-            console.log(`📌 Number ${letter}-${num} added to called numbers.`);
-            
-            state.lastActivityTime = Date.now();
         }
 
         // 🚀 OPTIMIZED BINGO PATTERN CHECKING
@@ -3497,6 +3506,102 @@
             state.isResettingLobby = false;
             
             console.log('✅ Lobby reset complete');
+        }
+
+        // ========== RESTORE GAME STATE FUNCTION ==========
+        function restoreGameState(roomStake, boxNumber) {
+            console.log(`🔄 Restoring game state for room ${roomStake}, box ${boxNumber}`);
+            state.stake = roomStake;
+            state.selectedBox = boxNumber;
+            document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
+            document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
+            
+            // Generate the bingo card based on the saved box
+            generateTraditionalBingoCard(boxNumber);
+            
+            if (state.isConnected) {
+                // Subscribe to room updates
+                socket.emit('subscribeToRoom', { room: roomStake });
+                state.roomSubscribed = true;
+                
+                // Request full room state
+                socket.emit('getRoomState', { room: roomStake }, (roomState) => {
+                    if (!roomState || !roomState.success) {
+                        console.log('Failed to get room state, returning to lobby');
+                        resetToLobby();
+                        return;
+                    }
+                    
+                    // Restore called numbers and history
+                    state.calledNumbers = new Set(roomState.calledNumbers || []);
+                    state.history = (roomState.calledNumbers || []).map(num => ({
+                        num: num,
+                        letter: getBingoLetter(num)
+                    })).reverse(); // most recent first
+                    
+                    // Update history UI
+                    updateBallHistoryUI();
+                    
+                    if (roomState.status === 'playing') {
+                        // Show game screen
+                        showScreen('gameScreen');
+                        initGameBoard(); // this recreates the grid
+                        
+                        // Mark numbers that have been called and are on the card
+                        roomState.calledNumbers.forEach(num => {
+                            if (state.grid.includes(num)) {
+                                const index = state.grid.indexOf(num);
+                                if (index !== -1) {
+                                    const cell = document.querySelector(`.cell[data-index="${index}"]`);
+                                    if (cell) {
+                                        cell.classList.add('marked');
+                                        state.markedNumbers.add(num);
+                                    }
+                                }
+                            }
+                        });
+                        // Always mark the FREE space
+                        const freeCell = document.querySelector('.cell.free');
+                        if (freeCell) freeCell.classList.add('marked');
+                        
+                        // Update current ball display
+                        if (roomState.currentBall) {
+                            const letter = getBingoLetter(roomState.currentBall);
+                            triggerNewBall(roomState.currentBall, letter);
+                        }
+                        
+                        // Check if Bingo is already possible
+                        if (checkWinningPattern()) {
+                            document.getElementById('claimBingoButton').disabled = false;
+                        }
+                    } 
+                    else if (roomState.status === 'waiting' || roomState.status === 'starting') {
+                        // Show wait screen
+                        showScreen('waitScreen');
+                        
+                        // Update player count and timer
+                        document.getElementById('waitMessage').textContent = 
+                            roomState.onlinePlayers >= 1 ? "Game starting soon!" : "Waiting for players...";
+                        document.getElementById('waitDetails').innerHTML = 
+                            roomState.onlinePlayers >= 1
+                                ? `✅ <span style="color: #10b981;">${roomState.onlinePlayers} online player${roomState.onlinePlayers > 1 ? 's' : ''}</span> - Game will start when timer reaches 0`
+                                : `Need at least 1 player to start`;
+                        
+                        // If starting, set initial timer
+                        if (roomState.status === 'starting' && roomState.countdownStartTime) {
+                            const elapsed = Date.now() - new Date(roomState.countdownStartTime).getTime();
+                            const remaining = Math.max(0, roomState.countdownTimer - Math.floor(elapsed / 1000));
+                            document.getElementById('waitTimer').textContent = remaining;
+                        } else {
+                            document.getElementById('waitTimer').textContent = '30';
+                        }
+                    } 
+                    else {
+                        // Room ended or locked – go to lobby
+                        resetToLobby();
+                    }
+                });
+            }
         }
 
         // lobbyUpdate event handler
