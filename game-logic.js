@@ -2781,7 +2781,9 @@ function setupSocketHandlers() {
             userName: user.userName,
             balance: user.balance,
             referralCode: user.referralCode,
-            phoneNumber: user.phoneNumber || ''
+            phoneNumber: user.phoneNumber || '',
+            currentRoom: user.currentRoom,   // <-- ADDED for refresh resume
+            box: user.box                    // <-- ADDED for refresh resume
           });
           
           // Send Telebirr number to player
@@ -2855,6 +2857,45 @@ function setupSocketHandlers() {
       } catch (error) {
         console.error('Error in getRoomCountdown:', error);
         if (callback) callback({ countdownActive: false });
+      }
+    });
+    
+    // ========== NEW: Get full room state for reconnection ==========
+    socket.on('getRoomState', async ({ room }, callback) => {
+      try {
+        const userId = socketToUser.get(socket.id) || socket.userId;
+        if (!userId) {
+          if (callback) callback({ success: false, message: 'Not authenticated' });
+          return;
+        }
+        const roomData = await getRoomWithCache(parseInt(room));
+        if (!roomData) {
+          if (callback) callback({ success: false, message: 'Room not found' });
+          return;
+        }
+        // Verify user is in this room
+        if (!roomData.players.includes(userId)) {
+          if (callback) callback({ success: false, message: 'User not in this room' });
+          return;
+        }
+        const onlinePlayers = await getOnlinePlayersInRoomWithCache(room);
+        const roomState = {
+          success: true,
+          status: roomData.status,
+          calledNumbers: roomData.calledNumbers || [],
+          currentBall: roomData.currentBall,
+          ballsDrawn: roomData.ballsDrawn,
+          players: roomData.players,
+          onlinePlayers: onlinePlayers.length,
+          takenBoxes: roomData.takenBoxes,
+          countdownStartTime: roomData.countdownStartTime,
+          countdownTimer: CONFIG.COUNTDOWN_TIMER,
+          startTime: roomData.startTime
+        };
+        if (callback) callback(roomState);
+      } catch (error) {
+        console.error('Error in getRoomState:', error);
+        if (callback) callback({ success: false, message: error.message });
       }
     });
     
