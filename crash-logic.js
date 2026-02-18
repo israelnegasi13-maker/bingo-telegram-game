@@ -2,20 +2,13 @@
 const CONFIG = {
   MIN_BET: 5,
   MAX_BET: 5000,
-  COUNTDOWN_SECONDS: 15,                    // increased from 5 to 15
+  COUNTDOWN_SECONDS: 15,                    // 15 seconds countdown
   ROUND_DURATION: 30 * 1000,                // 30 seconds total (including countdown)
   MULTIPLIER_UPDATE_INTERVAL: 100,           // 100ms updates
-  HOUSE_EDGE: 0.05,                          // 5% house edge (still used? not directly now)
-  MAX_MULTIPLIER: 1000,                       // safety cap
-  COMMISSION_RATE: 0.10,                      // 10% agent commission
+  MAX_MULTIPLIER: 10.0,                      // Hard cap at 10.0x
+  COMMISSION_RATE: 0.10,                     // 10% agent commission
   ROUND_HISTORY_LIMIT: 10,
-  // New bet‑sensitive crash settings
-  LARGE_BET_THRESHOLD: 500,                  // ETB – if total bets >= this, crash at 1.00
-  SMALL_BET_MIN: 1.6,                        // min multiplier when bets are small
-  SMALL_BET_MAX: 7.0,                         // max multiplier when bets are small
-  NO_BETS_MIN: 2.0,                           // when no players
-  NO_BETS_MAX: 7.0,
-  // Multiplier increment per step (0.005 = 0.05 per second) – slowed down
+  // Multiplier increment per step (0.005 = 0.05 per second)
   MULTIPLIER_INCREMENT: 0.005
 };
 
@@ -28,7 +21,7 @@ class CrashGame {
       status: 'waiting',          // waiting, countdown, running, crashed
       countdown: CONFIG.COUNTDOWN_SECONDS,
       multiplier: 1.00,
-      crashPoint: null,            // will be set after countdown based on total bets
+      crashPoint: null,            // will be set randomly after countdown
       startTime: null,
       endTime: null,
       bets: new Map(),             // userId -> { bet, autoCashout, cashedOutAt, payout }
@@ -53,7 +46,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized (bet‑sensitive crash, slow multiplier 0.005)');
+    console.log('✅ Crash Game initialized (random crashes, max 10x, 30% insta‑crash)');
   }
 
   handleCrashConnection(socket) {
@@ -78,7 +71,7 @@ class CrashGame {
       totalPlayers: this.currentRound.totalPlayers
     });
 
-    // 🔥 FIX: Send user's bet if exists (for page reload / reconnect)
+    // Send user's bet if exists (for page reload / reconnect)
     const userBet = this.currentRound.bets.get(socket.userId);
     if (userBet) {
       socket.emit('crash:userBet', {
@@ -161,22 +154,14 @@ class CrashGame {
     return `CRASH_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   }
 
-  // New crash point generator based on total bets
-  generateCrashPoint(totalBets) {
-    if (totalBets === 0) {
-      // No players – random high multiplier to keep visuals interesting
-      return this.randomInRange(CONFIG.NO_BETS_MIN, CONFIG.NO_BETS_MAX);
+  // Random crash point generator:
+  // 30% chance of instant crash (1.00x), otherwise random between 1.01x and 10.00x
+  generateCrashPoint() {
+    if (Math.random() < 0.3) {
+      return 1.00;
     }
-    if (totalBets < CONFIG.LARGE_BET_THRESHOLD) {
-      // Small total bets – give players a chance
-      return this.randomInRange(CONFIG.SMALL_BET_MIN, CONFIG.SMALL_BET_MAX);
-    }
-    // Large total bets – house takes all
-    return 1.00;
-  }
-
-  randomInRange(min, max) {
-    return Math.random() * (max - min) + min;
+    // Random between 1.01 and 10.00 (inclusive of 10.00)
+    return 1.01 + Math.random() * 8.99;
   }
 
   startNextRound() {
@@ -227,8 +212,8 @@ class CrashGame {
     this.currentRound.status = 'running';
     this.currentRound.startTime = Date.now();
 
-    // ***** CRASH POINT IS NOW GENERATED HERE, AFTER ALL BETS ARE IN *****
-    this.currentRound.crashPoint = this.generateCrashPoint(this.currentRound.totalBets);
+    // ***** CRASH POINT IS GENERATED HERE (RANDOM) *****
+    this.currentRound.crashPoint = this.generateCrashPoint();
 
     this.io.to('crash').emit('crash:roundStarted', {
       roundId: this.currentRound.id,
@@ -245,7 +230,7 @@ class CrashGame {
         CONFIG.MAX_MULTIPLIER
       );
 
-      // Check for crash using the newly set crashPoint
+      // Check for crash using the randomly generated crashPoint
       if (this.currentRound.multiplier >= this.currentRound.crashPoint) {
         this.crashRound('normal');
         return;
