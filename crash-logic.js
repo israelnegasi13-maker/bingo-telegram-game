@@ -15,8 +15,8 @@ const CONFIG = {
   SMALL_BET_MAX: 7.0,                         // max multiplier when bets are small
   NO_BETS_MIN: 2.0,                           // when no players
   NO_BETS_MAX: 7.0,
-  // Multiplier increment per step (0.03 = 0.3 per second)
-  MULTIPLIER_INCREMENT: 0.03
+  // Multiplier increment per step (0.005 = 0.05 per second) – slowed down
+  MULTIPLIER_INCREMENT: 0.005
 };
 
 class CrashGame {
@@ -53,7 +53,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized (bet‑sensitive crash)');
+    console.log('✅ Crash Game initialized (bet‑sensitive crash, slow multiplier 0.005)');
   }
 
   handleCrashConnection(socket) {
@@ -235,7 +235,7 @@ class CrashGame {
       multiplier: 1.00
     });
 
-    // Start multiplier increase – slower increment (0.03 per step = 0.3 per second)
+    // Start multiplier increase – slower increment (0.005 per step = 0.05 per second)
     this.multiplierInterval = setInterval(() => {
       if (this.currentRound.status !== 'running') return;
 
