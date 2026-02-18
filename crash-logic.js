@@ -5,10 +5,16 @@ const CONFIG = {
   COUNTDOWN_SECONDS: 15,                    // increased from 5 to 15
   ROUND_DURATION: 30 * 1000,                // 30 seconds total (including countdown)
   MULTIPLIER_UPDATE_INTERVAL: 100,           // 100ms updates
-  HOUSE_EDGE: 0.05,                          // 5% house edge
+  HOUSE_EDGE: 0.05,                          // 5% house edge (still used? not directly now)
   MAX_MULTIPLIER: 1000,                       // safety cap
   COMMISSION_RATE: 0.10,                      // 10% agent commission
-  ROUND_HISTORY_LIMIT: 10
+  ROUND_HISTORY_LIMIT: 10,
+  // New bet‑sensitive crash settings
+  LARGE_BET_THRESHOLD: 500,                  // ETB – if total bets >= this, crash at 1.00
+  SMALL_BET_MIN: 1.6,                        // min multiplier when bets are small
+  SMALL_BET_MAX: 7.0,                         // max multiplier when bets are small
+  NO_BETS_MIN: 2.0,                           // when no players
+  NO_BETS_MAX: 7.0
 };
 
 class CrashGame {
@@ -20,7 +26,7 @@ class CrashGame {
       status: 'waiting',          // waiting, countdown, running, crashed
       countdown: CONFIG.COUNTDOWN_SECONDS,
       multiplier: 1.00,
-      crashPoint: null,
+      crashPoint: null,            // will be set after countdown based on total bets
       startTime: null,
       endTime: null,
       bets: new Map(),             // userId -> { bet, autoCashout, cashedOutAt, payout }
@@ -45,7 +51,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized');
+    console.log('✅ Crash Game initialized (bet‑sensitive crash)');
   }
 
   handleCrashConnection(socket) {
@@ -142,17 +148,22 @@ class CrashGame {
     return `CRASH_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   }
 
-  generateCrashPoint() {
-    // 30% chance of immediate crash at 1.00x (house win)
-    if (Math.random() < 0.3) {
-      return 1.00;
+  // New crash point generator based on total bets
+  generateCrashPoint(totalBets) {
+    if (totalBets === 0) {
+      // No players – random high multiplier to keep visuals interesting
+      return this.randomInRange(CONFIG.NO_BETS_MIN, CONFIG.NO_BETS_MAX);
     }
-    // Otherwise use distribution with house edge: range 1.00 ... 20 (for 5% edge)
-    const r = Math.random();
-    // Formula: 1 / (1 - r * (1 - edge))  → min 1.00, max 1/edge = 20
-    let crash = 1 / (1 - r * (1 - CONFIG.HOUSE_EDGE));
-    // Cap at safety limit
-    return Math.min(crash, CONFIG.MAX_MULTIPLIER);
+    if (totalBets < CONFIG.LARGE_BET_THRESHOLD) {
+      // Small total bets – give players a chance
+      return this.randomInRange(CONFIG.SMALL_BET_MIN, CONFIG.SMALL_BET_MAX);
+    }
+    // Large total bets – house takes all
+    return 1.00;
+  }
+
+  randomInRange(min, max) {
+    return Math.random() * (max - min) + min;
   }
 
   startNextRound() {
@@ -166,14 +177,13 @@ class CrashGame {
     }
 
     const roundId = this.generateRoundId();
-    const crashPoint = this.generateCrashPoint();
-
+    // crashPoint is not generated yet – will be set in startRound
     this.currentRound = {
       id: roundId,
       status: 'countdown',
       countdown: CONFIG.COUNTDOWN_SECONDS,
       multiplier: 1.00,
-      crashPoint,
+      crashPoint: null,
       startTime: Date.now(),
       endTime: null,
       bets: new Map(),
@@ -203,6 +213,10 @@ class CrashGame {
   startRound() {
     this.currentRound.status = 'running';
     this.currentRound.startTime = Date.now();
+
+    // ***** CRASH POINT IS NOW GENERATED HERE, AFTER ALL BETS ARE IN *****
+    this.currentRound.crashPoint = this.generateCrashPoint(this.currentRound.totalBets);
+
     this.io.to('crash').emit('crash:roundStarted', {
       roundId: this.currentRound.id,
       multiplier: 1.00
@@ -218,7 +232,7 @@ class CrashGame {
         CONFIG.MAX_MULTIPLIER
       );
 
-      // Check for crash
+      // Check for crash using the newly set crashPoint
       if (this.currentRound.multiplier >= this.currentRound.crashPoint) {
         this.crashRound('normal');
         return;
