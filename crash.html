@@ -27,7 +27,7 @@
         /* game card – larger on mobile */
         .game-area {
             flex: 1;
-            min-height: 60vh;          /* use more vertical space */
+            min-height: 60vh;
             background: #10161f;
             border-radius: 32px;
             position: relative;
@@ -49,7 +49,7 @@
             position: absolute;
             top: 16px;
             left: 16px;
-            font-size: clamp(48px, 15vw, 82px);   /* responsive font */
+            font-size: clamp(32px, 10vw, 56px);   /* smaller than before */
             font-weight: 800;
             background: rgba(10, 15, 25, 0.5);
             backdrop-filter: blur(12px);
@@ -383,8 +383,8 @@
 
         /* small screen adjustments */
         @media (max-width: 480px) {
-            .multiplier { font-size: 56px; top: 12px; left: 12px; }
-            .multiplier.small { font-size: 16px; top: 80px; }
+            .multiplier { font-size: 42px; top: 12px; left: 12px; }
+            .multiplier.small { font-size: 16px; top: 70px; }
             .status-badge { font-size: 12px; padding: 6px 16px; }
             .sound-toggle { right: 120px; padding: 6px 14px; font-size: 13px; }
             .balance-value { font-size: 22px; }
@@ -444,7 +444,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         (function() {
-            // --- Configuration (identical to original) ---
+            // --- Configuration ---
             const SOUNDS = {
                 takeoff: '/assets/sounds/takeoff.mp3',
                 cashout: '/assets/sounds/cashout.mp3',
@@ -473,7 +473,7 @@
             const toast = document.getElementById('toastMessage');
             const loading = document.getElementById('loading');
 
-            // --- State (unchanged) ---
+            // --- State ---
             let socket = io();
             let userId = null;
             let userName = 'Player';
@@ -500,6 +500,8 @@
             explosionImage.src = EXPLOSION_IMG;
             let planeReady = false;
             let explosionReady = false;
+            let lastPlanePos = { x: 0, y: 0 };   // store last plane position for explosion
+
             planeImage.onload = () => { planeReady = true; checkLoading(); };
             explosionImage.onload = () => { explosionReady = true; checkLoading(); };
             function checkLoading() {
@@ -507,7 +509,7 @@
             }
             setTimeout(() => loading.classList.add('hidden'), 3000);
 
-            // --- Helper Functions (identical) ---
+            // --- Helper Functions ---
             function showToast(msg, isError = true) {
                 toast.style.display = 'block';
                 toast.textContent = msg;
@@ -540,7 +542,7 @@
                 }
             }
 
-            // --- Socket Handlers (identical) ---
+            // --- Socket Handlers ---
             function initSocket() {
                 const urlParams = new URLSearchParams(window.location.search);
                 userId = urlParams.get('userId');
@@ -564,7 +566,7 @@
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
-                    currentRound.crashPoint = data.crashPoint;
+                    // crashPoint intentionally omitted (security)
                     updateUI();
                 });
 
@@ -641,7 +643,7 @@
                 });
             }
 
-            // --- UI Updates (unchanged) ---
+            // --- UI Updates ---
             function updateUI() {
                 if (currentRound.roundId) roundIdSpan.textContent = currentRound.roundId.slice(-6);
                 playersCountSpan.textContent = currentRound.totalPlayers;
@@ -670,7 +672,7 @@
                 }).join('');
             }
 
-            // --- Canvas Drawing (enhanced with dynamic plane size) ---
+            // --- Canvas Drawing (improved: bigger plane, explosion at last plane position) ---
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -705,9 +707,12 @@
                     const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
                     const x = canvas.width * 0.1 + progress * canvas.width * 0.7;
 
-                    // Dynamic plane size: about 20% of canvas width, max 140px
-                    let planeWidth = Math.min(140, canvas.width * 0.2);
-                    let planeHeight = planeWidth * (45 / 70); // maintain aspect ratio (original 70x45)
+                    // Save plane position for explosion
+                    lastPlanePos = { x, y };
+
+                    // Bigger plane: up to 200px width or 30% of canvas width
+                    let planeWidth = Math.min(200, canvas.width * 0.3);
+                    let planeHeight = planeWidth * (45 / 70); // maintain aspect ratio
 
                     // contrail (scaled with plane)
                     ctx.shadowColor = '#f97316';
@@ -716,7 +721,7 @@
                         let alpha = 0.3 - i * 0.07;
                         ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
                         ctx.beginPath();
-                        let circleSize = (10 + i * 2) * (planeWidth / 70); // scale circles
+                        let circleSize = (10 + i * 2) * (planeWidth / 70);
                         ctx.arc(x - i * 18 * (planeWidth / 70), y + i * 4 * (planeWidth / 70), circleSize, 0, 2 * Math.PI);
                         ctx.fill();
                     }
@@ -726,18 +731,24 @@
                 }
 
                 if (currentRound.status === 'crashed' && explosionReady) {
-                    // scale explosion too
-                    let explosionSize = Math.min(150, canvas.width * 0.3);
+                    // Explosion at last plane position, not center
+                    let explosionSize = Math.min(180, canvas.width * 0.35); // slightly bigger
                     ctx.shadowColor = '#ef4444';
                     ctx.shadowBlur = 40;
-                    ctx.drawImage(explosionImage, canvas.width/2 - explosionSize/2, canvas.height/2 - explosionSize/2, explosionSize, explosionSize);
+                    ctx.drawImage(
+                        explosionImage,
+                        lastPlanePos.x - explosionSize / 2,
+                        lastPlanePos.y - explosionSize / 2,
+                        explosionSize,
+                        explosionSize
+                    );
                     ctx.shadowBlur = 0;
                 }
 
                 animationFrame = requestAnimationFrame(draw);
             }
 
-            // --- Sounds (identical) ---
+            // --- Sounds ---
             function initSounds() {
                 for (let [key, url] of Object.entries(SOUNDS)) {
                     let audio = new Audio(url);
@@ -768,7 +779,7 @@
                 }
             });
 
-            // --- Betting Actions (identical) ---
+            // --- Betting Actions ---
             placeBetBtn.addEventListener('click', () => {
                 const amount = parseFloat(betAmountInput.value);
                 const auto = parseFloat(autoCashoutInput.value) || null;
