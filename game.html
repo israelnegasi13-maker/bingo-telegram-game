@@ -4037,25 +4037,49 @@
             state.lastActivityTime = Date.now();
         });
 
+        // ========== OPTIMIZED: Real-time box update ==========
         socket.on('boxesTakenUpdate', (data) => {
             console.log('📦 Real-time box update received:', data);
-            
-            if (data.room === state.stake) {
-                console.log(`📦 Updating display for room ${state.stake} with ${data.takenBoxes.length} boxes`);
-                
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    renderBoxes(data.takenBoxes);
-                    updateBoxCounters(data.takenBoxes);
-                }
-                
-                if (data.newBox && data.playerName) {
-                    if (data.playerName !== state.userName) {
-                        showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 3000);
+
+            // Only process if the update is for the room we are currently viewing
+            if (data.room !== state.stake) return;
+
+            // Update counters (available / taken)
+            document.getElementById('availableBoxes').textContent = 100 - data.takenBoxes.length;
+            document.getElementById('takenBoxes').textContent = data.takenBoxes.length;
+
+            // If we have info about the new box, update only that box in the DOM
+            if (data.newBox) {
+                const boxElement = document.querySelector(`.box-item[data-number="${data.newBox}"]`);
+                if (boxElement) {
+                    // Mark it as taken and disable click
+                    boxElement.classList.add('taken');
+                    boxElement.classList.remove('selected'); // in case it was selected
+                    boxElement.onclick = null; // remove click handler
+
+                    // If the new box was taken by another player, show a quick notification
+                    if (data.playerName && data.playerName !== state.userName) {
+                        showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 2000);
                     }
+                } else {
+                    // Fallback: if for some reason the box isn't found, re-render the whole grid
+                    renderBoxes(data.takenBoxes);
                 }
-                
-                state.lastActivityTime = Date.now();
+            } else {
+                // No specific new box info – full re-render (should rarely happen)
+                renderBoxes(data.takenBoxes);
             }
+
+            // If the current player had that box selected (rare race condition), clear selection
+            if (data.newBox === state.selectedBox) {
+                state.selectedBox = null;
+                document.getElementById('confirmBoxButton').disabled = true;
+                document.getElementById('confirmBoxButton').textContent = 'Select a box first';
+                // Also hide plate preview if desired
+                document.getElementById('platePreviewContainer').classList.remove('active');
+            }
+
+            state.lastActivityTime = Date.now();
         });
 
         socket.on('boxesCleared', (data) => {
