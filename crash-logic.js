@@ -14,7 +14,9 @@ const CONFIG = {
   SMALL_BET_MIN: 1.6,                        // min multiplier when bets are small
   SMALL_BET_MAX: 7.0,                         // max multiplier when bets are small
   NO_BETS_MIN: 2.0,                           // when no players
-  NO_BETS_MAX: 7.0
+  NO_BETS_MAX: 7.0,
+  // Multiplier increment per step (0.03 = 0.3 per second)
+  MULTIPLIER_INCREMENT: 0.03
 };
 
 class CrashGame {
@@ -233,13 +235,13 @@ class CrashGame {
       multiplier: 1.00
     });
 
-    // Start multiplier increase – faster: +0.05 every 100ms
+    // Start multiplier increase – slower increment (0.03 per step = 0.3 per second)
     this.multiplierInterval = setInterval(() => {
       if (this.currentRound.status !== 'running') return;
 
-      // Increase multiplier (0.05 per step = 0.5 per second)
+      // Increase multiplier by configured increment
       this.currentRound.multiplier = Math.min(
-        this.currentRound.multiplier + 0.05,
+        this.currentRound.multiplier + CONFIG.MULTIPLIER_INCREMENT,
         CONFIG.MAX_MULTIPLIER
       );
 
