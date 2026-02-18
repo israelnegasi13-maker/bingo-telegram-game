@@ -143,9 +143,16 @@ class CrashGame {
   }
 
   generateCrashPoint() {
-    // Random crash point with house edge: 1 / (random * (1 - edge))
+    // 30% chance of immediate crash at 1.00x (house win)
+    if (Math.random() < 0.3) {
+      return 1.00;
+    }
+    // Otherwise use distribution with house edge: range 1.00 ... 20 (for 5% edge)
     const r = Math.random();
-    return Math.max(1.00, 1 / (r * (1 - CONFIG.HOUSE_EDGE)));
+    // Formula: 1 / (1 - r * (1 - edge))  → min 1.00, max 1/edge = 20
+    let crash = 1 / (1 - r * (1 - CONFIG.HOUSE_EDGE));
+    // Cap at safety limit
+    return Math.min(crash, CONFIG.MAX_MULTIPLIER);
   }
 
   startNextRound() {
@@ -201,13 +208,13 @@ class CrashGame {
       multiplier: 1.00
     });
 
-    // Start multiplier increase
+    // Start multiplier increase – faster: +0.05 every 100ms
     this.multiplierInterval = setInterval(() => {
       if (this.currentRound.status !== 'running') return;
 
-      // Increase multiplier
+      // Increase multiplier (0.05 per step = 0.5 per second)
       this.currentRound.multiplier = Math.min(
-        this.currentRound.multiplier + 0.01,
+        this.currentRound.multiplier + 0.05,
         CONFIG.MAX_MULTIPLIER
       );
 
