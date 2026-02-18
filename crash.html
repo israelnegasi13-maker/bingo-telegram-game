@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CRASH GAME · ETHIO GAMES</title>
+    <title>CRASH · ETHIO GAMES</title>
     <style>
         * {
             margin: 0;
@@ -11,98 +11,147 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         body {
             background: #0a0c10;
-            color: #f0f4fa;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #fff;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
 
-        /* Canvas container */
+        /* game canvas container */
         .game-area {
             flex: 1;
-            min-height: 300px;
-            background: #0f172a;
+            min-height: 320px;
+            background: #0b1420;
             position: relative;
             overflow: hidden;
-            border-bottom: 2px solid #262d36;
+            border-bottom: 2px solid #2a3240;
+            box-shadow: inset 0 -10px 20px rgba(0,0,0,0.6);
         }
 
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            background: linear-gradient(145deg, #0b1a2a, #061016);
+            background: radial-gradient(circle at 20% 80%, #1a2a3a, #03070e);
             cursor: none;
         }
 
-        /* Overlay stats */
+        /* overlay UI */
         .multiplier {
             position: absolute;
             top: 20px;
             left: 20px;
-            font-size: 48px;
+            font-size: 70px;
             font-weight: 800;
-            text-shadow: 0 0 20px #3b82f6;
-            color: #fbbf24;
+            text-shadow: 0 0 30px #f97316, 0 0 60px #f97316;
+            color: #fdba74;
+            line-height: 1;
             z-index: 10;
+            transition: all 0.1s ease-out;
+            letter-spacing: -2px;
         }
-        .multiplier.small {
-            font-size: 24px;
-            top: 80px;
-            color: #8e9aaf;
+        .multiplier.running {
+            animation: pulse 0.8s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { text-shadow: 0 0 20px #f97316, 0 0 40px #f97316; transform: scale(1); }
+            100% { text-shadow: 0 0 40px #f97316, 0 0 80px #f97316; transform: scale(1.02); }
         }
 
-        .countdown {
+        .multiplier.small {
+            font-size: 24px;
+            top: 100px;
+            left: 20px;
+            color: #94a3b8;
+            text-shadow: none;
+            font-weight: 500;
+        }
+
+        .status-badge {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: #1e293b;
-            padding: 12px 20px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 8px 18px;
             border-radius: 40px;
             font-weight: 600;
-            border: 1px solid #3b82f6;
-            color: #fbbf24;
+            font-size: 14px;
+            border: 1px solid #f97316;
+            color: #fdba74;
             z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
         }
 
-        /* Round history strip */
-        .history {
+        .sound-toggle {
+            position: absolute;
+            top: 20px;
+            right: 140px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid #3b82f6;
+            border-radius: 40px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 20;
+            color: #fff;
+            transition: all 0.2s;
+        }
+        .sound-toggle:hover {
+            background: #3b82f6;
+        }
+
+        .history-strip {
             position: absolute;
             bottom: 20px;
             left: 20px;
             right: 20px;
             display: flex;
-            gap: 8px;
+            gap: 10px;
             overflow-x: auto;
             padding: 8px 0;
             z-index: 10;
             pointer-events: none;
+            scrollbar-width: thin;
+            scrollbar-color: #f97316 #1e293b;
+        }
+        .history-strip::-webkit-scrollbar {
+            height: 4px;
+        }
+        .history-strip::-webkit-scrollbar-thumb {
+            background: #f97316;
+            border-radius: 4px;
         }
         .history-item {
-            background: #1e293b;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(4px);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 15px;
+            font-weight: 700;
             white-space: nowrap;
-            border: 1px solid #334155;
+            border: 1px solid #3b82f6;
+            color: #fbbf24;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         }
-        .history-item.crash-early { color: #ef4444; border-color: #ef4444; }
-        .history-item.crash-high { color: #10b981; border-color: #10b981; }
+        .history-item.crash-early { border-color: #ef4444; color: #ef4444; }
+        .history-item.crash-high { border-color: #10b981; color: #10b981; }
 
-        /* Bottom control panel */
+        /* bottom panel */
         .control-panel {
-            background: #13171c;
-            border-top: 1px solid #262d36;
-            padding: 20px 16px;
+            background: #0f151c;
+            border-top: 2px solid #2a3240;
+            padding: 24px 20px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 20px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.8);
         }
 
         .balance-row {
@@ -110,8 +159,18 @@
             justify-content: space-between;
             align-items: center;
         }
-        .balance-label { color: #8e9aaf; font-size: 14px; }
-        .balance-value { font-weight: 700; font-size: 20px; color: #fbbf24; }
+        .balance-label {
+            color: #94a3b8;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .balance-value {
+            font-weight: 800;
+            font-size: 28px;
+            color: #fbbf24;
+            text-shadow: 0 0 10px #fbbf24;
+        }
 
         .bet-panel {
             display: flex;
@@ -120,136 +179,196 @@
         }
         .bet-input-group {
             flex: 2;
-            min-width: 150px;
+            min-width: 160px;
+            position: relative;
+        }
+        .bet-input-group::before {
+            content: '₿';
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f97316;
+            font-weight: 600;
+            font-size: 18px;
         }
         .bet-input {
             width: 100%;
-            padding: 14px;
-            background: #0a0c10;
-            border: 1px solid #262d36;
-            border-radius: 16px;
+            padding: 16px 16px 16px 40px;
+            background: #0a0d12;
+            border: 1px solid #2a3240;
+            border-radius: 24px;
             color: white;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
+            transition: all 0.2s;
         }
         .bet-input:focus {
-            border-color: #3b82f6;
+            border-color: #f97316;
             outline: none;
+            box-shadow: 0 0 0 3px rgba(249,115,22,0.2);
         }
 
         .auto-cashout-group {
             flex: 1;
-            min-width: 100px;
+            min-width: 110px;
+            position: relative;
+        }
+        .auto-cashout-group::before {
+            content: '×';
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #f97316;
+            font-weight: 600;
+            font-size: 20px;
         }
         .auto-cashout-input {
             width: 100%;
-            padding: 14px;
-            background: #0a0c10;
-            border: 1px solid #262d36;
-            border-radius: 16px;
+            padding: 16px 16px 16px 34px;
+            background: #0a0d12;
+            border: 1px solid #2a3240;
+            border-radius: 24px;
             color: white;
             font-size: 16px;
         }
 
         .action-buttons {
             display: flex;
-            gap: 12px;
+            gap: 16px;
+            margin-top: 8px;
         }
         .btn {
             flex: 1;
-            padding: 16px;
+            padding: 18px 12px;
             border: none;
             border-radius: 40px;
             font-weight: 700;
-            font-size: 16px;
+            font-size: 18px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        .btn:active { transform: scale(0.98); }
+        .btn:active { transform: scale(0.97); }
         .btn-primary {
-            background: #3b82f6;
+            background: linear-gradient(145deg, #f97316, #ea580c);
             color: white;
+            box-shadow: 0 8px 0 #b45309, 0 10px 20px rgba(249,115,22,0.4);
         }
         .btn-primary:disabled {
-            background: #1e293b;
-            color: #5a6573;
+            background: #334155;
+            box-shadow: 0 8px 0 #1e293b;
+            color: #64748b;
             cursor: not-allowed;
+            transform: none;
         }
         .btn-success {
-            background: #10b981;
+            background: linear-gradient(145deg, #10b981, #059669);
             color: white;
+            box-shadow: 0 8px 0 #047857, 0 10px 20px rgba(16,185,129,0.4);
         }
-        .btn-warning {
-            background: #f59e0b;
-            color: black;
+        .btn-success:disabled {
+            background: #334155;
+            box-shadow: 0 8px 0 #1e293b;
+            color: #64748b;
         }
 
         .info-row {
             display: flex;
             justify-content: space-between;
             font-size: 14px;
-            color: #8e9aaf;
-        }
-
-        /* Sound toggle */
-        .sound-toggle {
-            position: absolute;
-            top: 20px;
-            right: 100px;
-            background: #1e293b;
-            border: 1px solid #3b82f6;
+            color: #94a3b8;
+            background: rgba(255,255,255,0.02);
+            padding: 12px 16px;
             border-radius: 40px;
-            padding: 8px 16px;
-            font-size: 14px;
-            cursor: pointer;
-            z-index: 20;
+            border: 1px solid #2a3240;
         }
 
-        /* Error/toast */
         .toast {
             position: fixed;
-            bottom: 100px;
+            bottom: 110px;
             left: 20px;
             right: 20px;
             background: #ef4444;
             color: white;
-            padding: 12px;
-            border-radius: 40px;
+            padding: 14px 20px;
+            border-radius: 60px;
             text-align: center;
             font-weight: 600;
             z-index: 100;
             display: none;
+            box-shadow: 0 10px 25px rgba(239,68,68,0.5);
         }
+
+        /* loading overlay */
+        .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0c10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        .loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f97316;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+
     <div class="game-area">
         <canvas id="gameCanvas"></canvas>
         <div class="multiplier" id="multiplierDisplay">1.00x</div>
         <div class="multiplier small" id="multiplierSmall"></div>
-        <div class="countdown" id="countdownDisplay"></div>
-        <div class="history" id="historyStrip"></div>
+        <div class="status-badge" id="statusBadge">WAITING</div>
         <div class="sound-toggle" id="soundToggle">🔊 Sound On</div>
+        <div class="history-strip" id="historyStrip"></div>
     </div>
 
     <div class="control-panel">
         <div class="balance-row">
-            <span class="balance-label">💰 Your Balance</span>
+            <span class="balance-label">💰 YOUR BALANCE</span>
             <span class="balance-value" id="balanceDisplay">0.00 ETB</span>
         </div>
 
         <div class="bet-panel">
             <div class="bet-input-group">
-                <input type="number" id="betAmount" class="bet-input" placeholder="Bet (5-5000)" min="5" max="5000" step="1">
+                <input type="number" id="betAmount" class="bet-input" placeholder="Bet (5-5000)" min="5" max="5000" step="1" value="10">
             </div>
             <div class="auto-cashout-group">
-                <input type="number" id="autoCashout" class="auto-cashout-input" placeholder="Auto x" min="1.1" step="0.1">
+                <input type="number" id="autoCashout" class="auto-cashout-input" placeholder="Auto x" min="1.1" step="0.1" value="2.0">
             </div>
         </div>
 
         <div class="action-buttons">
-            <button class="btn btn-primary" id="placeBetBtn" disabled>Place Bet</button>
-            <button class="btn btn-success" id="cashOutBtn" disabled>Cash Out</button>
+            <button class="btn btn-primary" id="placeBetBtn" disabled>
+                <span>🎲</span> Place Bet
+            </button>
+            <button class="btn btn-success" id="cashOutBtn" disabled>
+                <span>💸</span> Cash Out
+            </button>
         </div>
 
         <div class="info-row">
@@ -279,7 +398,7 @@
             const ctx = canvas.getContext('2d');
             const multiplierDisplay = document.getElementById('multiplierDisplay');
             const multiplierSmall = document.getElementById('multiplierSmall');
-            const countdownDisplay = document.getElementById('countdownDisplay');
+            const statusBadge = document.getElementById('statusBadge');
             const historyStrip = document.getElementById('historyStrip');
             const balanceDisplay = document.getElementById('balanceDisplay');
             const roundIdSpan = document.getElementById('roundId');
@@ -291,6 +410,7 @@
             const cashOutBtn = document.getElementById('cashOutBtn');
             const soundToggle = document.getElementById('soundToggle');
             const toast = document.getElementById('toastMessage');
+            const loading = document.getElementById('loading');
 
             // --- State ---
             let socket = io();
@@ -319,8 +439,15 @@
             explosionImage.src = EXPLOSION_IMG;
             let planeReady = false;
             let explosionReady = false;
-            planeImage.onload = () => { planeReady = true; };
-            explosionImage.onload = () => { explosionReady = true; };
+            planeImage.onload = () => { planeReady = true; checkLoading(); };
+            explosionImage.onload = () => { explosionReady = true; checkLoading(); };
+            function checkLoading() {
+                if (planeReady && explosionReady) {
+                    loading.classList.add('hidden');
+                }
+            }
+            // fallback hide after 3 sec
+            setTimeout(() => loading.classList.add('hidden'), 3000);
 
             // --- Helper Functions ---
             function showToast(msg, isError = true) {
@@ -334,7 +461,16 @@
                 return m.toFixed(2) + 'x';
             }
 
-            // Load balance from server (via REST or socket)
+            function updateStatusBadge() {
+                const s = currentRound.status;
+                if (s === 'waiting') statusBadge.textContent = '⏳ WAITING';
+                else if (s === 'countdown') statusBadge.textContent = `⏱️ STARTING IN ${currentRound.countdown}s`;
+                else if (s === 'running') statusBadge.textContent = '✈️ FLYING';
+                else if (s === 'crashed') statusBadge.textContent = '💥 CRASHED';
+                else statusBadge.textContent = s.toUpperCase();
+            }
+
+            // Load balance from server
             async function fetchBalance() {
                 if (!userId) return;
                 try {
@@ -349,7 +485,6 @@
 
             // --- Socket Event Handlers ---
             function initSocket() {
-                // Identify user from URL (like /crash?userId=...&name=...)
                 const urlParams = new URLSearchParams(window.location.search);
                 userId = urlParams.get('userId');
                 userName = urlParams.get('name') || 'Player';
@@ -363,7 +498,6 @@
 
                 socket.emit('init', { userId, userName });
 
-                // Round state
                 socket.on('crash:roundState', (data) => {
                     currentRound = { ...currentRound, ...data };
                     updateUI();
@@ -373,27 +507,32 @@
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
-                    currentRound.crashPoint = data.crashPoint; // debug only
+                    currentRound.crashPoint = data.crashPoint;
                     updateUI();
                 });
 
                 socket.on('crash:countdownUpdate', (data) => {
                     currentRound.countdown = data.countdown;
-                    countdownDisplay.textContent = `Starting in ${currentRound.countdown}s`;
+                    updateStatusBadge();
                 });
 
                 socket.on('crash:roundStarted', (data) => {
                     currentRound.status = 'running';
                     currentRound.multiplier = 1.00;
                     multiplierDisplay.textContent = formatMultiplier(1.00);
-                    countdownDisplay.textContent = '';
+                    multiplierDisplay.classList.add('running');
+                    updateStatusBadge();
                     playSound('takeoff');
                 });
 
                 socket.on('crash:multiplierUpdate', (data) => {
                     currentRound.multiplier = data.multiplier;
                     multiplierDisplay.textContent = formatMultiplier(data.multiplier);
-                    // Auto-cashout check
+                    // change color based on multiplier
+                    if (data.multiplier >= 10) multiplierDisplay.style.color = '#10b981';
+                    else if (data.multiplier >= 5) multiplierDisplay.style.color = '#fbbf24';
+                    else multiplierDisplay.style.color = '#fdba74';
+
                     if (myBet && !myBet.cashedOutAt && myBet.autoCashout && data.multiplier >= myBet.autoCashout) {
                         socket.emit('crash:cashOut');
                     }
@@ -403,9 +542,11 @@
                     currentRound.status = 'crashed';
                     currentRound.history = data.history;
                     multiplierDisplay.textContent = '💥 CRASHED';
+                    multiplierDisplay.classList.remove('running');
+                    multiplierDisplay.style.color = '#ef4444';
+                    updateStatusBadge();
                     playSound('crash');
                     updateHistoryStrip();
-                    // Reset myBet if it wasn't cashed (lost)
                     if (myBet && !myBet.cashedOutAt) {
                         myBet = null;
                         fetchBalance();
@@ -453,20 +594,18 @@
                 if (currentRound.roundId) roundIdSpan.textContent = currentRound.roundId.slice(-6);
                 playersCountSpan.textContent = currentRound.totalPlayers;
                 totalBetsSpan.textContent = currentRound.totalBets.toFixed(2);
+                updateStatusBadge();
 
                 if (currentRound.status === 'countdown') {
-                    countdownDisplay.textContent = `Starting in ${currentRound.countdown}s`;
                     placeBetBtn.disabled = !userId || myBet !== null;
                     cashOutBtn.disabled = true;
                 } else if (currentRound.status === 'running') {
-                    countdownDisplay.textContent = '';
-                    placeBetBtn.disabled = true; // can't bet after round started
+                    placeBetBtn.disabled = true;
                     cashOutBtn.disabled = !myBet || myBet.cashedOutAt !== null;
                 } else if (currentRound.status === 'crashed' || currentRound.status === 'waiting') {
-                    placeBetBtn.disabled = !userId; // will be enabled during waiting/countdown, but we'll control via round state listener
+                    placeBetBtn.disabled = !userId;
                     cashOutBtn.disabled = true;
                 }
-
                 updateHistoryStrip();
             }
 
@@ -483,27 +622,52 @@
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Draw horizon line
+                // gradient sky
+                const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                grd.addColorStop(0, '#0b1e2b');
+                grd.addColorStop(0.7, '#162b38');
+                grd.addColorStop(1, '#1a2f3c');
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // ground line
                 ctx.beginPath();
-                ctx.strokeStyle = '#3b82f6';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#f97316';
+                ctx.lineWidth = 3;
+                ctx.shadowColor = '#f97316';
+                ctx.shadowBlur = 15;
                 ctx.moveTo(0, canvas.height * 0.8);
                 ctx.lineTo(canvas.width, canvas.height * 0.8);
                 ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                // draw runway dashes
+                ctx.beginPath();
+                ctx.strokeStyle = '#fdba74';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([20, 30]);
+                ctx.moveTo(0, canvas.height * 0.8 - 10);
+                ctx.lineTo(canvas.width, canvas.height * 0.8 - 10);
+                ctx.stroke();
+                ctx.setLineDash([]);
 
                 if (currentRound.status === 'running' && planeReady) {
-                    // Plane flies upward based on multiplier
                     const progress = Math.min(currentRound.multiplier / (currentRound.crashPoint || 10), 1);
-                    const y = canvas.height * 0.8 - (progress * canvas.height * 0.7);
-                    const x = canvas.width * 0.2 + progress * canvas.width * 0.6;
-
-                    // Draw plane
-                    ctx.drawImage(planeImage, x - 30, y - 20, 60, 40);
+                    const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
+                    const x = canvas.width * 0.1 + progress * canvas.width * 0.7;
+                    ctx.save();
+                    ctx.shadowColor = '#f97316';
+                    ctx.shadowBlur = 20;
+                    ctx.drawImage(planeImage, x - 30, y - 20, 70, 45);
+                    ctx.restore();
                 }
 
                 if (currentRound.status === 'crashed' && explosionReady) {
-                    // Draw explosion at last position (or center)
-                    ctx.drawImage(explosionImage, canvas.width/2 - 40, canvas.height/2 - 40, 80, 80);
+                    ctx.save();
+                    ctx.shadowColor = '#ef4444';
+                    ctx.shadowBlur = 30;
+                    ctx.drawImage(explosionImage, canvas.width/2 - 50, canvas.height/2 - 50, 100, 100);
+                    ctx.restore();
                 }
 
                 animationFrame = requestAnimationFrame(draw);
@@ -516,7 +680,6 @@
                     audio.preload = 'auto';
                     audioElements[key] = audio;
                 }
-                // Background music loops
                 if (audioElements.background) {
                     audioElements.background.loop = true;
                 }
@@ -524,7 +687,6 @@
 
             function playSound(name) {
                 if (!soundEnabled || !audioElements[name]) return;
-                // Clone to allow overlapping (except background)
                 if (name === 'background') {
                     audioElements[name].play().catch(e => console.warn('Audio play failed:', e));
                 } else {
@@ -578,7 +740,7 @@
             initSocket();
             fetchBalance();
 
-            // Enable bet button after user known (socket will adjust based on round)
+            // Enable bet button after user known
             placeBetBtn.disabled = !userId;
         })();
     </script>
