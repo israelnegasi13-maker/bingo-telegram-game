@@ -558,6 +558,19 @@
 
                 socket.emit('init', { userId, userName });
 
+                // --- Reconnect handling ---
+                socket.on('connect', () => {
+                    console.log('Socket reconnected – requesting fresh state');
+                    if (userId) {
+                        socket.emit('init', { userId, userName });
+                    }
+                });
+
+                socket.on('disconnect', () => {
+                    console.log('Socket disconnected – showing warning');
+                    showToast('Connection lost – reconnecting...', true);
+                });
+
                 socket.on('crash:roundState', (data) => {
                     currentRound = { ...currentRound, ...data };
                     // Initialize smooth multiplier from state
@@ -615,6 +628,8 @@
                         myBet = null;
                         fetchBalance();
                     }
+                    // Force immediate redraw to show explosion
+                    smoothMultiplier = targetMultiplier; // stop interpolation
                 });
 
                 socket.on('crash:totalBets', (data) => {
@@ -759,8 +774,16 @@
                     );
                     ctx.shadowBlur = 0;
                 }
+            }
 
-                animationFrame = requestAnimationFrame(draw);
+            // --- Safe draw wrapper to prevent canvas freezes ---
+            function drawSafe() {
+                try {
+                    draw();
+                } catch (e) {
+                    console.error('Canvas error', e);
+                }
+                animationFrame = requestAnimationFrame(drawSafe);
             }
 
             // --- Sounds ---
@@ -821,7 +844,9 @@
             }
             window.addEventListener('resize', resizeCanvas);
             resizeCanvas();
-            animationFrame = requestAnimationFrame(draw);
+
+            // --- Start animation with safe wrapper ---
+            animationFrame = requestAnimationFrame(drawSafe);
 
             // --- Start ---
             initSounds();
