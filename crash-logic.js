@@ -65,7 +65,7 @@ class CrashGame {
     }
     this.userSockets.get(socket.userId).add(socket.id);
 
-    // Send current round state (crashPoint removed)
+    // Send current round state
     socket.emit('crash:roundState', {
       status: this.currentRound.status,
       roundId: this.currentRound.id,
@@ -75,6 +75,17 @@ class CrashGame {
       totalBets: this.currentRound.totalBets,
       totalPlayers: this.currentRound.totalPlayers
     });
+
+    // 🔥 FIX: Send user's bet if exists (for page reload / reconnect)
+    const userBet = this.currentRound.bets.get(socket.userId);
+    if (userBet) {
+      socket.emit('crash:userBet', {
+        roundId: this.currentRound.id,
+        amount: userBet.amount,
+        autoCashout: userBet.autoCashout,
+        cashedOutAt: userBet.cashedOutAt
+      });
+    }
 
     // Attach event handlers
     socket.on('crash:placeBet', (data) => this.placeBet(socket, data));
@@ -192,7 +203,7 @@ class CrashGame {
       history: this.currentRound.history || []
     };
 
-    // Broadcast countdown start (crashPoint removed)
+    // Broadcast countdown start
     this.io.to('crash').emit('crash:roundCountdown', {
       roundId,
       countdown: this.currentRound.countdown
