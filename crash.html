@@ -24,7 +24,6 @@
             gap: 8px;
         }
 
-        /* game card – larger on mobile */
         .game-area {
             flex: 1;
             min-height: 60vh;
@@ -49,7 +48,7 @@
             position: absolute;
             top: 16px;
             left: 16px;
-            font-size: clamp(32px, 10vw, 56px);   /* smaller than before */
+            font-size: clamp(32px, 10vw, 56px);
             font-weight: 800;
             background: rgba(10, 15, 25, 0.5);
             backdrop-filter: blur(12px);
@@ -159,7 +158,6 @@
         .history-item.crash-early { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,0.1); }
         .history-item.crash-high { border-color: #10b981; color: #10b981; background: rgba(16,185,129,0.1); }
 
-        /* bottom panel – slightly more compact for mobile */
         .control-panel {
             background: rgba(15, 22, 32, 0.8);
             backdrop-filter: blur(16px);
@@ -381,7 +379,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* small screen adjustments */
         @media (max-width: 480px) {
             .multiplier { font-size: 42px; top: 12px; left: 12px; }
             .multiplier.small { font-size: 16px; top: 70px; }
@@ -492,6 +489,10 @@
             let soundEnabled = true;
             let audioElements = {};
 
+            // --- Smooth multiplier for animation ---
+            let targetMultiplier = 1.00;   // latest received multiplier
+            let smoothMultiplier = 1.00;   // value used for drawing (interpolated)
+
             // Canvas animation
             let animationFrame = null;
             let planeImage = new Image();
@@ -500,7 +501,7 @@
             explosionImage.src = EXPLOSION_IMG;
             let planeReady = false;
             let explosionReady = false;
-            let lastPlanePos = { x: 0, y: 0 };   // store last plane position for explosion
+            let lastPlanePos = { x: 0, y: 0 };
 
             planeImage.onload = () => { planeReady = true; checkLoading(); };
             explosionImage.onload = () => { explosionReady = true; checkLoading(); };
@@ -559,6 +560,9 @@
 
                 socket.on('crash:roundState', (data) => {
                     currentRound = { ...currentRound, ...data };
+                    // Initialize smooth multiplier from state
+                    targetMultiplier = currentRound.multiplier;
+                    smoothMultiplier = currentRound.multiplier;
                     updateUI();
                 });
 
@@ -566,7 +570,6 @@
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
-                    // crashPoint intentionally omitted (security)
                     updateUI();
                 });
 
@@ -578,6 +581,8 @@
                 socket.on('crash:roundStarted', (data) => {
                     currentRound.status = 'running';
                     currentRound.multiplier = 1.00;
+                    targetMultiplier = 1.00;
+                    smoothMultiplier = 1.00;
                     multiplierDisplay.textContent = formatMultiplier(1.00);
                     multiplierDisplay.classList.add('running');
                     updateStatusBadge();
@@ -586,6 +591,7 @@
 
                 socket.on('crash:multiplierUpdate', (data) => {
                     currentRound.multiplier = data.multiplier;
+                    targetMultiplier = data.multiplier;   // update target for smooth animation
                     multiplierDisplay.textContent = formatMultiplier(data.multiplier);
                     if (data.multiplier >= 10) multiplierDisplay.style.color = '#10b981';
                     else if (data.multiplier >= 5) multiplierDisplay.style.color = '#fbbf24';
@@ -672,9 +678,11 @@
                 }).join('');
             }
 
-            // --- Canvas Drawing (improved: bigger plane, explosion at last plane position) ---
+            // --- Canvas Drawing (smooth plane movement) ---
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Background gradient
                 const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
                 grd.addColorStop(0, '#0b1a2b');
                 grd.addColorStop(0.7, '#142734');
@@ -682,7 +690,7 @@
                 ctx.fillStyle = grd;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // glowing runway
+                // Runway glow
                 ctx.shadowColor = '#f97316';
                 ctx.shadowBlur = 20;
                 ctx.beginPath();
@@ -702,19 +710,27 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
+                // --- Smooth multiplier interpolation ---
+                if (Math.abs(smoothMultiplier - targetMultiplier) > 0.001) {
+                    // Ease toward target (10% per frame)
+                    smoothMultiplier += (targetMultiplier - smoothMultiplier) * 0.1;
+                } else {
+                    smoothMultiplier = targetMultiplier;
+                }
+
+                // Draw plane only during running state
                 if (currentRound.status === 'running' && planeReady) {
-                    const progress = Math.min(currentRound.multiplier / (currentRound.crashPoint || 10), 1);
+                    // Use smoothMultiplier for continuous motion
+                    const progress = Math.min(smoothMultiplier / (currentRound.crashPoint || 10), 1);
                     const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
                     const x = canvas.width * 0.1 + progress * canvas.width * 0.7;
 
-                    // Save plane position for explosion
                     lastPlanePos = { x, y };
 
-                    // Bigger plane: up to 200px width or 30% of canvas width
                     let planeWidth = Math.min(200, canvas.width * 0.3);
-                    let planeHeight = planeWidth * (45 / 70); // maintain aspect ratio
+                    let planeHeight = planeWidth * (45 / 70);
 
-                    // contrail (scaled with plane)
+                    // Contrail
                     ctx.shadowColor = '#f97316';
                     ctx.shadowBlur = 25;
                     for (let i = 1; i <= 4; i++) {
@@ -731,8 +747,7 @@
                 }
 
                 if (currentRound.status === 'crashed' && explosionReady) {
-                    // Explosion at last plane position, not center
-                    let explosionSize = Math.min(180, canvas.width * 0.35); // slightly bigger
+                    let explosionSize = Math.min(180, canvas.width * 0.35);
                     ctx.shadowColor = '#ef4444';
                     ctx.shadowBlur = 40;
                     ctx.drawImage(
