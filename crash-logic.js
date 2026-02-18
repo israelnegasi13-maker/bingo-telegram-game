@@ -2,12 +2,12 @@
 const CONFIG = {
   MIN_BET: 5,
   MAX_BET: 5000,
-  COUNTDOWN_SECONDS: 5,
-  ROUND_DURATION: 30 * 1000,          // 30 seconds total (including countdown)
-  MULTIPLIER_UPDATE_INTERVAL: 100,     // 100ms updates
-  HOUSE_EDGE: 0.05,                    // 5% house edge
-  MAX_MULTIPLIER: 1000,                 // safety cap
-  COMMISSION_RATE: 0.10,                // 10% agent commission (same as Keno)
+  COUNTDOWN_SECONDS: 15,                    // increased from 5 to 15
+  ROUND_DURATION: 30 * 1000,                // 30 seconds total (including countdown)
+  MULTIPLIER_UPDATE_INTERVAL: 100,           // 100ms updates
+  HOUSE_EDGE: 0.05,                          // 5% house edge
+  MAX_MULTIPLIER: 1000,                       // safety cap
+  COMMISSION_RATE: 0.10,                      // 10% agent commission
   ROUND_HISTORY_LIMIT: 10
 };
 
@@ -59,13 +59,12 @@ class CrashGame {
     }
     this.userSockets.get(socket.userId).add(socket.id);
 
-    // Send current round state
+    // Send current round state (crashPoint removed)
     socket.emit('crash:roundState', {
       status: this.currentRound.status,
       roundId: this.currentRound.id,
       countdown: this.currentRound.countdown,
       multiplier: this.currentRound.multiplier,
-      crashPoint: this.currentRound.crashPoint, // for debugging only – remove in production
       history: this.currentRound.history,
       totalBets: this.currentRound.totalBets,
       totalPlayers: this.currentRound.totalPlayers
@@ -145,9 +144,7 @@ class CrashGame {
 
   generateCrashPoint() {
     // Random crash point with house edge: 1 / (random * (1 - edge))
-    // Example: edge 0.05 => average multiplier ~ 1.0526
     const r = Math.random();
-    // Ensure crash point is at least 1.00
     return Math.max(1.00, 1 / (r * (1 - CONFIG.HOUSE_EDGE)));
   }
 
@@ -178,11 +175,10 @@ class CrashGame {
       history: this.currentRound.history || []
     };
 
-    // Broadcast countdown start to crash room
+    // Broadcast countdown start (crashPoint removed)
     this.io.to('crash').emit('crash:roundCountdown', {
       roundId,
-      countdown: this.currentRound.countdown,
-      crashPoint // only for debugging – remove in production
+      countdown: this.currentRound.countdown
     });
 
     // Countdown timer
@@ -209,7 +205,7 @@ class CrashGame {
     this.multiplierInterval = setInterval(() => {
       if (this.currentRound.status !== 'running') return;
 
-      // Increase multiplier (simple linear – you can use easing for smoother feel)
+      // Increase multiplier
       this.currentRound.multiplier = Math.min(
         this.currentRound.multiplier + 0.01,
         CONFIG.MAX_MULTIPLIER
@@ -221,7 +217,14 @@ class CrashGame {
         return;
       }
 
-      // Broadcast multiplier to all players in crash room
+      // Server-side auto cashout
+      for (let [userId, bet] of this.currentRound.bets.entries()) {
+        if (!bet.cashedOutAt && bet.autoCashout && this.currentRound.multiplier >= bet.autoCashout) {
+          this.autoCashoutUser(userId).catch(err => console.error('Auto cashout failed:', err));
+        }
+      }
+
+      // Broadcast multiplier
       this.io.to('crash').emit('crash:multiplierUpdate', {
         multiplier: this.currentRound.multiplier
       });
@@ -233,13 +236,14 @@ class CrashGame {
     this.currentRound.status = 'crashed';
     this.currentRound.endTime = Date.now();
 
-    // Process all uncashed bets as losses
+    // Process all uncashed bets as losses (async but don't block)
+    const lossPromises = [];
     for (let [userId, bet] of this.currentRound.bets.entries()) {
       if (!bet.cashedOutAt) {
-        // Bet lost – mark transaction as lost
-        this.recordLoss(userId, bet);
+        lossPromises.push(this.recordLoss(userId, bet));
       }
     }
+    Promise.all(lossPromises).catch(err => console.error('Error recording losses:', err));
 
     // Update stats
     this.stats.totalGames++;
@@ -258,7 +262,7 @@ class CrashGame {
       this.currentRound.history.pop();
     }
 
-    // Emit crash event to all players
+    // Emit crash event
     this.io.to('crash').emit('crash:roundCrashed', {
       roundId: this.currentRound.id,
       crashPoint: this.currentRound.crashPoint,
@@ -274,7 +278,6 @@ class CrashGame {
     const userId = socket.userId;
     if (!userId) return socket.emit('crash:error', 'Not authenticated');
 
-    // Validate round state
     if (this.currentRound.status !== 'countdown' && this.currentRound.status !== 'waiting') {
       return socket.emit('crash:error', 'Cannot bet at this time');
     }
@@ -284,18 +287,15 @@ class CrashGame {
       return socket.emit('crash:error', `Bet must be between ${CONFIG.MIN_BET} and ${CONFIG.MAX_BET} ETB`);
     }
 
-    // Check if user already has a bet this round
     if (this.currentRound.bets.has(userId)) {
       return socket.emit('crash:error', 'You already placed a bet this round');
     }
 
-    // Check user balance
     const user = await this.models.User.findOne({ userId });
     if (!user || user.balance < amount) {
       return socket.emit('crash:error', 'Insufficient balance');
     }
 
-    // Deduct balance immediately
     user.balance -= amount;
     await user.save();
 
@@ -309,21 +309,19 @@ class CrashGame {
     this.currentRound.totalBets += amount;
     this.currentRound.totalPlayers++;
 
-    // Record transaction (pending)
+    // Record transaction with roundId
     const transaction = new this.models.Transaction({
       type: 'CRASH_BET',
       userId,
       userName: user.userName,
       amount: -amount,
       description: `Crash game bet – round ${this.currentRound.id}`,
-      status: 'pending'   // will be updated on win/loss
+      roundId: this.currentRound.id,
+      status: 'pending'
     });
     await transaction.save();
 
-    // Notify player
     socket.emit('crash:betPlaced', { roundId: this.currentRound.id, amount });
-
-    // Broadcast updated total bets to all
     this.io.to('crash').emit('crash:totalBets', { totalBets: this.currentRound.totalBets });
   }
 
@@ -340,51 +338,88 @@ class CrashGame {
       return socket.emit('crash:error', 'No active bet or already cashed out');
     }
 
-    // Calculate payout
     const multiplier = this.currentRound.multiplier;
     const payout = bet.amount * multiplier;
     bet.cashedOutAt = multiplier;
     bet.payout = payout;
 
-    // Update user balance
     const user = await this.models.User.findOne({ userId });
     if (user) {
       user.balance += payout;
       await user.save();
 
-      // Record win transaction
       const transaction = new this.models.Transaction({
         type: 'CRASH_WIN',
         userId,
         userName: user.userName,
         amount: payout,
         description: `Crash game win – round ${this.currentRound.id} at ${multiplier.toFixed(2)}x`,
+        roundId: this.currentRound.id,
         status: 'completed'
       });
       await transaction.save();
 
-      // Update stats
       this.stats.totalPayouts += payout;
 
-      // **Agent Commission** (10% of net win)
       const netWin = payout - bet.amount;
       if (netWin > 0 && user.agentId) {
         await this.processAgentCommission(user, netWin, this.currentRound.id);
       }
 
-      // Notify player
       socket.emit('crash:cashOutSuccess', { multiplier, payout });
-      this.io.to('crash').emit('crash:playerCashedOut', { userId, multiplier }); // optional
+      this.io.to('crash').emit('crash:playerCashedOut', { userId, multiplier });
+    }
+  }
 
-      // Update total bets display (decrease total bets? not necessary)
+  async autoCashoutUser(userId) {
+    const bet = this.currentRound.bets.get(userId);
+    if (!bet || bet.cashedOutAt) return;
+
+    const multiplier = this.currentRound.multiplier;
+    const payout = bet.amount * multiplier;
+    bet.cashedOutAt = multiplier;
+    bet.payout = payout;
+
+    const user = await this.models.User.findOne({ userId });
+    if (user) {
+      user.balance += payout;
+      await user.save();
+
+      await this.models.Transaction.create({
+        type: 'CRASH_WIN',
+        userId,
+        userName: user.userName,
+        amount: payout,
+        description: `Crash game win (auto) – round ${this.currentRound.id} at ${multiplier.toFixed(2)}x`,
+        roundId: this.currentRound.id,
+        status: 'completed'
+      });
+
+      this.stats.totalPayouts += payout;
+
+      const netWin = payout - bet.amount;
+      if (netWin > 0 && user.agentId) {
+        await this.processAgentCommission(user, netWin, this.currentRound.id);
+      }
+
+      // Notify all clients
+      this.io.to('crash').emit('crash:playerCashedOut', { userId, multiplier });
     }
   }
 
   async recordLoss(userId, bet) {
-    // Update transaction status to lost
+    // Update only the pending bet for this specific round
     await this.models.Transaction.updateMany(
-      { userId, type: 'CRASH_BET', status: 'pending' },
-      { status: 'lost', description: `Crash game loss – round ${this.currentRound.id}` }
+      {
+        userId,
+        type: 'CRASH_BET',
+        roundId: this.currentRound.id,
+        status: 'pending'
+      },
+      {
+        status: 'lost',
+        description: `Crash game loss – round ${this.currentRound.id}`
+      }
     );
     // No balance change (already deducted)
   }
@@ -397,14 +432,13 @@ class CrashGame {
       const commission = netWin * CONFIG.COMMISSION_RATE;
       if (commission <= 0) return;
 
-      // Create commission record
       const commissionRecord = new this.models.AgentCommission({
         agentId: agent._id,
         userId: user.userId,
         userName: user.userName,
         telegramUsername: user.telegramUsername,
         gameType: 'CRASH',
-        stake: netWin, // net win is the basis for commission? Actually commission on net win.
+        stake: netWin,
         winningAmount: netWin,
         commissionRate: CONFIG.COMMISSION_RATE,
         commissionAmount: commission,
@@ -412,12 +446,10 @@ class CrashGame {
       });
       await commissionRecord.save();
 
-      // Update agent totals
       agent.totalEarnings += commission;
       agent.lastCommissionDate = new Date();
       await agent.save();
 
-      // Update user's agent commission earned
       user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commission;
       await user.save();
 
