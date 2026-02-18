@@ -46,7 +46,7 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            font-size: 70px;
+            font-size: 48px;               /* reduced from 70px */
             font-weight: 800;
             text-shadow: 0 0 30px #f97316, 0 0 60px #f97316;
             color: #fdba74;
@@ -658,7 +658,8 @@
                     ctx.save();
                     ctx.shadowColor = '#f97316';
                     ctx.shadowBlur = 20;
-                    ctx.drawImage(planeImage, x - 30, y - 20, 70, 45);
+                    // Draw plane larger (140x90) and centered on (x, y)
+                    ctx.drawImage(planeImage, x - 70, y - 45, 140, 90);
                     ctx.restore();
                 }
 
@@ -694,6 +695,19 @@
                     snd.volume = 0.5;
                     snd.play().catch(e => console.warn('Sound play failed:', e));
                 }
+            }
+
+            // Try to play background on first user interaction (required by browsers)
+            function enableBackgroundSoundOnFirstClick() {
+                const handler = () => {
+                    if (soundEnabled && audioElements.background) {
+                        audioElements.background.play().catch(e => console.warn('Background play failed:', e));
+                    }
+                    document.body.removeEventListener('click', handler, { capture: true });
+                    document.body.removeEventListener('touchstart', handler, { capture: true });
+                };
+                document.body.addEventListener('click', handler, { capture: true, once: true });
+                document.body.addEventListener('touchstart', handler, { capture: true, once: true });
             }
 
             soundToggle.addEventListener('click', () => {
@@ -739,6 +753,7 @@
             initSounds();
             initSocket();
             fetchBalance();
+            enableBackgroundSoundOnFirstClick();   // added to handle autoplay
 
             // Enable bet button after user known
             placeBetBtn.disabled = !userId;
