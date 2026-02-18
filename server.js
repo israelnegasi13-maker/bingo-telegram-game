@@ -1,4 +1,4 @@
-// server.js - BINGO ELITE + KENO ULTRA + AGENT SYSTEM - TELEGRAM MINI APP - MAIN SERVER FILE
+// server.js - BINGO ELITE + KENO ULTRA + CRASH GAME + AGENT SYSTEM - TELEGRAM MINI APP - MAIN SERVER FILE
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -16,6 +16,8 @@ const crypto = require('crypto');  // added for generating app user IDs
 // Import game logic modules
 const gameLogic = require('./game-logic');
 const kenoLogic = require('./keno-logic');
+// ========== NEW: Import Crash Game ==========
+const crashLogic = require('./crash-logic');
 
 // Import Agent System
 const AgentSystem = require('./agent-logic');
@@ -60,12 +62,12 @@ async function connectWithRetry(retries = MAX_RETRIES) {
 connectWithRetry();
 
 // ========== CREATE REQUIRED DIRECTORIES AND FILES ==========
-const requiredDirs = ['public'];
+const requiredDirs = ['public', 'assets/images', 'assets/sounds']; // added assets subfolders
 const requiredFiles = {
   'public/index.html': `<!DOCTYPE html>
 <html>
 <head>
-  <title>Bingo Elite + Keno Ultra + Agent System</title>
+  <title>Bingo Elite + Keno Ultra + Crash + Agent System</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
     .container { max-width: 800px; margin: 0 auto; }
@@ -74,7 +76,7 @@ const requiredFiles = {
 </head>
 <body>
   <div class="container">
-    <h1>🎮 Bingo Elite + Keno Ultra + Agent System</h1>
+    <h1>🎮 Bingo Elite + Keno Ultra + Crash + Agent System</h1>
     <p>Server is running successfully!</p>
     <div>
       <a href="/admin" class="btn" style="background: #ef4444;">🔒 Admin Panel</a>
@@ -82,6 +84,7 @@ const requiredFiles = {
       <a href="/telegram" class="btn" style="background: #8b5cf6;">🤖 Telegram Entry</a>
       <a href="/game" class="btn" style="background: #10b981;">🎮 Play Bingo</a>
       <a href="/keno" class="btn" style="background: #8b5cf6;">🎰 Play Keno</a>
+      <a href="/crash" class="btn" style="background: #f97316;">✈️ Play Crash</a>
     </div>
   </div>
 </body>
@@ -295,6 +298,11 @@ const statsSchema = new mongoose.Schema({
   totalKenoEarnings: { type: Number, default: 0 },
   totalKenoGames: { type: Number, default: 0 },
   totalKenoWins: { type: Number, default: 0 },
+  // Crash Game stats
+  totalCrashWagered: { type: Number, default: 0 },
+  totalCrashPayouts: { type: Number, default: 0 },
+  totalCrashGames: { type: Number, default: 0 },
+  totalCrashPlayers: { type: Number, default: 0 },
   // Agent System stats
   agentCommissions: { type: Number, default: 0 },
   agentReferrals: { type: Number, default: 0 },
@@ -317,6 +325,7 @@ const agentSchema = new mongoose.Schema({
   phoneNumber: { type: String },
   commissionRateBingo: { type: Number, default: 40 }, // 40% commission
   commissionRateKeno: { type: Number, default: 10 }, // 10% commission
+  commissionRateCrash: { type: Number, default: 10 }, // 10% commission for Crash
   totalEarnings: { type: Number, default: 0 },
   totalReferrals: { type: Number, default: 0 },
   activeReferrals: { type: Number, default: 0 },
@@ -337,7 +346,7 @@ const agentCommissionSchema = new mongoose.Schema({
   transactionKey: { type: String, sparse: true, unique: true },
   userName: { type: String },
   telegramUsername: { type: String },
-  gameType: { type: String, enum: ['BINGO', 'KENO'], required: true },
+  gameType: { type: String, enum: ['BINGO', 'KENO', 'CRASH'], required: true }, // added CRASH
   stake: { type: Number, required: true },
   winningAmount: { type: Number, required: true },
   commissionRate: { type: Number, required: true },
@@ -536,6 +545,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// ========== NEW: Serve assets folder for images and sounds ==========
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
 // Security headers for Telegram
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -596,6 +608,11 @@ if (kenoLogic && kenoLogic.initialize) {
     AgentCommission,
     Referral
   });
+}
+
+// ========== NEW: Initialize Crash Game ==========
+if (crashLogic && crashLogic.initialize) {
+  crashLogic.initialize(io, models);
 }
 
 // Initialize Agent System
@@ -715,6 +732,12 @@ io.on('connection', (socket) => {
       if (kenoLogic && kenoLogic.getKenoGameStats) {
         const kenoStats = kenoLogic.getKenoGameStats();
         socket.emit('admin:kenoStats', kenoStats);
+      }
+      
+      // Send Crash stats
+      if (crashLogic && crashLogic.getCrashGameStats) {
+        const crashStats = crashLogic.getCrashGameStats();
+        socket.emit('admin:crashStats', crashStats);
       }
       
       // Send Agent stats
@@ -1296,6 +1319,44 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== CRASH GAME SOCKET EVENTS ==========
+  // Handle Crash socket connection
+  if (crashLogic && crashLogic.handleCrashConnection) {
+    crashLogic.handleCrashConnection(socket);
+  }
+  
+  // Admin: Get Crash stats
+  socket.on('admin:getCrashStats', () => {
+    if (socket.admin && crashLogic && crashLogic.getCrashGameStats) {
+      const stats = crashLogic.getCrashGameStats();
+      socket.emit('admin:crashStats', stats);
+    }
+  });
+
+  // Admin: Force crash round
+  socket.on('admin:forceCrashRound', () => {
+    if (socket.admin && crashLogic && crashLogic.forceCrashRound) {
+      const success = crashLogic.forceCrashRound();
+      socket.emit('admin:crashRoundForced', { success });
+    }
+  });
+
+  // Admin: Reset crash earnings
+  socket.on('admin:resetCrashEarnings', async () => {
+    if (socket.admin && crashLogic && crashLogic.resetCrashEarnings) {
+      const stats = await crashLogic.resetCrashEarnings();
+      socket.emit('admin:crashEarningsReset', stats);
+    }
+  });
+
+  // Admin: Get crash player list
+  socket.on('admin:getCrashPlayers', () => {
+    if (socket.admin && crashLogic && crashLogic.getCrashPlayerList) {
+      const players = crashLogic.getCrashPlayerList();
+      socket.emit('admin:crashPlayers', players);
+    }
+  });
+  
   // ========== HOUSE EARNINGS ==========
   // 👇 FIX #2: Completely rewritten reset handler
   socket.on('admin:resetHouseEarnings', async () => {
@@ -1444,6 +1505,11 @@ io.on('connection', (socket) => {
       kenoLogic.handleKenoDisconnect(socket);
     }
     
+    // Handle Crash disconnection
+    if (crashLogic && crashLogic.handleCrashDisconnect) {
+      crashLogic.handleCrashDisconnect(socket);
+    }
+    
     // Handle Agent disconnection
     if (agentSystem && agentSystem.handleAgentDisconnect) {
       agentSystem.handleAgentDisconnect(socket);
@@ -1587,6 +1653,12 @@ app.get('/', async (req, res) => {
     const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     const kenoPlayers = kenoLogic && kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
     const kenoOnline = kenoLogic && kenoLogic.getOnlinePlayersCount ? kenoLogic.getOnlinePlayersCount() : 0;
+    // ========== NEW: Crash stats ==========
+    const crashStats = crashLogic && crashLogic.getCrashGameStats ? crashLogic.getCrashGameStats() : { 
+      currentRound: { totalPlayers: 0, totalBets: 0 },
+      totalGames: 0,
+      totalWagered: 0
+    };
     const telebirrNumber = await getTelebirrNumber();
     
     // Get agent statistics
@@ -1613,7 +1685,7 @@ app.get('/', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bingo Elite + Keno Ultra + Agent System - Telegram Mini App</title>
+        <title>Bingo Elite + Keno Ultra + Crash + Agent System - Telegram Mini App</title>
         <style>
           body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
           .container { max-width: 1000px; margin: 0 auto; }
@@ -1629,10 +1701,13 @@ app.get('/', async (req, res) => {
           .btn-game:hover { background: #059669; }
           .btn-agent { background: #f59e0b; }
           .btn-agent:hover { background: #d97706; }
+          .btn-crash { background: #f97316; }
+          .btn-crash:hover { background: #ea580c; }
           .telebirr-info { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
           .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
           .fix-highlight { background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(16, 185, 129, 0.3); }
           .game-section { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
+          .crash-section { background: rgba(249, 115, 22, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(249, 115, 22, 0.3); }
           .agent-section { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
           .referral-stats { background: rgba(245, 158, 11, 0.05); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.2); }
           .referral-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; }
@@ -1642,7 +1717,7 @@ app.get('/', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite + Keno Ultra + Agent System</h1>
+          <h1 style="font-size: 3rem; margin-bottom: 20px;">🎮 Bingo Elite + Keno Ultra + Crash + Agent System</h1>
           <p style="color: #94a3b8; font-size: 1.2rem;">Multi-game Telegram Mini App with Agent/Referral System</p>
           
           <div class="status">
@@ -1655,6 +1730,10 @@ app.get('/', async (req, res) => {
               <div class="stat">
                 <div class="stat-label">Keno Players</div>
                 <div class="stat-value" style="color: #8b5cf6;">${kenoOnline}/${kenoPlayers}</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Crash Players</div>
+                <div class="stat-value" style="color: #f97316;">${crashStats.currentRound.totalPlayers}</div>
               </div>
               <div class="stat">
                 <div class="stat-label">Agents Active</div>
@@ -1710,13 +1789,14 @@ app.get('/', async (req, res) => {
                 1. ✅ Agent registration and login system<br>
                 2. ✅ 40% commission from Bingo wins<br>
                 3. ✅ 10% commission from Keno wins<br>
-                4. ✅ Real-time commission tracking<br>
-                5. ✅ Agent dashboard with stats<br>
-                6. ✅ Referral link generation<br>
-                7. ✅ Agent withdrawal requests<br>
-                8. ✅ Super admin panel for agent management<br>
-                9. ✅ Agent leaderboard<br>
-                10. ✅ Referral tracking and reporting<br>
+                4. ✅ 10% commission from Crash wins<br>
+                5. ✅ Real-time commission tracking<br>
+                6. ✅ Agent dashboard with stats<br>
+                7. ✅ Referral link generation<br>
+                8. ✅ Agent withdrawal requests<br>
+                9. ✅ Super admin panel for agent management<br>
+                10. ✅ Agent leaderboard<br>
+                11. ✅ Referral tracking and reporting<br>
               </p>
             </div>
             
@@ -1732,6 +1812,21 @@ app.get('/', async (req, res) => {
                 6. ✅ Payouts: Match 3-5 numbers<br>
                 7. ✅ Real-time multiplayer<br>
                 8. ✅ Automatic game rounds<br>
+              </p>
+            </div>
+            
+            <div class="crash-section">
+              <h3 style="color: #f97316;">✈️ CRASH GAME - NOW ACTIVE</h3>
+              <p style="color: #94a3b8;">
+                <strong>Features:</strong><br>
+                1. ✅ Multiplier increases until crash<br>
+                2. ✅ Cash out anytime before crash<br>
+                3. ✅ Bet amounts: 5-5000 ETB<br>
+                4. ✅ Auto cashout option<br>
+                5. ✅ Real‑time canvas animation<br>
+                6. ✅ Sound effects (optional)<br>
+                7. ✅ 10% agent commission on net wins<br>
+                8. ✅ Admin stats and controls<br>
               </p>
             </div>
             
@@ -1753,14 +1848,16 @@ app.get('/', async (req, res) => {
               </p>
             </div>
             
-            <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">👑 Agent Commissions: Bingo 40%, Keno 10%!</p>
+            <p style="margin-top: 20px; color: #f59e0b; font-weight: bold;">👑 Agent Commissions: Bingo 40%, Keno 10%, Crash 10%!</p>
             <p style="color: #f59e0b; margin-top: 10px; font-weight: bold;">💰 Agent Withdrawals: Processed within 24 hours</p>
             <p style="color: #8b5cf6; margin-top: 10px; font-weight: bold;">🎰 Keno Payouts: 3 matches = 1x, 4 matches = 5x, 5 matches = 50x</p>
+            <p style="color: #f97316; margin-top: 10px; font-weight: bold;">✈️ Crash: Cash out before it crashes!</p>
             <p style="color: #64748b; margin-top: 10px;">Server Time: ${new Date().toLocaleString()}</p>
             <p style="color: #10b981;">✅ Telegram Mini App Ready</p>
             <p style="color: #3b82f6; margin-top: 10px;">📦 Real-time Box Tracking: ✅ ACTIVE</p>
             <p style="color: #10b981; margin-top: 10px;">💰 Wallet System: ✅ ACTIVE</p>
             <p style="color: #f59e0b; margin-top: 10px;">👑 Agent System: ✅ ACTIVE</p>
+            <p style="color: #f97316; margin-top: 10px;">✈️ Crash Game: ✅ ACTIVE</p>
             <p style="color: #8b5cf6; margin-top: 10px; font-weight: bold;">🎮 More Games Coming Soon: Lottery & Slots!</p>
           </div>
           
@@ -1772,6 +1869,7 @@ app.get('/', async (req, res) => {
               <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">🤖 Telegram Entry</a>
               <a href="/game" class="btn btn-game" target="_blank">🎮 Bingo Game</a>
               <a href="/keno" class="btn" style="background: #8b5cf6;" target="_blank">🎰 Keno Game</a>
+              <a href="/crash" class="btn btn-crash" target="_blank">✈️ Crash Game</a>
             </div>
             <div style="margin-top: 20px;">
               <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -1788,9 +1886,10 @@ app.get('/', async (req, res) => {
           <div style="margin-top: 40px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px;">
             <h4>Telegram Mini App Information</h4>
             <p style="color: #94a3b8; font-size: 0.9rem;">
-              Version: 4.0.0 (BINGO + KENO + AGENT SYSTEM) | Database: MongoDB Atlas<br>
+              Version: 5.0.0 (BINGO + KENO + CRASH + AGENT SYSTEM) | Database: MongoDB Atlas<br>
               Socket.IO: ✅ Connected Sockets: ${connectedSockets}<br>
               Keno Players: ${kenoOnline} online / ${kenoPlayers} total<br>
+              Crash Players: ${crashStats.currentRound.totalPlayers} in current round<br>
               Agents: ${agentStats.activeAgents || 0} active / ${agentStats.totalAgents || 0} total<br>
               Agent Commissions: ${(agentStats.totalCommissions || 0).toFixed(2)} ETB<br>
               Agent Referrals: ${agentStats.totalReferrals || 0} total referrals<br>
@@ -1800,7 +1899,7 @@ app.get('/', async (req, res) => {
               Bot Username: @Ethio_elite_games_bot<br>
               Real-time Box Updates: ✅ ACTIVE<br>
               Wallet System: ✅ ACTIVE (Deposit/Withdraw)<br>
-              Agent System: ✅ ACTIVE (40% Bingo, 10% Keno commissions)<br>
+              Agent System: ✅ ACTIVE (40% Bingo, 10% Keno, 10% Crash commissions)<br>
               Referral System: ✅ ACTIVE (${usersWithAgents} users with agents)<br>
               <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
               Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
@@ -1808,6 +1907,7 @@ app.get('/', async (req, res) => {
               <strong>🎯 AGENT SYSTEM FEATURES:</strong><br>
               • 40% commission from Bingo wins<br>
               • 10% commission from Keno wins<br>
+              • 10% commission from Crash wins<br>
               • Real-time commission tracking<br>
               • Agent dashboard with statistics<br>
               • Referral link generation<br>
@@ -2012,7 +2112,7 @@ app.get('/app', (req, res) => {
         </div>
 
         <div class="info">
-          Create an account to play Bingo and Keno.
+          Create an account to play Bingo, Keno and Crash.
         </div>
       </div>
 
@@ -2265,6 +2365,7 @@ app.get('/agent', (req, res) => {
               <p style="text-align: left; color: #94a3b8;">
                 • 40% commission from Bingo wins<br>
                 • 10% commission from Keno wins<br>
+                • 10% commission from Crash wins<br>
                 • Real-time commission tracking<br>
                 • Agent dashboard with statistics<br>
                 • Referral link generation<br>
@@ -2321,7 +2422,7 @@ app.get('/telegram', async (req, res) => {
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
     // Load custom icons if present
-    let bingoIconBase64 = '', kenoIconBase64 = '';
+    let bingoIconBase64 = '', kenoIconBase64 = '', crashIconBase64 = '';
     try {
       const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
       const bingoBuffer = fs.readFileSync(bingoPath);
@@ -2332,7 +2433,8 @@ app.get('/telegram', async (req, res) => {
       const kenoBuffer = fs.readFileSync(kenoPath);
       kenoIconBase64 = kenoBuffer.toString('base64');
     } catch (e) {}
-
+    // Optional crash icon (not required, uses fallback)
+    
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -2491,6 +2593,9 @@ app.get('/telegram', async (req, res) => {
           .keno-icon {
             border-color: #8b5cf6;
           }
+          .crash-icon {
+            border-color: #f97316;
+          }
 
           /* Fallback CSS icons (if image missing) */
           .bingo-icon-fallback {
@@ -2546,6 +2651,23 @@ app.get('/telegram', async (req, res) => {
             text-shadow: 0 2px 0 #5b21b6;
             letter-spacing: 4px;
           }
+          .crash-icon-fallback {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(145deg, #3b2a1a, #251a0f);
+            border-radius: 18px;
+            border: 1px solid #f97316;
+          }
+          .crash-word {
+            font-size: 28px;
+            font-weight: 800;
+            color: #fdba74;
+            text-shadow: 0 2px 0 #b45309;
+            letter-spacing: 2px;
+          }
 
           .game-title {
             font-size: 18px;
@@ -2574,6 +2696,10 @@ app.get('/telegram', async (req, res) => {
           .play-btn.keno {
             border-color: #8b5cf6;
             color: #c4b5fd;
+          }
+          .play-btn.crash {
+            border-color: #f97316;
+            color: #fdba74;
           }
           .play-btn:active {
             background: rgba(59,130,246,0.1);
@@ -2771,19 +2897,21 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn keno">Play</button>
               </div>
 
+              <!-- CRASH card -->
+              <div class="game-card" onclick="launchGame('crash')">
+                <div class="crash-icon-fallback">
+                  <div class="crash-word">✈️</div>
+                </div>
+                <div class="game-title">Crash</div>
+                <div class="game-desc">Cash out before it crashes</div>
+                <button class="play-btn crash">Play</button>
+              </div>
+
               <!-- COMING SOON: Lottery -->
               <div class="game-card coming-soon">
                 <div style="width:80px;height:80px;background:#20262e;border-radius:18px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:32px;">🎫</div>
                 <div class="game-title">Ethio Lottery</div>
                 <div class="game-desc">Daily jackpots</div>
-                <button class="play-btn" disabled>Soon</button>
-              </div>
-
-              <!-- COMING SOON: Slots -->
-              <div class="game-card coming-soon">
-                <div style="width:80px;height:80px;background:#20262e;border-radius:18px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;font-size:32px;">🎰</div>
-                <div class="game-title">Slots Galaxy</div>
-                <div class="game-desc">Spin & win</div>
                 <button class="play-btn" disabled>Soon</button>
               </div>
             </div>
@@ -2920,6 +3048,7 @@ app.get('/telegram', async (req, res) => {
             const name = encodeURIComponent(appUserName || tg?.initDataUnsafe?.user?.first_name || 'User');
             if (game === 'bingo') window.location.href = '/game?userId=' + userId + '&name=' + name;
             if (game === 'keno') window.location.href = '/keno?userId=' + userId + '&name=' + name;
+            if (game === 'crash') window.location.href = '/crash?userId=' + userId + '&name=' + name;
           }
 
           // --- Modals ---
@@ -3007,10 +3136,10 @@ app.get('/telegram', async (req, res) => {
 
           // --- Helper popups ---
           function showHelp() {
-            tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
+            tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nCRASH: place bet, cash out before plane crashes.\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
           }
           function showAgentInfo() {
-            tg?.showPopup({ title: 'Agent System', message: '👑 Earn 40% Bingo, 10% Keno commissions.\\nOpen /agent portal or contact @Ethio_elite_games_bot' });
+            tg?.showPopup({ title: 'Agent System', message: '👑 Earn 40% Bingo, 10% Keno, 10% Crash commissions.\\nOpen /agent portal or contact @Ethio_elite_games_bot' });
           }
           function showTerms() {
             tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
@@ -3040,6 +3169,41 @@ app.get('/telegram', async (req, res) => {
         <h1>Error loading Telegram page</h1>
         <p>${error.message}</p>
         <a href="/">← Back to Home</a>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// ========== NEW: Serve Crash HTML page ==========
+app.get('/crash', (req, res) => {
+  const crashPath = path.join(__dirname, 'public', 'crash.html');
+  if (fs.existsSync(crashPath)) {
+    res.sendFile(crashPath);
+  } else {
+    // If crash.html doesn't exist, serve a placeholder (you should create the full crash.html file)
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Crash Game - ETHIO GAMES</title>
+        <style>
+          body { font-family: Arial; padding: 40px; text-align: center; background: #0f172a; color: white; }
+          h1 { color: #f97316; }
+        </style>
+      </head>
+      <body>
+        <h1>✈️ Crash Game</h1>
+        <p>Loading game... (ensure crash.html is in public folder)</p>
+        <a href="/">Back to Home</a>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+          const socket = io();
+          const urlParams = new URLSearchParams(window.location.search);
+          const userId = urlParams.get('userId');
+          const name = urlParams.get('name') || 'Player';
+          if (userId) socket.emit('init', { userId, userName: name });
+        </script>
       </body>
       </html>
     `);
@@ -3175,7 +3339,7 @@ app.get('/api/agent/:referralCode', async (req, res) => {
     const agent = await Agent.findOne({ 
       referralCode: req.params.referralCode,
       isActive: true 
-    }).select('name username referralCode commissionRateBingo commissionRateKeno');
+    }).select('name username referralCode commissionRateBingo commissionRateKeno commissionRateCrash');
     
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found or inactive' });
@@ -3189,7 +3353,8 @@ app.get('/api/agent/:referralCode', async (req, res) => {
         username: agent.username,
         referralCode: agent.referralCode,
         commissionRateBingo: agent.commissionRateBingo,
-        commissionRateKeno: agent.commissionRateKeno
+        commissionRateKeno: agent.commissionRateKeno,
+        commissionRateCrash: agent.commissionRateCrash
       }
     });
   } catch (error) {
@@ -3395,6 +3560,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `🎯 *Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
                   `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+                  `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
                   `• 🎫 **ETHIO LOTTERY** - Coming soon!\n` +
                   `• 🎰 **SLOTS GALAXY** - Coming soon!\n\n` +
                   `💳 *Wallet Instructions:*\n` +
@@ -3483,7 +3649,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
                   `4. You earn commission from their wins\n\n` +
                   `*Commission Rates:*\n` +
                   `• 🎱 Bingo wins: *40% commission*\n` +
-                  `• 🎰 Keno wins: *10% commission*\n\n` +
+                  `• 🎰 Keno wins: *10% commission*\n` +
+                  `• ✈️ Crash wins: *10% commission*\n\n` +
                   `*How to become agent:*\n` +
                   `Contact admin @Ethio_elite_games_bot`,
             parse_mode: 'Markdown',
@@ -3507,7 +3674,8 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `🎮 *ETHIO GAMES Help*\n\n` +
                   `*Games Available:*\n` +
                   `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection (NEW)\n` +
+                  `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+                  `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
                   `• 🎫 **ETHIO LOTTERY** - Coming soon!\n` +
                   `• 🎰 **SLOTS GALAXY** - Coming soon!\n\n` +
                   `*Commands:*\n` +
@@ -3585,6 +3753,7 @@ app.get('/setup-telegram', async (req, res) => {
           .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
           .agent-highlight { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
           .game-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
+          .crash-highlight { background: rgba(249, 115, 22, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(249, 115, 22, 0.3); }
         </style>
       </head>
       <body>
@@ -3611,6 +3780,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Commission Rates:</strong></p>
             <p>• Bingo wins: 40% commission</p>
             <p>• Keno wins: 10% commission</p>
+            <p>• Crash wins: 10% commission</p>
             <p><strong>Agent Features:</strong></p>
             <p>• Real-time commission tracking</p>
             <p>• Agent dashboard with statistics</p>
@@ -3624,7 +3794,8 @@ app.get('/setup-telegram', async (req, res) => {
             <h3>🎮 ALL GAMES - NOW AVAILABLE</h3>
             <p><strong>Active Games:</strong></p>
             <p>• 🎱 <strong>BINGO ELITE:</strong> Real-time multiplayer bingo</p>
-            <p>• 🎰 <strong>KENO ULTRA:</strong> Fast number selection (NEW)</p>
+            <p>• 🎰 <strong>KENO ULTRA:</strong> Fast number selection game</p>
+            <p>• ✈️ <strong>CRASH GAME:</strong> Cash out before it crashes</p>
             <p><strong>Coming Soon:</strong></p>
             <p>• 🎫 <strong>ETHIO LOTTERY:</strong> Daily draws with massive jackpots</p>
             <p>• 🎰 <strong>SLOTS GALAXY:</strong> Exciting slot machines with bonuses</p>
@@ -3635,6 +3806,16 @@ app.get('/setup-telegram', async (req, res) => {
             <p>• Admin approval for all transactions</p>
           </div>
           
+          <div class="crash-highlight">
+            <h3>✈️ CRASH GAME - NEW!</h3>
+            <p>• Multiplier increases until crash</p>
+            <p>• Cash out anytime before crash</p>
+            <p>• Auto cashout option</p>
+            <p>• Real‑time canvas animation</p>
+            <p>• 10% agent commission on net wins</p>
+            <p>• Play at <a href="/crash" style="color:#f97316;">/crash</a></p>
+          </div>
+          
           <div class="info-box">
             <h3>Bot Information:</h3>
             <p><strong>Bot:</strong> @Ethio_elite_games_bot</p>
@@ -3642,6 +3823,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
             <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
             <p><strong>Keno Game:</strong> https://bingo-telegram-game.onrender.com/keno</p>
+            <p><strong>Crash Game:</strong> https://bingo-telegram-game.onrender.com/crash</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</p>
           </div>
@@ -3659,7 +3841,7 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Open @Ethio_elite_games_bot in Telegram</li>
               <li>Click "Start"</li>
               <li>Click menu button (bottom left)</li>
-              <li>Choose between Bingo or Keno!</li>
+              <li>Choose between Bingo, Keno, or Crash!</li>
               <li>Check your wallet balance on the main screen</li>
             </ol>
             
@@ -3669,7 +3851,7 @@ app.get('/setup-telegram', async (req, res) => {
               <li>Login with agent credentials (contact admin)</li>
               <li>Generate referral link</li>
               <li>Share link with friends</li>
-              <li>Earn 40% from Bingo, 10% from Keno wins</li>
+              <li>Earn 40% from Bingo, 10% from Keno, 10% from Crash wins</li>
               <li>Request withdrawal when you have earnings</li>
             </ol>
             
@@ -3761,6 +3943,7 @@ app.get('/debug-agents', async (req, res) => {
         referralCode: a.referralCode,
         commissionRateBingo: a.commissionRateBingo,
         commissionRateKeno: a.commissionRateKeno,
+        commissionRateCrash: a.commissionRateCrash,
         totalEarnings: a.totalEarnings,
         totalReferrals: a.totalReferrals,
         activeReferrals: a.activeReferrals,
@@ -3855,6 +4038,7 @@ app.use((req, res) => {
           <a href="/agent" class="btn" style="background: #f59e0b;">👑 Agent Portal</a>
           <a href="/game" class="btn" style="background: #10b981;">🎮 Play Bingo</a>
           <a href="/keno" class="btn" style="background: #8b5cf6;">🎰 Play Keno</a>
+          <a href="/crash" class="btn" style="background: #f97316;">✈️ Play Crash</a>
         </div>
       </div>
     </body>
@@ -3879,7 +4063,7 @@ const httpServer = server.listen(PORT, HOST, async () => {
   const telebirrNumber = await getTelebirrNumber();
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║   🤖 BINGO ELITE + KENO ULTRA + AGENT SYSTEM - DEPLOYED ON RENDER           ║
+║   🤖 BINGO ELITE + KENO ULTRA + CRASH GAME + AGENT SYSTEM - DEPLOYED ON RENDER ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Server:       http://${HOST}:${PORT}                                       ║
 ║  Health:       /health                                                      ║
@@ -3890,6 +4074,7 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ║  Bot Username: @Ethio_elite_games_bot                                       ║
 ║  Telegram entry: /telegram                                                   ║
 ║  Mobile app:   /app                                                          ║
+║  Crash game:   /crash                                                        ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
