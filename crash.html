@@ -101,6 +101,51 @@
             letter-spacing: 0.3px;
         }
 
+        /* 🔥 NEW: Centered countdown overlay */
+        .countdown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+            pointer-events: none;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .countdown-overlay.active {
+            opacity: 1;
+        }
+        .countdown-circle {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: rgba(249, 115, 22, 0.15);
+            border: 4px solid #f97316;
+            box-shadow: 0 0 60px #f97316, inset 0 0 40px #f97316;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulseRing 1.5s infinite ease-out;
+        }
+        .countdown-number {
+            font-size: 120px;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0 0 30px #f97316, 0 0 60px #f97316;
+            line-height: 1;
+        }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7), inset 0 0 40px #f97316; }
+            70% { box-shadow: 0 0 0 30px rgba(249, 115, 22, 0), inset 0 0 60px #f97316; }
+            100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0), inset 0 0 40px #f97316; }
+        }
+
         .sound-toggle {
             position: absolute;
             top: 16px;
@@ -389,6 +434,8 @@
             .bet-input, .auto-cashout-input { padding: 12px 12px 12px 38px; font-size: 15px; }
             .bet-input-group::before { left: 14px; font-size: 16px; }
             .auto-cashout-group::before { left: 14px; font-size: 20px; }
+            .countdown-circle { width: 150px; height: 150px; }
+            .countdown-number { font-size: 80px; }
         }
     </style>
 </head>
@@ -400,6 +447,14 @@
         <div class="status-badge" id="statusBadge">WAITING</div>
         <div class="sound-toggle" id="soundToggle"><span>🔊</span> Sound On</div>
         <div class="history-strip" id="historyStrip"></div>
+
+        <!-- 🔥 NEW: Centered countdown overlay -->
+        <div class="countdown-overlay" id="countdownOverlay">
+            <div class="countdown-circle">
+                <span class="countdown-number" id="countdownNumber">15</span>
+            </div>
+        </div>
+
         <div class="loading" id="loading">
             <div class="spinner"></div>
         </div>
@@ -469,6 +524,9 @@
             const soundToggle = document.getElementById('soundToggle');
             const toast = document.getElementById('toastMessage');
             const loading = document.getElementById('loading');
+            // 🔥 NEW countdown elements
+            const countdownOverlay = document.getElementById('countdownOverlay');
+            const countdownNumber = document.getElementById('countdownNumber');
 
             // --- State ---
             let socket = io();
@@ -490,8 +548,8 @@
             let audioElements = {};
 
             // --- Smooth multiplier for animation ---
-            let targetMultiplier = 1.00;   // latest received multiplier
-            let smoothMultiplier = 1.00;   // value used for drawing (interpolated)
+            let targetMultiplier = 1.00;
+            let smoothMultiplier = 1.00;
 
             // Canvas animation
             let animationFrame = null;
@@ -573,7 +631,6 @@
 
                 socket.on('crash:roundState', (data) => {
                     currentRound = { ...currentRound, ...data };
-                    // Initialize smooth multiplier from state
                     targetMultiplier = currentRound.multiplier;
                     smoothMultiplier = currentRound.multiplier;
                     updateUI();
@@ -583,11 +640,15 @@
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
+                    // Show countdown overlay
+                    countdownOverlay.classList.add('active');
+                    countdownNumber.textContent = data.countdown;
                     updateUI();
                 });
 
                 socket.on('crash:countdownUpdate', (data) => {
                     currentRound.countdown = data.countdown;
+                    countdownNumber.textContent = data.countdown;
                     updateStatusBadge();
                 });
 
@@ -600,11 +661,13 @@
                     multiplierDisplay.classList.add('running');
                     updateStatusBadge();
                     playSound('takeoff');
+                    // Hide countdown overlay
+                    countdownOverlay.classList.remove('active');
                 });
 
                 socket.on('crash:multiplierUpdate', (data) => {
                     currentRound.multiplier = data.multiplier;
-                    targetMultiplier = data.multiplier;   // update target for smooth animation
+                    targetMultiplier = data.multiplier;
                     multiplierDisplay.textContent = formatMultiplier(data.multiplier);
                     if (data.multiplier >= 10) multiplierDisplay.style.color = '#10b981';
                     else if (data.multiplier >= 5) multiplierDisplay.style.color = '#fbbf24';
@@ -618,7 +681,9 @@
                 socket.on('crash:roundCrashed', (data) => {
                     currentRound.status = 'crashed';
                     currentRound.history = data.history;
-                    multiplierDisplay.textContent = '💥 CRASHED';
+                    currentRound.crashPoint = data.crashPoint;
+                    // 🔥 Show crash point instead of "CRASHED"
+                    multiplierDisplay.textContent = formatMultiplier(data.crashPoint);
                     multiplierDisplay.classList.remove('running');
                     multiplierDisplay.style.color = '#ef4444';
                     updateStatusBadge();
@@ -628,8 +693,8 @@
                         myBet = null;
                         fetchBalance();
                     }
-                    // Force immediate redraw to show explosion
-                    smoothMultiplier = targetMultiplier; // stop interpolation
+                    // Hide countdown overlay if somehow visible
+                    countdownOverlay.classList.remove('active');
                 });
 
                 socket.on('crash:totalBets', (data) => {
@@ -644,9 +709,29 @@
                     fetchBalance();
                 });
 
+                // 🔥 NEW: Restore bet after page reload
+                socket.on('crash:userBet', (data) => {
+                    myBet = {
+                        amount: data.amount,
+                        autoCashout: data.autoCashout,
+                        cashedOutAt: data.cashedOutAt
+                    };
+                    // Enable/disable buttons based on round state and bet
+                    if (currentRound.status === 'running' && !myBet.cashedOutAt) {
+                        cashOutBtn.disabled = false;
+                    } else {
+                        cashOutBtn.disabled = true;
+                    }
+                    if (currentRound.status === 'countdown') {
+                        placeBetBtn.disabled = true; // already have bet
+                    }
+                });
+
                 socket.on('crash:cashOutSuccess', (data) => {
-                    myBet.cashedOutAt = data.multiplier;
-                    myBet.payout = data.payout;
+                    if (myBet) {
+                        myBet.cashedOutAt = data.multiplier;
+                        myBet.payout = data.payout;
+                    }
                     cashOutBtn.disabled = true;
                     playSound('cashout');
                     showToast(`Cashed out at ${data.multiplier.toFixed(2)}x – won ${data.payout.toFixed(2)} ETB`, false);
@@ -727,7 +812,6 @@
 
                 // --- Smooth multiplier interpolation ---
                 if (Math.abs(smoothMultiplier - targetMultiplier) > 0.001) {
-                    // Ease toward target (10% per frame)
                     smoothMultiplier += (targetMultiplier - smoothMultiplier) * 0.1;
                 } else {
                     smoothMultiplier = targetMultiplier;
@@ -735,7 +819,6 @@
 
                 // Draw plane only during running state
                 if (currentRound.status === 'running' && planeReady) {
-                    // Use smoothMultiplier for continuous motion
                     const progress = Math.min(smoothMultiplier / (currentRound.crashPoint || 10), 1);
                     const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
                     const x = canvas.width * 0.1 + progress * canvas.width * 0.7;
@@ -776,7 +859,6 @@
                 }
             }
 
-            // --- Safe draw wrapper to prevent canvas freezes ---
             function drawSafe() {
                 try {
                     draw();
