@@ -2421,7 +2421,7 @@ app.get('/telegram', async (req, res) => {
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
-    // Load custom icons if present
+    // Load custom icons from root folder
     let bingoIconBase64 = '', kenoIconBase64 = '', crashIconBase64 = '';
     try {
       const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
@@ -2433,7 +2433,12 @@ app.get('/telegram', async (req, res) => {
       const kenoBuffer = fs.readFileSync(kenoPath);
       kenoIconBase64 = kenoBuffer.toString('base64');
     } catch (e) {}
-    // Optional crash icon (not required, uses fallback)
+    // ========== FIXED: Load crash icon from root ==========
+    try {
+      const crashPath = path.join(__dirname, 'crash-icon.png');
+      const crashBuffer = fs.readFileSync(crashPath);
+      crashIconBase64 = crashBuffer.toString('base64');
+    } catch (e) {}
     
     res.send(`
       <!DOCTYPE html>
@@ -2899,9 +2904,12 @@ app.get('/telegram', async (req, res) => {
 
               <!-- CRASH card -->
               <div class="game-card" onclick="launchGame('crash')">
-                <div class="crash-icon-fallback">
-                  <div class="crash-word">✈️</div>
-                </div>
+                ${crashIconBase64 
+                  ? `<img src="data:image/png;base64,${crashIconBase64}" class="game-icon crash-icon" alt="Crash">`
+                  : `<div class="crash-icon-fallback">
+                       <div class="crash-word">✈️</div>
+                     </div>`
+                }
                 <div class="game-title">Crash</div>
                 <div class="game-desc">Cash out before it crashes</div>
                 <button class="play-btn crash">Play</button>
@@ -3177,36 +3185,43 @@ app.get('/telegram', async (req, res) => {
 
 // ========== NEW: Serve Crash HTML page ==========
 app.get('/crash', (req, res) => {
-  const crashPath = path.join(__dirname, 'public', 'crash.html');
+  // ✅ FIX: look for crash.html in the root directory (same as server.js)
+  const crashPath = path.join(__dirname, 'crash.html');
   if (fs.existsSync(crashPath)) {
     res.sendFile(crashPath);
   } else {
-    // If crash.html doesn't exist, serve a placeholder (you should create the full crash.html file)
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Crash Game - ETHIO GAMES</title>
-        <style>
-          body { font-family: Arial; padding: 40px; text-align: center; background: #0f172a; color: white; }
-          h1 { color: #f97316; }
-        </style>
-      </head>
-      <body>
-        <h1>✈️ Crash Game</h1>
-        <p>Loading game... (ensure crash.html is in public folder)</p>
-        <a href="/">Back to Home</a>
-        <script src="/socket.io/socket.io.js"></script>
-        <script>
-          const socket = io();
-          const urlParams = new URLSearchParams(window.location.search);
-          const userId = urlParams.get('userId');
-          const name = urlParams.get('name') || 'Player';
-          if (userId) socket.emit('init', { userId, userName: name });
-        </script>
-      </body>
-      </html>
-    `);
+    // Fallback if crash.html is in public folder (or missing)
+    const publicCrashPath = path.join(__dirname, 'public', 'crash.html');
+    if (fs.existsSync(publicCrashPath)) {
+      res.sendFile(publicCrashPath);
+    } else {
+      // Final fallback
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Crash Game - ETHIO GAMES</title>
+          <style>
+            body { font-family: Arial; padding: 40px; text-align: center; background: #0f172a; color: white; }
+            h1 { color: #f97316; }
+          </style>
+        </head>
+        <body>
+          <h1>✈️ Crash Game</h1>
+          <p>Loading game... (ensure crash.html is in the root folder)</p>
+          <a href="/">Back to Home</a>
+          <script src="/socket.io/socket.io.js"></script>
+          <script>
+            const socket = io();
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('userId');
+            const name = urlParams.get('name') || 'Player';
+            if (userId) socket.emit('init', { userId, userName: name });
+          </script>
+        </body>
+        </html>
+      `);
+    }
   }
 });
 
