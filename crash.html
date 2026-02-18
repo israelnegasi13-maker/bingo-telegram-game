@@ -101,7 +101,6 @@
             letter-spacing: 0.3px;
         }
 
-        /* 🔥 NEW: Centered countdown overlay */
         .countdown-overlay {
             position: absolute;
             top: 0;
@@ -239,76 +238,37 @@
             line-height: 1;
         }
 
-        .bet-panel {
+        /* NEW: amount buttons */
+        .amount-buttons {
             display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+            margin-bottom: 8px;
         }
-        .bet-input-group {
-            flex: 2;
-            min-width: 180px;
-            position: relative;
-        }
-        .bet-input-group::before {
-            content: '₿';
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #f97316;
+        .amount-btn {
+            flex: 1;
+            background: #0e141f;
+            border: 2px solid #2a3a50;
+            border-radius: 40px;
+            padding: 12px 0;
             font-weight: 700;
             font-size: 18px;
-            z-index: 1;
+            color: #fbbf24;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 4px 0 #0b111a;
+            text-align: center;
         }
-        .bet-input {
-            width: 100%;
-            padding: 14px 14px 14px 42px;
-            background: #0e141f;
-            border: 1px solid #2a3a50;
-            border-radius: 40px;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.2s;
-            box-shadow: inset 0 4px 10px rgba(0,0,0,0.6);
-        }
-        .bet-input:focus {
+        .amount-btn.active {
+            background: #f97316;
             border-color: #f97316;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(249,115,22,0.3), inset 0 2px 8px black;
-        }
-
-        .auto-cashout-group {
-            flex: 1;
-            min-width: 130px;
-            position: relative;
-        }
-        .auto-cashout-group::before {
-            content: '×';
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #f97316;
-            font-weight: 700;
-            font-size: 22px;
-            z-index: 1;
-        }
-        .auto-cashout-input {
-            width: 100%;
-            padding: 14px 14px 14px 42px;
-            background: #0e141f;
-            border: 1px solid #2a3a50;
-            border-radius: 40px;
             color: white;
-            font-size: 16px;
-            font-weight: 600;
-            box-shadow: inset 0 4px 10px rgba(0,0,0,0.6);
+            box-shadow: 0 4px 0 #b2530e;
+            transform: translateY(-2px);
         }
-        .auto-cashout-input:focus {
-            border-color: #f97316;
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(249,115,22,0.3);
+        .amount-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #0b111a;
         }
 
         .action-buttons {
@@ -431,9 +391,7 @@
             .sound-toggle { right: 120px; padding: 6px 14px; font-size: 13px; }
             .balance-value { font-size: 22px; }
             .btn { font-size: 16px; padding: 14px 8px; }
-            .bet-input, .auto-cashout-input { padding: 12px 12px 12px 38px; font-size: 15px; }
-            .bet-input-group::before { left: 14px; font-size: 16px; }
-            .auto-cashout-group::before { left: 14px; font-size: 20px; }
+            .amount-btn { font-size: 16px; padding: 10px 0; }
             .countdown-circle { width: 150px; height: 150px; }
             .countdown-number { font-size: 80px; }
         }
@@ -448,7 +406,6 @@
         <div class="sound-toggle" id="soundToggle"><span>🔊</span> Sound On</div>
         <div class="history-strip" id="historyStrip"></div>
 
-        <!-- 🔥 NEW: Centered countdown overlay -->
         <div class="countdown-overlay" id="countdownOverlay">
             <div class="countdown-circle">
                 <span class="countdown-number" id="countdownNumber">15</span>
@@ -466,13 +423,12 @@
             <span class="balance-value" id="balanceDisplay">0.00 ETB</span>
         </div>
 
-        <div class="bet-panel">
-            <div class="bet-input-group">
-                <input type="number" id="betAmount" class="bet-input" placeholder="Bet (5-5000)" min="5" max="5000" step="1" value="10">
-            </div>
-            <div class="auto-cashout-group">
-                <input type="number" id="autoCashout" class="auto-cashout-input" placeholder="Auto x" min="1.1" step="0.1" value="2.0">
-            </div>
+        <!-- NEW: quick amount buttons -->
+        <div class="amount-buttons" id="amountButtons">
+            <button class="amount-btn active" data-amount="10">10 ETB</button>
+            <button class="amount-btn" data-amount="20">20 ETB</button>
+            <button class="amount-btn" data-amount="50">50 ETB</button>
+            <button class="amount-btn" data-amount="100">100 ETB</button>
         </div>
 
         <div class="action-buttons">
@@ -517,16 +473,16 @@
             const roundIdSpan = document.getElementById('roundId');
             const playersCountSpan = document.getElementById('playersCount');
             const totalBetsSpan = document.getElementById('totalBets');
-            const betAmountInput = document.getElementById('betAmount');
-            const autoCashoutInput = document.getElementById('autoCashout');
             const placeBetBtn = document.getElementById('placeBetBtn');
             const cashOutBtn = document.getElementById('cashOutBtn');
             const soundToggle = document.getElementById('soundToggle');
             const toast = document.getElementById('toastMessage');
             const loading = document.getElementById('loading');
-            // 🔥 NEW countdown elements
             const countdownOverlay = document.getElementById('countdownOverlay');
             const countdownNumber = document.getElementById('countdownNumber');
+            // NEW: amount buttons
+            const amountButtons = document.querySelectorAll('.amount-btn');
+            let selectedAmount = 10; // default
 
             // --- State ---
             let socket = io();
@@ -601,6 +557,15 @@
                 }
             }
 
+            // --- Amount button handling ---
+            amountButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    amountButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedAmount = parseInt(btn.dataset.amount, 10);
+                });
+            });
+
             // --- Socket Handlers ---
             function initSocket() {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -616,7 +581,6 @@
 
                 socket.emit('init', { userId, userName });
 
-                // --- Reconnect handling ---
                 socket.on('connect', () => {
                     console.log('Socket reconnected – requesting fresh state');
                     if (userId) {
@@ -640,7 +604,6 @@
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
-                    // Show countdown overlay
                     countdownOverlay.classList.add('active');
                     countdownNumber.textContent = data.countdown;
                     updateUI();
@@ -661,7 +624,6 @@
                     multiplierDisplay.classList.add('running');
                     updateStatusBadge();
                     playSound('takeoff');
-                    // Hide countdown overlay
                     countdownOverlay.classList.remove('active');
                 });
 
@@ -673,16 +635,13 @@
                     else if (data.multiplier >= 5) multiplierDisplay.style.color = '#fbbf24';
                     else multiplierDisplay.style.color = '#fcd34d';
 
-                    if (myBet && !myBet.cashedOutAt && myBet.autoCashout && data.multiplier >= myBet.autoCashout) {
-                        socket.emit('crash:cashOut');
-                    }
+                    // AUTO‑CAShOUT CHECK REMOVED
                 });
 
                 socket.on('crash:roundCrashed', (data) => {
                     currentRound.status = 'crashed';
                     currentRound.history = data.history;
                     currentRound.crashPoint = data.crashPoint;
-                    // 🔥 Show crash point instead of "CRASHED"
                     multiplierDisplay.textContent = formatMultiplier(data.crashPoint);
                     multiplierDisplay.classList.remove('running');
                     multiplierDisplay.style.color = '#ef4444';
@@ -693,7 +652,6 @@
                         myBet = null;
                         fetchBalance();
                     }
-                    // Hide countdown overlay if somehow visible
                     countdownOverlay.classList.remove('active');
                 });
 
@@ -703,27 +661,24 @@
                 });
 
                 socket.on('crash:betPlaced', (data) => {
-                    myBet = { amount: data.amount, autoCashout: null, cashedOutAt: null };
+                    myBet = { amount: data.amount, cashedOutAt: null };
                     placeBetBtn.disabled = true;
                     cashOutBtn.disabled = false;
                     fetchBalance();
                 });
 
-                // 🔥 NEW: Restore bet after page reload
                 socket.on('crash:userBet', (data) => {
                     myBet = {
                         amount: data.amount,
-                        autoCashout: data.autoCashout,
                         cashedOutAt: data.cashedOutAt
                     };
-                    // Enable/disable buttons based on round state and bet
                     if (currentRound.status === 'running' && !myBet.cashedOutAt) {
                         cashOutBtn.disabled = false;
                     } else {
                         cashOutBtn.disabled = true;
                     }
                     if (currentRound.status === 'countdown') {
-                        placeBetBtn.disabled = true; // already have bet
+                        placeBetBtn.disabled = true;
                     }
                 });
 
@@ -778,11 +733,10 @@
                 }).join('');
             }
 
-            // --- Canvas Drawing (smooth plane movement) ---
+            // --- Canvas Drawing (unchanged) ---
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Background gradient
                 const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
                 grd.addColorStop(0, '#0b1a2b');
                 grd.addColorStop(0.7, '#142734');
@@ -790,7 +744,6 @@
                 ctx.fillStyle = grd;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // Runway glow
                 ctx.shadowColor = '#f97316';
                 ctx.shadowBlur = 20;
                 ctx.beginPath();
@@ -810,14 +763,12 @@
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // --- Smooth multiplier interpolation ---
                 if (Math.abs(smoothMultiplier - targetMultiplier) > 0.001) {
                     smoothMultiplier += (targetMultiplier - smoothMultiplier) * 0.1;
                 } else {
                     smoothMultiplier = targetMultiplier;
                 }
 
-                // Draw plane only during running state
                 if (currentRound.status === 'running' && planeReady) {
                     const progress = Math.min(smoothMultiplier / (currentRound.crashPoint || 10), 1);
                     const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
@@ -828,7 +779,6 @@
                     let planeWidth = Math.min(200, canvas.width * 0.3);
                     let planeHeight = planeWidth * (45 / 70);
 
-                    // Contrail
                     ctx.shadowColor = '#f97316';
                     ctx.shadowBlur = 25;
                     for (let i = 1; i <= 4; i++) {
@@ -860,11 +810,7 @@
             }
 
             function drawSafe() {
-                try {
-                    draw();
-                } catch (e) {
-                    console.error('Canvas error', e);
-                }
+                try { draw(); } catch (e) { console.error('Canvas error', e); }
                 animationFrame = requestAnimationFrame(drawSafe);
             }
 
@@ -901,17 +847,13 @@
 
             // --- Betting Actions ---
             placeBetBtn.addEventListener('click', () => {
-                const amount = parseFloat(betAmountInput.value);
-                const auto = parseFloat(autoCashoutInput.value) || null;
-                if (isNaN(amount) || amount < 5 || amount > 5000) {
-                    showToast('Enter a valid bet amount (5–5000)');
+                const amount = selectedAmount;
+                if (amount < 5 || amount > 5000) {
+                    showToast('Selected amount is invalid');
                     return;
                 }
-                if (auto && (auto < 1.1 || auto > 1000)) {
-                    showToast('Auto cashout must be ≥1.1x');
-                    return;
-                }
-                socket.emit('crash:placeBet', { amount, autoCashout: auto });
+                // Send only amount (autoCashout removed)
+                socket.emit('crash:placeBet', { amount });
             });
 
             cashOutBtn.addEventListener('click', () => {
@@ -927,7 +869,6 @@
             window.addEventListener('resize', resizeCanvas);
             resizeCanvas();
 
-            // --- Start animation with safe wrapper ---
             animationFrame = requestAnimationFrame(drawSafe);
 
             // --- Start ---
