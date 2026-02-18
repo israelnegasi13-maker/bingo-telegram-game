@@ -716,44 +716,21 @@ async function cleanupLongRunningGames() {
   }
 }
 
-// ========== OPTIMIZED GAME TIMER FUNCTION ==========
+// ========== OPTIMIZED GAME TIMER FUNCTION (UPDATED) ==========
 async function startGameTimer(room) {
-  console.log(`🎲 STARTING OPTIMIZED GAME TIMER for room ${room.stake} with ${room.players.length} players`);
-  
-  // Clear any existing timer first
+  console.log(`🎲 STARTING GAME TIMER for room ${room.stake} with ${room.players.length} players`);
+
+  // Clear any existing timer
   cleanupRoomTimer(room.stake);
-  
+
   // Reset called numbers
   room.calledNumbers = [];
   room.currentBall = null;
   room.ballsDrawn = 0;
   room.startTime = new Date();
   await room.save();
-  
-  // Update cache
   updateRoomCache(room.stake, room);
-  
-  console.log(`✅ Room ${room.stake} set to playing, starting ball timer...`);
-  
-  // Pre-cache player sockets for faster broadcasting
-  const playerSockets = new Map();
-  room.players.forEach(userId => {
-    const userSockets = [];
-    for (const [socketId, uId] of socketToUser.entries()) {
-      if (uId === userId) {
-        const socket = io.sockets.sockets.get(socketId);
-        if (socket && socket.connected) {
-          userSockets.push(socket);
-        }
-      }
-    }
-    if (userSockets.length > 0) {
-      playerSockets.set(userId, userSockets);
-    }
-  });
-  
-  console.log(`📡 Pre-cached ${playerSockets.size} player connections for room ${room.stake}`);
-  
+
   const timer = setInterval(async () => {
     try {
       // Get fresh room data
@@ -764,7 +741,7 @@ async function startGameTimer(room) {
         roomTimers.delete(room.stake);
         return;
       }
-      
+
       // Check if 75 balls have been drawn
       if (currentRoom.ballsDrawn >= 75) {
         console.log(`⏰ Game timeout for room ${room.stake}: 75 balls drawn`);
@@ -773,19 +750,16 @@ async function startGameTimer(room) {
         await endGameWithNoWinner(currentRoom);
         return;
       }
-      
+
       // Generate a ball that hasn't been called
-      let ball;
-      let letter;
+      let ball, letter;
       let attempts = 0;
-      
       do {
         ball = Math.floor(Math.random() * 75) + 1;
         letter = getBingoLetter(ball);
         attempts++;
-        
         if (attempts > 100) {
-          // If we can't find a unique ball, use the first available
+          // Fallback: first available number
           for (let i = 1; i <= 75; i++) {
             if (!currentRoom.calledNumbers.includes(i)) {
               ball = i;
@@ -796,40 +770,50 @@ async function startGameTimer(room) {
           break;
         }
       } while (currentRoom.calledNumbers.includes(ball));
-      
+
       console.log(`🎱 Drawing ball ${letter}-${ball} for room ${room.stake} (Ball #${currentRoom.ballsDrawn + 1})`);
-      
+
       // Update room
       currentRoom.calledNumbers.push(ball);
       currentRoom.currentBall = ball;
       currentRoom.ballsDrawn += 1;
       currentRoom.lastBoxUpdate = new Date();
       await currentRoom.save();
-      
-      // Update cache
       updateRoomCache(room.stake, currentRoom);
-      
+
       const ballData = {
         room: currentRoom.stake,
         num: ball,
         letter: letter,
         ballsDrawn: currentRoom.ballsDrawn
       };
-      
-      // OPTIMIZED: Send to pre-cached player sockets
-      playerSockets.forEach((sockets, userId) => {
-        sockets.forEach(socket => {
-          if (socket.connected) {
+
+      // --- DYNAMIC SOCKET LOOKUP (FIX) ---
+      // Get the list of players currently in the room
+      const playersInRoom = currentRoom.players;
+
+      // For each player, find all their currently connected sockets
+      playersInRoom.forEach(playerId => {
+        // Find all socket IDs for this player
+        const socketIds = [];
+        socketToUser.forEach((uid, sid) => {
+          if (uid === playerId) socketIds.push(sid);
+        });
+
+        // Send ball draw to each active socket
+        socketIds.forEach(sid => {
+          const socket = io.sockets.sockets.get(sid);
+          if (socket && socket.connected) {
             socket.emit('ballDrawn', ballData);
-            // Only send enableBingo every 3 balls for performance
+            // Enable bingo button every 3 balls
             if (currentRoom.ballsDrawn % 3 === 0) {
               socket.emit('enableBingo');
             }
           }
         });
       });
-      
-      // Send to admin panels
+
+      // Also notify admin panels (unchanged)
       adminSockets.forEach(socketId => {
         const socket = io.sockets.sockets.get(socketId);
         if (socket && socket.connected) {
@@ -841,16 +825,16 @@ async function startGameTimer(room) {
           });
         }
       });
-      
+
       broadcastRoomStatus();
-      
+
     } catch (error) {
       console.error('❌ Error in game timer:', error);
       clearInterval(timer);
       roomTimers.delete(room.stake);
     }
   }, CONFIG.GAME_TIMER * 1000);
-  
+
   roomTimers.set(room.stake, timer);
   console.log(`✅ Game timer started for room ${room.stake}, interval: ${CONFIG.GAME_TIMER}s`);
 }
