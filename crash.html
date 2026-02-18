@@ -238,7 +238,7 @@
             line-height: 1;
         }
 
-        /* NEW: amount buttons */
+        /* amount buttons */
         .amount-buttons {
             display: flex;
             gap: 10px;
@@ -423,7 +423,7 @@
             <span class="balance-value" id="balanceDisplay">0.00 ETB</span>
         </div>
 
-        <!-- NEW: quick amount buttons -->
+        <!-- quick amount buttons -->
         <div class="amount-buttons" id="amountButtons">
             <button class="amount-btn active" data-amount="10">10 ETB</button>
             <button class="amount-btn" data-amount="20">20 ETB</button>
@@ -480,7 +480,6 @@
             const loading = document.getElementById('loading');
             const countdownOverlay = document.getElementById('countdownOverlay');
             const countdownNumber = document.getElementById('countdownNumber');
-            // NEW: amount buttons
             const amountButtons = document.querySelectorAll('.amount-btn');
             let selectedAmount = 10; // default
 
@@ -503,9 +502,10 @@
             let soundEnabled = true;
             let audioElements = {};
 
-            // --- Smooth multiplier for animation ---
+            // --- Smooth multiplier & ground scroll ---
             let targetMultiplier = 1.00;
             let smoothMultiplier = 1.00;
+            let groundOffset = 0;          // for scrolling ground lines
 
             // Canvas animation
             let animationFrame = null;
@@ -634,8 +634,6 @@
                     if (data.multiplier >= 10) multiplierDisplay.style.color = '#10b981';
                     else if (data.multiplier >= 5) multiplierDisplay.style.color = '#fbbf24';
                     else multiplierDisplay.style.color = '#fcd34d';
-
-                    // AUTO‑CAShOUT CHECK REMOVED
                 });
 
                 socket.on('crash:roundCrashed', (data) => {
@@ -733,10 +731,11 @@
                 }).join('');
             }
 
-            // --- Canvas Drawing (unchanged) ---
+            // --- Canvas Drawing with Scrolling Ground Lines ---
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+                // Sky gradient
                 const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
                 grd.addColorStop(0, '#0b1a2b');
                 grd.addColorStop(0.7, '#142734');
@@ -744,34 +743,65 @@
                 ctx.fillStyle = grd;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+                // Ground line Y position (fixed)
+                const groundY = canvas.height * 0.8;
+
+                // Update ground offset for scrolling effect – speed increases with multiplier
+                const speedFactor = 2 + (smoothMultiplier * 2);  // base 2 + 2 per multiplier
+                groundOffset = (groundOffset + speedFactor) % 60; // 60px spacing
+
+                // Draw the main ground stripe (thick line)
                 ctx.shadowColor = '#f97316';
                 ctx.shadowBlur = 20;
                 ctx.beginPath();
                 ctx.strokeStyle = '#f97316';
                 ctx.lineWidth = 4;
-                ctx.moveTo(0, canvas.height * 0.8);
-                ctx.lineTo(canvas.width, canvas.height * 0.8);
+                ctx.moveTo(0, groundY);
+                ctx.lineTo(canvas.width, groundY);
                 ctx.stroke();
-                ctx.shadowBlur = 0;
 
+                // Draw a secondary glow line above
+                ctx.shadowBlur = 12;
                 ctx.beginPath();
                 ctx.strokeStyle = '#fdba74';
                 ctx.lineWidth = 2;
                 ctx.setLineDash([20, 30]);
-                ctx.moveTo(0, canvas.height * 0.8 - 12);
-                ctx.lineTo(canvas.width, canvas.height * 0.8 - 12);
+                ctx.moveTo(0, groundY - 12);
+                ctx.lineTo(canvas.width, groundY - 12);
                 ctx.stroke();
                 ctx.setLineDash([]);
 
+                // Draw scrolling runway markings (short dashes that move right to left)
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = '#fbbf24';
+                const dashWidth = 30;
+                const dashGap = 40;
+                // We'll draw a series of dashes across the width, offset by groundOffset
+                for (let x = -dashWidth - (groundOffset % (dashWidth + dashGap)); x < canvas.width + dashWidth; x += dashWidth + dashGap) {
+                    ctx.fillRect(x, groundY - 8, dashWidth, 4);
+                }
+
+                // Draw a second row of smaller dots just above for extra texture
+                ctx.fillStyle = '#f97316';
+                for (let x = -10 - (groundOffset * 0.5) % 50; x < canvas.width + 10; x += 50) {
+                    ctx.beginPath();
+                    ctx.arc(x, groundY - 18, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+
+                ctx.shadowBlur = 0;
+
+                // Smooth multiplier interpolation for plane
                 if (Math.abs(smoothMultiplier - targetMultiplier) > 0.001) {
                     smoothMultiplier += (targetMultiplier - smoothMultiplier) * 0.1;
                 } else {
                     smoothMultiplier = targetMultiplier;
                 }
 
+                // Draw plane if flying
                 if (currentRound.status === 'running' && planeReady) {
                     const progress = Math.min(smoothMultiplier / (currentRound.crashPoint || 10), 1);
-                    const y = canvas.height * 0.8 - (progress * canvas.height * 0.6) - 20;
+                    const y = groundY - (progress * canvas.height * 0.6) - 20;
                     const x = canvas.width * 0.1 + progress * canvas.width * 0.7;
 
                     lastPlanePos = { x, y };
@@ -779,6 +809,7 @@
                     let planeWidth = Math.min(200, canvas.width * 0.3);
                     let planeHeight = planeWidth * (45 / 70);
 
+                    // Engine glow
                     ctx.shadowColor = '#f97316';
                     ctx.shadowBlur = 25;
                     for (let i = 1; i <= 4; i++) {
@@ -794,6 +825,7 @@
                     ctx.shadowBlur = 0;
                 }
 
+                // Explosion if crashed
                 if (currentRound.status === 'crashed' && explosionReady) {
                     let explosionSize = Math.min(180, canvas.width * 0.35);
                     ctx.shadowColor = '#ef4444';
@@ -852,7 +884,6 @@
                     showToast('Selected amount is invalid');
                     return;
                 }
-                // Send only amount (autoCashout removed)
                 socket.emit('crash:placeBet', { amount });
             });
 
