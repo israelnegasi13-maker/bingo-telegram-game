@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CRASH GAME · ETHIO GAMES</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #0a0c10;
+            color: #f0f4fa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Canvas container */
+        .game-area {
+            flex: 1;
+            min-height: 300px;
+            background: #0f172a;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid #262d36;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #0b1a2a, #061016);
+            cursor: none;
+        }
+
+        /* Overlay stats */
+        .multiplier {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 48px;
+            font-weight: 800;
+            text-shadow: 0 0 20px #3b82f6;
+            color: #fbbf24;
+            z-index: 10;
+        }
+        .multiplier.small {
+            font-size: 24px;
+            top: 80px;
+            color: #8e9aaf;
+        }
+
+        .countdown {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #1e293b;
+            padding: 12px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            border: 1px solid #3b82f6;
+            color: #fbbf24;
+            z-index: 10;
+        }
+
+        /* Round history strip */
+        .history {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 8px 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .history-item {
+            background: #1e293b;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid #334155;
+        }
+        .history-item.crash-early { color: #ef4444; border-color: #ef4444; }
+        .history-item.crash-high { color: #10b981; border-color: #10b981; }
+
+        /* Bottom control panel */
+        .control-panel {
+            background: #13171c;
+            border-top: 1px solid #262d36;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .balance-label { color: #8e9aaf; font-size: 14px; }
+        .balance-value { font-weight: 700; font-size: 20px; color: #fbbf24; }
+
+        .bet-panel {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .bet-input-group {
+            flex: 2;
+            min-width: 150px;
+        }
+        .bet-input {
+            width: 100%;
+            padding: 14px;
+            background: #0a0c10;
+            border: 1px solid #262d36;
+            border-radius: 16px;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .bet-input:focus {
+            border-color: #3b82f6;
+            outline: none;
+        }
+
+        .auto-cashout-group {
+            flex: 1;
+            min-width: 100px;
+        }
+        .auto-cashout-input {
+            width: 100%;
+            padding: 14px;
+            background: #0a0c10;
+            border: 1px solid #262d36;
+            border-radius: 16px;
+            color: white;
+            font-size: 16px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        .btn {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 40px;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:disabled {
+            background: #1e293b;
+            color: #5a6573;
+            cursor: not-allowed;
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-warning {
+            background: #f59e0b;
+            color: black;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #8e9aaf;
+        }
+
+        /* Sound toggle */
+        .sound-toggle {
+            position: absolute;
+            top: 20px;
+            right: 100px;
+            background: #1e293b;
+            border: 1px solid #3b82f6;
+            border-radius: 40px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 20;
+        }
+
+        /* Error/toast */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 20px;
+            right: 20px;
+            background: #ef4444;
+            color: white;
+            padding: 12px;
+            border-radius: 40px;
+            text-align: center;
+            font-weight: 600;
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-area">
+        <canvas id="gameCanvas"></canvas>
+        <div class="multiplier" id="multiplierDisplay">1.00x</div>
+        <div class="multiplier small" id="multiplierSmall"></div>
+        <div class="countdown" id="countdownDisplay"></div>
+        <div class="history" id="historyStrip"></div>
+        <div class="sound-toggle" id="soundToggle">🔊 Sound On</div>
+    </div>
+
+    <div class="control-panel">
+        <div class="balance-row">
+            <span class="balance-label">💰 Your Balance</span>
+            <span class="balance-value" id="balanceDisplay">0.00 ETB</span>
+        </div>
+
+        <div class="bet-panel">
+            <div class="bet-input-group">
+                <input type="number" id="betAmount" class="bet-input" placeholder="Bet (5-5000)" min="5" max="5000" step="1">
+            </div>
+            <div class="auto-cashout-group">
+                <input type="number" id="autoCashout" class="auto-cashout-input" placeholder="Auto x" min="1.1" step="0.1">
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="placeBetBtn" disabled>Place Bet</button>
+            <button class="btn btn-success" id="cashOutBtn" disabled>Cash Out</button>
+        </div>
+
+        <div class="info-row">
+            <span>🎮 Round: <span id="roundId">---</span></span>
+            <span>👥 Players: <span id="playersCount">0</span></span>
+            <span>💰 Total Bets: <span id="totalBets">0</span> ETB</span>
+        </div>
+    </div>
+
+    <div class="toast" id="toastMessage"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        (function() {
+            // --- Configuration ---
+            const SOUNDS = {
+                takeoff: '/assets/sounds/takeoff.mp3',
+                cashout: '/assets/sounds/cashout.mp3',
+                crash: '/assets/sounds/crash.mp3',
+                background: '/assets/sounds/background.mp3'
+            };
+            const PLANE_IMG = '/assets/images/plane.png';
+            const EXPLOSION_IMG = '/assets/images/explosion.png';
+
+            // --- DOM elements ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const multiplierDisplay = document.getElementById('multiplierDisplay');
+            const multiplierSmall = document.getElementById('multiplierSmall');
+            const countdownDisplay = document.getElementById('countdownDisplay');
+            const historyStrip = document.getElementById('historyStrip');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+            const roundIdSpan = document.getElementById('roundId');
+            const playersCountSpan = document.getElementById('playersCount');
+            const totalBetsSpan = document.getElementById('totalBets');
+            const betAmountInput = document.getElementById('betAmount');
+            const autoCashoutInput = document.getElementById('autoCashout');
+            const placeBetBtn = document.getElementById('placeBetBtn');
+            const cashOutBtn = document.getElementById('cashOutBtn');
+            const soundToggle = document.getElementById('soundToggle');
+            const toast = document.getElementById('toastMessage');
+
+            // --- State ---
+            let socket = io();
+            let userId = null;
+            let userName = 'Player';
+            let balance = 0;
+            let currentRound = {
+                status: 'waiting',
+                roundId: null,
+                countdown: 0,
+                multiplier: 1.00,
+                crashPoint: null,
+                totalBets: 0,
+                totalPlayers: 0,
+                history: []
+            };
+            let myBet = null; // { amount, autoCashout, cashedOutAt }
+            let soundEnabled = true;
+            let audioElements = {};
+
+            // Canvas animation
+            let animationFrame = null;
+            let planeImage = new Image();
+            let explosionImage = new Image();
+            planeImage.src = PLANE_IMG;
+            explosionImage.src = EXPLOSION_IMG;
+            let planeReady = false;
+            let explosionReady = false;
+            planeImage.onload = () => { planeReady = true; };
+            explosionImage.onload = () => { explosionReady = true; };
+
+            // --- Helper Functions ---
+            function showToast(msg, isError = true) {
+                toast.style.display = 'block';
+                toast.textContent = msg;
+                toast.style.background = isError ? '#ef4444' : '#10b981';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            }
+
+            function formatMultiplier(m) {
+                return m.toFixed(2) + 'x';
+            }
+
+            // Load balance from server (via REST or socket)
+            async function fetchBalance() {
+                if (!userId) return;
+                try {
+                    const res = await fetch(`/api/user/${userId}/balance`);
+                    const data = await res.json();
+                    balance = data.balance || 0;
+                    balanceDisplay.textContent = balance.toFixed(2) + ' ETB';
+                } catch (e) {
+                    console.warn('Balance fetch failed, using socket');
+                }
+            }
+
+            // --- Socket Event Handlers ---
+            function initSocket() {
+                // Identify user from URL (like /crash?userId=...&name=...)
+                const urlParams = new URLSearchParams(window.location.search);
+                userId = urlParams.get('userId');
+                userName = urlParams.get('name') || 'Player';
+
+                if (!userId) {
+                    showToast('No user ID – please log in via /telegram or /app');
+                    placeBetBtn.disabled = true;
+                    cashOutBtn.disabled = true;
+                    return;
+                }
+
+                socket.emit('init', { userId, userName });
+
+                // Round state
+                socket.on('crash:roundState', (data) => {
+                    currentRound = { ...currentRound, ...data };
+                    updateUI();
+                });
+
+                socket.on('crash:roundCountdown', (data) => {
+                    currentRound.status = 'countdown';
+                    currentRound.roundId = data.roundId;
+                    currentRound.countdown = data.countdown;
+                    currentRound.crashPoint = data.crashPoint; // debug only
+                    updateUI();
+                });
+
+                socket.on('crash:countdownUpdate', (data) => {
+                    currentRound.countdown = data.countdown;
+                    countdownDisplay.textContent = `Starting in ${currentRound.countdown}s`;
+                });
+
+                socket.on('crash:roundStarted', (data) => {
+                    currentRound.status = 'running';
+                    currentRound.multiplier = 1.00;
+                    multiplierDisplay.textContent = formatMultiplier(1.00);
+                    countdownDisplay.textContent = '';
+                    playSound('takeoff');
+                });
+
+                socket.on('crash:multiplierUpdate', (data) => {
+                    currentRound.multiplier = data.multiplier;
+                    multiplierDisplay.textContent = formatMultiplier(data.multiplier);
+                    // Auto-cashout check
+                    if (myBet && !myBet.cashedOutAt && myBet.autoCashout && data.multiplier >= myBet.autoCashout) {
+                        socket.emit('crash:cashOut');
+                    }
+                });
+
+                socket.on('crash:roundCrashed', (data) => {
+                    currentRound.status = 'crashed';
+                    currentRound.history = data.history;
+                    multiplierDisplay.textContent = '💥 CRASHED';
+                    playSound('crash');
+                    updateHistoryStrip();
+                    // Reset myBet if it wasn't cashed (lost)
+                    if (myBet && !myBet.cashedOutAt) {
+                        myBet = null;
+                        fetchBalance();
+                    }
+                });
+
+                socket.on('crash:totalBets', (data) => {
+                    currentRound.totalBets = data.totalBets;
+                    totalBetsSpan.textContent = data.totalBets.toFixed(2);
+                });
+
+                socket.on('crash:betPlaced', (data) => {
+                    myBet = { amount: data.amount, autoCashout: null, cashedOutAt: null };
+                    placeBetBtn.disabled = true;
+                    cashOutBtn.disabled = false;
+                    fetchBalance();
+                });
+
+                socket.on('crash:cashOutSuccess', (data) => {
+                    myBet.cashedOutAt = data.multiplier;
+                    myBet.payout = data.payout;
+                    cashOutBtn.disabled = true;
+                    playSound('cashout');
+                    showToast(`Cashed out at ${data.multiplier.toFixed(2)}x – won ${data.payout.toFixed(2)} ETB`, false);
+                    fetchBalance();
+                });
+
+                socket.on('crash:error', (msg) => {
+                    showToast(msg);
+                });
+
+                socket.on('balanceUpdate', (bal) => {
+                    balance = bal;
+                    balanceDisplay.textContent = balance.toFixed(2) + ' ETB';
+                });
+
+                socket.on('crash:history', (history) => {
+                    currentRound.history = history;
+                    updateHistoryStrip();
+                });
+            }
+
+            // --- UI Updates ---
+            function updateUI() {
+                if (currentRound.roundId) roundIdSpan.textContent = currentRound.roundId.slice(-6);
+                playersCountSpan.textContent = currentRound.totalPlayers;
+                totalBetsSpan.textContent = currentRound.totalBets.toFixed(2);
+
+                if (currentRound.status === 'countdown') {
+                    countdownDisplay.textContent = `Starting in ${currentRound.countdown}s`;
+                    placeBetBtn.disabled = !userId || myBet !== null;
+                    cashOutBtn.disabled = true;
+                } else if (currentRound.status === 'running') {
+                    countdownDisplay.textContent = '';
+                    placeBetBtn.disabled = true; // can't bet after round started
+                    cashOutBtn.disabled = !myBet || myBet.cashedOutAt !== null;
+                } else if (currentRound.status === 'crashed' || currentRound.status === 'waiting') {
+                    placeBetBtn.disabled = !userId; // will be enabled during waiting/countdown, but we'll control via round state listener
+                    cashOutBtn.disabled = true;
+                }
+
+                updateHistoryStrip();
+            }
+
+            function updateHistoryStrip() {
+                if (!currentRound.history) return;
+                historyStrip.innerHTML = currentRound.history.map(h => {
+                    const cp = h.crashPoint.toFixed(2);
+                    const cls = cp < 2 ? 'crash-early' : (cp > 10 ? 'crash-high' : '');
+                    return `<div class="history-item ${cls}">${cp}x</div>`;
+                }).join('');
+            }
+
+            // --- Canvas Animation ---
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw horizon line
+                ctx.beginPath();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 2;
+                ctx.moveTo(0, canvas.height * 0.8);
+                ctx.lineTo(canvas.width, canvas.height * 0.8);
+                ctx.stroke();
+
+                if (currentRound.status === 'running' && planeReady) {
+                    // Plane flies upward based on multiplier
+                    const progress = Math.min(currentRound.multiplier / (currentRound.crashPoint || 10), 1);
+                    const y = canvas.height * 0.8 - (progress * canvas.height * 0.7);
+                    const x = canvas.width * 0.2 + progress * canvas.width * 0.6;
+
+                    // Draw plane
+                    ctx.drawImage(planeImage, x - 30, y - 20, 60, 40);
+                }
+
+                if (currentRound.status === 'crashed' && explosionReady) {
+                    // Draw explosion at last position (or center)
+                    ctx.drawImage(explosionImage, canvas.width/2 - 40, canvas.height/2 - 40, 80, 80);
+                }
+
+                animationFrame = requestAnimationFrame(draw);
+            }
+
+            // --- Sounds ---
+            function initSounds() {
+                for (let [key, url] of Object.entries(SOUNDS)) {
+                    let audio = new Audio(url);
+                    audio.preload = 'auto';
+                    audioElements[key] = audio;
+                }
+                // Background music loops
+                if (audioElements.background) {
+                    audioElements.background.loop = true;
+                }
+            }
+
+            function playSound(name) {
+                if (!soundEnabled || !audioElements[name]) return;
+                // Clone to allow overlapping (except background)
+                if (name === 'background') {
+                    audioElements[name].play().catch(e => console.warn('Audio play failed:', e));
+                } else {
+                    let snd = audioElements[name].cloneNode();
+                    snd.volume = 0.5;
+                    snd.play().catch(e => console.warn('Sound play failed:', e));
+                }
+            }
+
+            soundToggle.addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                soundToggle.textContent = soundEnabled ? '🔊 Sound On' : '🔇 Sound Off';
+                if (soundEnabled && audioElements.background) {
+                    audioElements.background.play().catch(() => {});
+                } else if (!soundEnabled && audioElements.background) {
+                    audioElements.background.pause();
+                }
+            });
+
+            // --- Betting Actions ---
+            placeBetBtn.addEventListener('click', () => {
+                const amount = parseFloat(betAmountInput.value);
+                const auto = parseFloat(autoCashoutInput.value) || null;
+                if (isNaN(amount) || amount < 5 || amount > 5000) {
+                    showToast('Enter a valid bet amount (5–5000)');
+                    return;
+                }
+                if (auto && (auto < 1.1 || auto > 1000)) {
+                    showToast('Auto cashout must be ≥1.1x');
+                    return;
+                }
+                socket.emit('crash:placeBet', { amount, autoCashout: auto });
+            });
+
+            cashOutBtn.addEventListener('click', () => {
+                socket.emit('crash:cashOut');
+            });
+
+            // --- Resize canvas ---
+            function resizeCanvas() {
+                const container = document.querySelector('.game-area');
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+            animationFrame = requestAnimationFrame(draw);
+
+            // --- Start ---
+            initSounds();
+            initSocket();
+            fetchBalance();
+
+            // Enable bet button after user known (socket will adjust based on round)
+            placeBetBtn.disabled = !userId;
+        })();
+    </script>
+</body>
+</html>
