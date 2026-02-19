@@ -601,6 +601,10 @@
                 });
 
                 socket.on('crash:roundCountdown', (data) => {
+                    // FIX: Clear previous round's bet when a new round begins
+                    if (currentRound.roundId !== data.roundId) {
+                        myBet = null;
+                    }
                     currentRound.status = 'countdown';
                     currentRound.roundId = data.roundId;
                     currentRound.countdown = data.countdown;
@@ -616,7 +620,12 @@
                 });
 
                 socket.on('crash:roundStarted', (data) => {
+                    // FIX: Clear previous round's bet when a new round starts
+                    if (currentRound.roundId !== data.roundId) {
+                        myBet = null;
+                    }
                     currentRound.status = 'running';
+                    currentRound.roundId = data.roundId;
                     currentRound.multiplier = 1.00;
                     targetMultiplier = 1.00;
                     smoothMultiplier = 1.00;
