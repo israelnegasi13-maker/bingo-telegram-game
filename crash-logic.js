@@ -8,7 +8,9 @@ const CONFIG = {
   MAX_MULTIPLIER: 100.0,                      // Hard cap at 100.0x
   COMMISSION_RATE: 0.10,                     // 10% agent commission
   ROUND_HISTORY_LIMIT: 10,
-  // Multiplier increment per step (0.005 = 0.05 per second)
+  // Base multiplier increment per step – actual increment becomes dynamic:
+  // - below 2.0x: constant 0.005 (slow)
+  // - above 2.0x: increases linearly, reaching ~0.1 at 100x (very fast)
   MULTIPLIER_INCREMENT: 0.005
 };
 
@@ -228,13 +230,28 @@ class CrashGame {
       multiplier: 1.00
     });
 
-    // Start multiplier increase – slower increment (0.005 per step = 0.05 per second)
+    // Start multiplier increase – now with dynamic speed:
+    // slow from 1.0 to 2.0, then progressively faster up to 100.0
     this.multiplierInterval = setInterval(() => {
       if (this.currentRound.status !== 'running') return;
 
-      // Increase multiplier by configured increment
+      // --- Dynamic increment calculation ---
+      let increment = CONFIG.MULTIPLIER_INCREMENT; // base 0.005 per step
+
+      // If multiplier is above 2.0, increase increment linearly
+      if (this.currentRound.multiplier > 2.0) {
+        // Factor k chosen so that increment reaches ~0.1 at 100x (20x base speed)
+        // formula: increment = base * (1 + k * (multiplier - 2.0))
+        // solve for k: at multiplier=100, desired increment=0.1 => k = (0.1/0.005 - 1) / 98 ≈ 0.194
+        const k = 0.194;
+        increment = CONFIG.MULTIPLIER_INCREMENT * (1 + k * (this.currentRound.multiplier - 2.0));
+        // Cap to avoid excessively large jumps
+        increment = Math.min(increment, 0.2);
+      }
+
+      // Apply increment and clamp to max multiplier
       this.currentRound.multiplier = Math.min(
-        this.currentRound.multiplier + CONFIG.MULTIPLIER_INCREMENT,
+        this.currentRound.multiplier + increment,
         CONFIG.MAX_MULTIPLIER
       );
 
