@@ -48,7 +48,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized (custom multiplier distribution: 40% 1.0x, 30% 1.1-1.5x, 20% 1.5-2.0x, 7% 2.0-3.0x, 3% 3.0-100.0x)');
+    console.log('✅ Crash Game initialized (custom multiplier distribution: 20% 1.0x, 30% 1.1-1.5x, 40% 1.5-3.0x, 9% 3.0-15.0x, 1% 15.0-100.0x)');
   }
 
   handleCrashConnection(socket) {
@@ -157,20 +157,20 @@ class CrashGame {
   }
 
   // Random crash point generator with custom distribution:
-  // 40% 1.00x, 30% 1.1-1.5, 20% 1.5-2.0, 7% 2.0-3.0, 3% 3.0-100.0
+  // 20% 1.00x, 30% 1.1-1.5, 40% 1.5-3.0, 9% 3.0-15.0, 1% 15.0-100.0
   generateCrashPoint() {
     const r = Math.random(); // [0, 1)
 
-    if (r < 0.4) {
-      return 1.00;                           // 40% – instant crash
-    } else if (r < 0.7) {                     // 30% – 1.1 to 1.5
-      return 1.1 + Math.random() * 0.4;       // 1.1 ... 1.5 (exclusive upper bound)
-    } else if (r < 0.9) {                     // 20% – 1.5 to 2.0
-      return 1.5 + Math.random() * 0.5;       // 1.5 ... 2.0
-    } else if (r < 0.97) {                    // 7% – 2.0 to 3.0
-      return 2.0 + Math.random() * 1.0;       // 2.0 ... 3.0
-    } else {                                  // 3% – 3.0 to MAX_MULTIPLIER (100.0)
-      return 3.0 + Math.random() * (CONFIG.MAX_MULTIPLIER - 3.0);
+    if (r < 0.2) {
+      return 1.00;                           // 20% – instant crash
+    } else if (r < 0.5) {                     // 30% – 1.1 to 1.5
+      return 1.1 + Math.random() * 0.4;       // 1.1 ... 1.5
+    } else if (r < 0.9) {                     // 40% – 1.5 to 3.0
+      return 1.5 + Math.random() * 1.5;       // 1.5 ... 3.0
+    } else if (r < 0.99) {                    // 9% – 3.0 to 15.0
+      return 3.0 + Math.random() * 12.0;      // 3.0 ... 15.0
+    } else {                                  // 1% – 15.0 to MAX_MULTIPLIER (100.0)
+      return 15.0 + Math.random() * (CONFIG.MAX_MULTIPLIER - 15.0);
     }
   }
 
