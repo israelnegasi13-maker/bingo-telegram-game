@@ -48,7 +48,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized (custom multiplier distribution: 20% 1.0x, 30% 1.1-1.5x, 40% 1.5-3.0x, 9% 3.0-15.0x, 1% 15.0-100.0x)');
+    console.log('✅ Crash Game initialized (custom multiplier distribution: 30% 1.0x, 30% 1.1-1.5x, 30% 1.5-3.0x, 9% 3.0-15.0x, 1% 15.0-100.0x)');
   }
 
   handleCrashConnection(socket) {
@@ -157,15 +157,15 @@ class CrashGame {
   }
 
   // Random crash point generator with custom distribution:
-  // 20% 1.00x, 30% 1.1-1.5, 40% 1.5-3.0, 9% 3.0-15.0, 1% 15.0-100.0
+  // 30% 1.00x, 30% 1.1-1.5, 30% 1.5-3.0, 9% 3.0-15.0, 1% 15.0-100.0
   generateCrashPoint() {
     const r = Math.random(); // [0, 1)
 
-    if (r < 0.2) {
-      return 1.00;                           // 20% – instant crash
-    } else if (r < 0.5) {                     // 30% – 1.1 to 1.5
+    if (r < 0.3) {
+      return 1.00;                           // 30% – instant crash
+    } else if (r < 0.6) {                     // 30% – 1.1 to 1.5
       return 1.1 + Math.random() * 0.4;       // 1.1 ... 1.5
-    } else if (r < 0.9) {                     // 40% – 1.5 to 3.0
+    } else if (r < 0.9) {                     // 30% – 1.5 to 3.0
       return 1.5 + Math.random() * 1.5;       // 1.5 ... 3.0
     } else if (r < 0.99) {                    // 9% – 3.0 to 15.0
       return 3.0 + Math.random() * 12.0;      // 3.0 ... 15.0
