@@ -5,7 +5,7 @@ const CONFIG = {
   COUNTDOWN_SECONDS: 15,                    // 15 seconds countdown
   ROUND_DURATION: 30 * 1000,                // 30 seconds total (including countdown)
   MULTIPLIER_UPDATE_INTERVAL: 100,           // 100ms updates
-  MAX_MULTIPLIER: 10.0,                      // Hard cap at 10.0x
+  MAX_MULTIPLIER: 100.0,                      // Hard cap at 100.0x
   COMMISSION_RATE: 0.10,                     // 10% agent commission
   ROUND_HISTORY_LIMIT: 10,
   // Multiplier increment per step (0.005 = 0.05 per second)
@@ -46,7 +46,7 @@ class CrashGame {
     this.io = io;
     this.models = models;
     this.startNextRound();
-    console.log('✅ Crash Game initialized (random crashes, max 10x, 30% insta‑crash)');
+    console.log('✅ Crash Game initialized (custom multiplier distribution: 40% 1.0x, 30% 1.1-1.5x, 20% 1.5-2.0x, 7% 2.0-3.0x, 3% 3.0-100.0x)');
   }
 
   handleCrashConnection(socket) {
@@ -154,14 +154,22 @@ class CrashGame {
     return `CRASH_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   }
 
-  // Random crash point generator:
-  // 30% chance of instant crash (1.00x), otherwise random between 1.01x and 10.00x
+  // Random crash point generator with custom distribution:
+  // 40% 1.00x, 30% 1.1-1.5, 20% 1.5-2.0, 7% 2.0-3.0, 3% 3.0-100.0
   generateCrashPoint() {
-    if (Math.random() < 0.3) {
-      return 1.00;
+    const r = Math.random(); // [0, 1)
+
+    if (r < 0.4) {
+      return 1.00;                           // 40% – instant crash
+    } else if (r < 0.7) {                     // 30% – 1.1 to 1.5
+      return 1.1 + Math.random() * 0.4;       // 1.1 ... 1.5 (exclusive upper bound)
+    } else if (r < 0.9) {                     // 20% – 1.5 to 2.0
+      return 1.5 + Math.random() * 0.5;       // 1.5 ... 2.0
+    } else if (r < 0.97) {                    // 7% – 2.0 to 3.0
+      return 2.0 + Math.random() * 1.0;       // 2.0 ... 3.0
+    } else {                                  // 3% – 3.0 to MAX_MULTIPLIER (100.0)
+      return 3.0 + Math.random() * (CONFIG.MAX_MULTIPLIER - 3.0);
     }
-    // Random between 1.01 and 10.00 (inclusive of 10.00)
-    return 1.01 + Math.random() * 8.99;
   }
 
   startNextRound() {
