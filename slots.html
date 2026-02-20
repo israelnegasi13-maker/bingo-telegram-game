@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Slots Galaxy · ETHIO GAMES</title>
+  <title>Slots Galaxy · 3‑Reel Classic</title>
   <style>
-    /* all styles exactly as before */
     * {
       margin: 0;
       padding: 0;
@@ -59,28 +58,30 @@
     }
     .balance-box span { color: #60a5fa; margin-right: 6px; }
 
+    /* Reels – single row */
     .reels {
       background: #0f172a;
       border-radius: 24px;
-      padding: 20px 10px;
+      padding: 30px 10px;
       margin: 20px 0 16px;
       border: 1px solid #334155;
     }
 
-    .reel-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      aspect-ratio: 1 / 1;
+    .reel-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
     }
 
     .symbol-cell {
+      width: 100px;
+      height: 100px;
       background: #1e293b;
-      border-radius: 16px;
+      border-radius: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 2.2rem;
+      font-size: 3.5rem;
       box-shadow: inset 0 0 0 1px #334155;
       transition: transform 0.1s ease;
     }
@@ -200,7 +201,7 @@
       text-decoration: none;
     }
 
-    /* modal styling (shared with other games) */
+    /* modal styling */
     .modal {
       display: none;
       position: fixed;
@@ -252,23 +253,21 @@
 <body>
   <div class="game-container">
     <div class="header">
-      <div class="logo">🌌 SLOTS <span>GALAXY</span></div>
+      <div class="logo">🎰 SLOTS <span>CLASSIC</span></div>
       <div class="balance-box"><span>💰</span><span id="balance">0.00</span></div>
     </div>
 
-    <!-- Reels -->
+    <!-- Reels: single row of 3 symbols -->
     <div class="reels" id="reelsContainer">
-      <div class="reel-grid" id="reelGrid">
+      <div class="reel-row" id="reelRow">
         <!-- filled by JS -->
       </div>
     </div>
 
-    <!-- 🔻 CHANGED: now shows only one payline (middle row) -->
     <div class="paylines-info">
-      <strong>1 Payline (middle row)</strong> · classic 3‑emoji match
+      <strong>3 Reels · 1 Payline</strong> — match all three!
     </div>
 
-    <!-- Bet panel -->
     <div class="bet-panel">
       <div class="bet-label">
         <span>Bet amount</span>
@@ -283,11 +282,9 @@
       </div>
     </div>
 
-    <!-- Spin button -->
-    <button class="spin-btn" id="spinBtn">🚀 SPIN</button>
+    <button class="spin-btn" id="spinBtn">🎰 SPIN</button>
     <div class="result-message" id="resultMessage"></div>
 
-    <!-- Footer (optional) -->
     <div class="footer-links">
       <a href="#" onclick="window.history.back()">⬅️ Back</a>
       <a href="#" onclick="showStats()">📊 Stats</a>
@@ -319,7 +316,6 @@
       let currentBet = 5;
       let spinning = false;
 
-      // ---------- get userId from URL ----------
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
       const name = urlParams.get('name');
@@ -332,8 +328,7 @@
         window.location.href = '/telegram';
       }
 
-      // ---------- DOM elements ----------
-      const reelGrid = document.getElementById('reelGrid');
+      const reelRow = document.getElementById('reelRow');
       const balanceSpan = document.getElementById('balance');
       const betAmountSpan = document.getElementById('betAmount');
       const spinBtn = document.getElementById('spinBtn');
@@ -341,28 +336,25 @@
       const betOptions = document.querySelectorAll('.bet-option');
       const reelsContainer = document.getElementById('reelsContainer');
 
-      // ---------- symbols (space theme) ----------
       const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️', '👾'];
 
-      // initialize reels (empty)
+      // Initialize three reels with a placeholder
       function initReels() {
         let html = '';
-        for (let i = 0; i < 9; i++) {
+        for (let i = 0; i < 3; i++) {
           html += `<div class="symbol-cell">${SYMBOLS[0]}</div>`;
         }
-        reelGrid.innerHTML = html;
+        reelRow.innerHTML = html;
       }
       initReels();
 
-      // update reels with given array (9 symbols)
-      function setReels(symbols) {
+      function setReels(symbolIndices) {
         const cells = document.querySelectorAll('.symbol-cell');
-        symbols.forEach((sym, idx) => {
-          if (cells[idx]) cells[idx].textContent = sym;
+        symbolIndices.forEach((idx, i) => {
+          if (cells[i]) cells[i].textContent = SYMBOLS[idx];
         });
       }
 
-      // spinning animation
       function startSpinAnimation() {
         reelsContainer.classList.add('spinning');
       }
@@ -370,13 +362,11 @@
         reelsContainer.classList.remove('spinning');
       }
 
-      // update balance display
       function updateBalance(newBalance) {
         balance = newBalance;
         balanceSpan.textContent = balance.toFixed(2);
       }
 
-      // bet selection
       betOptions.forEach(opt => {
         opt.addEventListener('click', () => {
           betOptions.forEach(o => o.classList.remove('active'));
@@ -386,7 +376,6 @@
         });
       });
 
-      // ---------- spin action ----------
       spinBtn.addEventListener('click', () => {
         if (spinning) return;
         if (!currentUserId) return;
@@ -406,7 +395,6 @@
         });
       });
 
-      // ---------- socket events ----------
       socket.on('initSuccess', (data) => {
         updateBalance(data.balance);
       });
@@ -425,15 +413,12 @@
           return;
         }
 
-        // update reels
+        // data.symbols is an array of 3 indices
         setReels(data.symbols);
-
-        // update balance
         updateBalance(data.newBalance);
 
-        // show win/loss message
         if (data.winAmount > 0) {
-          resultMsg.textContent = `🎉 YOU WON ${data.winAmount} ETB! (x${data.multiplier.toFixed(2)})`;
+          resultMsg.textContent = `🎉 JACKPOT! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)})`;
         } else {
           resultMsg.textContent = '😞 Try again!';
         }
@@ -446,14 +431,12 @@
         resultMsg.textContent = err;
       });
 
-      // refresh balance periodically
       setInterval(() => {
         if (currentUserId) {
           socket.emit('getUserData', { userId: currentUserId });
         }
       }, 10000);
 
-      // ---------- stats modal ----------
       window.showStats = function() {
         socket.emit('slots:getStats');
         document.getElementById('statsModal').style.display = 'flex';
@@ -472,7 +455,6 @@
         document.getElementById('statHouse').textContent = house + '%';
       });
 
-      // close modal on outside click
       window.onclick = (e) => {
         if (e.target === document.getElementById('statsModal')) closeStats();
       };
