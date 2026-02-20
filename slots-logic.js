@@ -55,11 +55,12 @@ class SlotsGame {
         return socket.emit('slots:error', 'Insufficient balance');
       }
 
+      // Deduct bet
       user.balance -= bet;
       user.totalWagered = (user.totalWagered || 0) + bet;
       await user.save();
 
-      // Generate only 3 symbols (one per reel)
+      // Generate 3 random symbols (0‑7)
       const symbols = this.generateRandomSymbols(3);
       const winAmount = this.calculateWin(symbols, bet);
 
@@ -72,6 +73,7 @@ class SlotsGame {
         await user.save();
       }
 
+      // Record transaction
       const Transaction = this.models.Transaction;
       const transaction = new Transaction({
         type: winAmount > 0 ? 'SLOTS_WIN' : 'SLOTS_LOSS',
@@ -83,13 +85,15 @@ class SlotsGame {
       });
       await transaction.save();
 
+      // Update daily stats
       await this.updateDailyStats(bet, winAmount);
 
+      // Agent commission if applicable
       if (netWin > 0 && user.agentId) {
         await this.recordAgentCommission(user, netWin, bet, winAmount);
       }
 
-      // Send result – symbols is now an array of 3 strings (emoji indices)
+      // Send result to client
       socket.emit('slots:spinResult', {
         symbols,          // e.g. [2,2,2]
         winAmount,
@@ -97,8 +101,10 @@ class SlotsGame {
         newBalance: user.balance
       });
 
+      // Broadcast updated balance
       this.io.to(socket.id).emit('balanceUpdate', user.balance);
 
+      // Update internal stats
       this.stats.totalGames++;
       this.stats.totalWagered += bet;
       this.stats.totalPayouts += winAmount;
@@ -151,7 +157,7 @@ class SlotsGame {
       const agent = await Agent.findById(user.agentId);
       if (!agent || !agent.isActive) return;
 
-      const commissionAmount = netWin * 0.10;
+      const commissionAmount = netWin * 0.10;  // 10% commission
       const txKey = `slots_${user.userId}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
       const AgentCommission = this.models.AgentCommission;
