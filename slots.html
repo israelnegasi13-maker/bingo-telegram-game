@@ -109,9 +109,14 @@
       box-shadow: 0 8px 0 #0b0f17, 0 0 0 3px #fbbf24, 0 0 40px #fbbf24;
     }
 
-    /* Spinning animation – rolling effect handled by JS */
+    /* Vertical rolling animation */
+    @keyframes vertical-roll {
+      0% { transform: translateY(-5px) scale(1.02); filter: blur(1px); opacity: 0.9; }
+      50% { transform: translateY(5px) scale(0.98); filter: blur(2px); opacity: 0.7; }
+      100% { transform: translateY(-5px) scale(1.02); filter: blur(1px); opacity: 0.9; }
+    }
     .spinning .symbol-cell {
-      animation: none; /* we control via JS */
+      animation: vertical-roll 0.15s infinite ease-in-out;
     }
 
     .paylines-info {
@@ -228,24 +233,6 @@
       letter-spacing: 1px;
     }
 
-    .footer-links {
-      display: flex;
-      justify-content: center;
-      gap: 24px;
-      margin-top: 24px;
-      font-size: 15px;
-    }
-    .footer-links a {
-      color: #a0b0c0;
-      text-decoration: none;
-      transition: color 0.2s;
-      font-weight: 500;
-      padding: 5px 12px;
-      border-radius: 30px;
-      background: rgba(0,0,0,0.3);
-    }
-    .footer-links a:hover { color: #fbbf24; }
-
     /* Modal */
     .modal {
       display: none;
@@ -305,6 +292,15 @@
       transform: translateY(3px);
       box-shadow: 0 2px 0 #b45309;
     }
+
+    /* Mobile fit: smaller cells on narrow screens */
+    @media (max-width: 400px) {
+      .symbol-cell {
+        width: 80px;
+        height: 80px;
+        font-size: 3rem;
+      }
+    }
   </style>
 </head>
 <body>
@@ -340,11 +336,7 @@
     <button class="spin-btn" id="spinBtn">🎰 SPIN</button>
     <div class="result-message" id="resultMessage"></div>
 
-    <div class="footer-links">
-      <a href="#" onclick="window.history.back()">⬅️ Back</a>
-      <a href="#" onclick="showStats()">📊 Stats</a>
-      <a href="#" onclick="window.location.href='/telegram'">🏠 Home</a>
-    </div>
+    <!-- Footer links removed as requested -->
   </div>
 
   <!-- Stats Modal -->
@@ -414,13 +406,14 @@
 
       // Rolling animation
       function startRolling() {
+        reelsContainer.classList.add('spinning');
         if (rollInterval) clearInterval(rollInterval);
         rollInterval = setInterval(() => {
           const cells = document.querySelectorAll('.symbol-cell');
           cells.forEach(cell => {
             cell.textContent = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
           });
-        }, 80); // smooth rolling speed
+        }, 80);
       }
 
       function stopRolling(finalSymbols) {
@@ -429,6 +422,7 @@
           rollInterval = null;
         }
         setReels(finalSymbols);
+        reelsContainer.classList.remove('spinning');
       }
 
       // Win celebration (confetti)
@@ -513,7 +507,6 @@
         if (data.winAmount > 0) {
           resultMsg.innerHTML = `🎉 JACKPOT! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
           reelsContainer.classList.add('win-glow');
-          // Confetti
           if (typeof confetti !== 'undefined') launchConfetti();
         } else {
           resultMsg.textContent = '😞 TRY AGAIN!';
