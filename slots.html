@@ -14,7 +14,7 @@
     }
 
     body {
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Segoe UI', 'Apple Color Emoji', 'Noto Color Emoji', 'EmojiOne Color', Roboto, Helvetica, Arial, sans-serif;
       background: radial-gradient(circle at 20% 30%, #1a1f2e, #0b0d14);
       min-height: 100vh;
       display: flex;
@@ -316,7 +316,7 @@
     </div>
 
     <div class="paylines-info">
-      <strong>⚡ 7 SYMBOLS · 1 PAYLINE ⚡</strong><br> any pair wins 2×, triple wins up to 20×
+      <strong>⚡ 14 SYMBOLS · 1 PAYLINE ⚡</strong><br> any pair wins 2×, triple wins up to 20×
     </div>
 
     <div class="bet-panel">
@@ -384,8 +384,23 @@
       const betOptions = document.querySelectorAll('.bet-option');
       const reelsContainer = document.getElementById('reelsContainer');
 
-      // Updated: 7 symbols (matches server)
-      const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️']; // 7 symbols
+      // 14 symbols (matching backend indices 0‑13)
+      const SYMBOLS = [
+        '🌌',  // 0
+        '🌠',  // 1
+        '🪐',  // 2
+        '👽',  // 3
+        '🚀',  // 4
+        '🌟',  // 5
+        '☄️',  // 6
+        '🌙',  // 7
+        '☀️',  // 8
+        '⭐',  // 9
+        '🌍',  // 10
+        '🛸',  // 11
+        '🌕',  // 12
+        '⚡'   // 13
+      ];
 
       // Initialize reels
       function initReels() {
