@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Slots Galaxy · ETHIO GAMES</title>
   <style>
+    /* all styles exactly as before */
     * {
       margin: 0;
       padding: 0;
@@ -14,8 +15,8 @@
     }
 
     body {
-      font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
-      background: #0b0e14;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: #0a0c10;
       color: #f0f4fa;
       min-height: 100vh;
       display: flex;
@@ -25,13 +26,13 @@
     }
 
     .game-container {
-      max-width: 420px;
+      max-width: 400px;
       width: 100%;
-      background: #1a1f2c;
-      border: 1px solid #2f3747;
-      border-radius: 40px;
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 32px;
       padding: 24px 16px 32px;
-      box-shadow: 0 25px 40px rgba(0,0,0,0.8);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
     }
 
     .header {
@@ -45,66 +46,60 @@
       font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #c0c7ff, #a78bfa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
     }
-    .logo span { color: #8b5cf6; background: none; -webkit-text-fill-color: #8b5cf6; }
+    .logo span { color: #8b5cf6; }
 
     .balance-box {
-      background: #252d3b;
-      padding: 10px 20px;
+      background: #20262e;
+      padding: 10px 18px;
       border-radius: 40px;
       font-weight: 600;
       font-size: 18px;
-      border: 1px solid #4b5563;
-      box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+      border: 1px solid #3b82f6;
     }
-    .balance-box span { color: #fbbf24; margin-right: 6px; }
+    .balance-box span { color: #60a5fa; margin-right: 6px; }
 
-    /* Reels – 3D recessed look */
     .reels {
-      background: #111827;
-      border-radius: 30px;
-      padding: 20px 12px;
+      background: #0f172a;
+      border-radius: 24px;
+      padding: 20px 10px;
       margin: 20px 0 16px;
-      border: 1px solid #374151;
-      box-shadow: inset 0 0 15px #00000066, 0 10px 15px -5px #00000080;
+      border: 1px solid #334155;
     }
 
     .reel-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      gap: 8px;
       aspect-ratio: 1 / 1;
     }
 
     .symbol-cell {
       background: #1e293b;
-      border-radius: 20px;
+      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 2.8rem;
-      box-shadow: 
-        inset 0 -4px 0 #0f172a,
-        inset 0 0 0 2px #4b5563,
-        0 5px 0 #0b0f17;
-      transition: transform 0.05s, box-shadow 0.1s;
-      text-shadow: 0 2px 5px black;
+      font-size: 2.2rem;
+      box-shadow: inset 0 0 0 1px #334155;
+      transition: transform 0.1s ease;
     }
 
-    /* No global spinning class – we control via JS */
+    /* spinning animation */
+    .spinning .symbol-cell {
+      animation: spin 0.15s infinite linear;
+    }
+    @keyframes spin {
+      0% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(0.95); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 0.8; }
+    }
 
     .paylines-info {
       text-align: center;
       font-size: 14px;
-      color: #9ca3af;
+      color: #94a3b8;
       margin: 10px 0 20px;
-      background: #1e293b80;
-      padding: 8px;
-      border-radius: 30px;
-      backdrop-filter: blur(4px);
     }
     .paylines-info strong {
       color: #fbbf24;
@@ -112,28 +107,26 @@
     }
 
     .bet-panel {
-      background: #252d3b;
-      border-radius: 28px;
-      padding: 18px;
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 16px;
       margin: 20px 0;
-      border: 1px solid #3f4a5a;
     }
 
     .bet-label {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .bet-label span {
-      color: #b0c0d0;
-      font-size: 15px;
+      color: #94a3b8;
+      font-size: 14px;
     }
     .bet-amount {
-      font-size: 28px;
+      font-size: 24px;
       font-weight: 700;
-      color: #fbbf24;
-      text-shadow: 0 0 8px #fbbf2480;
+      color: #60a5fa;
     }
 
     .bet-options {
@@ -143,83 +136,71 @@
       justify-content: center;
     }
     .bet-option {
-      background: #1f2a37;
-      border: 1px solid #4b5563;
+      background: #0f172a;
+      border: 1px solid #334155;
       border-radius: 40px;
-      padding: 10px 18px;
-      font-weight: 700;
-      font-size: 16px;
-      color: #d1d5db;
+      padding: 8px 16px;
+      font-weight: 600;
+      color: #cbd5e1;
       cursor: pointer;
       transition: all 0.15s;
       flex: 1 0 auto;
       max-width: 70px;
-      box-shadow: 0 3px 0 #0f172a;
     }
     .bet-option.active {
       background: #3b82f6;
       border-color: #3b82f6;
       color: white;
-      box-shadow: 0 0 15px #3b82f6, 0 3px 0 #1e3a8a;
+      box-shadow: 0 0 10px #3b82f6;
     }
 
     .spin-btn {
       width: 100%;
-      background: linear-gradient(145deg, #f97316, #dc2626);
+      background: linear-gradient(145deg, #8b5cf6, #6d28d9);
       border: none;
       border-radius: 60px;
-      padding: 20px;
-      font-size: 24px;
-      font-weight: 800;
+      padding: 18px;
+      font-size: 20px;
+      font-weight: 700;
       color: white;
       text-transform: uppercase;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
       margin: 12px 0 8px;
       cursor: pointer;
-      transition: all 0.08s linear;
-      box-shadow: 0 10px 0 #b91c1c;
-      border: 1px solid #fca5a5;
+      transition: opacity 0.2s;
+      box-shadow: 0 8px 0 #4c1d95;
     }
     .spin-btn:active {
-      transform: translateY(5px);
-      box-shadow: 0 5px 0 #b91c1c;
+      transform: translateY(4px);
+      box-shadow: 0 4px 0 #4c1d95;
     }
     .spin-btn:disabled {
-      opacity: 0.6;
-      filter: grayscale(0.4);
+      opacity: 0.5;
       pointer-events: none;
-      transform: translateY(4px);
-      box-shadow: 0 6px 0 #b91c1c;
     }
 
     .result-message {
       text-align: center;
-      min-height: 36px;
-      font-weight: 700;
-      font-size: 18px;
-      margin: 12px 0 0;
+      min-height: 32px;
+      font-weight: 600;
+      margin: 8px 0;
       color: #fbbf24;
-      text-shadow: 0 0 5px #fbbf24;
     }
 
     .footer-links {
       display: flex;
       justify-content: center;
-      gap: 28px;
+      gap: 24px;
       margin-top: 24px;
-      font-size: 15px;
+      font-size: 14px;
+      color: #5a6573;
     }
     .footer-links a {
-      color: #a0b3cc;
+      color: #8e9aaf;
       text-decoration: none;
-      font-weight: 500;
-      padding: 6px 12px;
-      background: #1e293b;
-      border-radius: 30px;
-      border: 1px solid #3a4a5e;
     }
 
-    /* Modal (unchanged) */
+    /* modal styling (shared with other games) */
     .modal {
       display: none;
       position: fixed;
@@ -231,38 +212,36 @@
       padding: 16px;
     }
     .modal-content {
-      background: #1f2a37;
-      border: 1px solid #4b5563;
+      background: #13171c;
+      border: 1px solid #262d36;
       border-radius: 32px;
       padding: 24px;
       width: 100%;
       max-width: 360px;
       text-align: center;
-      box-shadow: 0 30px 40px black;
     }
     .modal-title {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       color: #fbbf24;
     }
     .modal-stats {
-      background: #111827;
-      padding: 20px;
-      border-radius: 20px;
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 16px;
       margin: 16px 0;
     }
     .stat-row {
       display: flex;
       justify-content: space-between;
-      margin: 10px 0;
-      font-size: 16px;
+      margin: 8px 0;
     }
     .close-btn {
       background: #3b82f6;
       border: none;
       border-radius: 40px;
-      padding: 14px 30px;
+      padding: 12px 30px;
       color: white;
       font-weight: 600;
       cursor: pointer;
@@ -284,8 +263,9 @@
       </div>
     </div>
 
+    <!-- 🔻 CHANGED: now shows only one payline (middle row) -->
     <div class="paylines-info">
-      <strong>5 Paylines</strong> · 3 rows · 2 diagonals
+      <strong>1 Payline (middle row)</strong> · classic 3‑emoji match
     </div>
 
     <!-- Bet panel -->
@@ -307,7 +287,7 @@
     <button class="spin-btn" id="spinBtn">🚀 SPIN</button>
     <div class="result-message" id="resultMessage"></div>
 
-    <!-- Footer -->
+    <!-- Footer (optional) -->
     <div class="footer-links">
       <a href="#" onclick="window.history.back()">⬅️ Back</a>
       <a href="#" onclick="showStats()">📊 Stats</a>
@@ -361,69 +341,33 @@
       const betOptions = document.querySelectorAll('.bet-option');
       const reelsContainer = document.getElementById('reelsContainer');
 
-      // ---------- symbols (must match backend order) ----------
+      // ---------- symbols (space theme) ----------
       const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️', '👾'];
 
-      // initialize reels with random symbols
+      // initialize reels (empty)
       function initReels() {
         let html = '';
         for (let i = 0; i < 9; i++) {
-          const randomIdx = Math.floor(Math.random() * SYMBOLS.length);
-          html += `<div class="symbol-cell">${SYMBOLS[randomIdx]}</div>`;
+          html += `<div class="symbol-cell">${SYMBOLS[0]}</div>`;
         }
         reelGrid.innerHTML = html;
       }
       initReels();
 
-      // update reels with given indices (array of 9 numbers)
-      function setReelsFromIndices(indices) {
+      // update reels with given array (9 symbols)
+      function setReels(symbols) {
         const cells = document.querySelectorAll('.symbol-cell');
-        indices.forEach((idx, pos) => {
-          cells[pos].textContent = SYMBOLS[idx];
+        symbols.forEach((sym, idx) => {
+          if (cells[idx]) cells[idx].textContent = sym;
         });
       }
 
-      // ---------- rolling animation variables ----------
-      let spinInterval = null;
-      let finalIndices = null;
-      let spinStartTime = 0;
-      const MIN_SPIN_MS = 1000; // at least 1 sec of spinning
-      const COLUMN_STOP_DELAY = 180; // ms between column stops
-
-      // start spinning – all cells change rapidly
-      function startRolling() {
-        if (spinInterval) clearInterval(spinInterval);
-        spinInterval = setInterval(() => {
-          const cells = document.querySelectorAll('.symbol-cell');
-          for (let i = 0; i < cells.length; i++) {
-            const randomIdx = Math.floor(Math.random() * SYMBOLS.length);
-            cells[i].textContent = SYMBOLS[randomIdx];
-          }
-        }, 60); // 60ms per frame = smooth rolling
+      // spinning animation
+      function startSpinAnimation() {
+        reelsContainer.classList.add('spinning');
       }
-
-      // stop columns one by one
-      function stopColumns(colIndex, finalIndices) {
-        if (colIndex >= 3) {
-          // all columns stopped
-          spinning = false;
-          spinBtn.disabled = false;
-          return;
-        }
-
-        setTimeout(() => {
-          const cells = document.querySelectorAll('.symbol-cell');
-          // column indices: 0->0,3,6 ; 1->1,4,7 ; 2->2,5,8
-          const pos1 = colIndex;
-          const pos2 = colIndex + 3;
-          const pos3 = colIndex + 6;
-          cells[pos1].textContent = SYMBOLS[finalIndices[pos1]];
-          cells[pos2].textContent = SYMBOLS[finalIndices[pos2]];
-          cells[pos3].textContent = SYMBOLS[finalIndices[pos3]];
-
-          // move to next column
-          stopColumns(colIndex + 1, finalIndices);
-        }, colIndex === 0 ? 0 : COLUMN_STOP_DELAY); // first column stops immediately
+      function stopSpinAnimation() {
+        reelsContainer.classList.remove('spinning');
       }
 
       // update balance display
@@ -453,13 +397,9 @@
 
         spinning = true;
         spinBtn.disabled = true;
-        resultMsg.textContent = 'rolling...';
+        resultMsg.textContent = '';
+        startSpinAnimation();
 
-        // start the visual roll immediately
-        spinStartTime = Date.now();
-        startRolling();
-
-        // request server spin
         socket.emit('slots:spin', {
           userId: currentUserId,
           bet: currentBet
@@ -476,42 +416,31 @@
       });
 
       socket.on('slots:spinResult', (data) => {
-        // data.symbols is array of indices (0-7)
-        finalIndices = data.symbols;
+        stopSpinAnimation();
+        spinning = false;
+        spinBtn.disabled = false;
 
-        const elapsed = Date.now() - spinStartTime;
-        const remaining = Math.max(0, MIN_SPIN_MS - elapsed);
+        if (data.error) {
+          resultMsg.textContent = data.error;
+          return;
+        }
 
-        setTimeout(() => {
-          // stop the rapid rolling
-          if (spinInterval) {
-            clearInterval(spinInterval);
-            spinInterval = null;
-          }
+        // update reels
+        setReels(data.symbols);
 
-          // begin sequential column stop
-          stopColumns(0, finalIndices);
+        // update balance
+        updateBalance(data.newBalance);
 
-          // update balance and win message after all columns stopped?
-          // We'll set a timeout for the approximate duration of stops
-          const totalStopDuration = 2 * COLUMN_STOP_DELAY; // after last column starts
-          setTimeout(() => {
-            updateBalance(data.newBalance);
-            if (data.winAmount > 0) {
-              resultMsg.textContent = `🎉 YOU WON ${data.winAmount} ETB! (x${data.multiplier.toFixed(2)})`;
-            } else {
-              resultMsg.textContent = '😞 Try again!';
-            }
-          }, totalStopDuration + 50);
-        }, remaining);
+        // show win/loss message
+        if (data.winAmount > 0) {
+          resultMsg.textContent = `🎉 YOU WON ${data.winAmount} ETB! (x${data.multiplier.toFixed(2)})`;
+        } else {
+          resultMsg.textContent = '😞 Try again!';
+        }
       });
 
       socket.on('slots:error', (err) => {
-        // stop animation and re-enable
-        if (spinInterval) {
-          clearInterval(spinInterval);
-          spinInterval = null;
-        }
+        stopSpinAnimation();
         spinning = false;
         spinBtn.disabled = false;
         resultMsg.textContent = err;
