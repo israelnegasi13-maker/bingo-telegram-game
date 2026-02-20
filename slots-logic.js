@@ -1,4 +1,5 @@
 // slots-logic.js - Server-side Slots Galaxy game logic (3‑reel classic)
+// Updated: 7 symbols, any pair wins 2x, three-of-a-kind multipliers [2,4,6,8,10,15,20]
 
 const crypto = require('crypto');
 
@@ -16,14 +17,14 @@ class SlotsGame {
     // Single payline: indices 0,1,2 (the three reels)
     this.paylines = [[0, 1, 2]];
 
-    // Symbol pay multipliers (for 3 in a line)
-    this.symbolPayouts = [5, 10, 15, 20, 30, 40, 50, 100];
+    // Symbol pay multipliers for 3 in a line (index 0‑6)
+    this.symbolPayouts = [2, 4, 6, 8, 10, 15, 20];
   }
 
   initialize(io, models) {
     this.io = io;
     this.models = models;
-    console.log('✅ Slots Galaxy initialized (3‑reel classic)');
+    console.log('✅ Slots Galaxy initialized (7 symbols, 2‑of‑a‑kind win)');
   }
 
   handleSlotsConnection(socket) {
@@ -60,7 +61,7 @@ class SlotsGame {
       user.totalWagered = (user.totalWagered || 0) + bet;
       await user.save();
 
-      // Generate 3 random symbols (0‑7)
+      // Generate 3 random symbols (0‑6)
       const symbols = this.generateRandomSymbols(3);
       const winAmount = this.calculateWin(symbols, bet);
 
@@ -118,17 +119,22 @@ class SlotsGame {
   generateRandomSymbols(count) {
     const symbols = [];
     for (let i = 0; i < count; i++) {
-      symbols.push(Math.floor(Math.random() * 8));
+      symbols.push(Math.floor(Math.random() * 7)); // 0‑6
     }
     return symbols;
   }
 
-  // Win if all three symbols are the same
+  // Win if all three same (using symbolPayouts) OR any two same (2×)
   calculateWin(symbols, bet) {
     const [a, b, c] = symbols;
+    // Three of a kind
     if (a === b && b === c) {
       const multiplier = this.symbolPayouts[a];
       return Math.round(bet * multiplier * 100) / 100;
+    }
+    // Two of a kind
+    if (a === b || a === c || b === c) {
+      return Math.round(bet * 2 * 100) / 100; // 2×
     }
     return 0;
   }
