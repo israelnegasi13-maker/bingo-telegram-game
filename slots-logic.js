@@ -17,14 +17,10 @@ class SlotsGame {
 
     // Paylines definition for 3x3 grid (indices 0‑8)
     // 0 1 2
-    // 3 4 5
+    // 3 4 5   ← MIDDLE ROW (only payline now)
     // 6 7 8
     this.paylines = [
-      [0,1,2], // top row
-      [3,4,5], // middle row
-      [6,7,8], // bottom row
-      [0,4,8], // diagonal top‑left to bottom‑right
-      [2,4,6]  // diagonal top‑right to bottom‑left
+      [3,4,5] // only the middle row – classic 3‑emoji match
     ];
 
     // Symbol pay multipliers (for 3 in a line)
@@ -35,7 +31,7 @@ class SlotsGame {
   initialize(io, models) {
     this.io = io;
     this.models = models;
-    console.log('✅ Slots Galaxy initialized');
+    console.log('✅ Slots Galaxy initialized (classic mode)');
   }
 
   // Called when a client connects (attach event listeners)
@@ -86,7 +82,7 @@ class SlotsGame {
       let netWin = 0;
       if (winAmount > 0) {
         user.balance += winAmount;
-        netWin = winAmount - bet; // net profit (could be negative if win < bet, but winAmount already includes bet? We treat winAmount as total payout)
+        netWin = winAmount - bet; // net profit
         await user.save();
 
         // update user stats
@@ -145,26 +141,18 @@ class SlotsGame {
     return symbols;
   }
 
-  // Calculate total win based on paylines
+  // Calculate win – classic mode: only middle row [3,4,5] matters.
+  // If all three symbols are identical, win = bet * symbol multiplier.
   calculateWin(symbols, bet) {
-    let totalWin = 0;
-    const lines = this.paylines.length;
-
-    // For each payline, check if all three symbols are identical
-    for (let line of this.paylines) {
-      const [a, b, c] = line;
-      if (symbols[a] === symbols[b] && symbols[b] === symbols[c]) {
-        const symbolIdx = symbols[a];
-        const multiplier = this.symbolPayouts[symbolIdx];
-        // win per line = bet per line * multiplier
-        // we distribute bet evenly across lines (bet / lines)
-        const lineBet = bet / lines;
-        totalWin += lineBet * multiplier;
-      }
+    const middleRow = this.paylines[0]; // [3,4,5]
+    const [a, b, c] = middleRow;
+    if (symbols[a] === symbols[b] && symbols[b] === symbols[c]) {
+      const symbolIdx = symbols[a];
+      const multiplier = this.symbolPayouts[symbolIdx];
+      // Full bet on a single line
+      return Math.round(bet * multiplier * 100) / 100;
     }
-
-    // Round to 2 decimals to avoid floating issues
-    return Math.round(totalWin * 100) / 100;
+    return 0;
   }
 
   // Update daily stats in MongoDB
