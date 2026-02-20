@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Slots Galaxy · ETHIO GAMES</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: #0a0c10;
+      color: #f0f4fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .game-container {
+      max-width: 400px;
+      width: 100%;
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 32px;
+      padding: 24px 16px 32px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: #8b5cf6; }
+
+    .balance-box {
+      background: #20262e;
+      padding: 10px 18px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 18px;
+      border: 1px solid #3b82f6;
+    }
+    .balance-box span { color: #60a5fa; margin-right: 6px; }
+
+    .reels {
+      background: #0f172a;
+      border-radius: 24px;
+      padding: 20px 10px;
+      margin: 20px 0 16px;
+      border: 1px solid #334155;
+    }
+
+    .reel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      aspect-ratio: 1 / 1;
+    }
+
+    .symbol-cell {
+      background: #1e293b;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      box-shadow: inset 0 0 0 1px #334155;
+      transition: transform 0.1s ease;
+    }
+
+    /* spinning animation */
+    .spinning .symbol-cell {
+      animation: spin 0.15s infinite linear;
+    }
+    @keyframes spin {
+      0% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(0.95); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 0.8; }
+    }
+
+    .paylines-info {
+      text-align: center;
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 10px 0 20px;
+    }
+    .paylines-info strong {
+      color: #fbbf24;
+      font-weight: 600;
+    }
+
+    .bet-panel {
+      background: #1e293b;
+      border-radius: 20px;
+      padding: 16px;
+      margin: 20px 0;
+    }
+
+    .bet-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .bet-label span {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .bet-amount {
+      font-size: 24px;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+
+    .bet-options {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .bet-option {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 40px;
+      padding: 8px 16px;
+      font-weight: 600;
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: all 0.15s;
+      flex: 1 0 auto;
+      max-width: 70px;
+    }
+    .bet-option.active {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: white;
+      box-shadow: 0 0 10px #3b82f6;
+    }
+
+    .spin-btn {
+      width: 100%;
+      background: linear-gradient(145deg, #8b5cf6, #6d28d9);
+      border: none;
+      border-radius: 60px;
+      padding: 18px;
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin: 12px 0 8px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      box-shadow: 0 8px 0 #4c1d95;
+    }
+    .spin-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 4px 0 #4c1d95;
+    }
+    .spin-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .result-message {
+      text-align: center;
+      min-height: 32px;
+      font-weight: 600;
+      margin: 8px 0;
+      color: #fbbf24;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 24px;
+      font-size: 14px;
+      color: #5a6573;
+    }
+    .footer-links a {
+      color: #8e9aaf;
+      text-decoration: none;
+    }
+
+    /* modal styling (shared with other games) */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-content {
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 32px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+    }
+    .modal-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #fbbf24;
+    }
+    .modal-stats {
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 16px;
+      margin: 16px 0;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+    }
+    .close-btn {
+      background: #3b82f6;
+      border: none;
+      border-radius: 40px;
+      padding: 12px 30px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="header">
+      <div class="logo">🌌 SLOTS <span>GALAXY</span></div>
+      <div class="balance-box"><span>💰</span><span id="balance">0.00</span></div>
+    </div>
+
+    <!-- Reels -->
+    <div class="reels" id="reelsContainer">
+      <div class="reel-grid" id="reelGrid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <div class="paylines-info">
+      <strong>5 Paylines</strong> · 3 rows · 2 diagonals
+    </div>
+
+    <!-- Bet panel -->
+    <div class="bet-panel">
+      <div class="bet-label">
+        <span>Bet amount</span>
+        <span class="bet-amount" id="betAmount">5</span>
+      </div>
+      <div class="bet-options" id="betOptions">
+        <button class="bet-option active" data-bet="5">5</button>
+        <button class="bet-option" data-bet="10">10</button>
+        <button class="bet-option" data-bet="20">20</button>
+        <button class="bet-option" data-bet="50">50</button>
+        <button class="bet-option" data-bet="100">100</button>
+      </div>
+    </div>
+
+    <!-- Spin button -->
+    <button class="spin-btn" id="spinBtn">🚀 SPIN</button>
+    <div class="result-message" id="resultMessage"></div>
+
+    <!-- Footer (optional) -->
+    <div class="footer-links">
+      <a href="#" onclick="window.history.back()">⬅️ Back</a>
+      <a href="#" onclick="showStats()">📊 Stats</a>
+      <a href="#" onclick="window.location.href='/telegram'">🏠 Home</a>
+    </div>
+  </div>
+
+  <!-- Stats Modal -->
+  <div class="modal" id="statsModal">
+    <div class="modal-content">
+      <div class="modal-title">✨ SLOTS STATS</div>
+      <div class="modal-stats">
+        <div class="stat-row"><span>Total games</span> <span id="statGames">0</span></div>
+        <div class="stat-row"><span>Total wagered</span> <span id="statWagered">0 ETB</span></div>
+        <div class="stat-row"><span>Total payouts</span> <span id="statPayouts">0 ETB</span></div>
+        <div class="stat-row"><span>House edge</span> <span id="statHouse">0%</span></div>
+      </div>
+      <button class="close-btn" onclick="closeStats()">Close</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function() {
+      const socket = io();
+      let currentUserId = null;
+      let userName = 'Player';
+      let balance = 0;
+      let currentBet = 5;
+      let spinning = false;
+
+      // ---------- get userId from URL ----------
+      const urlParams = new URLSearchParams(window.location.search);
+      const userId = urlParams.get('userId');
+      const name = urlParams.get('name');
+      if (userId) {
+        currentUserId = userId;
+        userName = name || 'Player';
+        socket.emit('init', { userId, userName });
+      } else {
+        alert('Missing user data. Please login via /telegram');
+        window.location.href = '/telegram';
+      }
+
+      // ---------- DOM elements ----------
+      const reelGrid = document.getElementById('reelGrid');
+      const balanceSpan = document.getElementById('balance');
+      const betAmountSpan = document.getElementById('betAmount');
+      const spinBtn = document.getElementById('spinBtn');
+      const resultMsg = document.getElementById('resultMessage');
+      const betOptions = document.querySelectorAll('.bet-option');
+      const reelsContainer = document.getElementById('reelsContainer');
+
+      // ---------- symbols (space theme) ----------
+      const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️', '👾'];
+
+      // initialize reels (empty)
+      function initReels() {
+        let html = '';
+        for (let i = 0; i < 9; i++) {
+          html += `<div class="symbol-cell">${SYMBOLS[0]}</div>`;
+        }
+        reelGrid.innerHTML = html;
+      }
+      initReels();
+
+      // update reels with given array (9 symbols)
+      function setReels(symbols) {
+        const cells = document.querySelectorAll('.symbol-cell');
+        symbols.forEach((sym, idx) => {
+          if (cells[idx]) cells[idx].textContent = sym;
+        });
+      }
+
+      // spinning animation
+      function startSpinAnimation() {
+        reelsContainer.classList.add('spinning');
+      }
+      function stopSpinAnimation() {
+        reelsContainer.classList.remove('spinning');
+      }
+
+      // update balance display
+      function updateBalance(newBalance) {
+        balance = newBalance;
+        balanceSpan.textContent = balance.toFixed(2);
+      }
+
+      // bet selection
+      betOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+          betOptions.forEach(o => o.classList.remove('active'));
+          opt.classList.add('active');
+          currentBet = parseInt(opt.dataset.bet, 10);
+          betAmountSpan.textContent = currentBet;
+        });
+      });
+
+      // ---------- spin action ----------
+      spinBtn.addEventListener('click', () => {
+        if (spinning) return;
+        if (!currentUserId) return;
+        if (balance < currentBet) {
+          resultMsg.textContent = '❌ Insufficient balance';
+          return;
+        }
+
+        spinning = true;
+        spinBtn.disabled = true;
+        resultMsg.textContent = '';
+        startSpinAnimation();
+
+        socket.emit('slots:spin', {
+          userId: currentUserId,
+          bet: currentBet
+        });
+      });
+
+      // ---------- socket events ----------
+      socket.on('initSuccess', (data) => {
+        updateBalance(data.balance);
+      });
+
+      socket.on('balanceUpdate', (newBal) => {
+        updateBalance(newBal);
+      });
+
+      socket.on('slots:spinResult', (data) => {
+        stopSpinAnimation();
+        spinning = false;
+        spinBtn.disabled = false;
+
+        if (data.error) {
+          resultMsg.textContent = data.error;
+          return;
+        }
+
+        // update reels
+        setReels(data.symbols);
+
+        // update balance
+        updateBalance(data.newBalance);
+
+        // show win/loss message
+        if (data.winAmount > 0) {
+          resultMsg.textContent = `🎉 YOU WON ${data.winAmount} ETB! (x${data.multiplier.toFixed(2)})`;
+        } else {
+          resultMsg.textContent = '😞 Try again!';
+        }
+      });
+
+      socket.on('slots:error', (err) => {
+        stopSpinAnimation();
+        spinning = false;
+        spinBtn.disabled = false;
+        resultMsg.textContent = err;
+      });
+
+      // refresh balance periodically
+      setInterval(() => {
+        if (currentUserId) {
+          socket.emit('getUserData', { userId: currentUserId });
+        }
+      }, 10000);
+
+      // ---------- stats modal ----------
+      window.showStats = function() {
+        socket.emit('slots:getStats');
+        document.getElementById('statsModal').style.display = 'flex';
+      };
+      window.closeStats = function() {
+        document.getElementById('statsModal').style.display = 'none';
+      };
+
+      socket.on('slots:stats', (stats) => {
+        document.getElementById('statGames').textContent = stats.totalGames || 0;
+        document.getElementById('statWagered').textContent = (stats.totalWagered || 0).toFixed(2) + ' ETB';
+        document.getElementById('statPayouts').textContent = (stats.totalPayouts || 0).toFixed(2) + ' ETB';
+        const house = stats.totalWagered > 0 
+          ? ((stats.totalWagered - stats.totalPayouts) / stats.totalWagered * 100).toFixed(2)
+          : 0;
+        document.getElementById('statHouse').textContent = house + '%';
+      });
+
+      // close modal on outside click
+      window.onclick = (e) => {
+        if (e.target === document.getElementById('statsModal')) closeStats();
+      };
+    })();
+  </script>
+</body>
+</html>
