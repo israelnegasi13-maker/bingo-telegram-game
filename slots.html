@@ -316,7 +316,7 @@
     </div>
 
     <div class="paylines-info">
-      <strong>⚡ 3 REELS · 1 PAYLINE ⚡</strong><br> match all three!
+      <strong>⚡ 7 SYMBOLS · 1 PAYLINE ⚡</strong><br> any pair wins 2×, triple wins up to 20×
     </div>
 
     <div class="bet-panel">
@@ -384,7 +384,8 @@
       const betOptions = document.querySelectorAll('.bet-option');
       const reelsContainer = document.getElementById('reelsContainer');
 
-      const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️', '👾'];
+      // Updated: 7 symbols (matches server)
+      const SYMBOLS = ['🌌', '🌠', '🪐', '👽', '🚀', '🌟', '☄️']; // 7 symbols
 
       // Initialize reels
       function initReels() {
@@ -505,7 +506,7 @@
         updateBalance(data.newBalance);
 
         if (data.winAmount > 0) {
-          resultMsg.innerHTML = `🎉 JACKPOT! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
+          resultMsg.innerHTML = `🎉 WIN! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
           reelsContainer.classList.add('win-glow');
           if (typeof confetti !== 'undefined') launchConfetti();
         } else {
