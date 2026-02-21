@@ -104,19 +104,21 @@
       transform: translateY(-2px);
     }
 
+    /* Improved vertical scrolling animation */
+    @keyframes vertical-roll {
+      0% { transform: translateY(-20px) scale(1.02); filter: blur(2px); opacity: 0.9; }
+      25% { transform: translateY(-10px) scale(1.01); filter: blur(1px); opacity: 0.95; }
+      50% { transform: translateY(10px) scale(0.98); filter: blur(2px); opacity: 0.9; }
+      75% { transform: translateY(20px) scale(0.97); filter: blur(3px); opacity: 0.85; }
+      100% { transform: translateY(-20px) scale(1.02); filter: blur(2px); opacity: 0.9; }
+    }
+    .symbol-cell.spinning {
+      animation: vertical-roll 0.4s infinite ease-in-out;
+    }
+
     /* Win glow */
     .win-glow .symbol-cell {
       box-shadow: 0 8px 0 #0b0f17, 0 0 0 3px #fbbf24, 0 0 40px #fbbf24;
-    }
-
-    /* Vertical rolling animation */
-    @keyframes vertical-roll {
-      0% { transform: translateY(-5px) scale(1.02); filter: blur(1px); opacity: 0.9; }
-      50% { transform: translateY(5px) scale(0.98); filter: blur(2px); opacity: 0.7; }
-      100% { transform: translateY(-5px) scale(1.02); filter: blur(1px); opacity: 0.9; }
-    }
-    .spinning .symbol-cell {
-      animation: vertical-roll 0.15s infinite ease-in-out;
     }
 
     .paylines-info {
@@ -362,7 +364,10 @@
       let balance = 0;
       let currentBet = 5;
       let spinning = false;
-      let rollInterval = null;
+
+      // Per‑reel intervals and timeouts for sequential stop
+      let reelIntervals = [null, null, null];
+      let spinTimeouts = [];
 
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
@@ -408,7 +413,7 @@
       }
       initReels();
 
-      // Set final symbols
+      // Set final symbols (used after stop)
       function setReels(symbolIndices) {
         const cells = document.querySelectorAll('.symbol-cell');
         symbolIndices.forEach((idx, i) => {
@@ -416,25 +421,81 @@
         });
       }
 
-      // Rolling animation
+      // Start spinning – each reel runs its own interval (slower, 180ms)
       function startRolling() {
-        reelsContainer.classList.add('spinning');
-        if (rollInterval) clearInterval(rollInterval);
-        rollInterval = setInterval(() => {
-          const cells = document.querySelectorAll('.symbol-cell');
-          cells.forEach(cell => {
+        const cells = document.querySelectorAll('.symbol-cell');
+        // Clear any leftovers
+        reelIntervals.forEach((interval, idx) => {
+          if (interval) {
+            clearInterval(interval);
+            reelIntervals[idx] = null;
+          }
+        });
+        spinTimeouts.forEach(timeout => clearTimeout(timeout));
+        spinTimeouts = [];
+
+        cells.forEach((cell, index) => {
+          cell.classList.add('spinning');
+          reelIntervals[index] = setInterval(() => {
             cell.textContent = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-          });
-        }, 80);
+          }, 180); // slower spin
+        });
       }
 
-      function stopRolling(finalSymbols) {
-        if (rollInterval) {
-          clearInterval(rollInterval);
-          rollInterval = null;
-        }
-        setReels(finalSymbols);
-        reelsContainer.classList.remove('spinning');
+      // Stop reels one by one (first → second → third)
+      function stopRolling(finalSymbols, onComplete) {
+        const cells = document.querySelectorAll('.symbol-cell');
+
+        // Stop first reel after 200ms
+        spinTimeouts.push(setTimeout(() => {
+          if (reelIntervals[0]) {
+            clearInterval(reelIntervals[0]);
+            reelIntervals[0] = null;
+            cells[0].classList.remove('spinning');
+            cells[0].textContent = SYMBOLS[finalSymbols[0]];
+          }
+        }, 200));
+
+        // Stop second reel after 400ms
+        spinTimeouts.push(setTimeout(() => {
+          if (reelIntervals[1]) {
+            clearInterval(reelIntervals[1]);
+            reelIntervals[1] = null;
+            cells[1].classList.remove('spinning');
+            cells[1].textContent = SYMBOLS[finalSymbols[1]];
+          }
+        }, 400));
+
+        // Stop third reel after 600ms, then finish
+        spinTimeouts.push(setTimeout(() => {
+          if (reelIntervals[2]) {
+            clearInterval(reelIntervals[2]);
+            reelIntervals[2] = null;
+            cells[2].classList.remove('spinning');
+            cells[2].textContent = SYMBOLS[finalSymbols[2]];
+          }
+          spinning = false;
+          spinBtn.disabled = false;
+          betOptions.forEach(opt => opt.classList.remove('disabled'));
+          if (onComplete) onComplete();
+        }, 600));
+      }
+
+      // Clean stop in case of error
+      function abortSpin() {
+        reelIntervals.forEach((interval, idx) => {
+          if (interval) {
+            clearInterval(interval);
+            reelIntervals[idx] = null;
+          }
+        });
+        spinTimeouts.forEach(timeout => clearTimeout(timeout));
+        spinTimeouts = [];
+        const cells = document.querySelectorAll('.symbol-cell');
+        cells.forEach(cell => cell.classList.remove('spinning'));
+        spinning = false;
+        spinBtn.disabled = false;
+        betOptions.forEach(opt => opt.classList.remove('disabled'));
       }
 
       // Win celebration (confetti)
@@ -451,7 +512,7 @@
         fire(0.1, { spread: 120, startVelocity: 45 });
       }
 
-      // Add confetti script if not present
+      // Load confetti library if not present
       if (typeof confetti === 'undefined') {
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1';
@@ -504,32 +565,24 @@
       });
 
       socket.on('slots:spinResult', (data) => {
-        stopRolling(data.symbols);
-        spinning = false;
-        spinBtn.disabled = false;
-        betOptions.forEach(opt => opt.classList.remove('disabled'));
-
-        if (data.error) {
-          resultMsg.textContent = data.error;
-          return;
-        }
+        // Stop reels sequentially, then show win message and confetti
+        stopRolling(data.symbols, () => {
+          if (data.winAmount > 0) {
+            resultMsg.innerHTML = `🎉 WIN! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
+            reelsContainer.classList.add('win-glow');
+            if (typeof confetti !== 'undefined') launchConfetti();
+          } else {
+            resultMsg.textContent = '😞 TRY AGAIN!';
+          }
+        });
 
         updateBalance(data.newBalance);
-
-        if (data.winAmount > 0) {
-          resultMsg.innerHTML = `🎉 WIN! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
-          reelsContainer.classList.add('win-glow');
-          if (typeof confetti !== 'undefined') launchConfetti();
-        } else {
-          resultMsg.textContent = '😞 TRY AGAIN!';
-        }
       });
 
       socket.on('slots:error', (err) => {
-        stopRolling([0,0,0]); // fallback
-        spinning = false;
-        spinBtn.disabled = false;
-        betOptions.forEach(opt => opt.classList.remove('disabled'));
+        abortSpin();
+        // Optionally reset reels to a neutral state
+        setReels([0, 0, 0]);
         resultMsg.textContent = err;
       });
 
