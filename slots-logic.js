@@ -58,10 +58,9 @@ class SlotsGame {
         return socket.emit('slots:error', 'Insufficient balance');
       }
 
-      // Deduct bet
+      // --- Deduct bet & update wagered total ---
       user.balance -= bet;
       user.totalWagered = (user.totalWagered || 0) + bet;
-      await user.save();
 
       // Generate 3 random symbols (0‑9)
       const symbols = this.generateRandomSymbols(3);
@@ -71,10 +70,11 @@ class SlotsGame {
       if (winAmount > 0) {
         user.balance += winAmount;
         netWin = winAmount - bet;
-        await user.save();
         user.totalWins = (user.totalWins || 0) + winAmount;
-        await user.save();
       }
+
+      // --- Single database save (all updates at once) ---
+      await user.save();
 
       // Record transaction
       const Transaction = this.models.Transaction;
