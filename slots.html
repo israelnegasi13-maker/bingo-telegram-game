@@ -104,16 +104,16 @@
       transform: translateY(-2px);
     }
 
-    /* Improved vertical scrolling animation */
+    /* Very slow and pronounced vertical roll */
     @keyframes vertical-roll {
-      0% { transform: translateY(-20px) scale(1.02); filter: blur(2px); opacity: 0.9; }
-      25% { transform: translateY(-10px) scale(1.01); filter: blur(1px); opacity: 0.95; }
-      50% { transform: translateY(10px) scale(0.98); filter: blur(2px); opacity: 0.9; }
-      75% { transform: translateY(20px) scale(0.97); filter: blur(3px); opacity: 0.85; }
-      100% { transform: translateY(-20px) scale(1.02); filter: blur(2px); opacity: 0.9; }
+      0% { transform: translateY(-50px) scale(1.1); filter: blur(4px); opacity: 0.7; }
+      25% { transform: translateY(-25px) scale(1.05); filter: blur(2px); opacity: 0.85; }
+      50% { transform: translateY(25px) scale(0.95); filter: blur(2px); opacity: 0.85; }
+      75% { transform: translateY(50px) scale(0.9); filter: blur(5px); opacity: 0.6; }
+      100% { transform: translateY(-50px) scale(1.1); filter: blur(4px); opacity: 0.7; }
     }
     .symbol-cell.spinning {
-      animation: vertical-roll 0.4s infinite ease-in-out;
+      animation: vertical-roll 1s infinite ease-in-out;
     }
 
     /* Win glow */
@@ -421,7 +421,7 @@
         });
       }
 
-      // Start spinning – each reel runs its own interval (slower, 180ms)
+      // Start spinning – each reel runs its own interval (very slow, 500ms)
       function startRolling() {
         const cells = document.querySelectorAll('.symbol-cell');
         // Clear any leftovers
@@ -438,15 +438,15 @@
           cell.classList.add('spinning');
           reelIntervals[index] = setInterval(() => {
             cell.textContent = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-          }, 180); // slower spin
+          }, 500); // very slow symbol change
         });
       }
 
-      // Stop reels one by one (first → second → third)
+      // Stop reels one by one with long delays
       function stopRolling(finalSymbols, onComplete) {
         const cells = document.querySelectorAll('.symbol-cell');
 
-        // Stop first reel after 200ms
+        // Stop first reel after 800ms
         spinTimeouts.push(setTimeout(() => {
           if (reelIntervals[0]) {
             clearInterval(reelIntervals[0]);
@@ -454,9 +454,9 @@
             cells[0].classList.remove('spinning');
             cells[0].textContent = SYMBOLS[finalSymbols[0]];
           }
-        }, 200));
+        }, 800));
 
-        // Stop second reel after 400ms
+        // Stop second reel after 1600ms
         spinTimeouts.push(setTimeout(() => {
           if (reelIntervals[1]) {
             clearInterval(reelIntervals[1]);
@@ -464,9 +464,9 @@
             cells[1].classList.remove('spinning');
             cells[1].textContent = SYMBOLS[finalSymbols[1]];
           }
-        }, 400));
+        }, 1600));
 
-        // Stop third reel after 600ms, then finish
+        // Stop third reel after 2400ms, then finish
         spinTimeouts.push(setTimeout(() => {
           if (reelIntervals[2]) {
             clearInterval(reelIntervals[2]);
@@ -478,7 +478,7 @@
           spinBtn.disabled = false;
           betOptions.forEach(opt => opt.classList.remove('disabled'));
           if (onComplete) onComplete();
-        }, 600));
+        }, 2400));
       }
 
       // Clean stop in case of error
