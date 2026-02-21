@@ -1,5 +1,6 @@
 // slots-logic.js - Server-side Slots Galaxy game logic (3‑reel classic)
-// Updated: 14 symbols, any pair wins 2x, three-of-a-kind multipliers up to 20x
+// Updated: 10 symbols, any pair wins 2x, three-of-a-kind multipliers up to 50x
+// Overall RTP: 92.4% (house edge 7.6%)
 
 const crypto = require('crypto');
 
@@ -17,15 +18,15 @@ class SlotsGame {
     // Single payline: indices 0,1,2 (the three reels)
     this.paylines = [[0, 1, 2]];
 
-    // Symbol pay multipliers for 3 in a line (index 0‑13)
-    // Sum = 143 → Expected return ~92.4%
-    this.symbolPayouts = [2, 4, 5, 6, 7, 8, 9, 10, 12, 12, 14, 16, 18, 20];
+    // Payout multipliers for three of a kind (10 symbols, sum = 384)
+    // Pair wins are always 2x
+    this.symbolPayouts = [50, 37, 37, 37, 37, 37, 37, 37, 37, 38];
   }
 
   initialize(io, models) {
     this.io = io;
     this.models = models;
-    console.log('✅ Slots Galaxy initialized (14 symbols, 20% win rate)');
+    console.log('✅ Slots Galaxy initialized (10 symbols, top multiplier 50x, 92.4% RTP)');
   }
 
   handleSlotsConnection(socket) {
@@ -62,7 +63,7 @@ class SlotsGame {
       user.totalWagered = (user.totalWagered || 0) + bet;
       await user.save();
 
-      // Generate 3 random symbols (0‑13)
+      // Generate 3 random symbols (0‑9)
       const symbols = this.generateRandomSymbols(3);
       const winAmount = this.calculateWin(symbols, bet);
 
@@ -120,7 +121,7 @@ class SlotsGame {
   generateRandomSymbols(count) {
     const symbols = [];
     for (let i = 0; i < count; i++) {
-      symbols.push(Math.floor(Math.random() * 14)); // 0‑13
+      symbols.push(Math.floor(Math.random() * 10)); // 0‑9
     }
     return symbols;
   }
