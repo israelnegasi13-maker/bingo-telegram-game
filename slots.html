@@ -369,6 +369,9 @@
       let reelIntervals = [null, null, null];
       let spinTimeouts = [];
 
+      // Timeout for server response
+      let spinResponseTimeout = null;
+
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get('userId');
       const name = urlParams.get('name');
@@ -481,7 +484,7 @@
         }, 2400));
       }
 
-      // Clean stop in case of error
+      // Clean stop in case of error or timeout
       function abortSpin() {
         reelIntervals.forEach((interval, idx) => {
           if (interval) {
@@ -550,6 +553,16 @@
         reelsContainer.classList.remove('win-glow');
         startRolling();
 
+        // Clear any previous timeout
+        if (spinResponseTimeout) clearTimeout(spinResponseTimeout);
+        // Set a new timeout: abort after 5 seconds
+        spinResponseTimeout = setTimeout(() => {
+          abortSpin();
+          setReels([0, 0, 0]); // fallback symbols
+          resultMsg.textContent = '⚠️ Server timeout. Please try again.';
+          spinResponseTimeout = null;
+        }, 5000);
+
         socket.emit('slots:spin', {
           userId: currentUserId,
           bet: currentBet
@@ -565,6 +578,12 @@
       });
 
       socket.on('slots:spinResult', (data) => {
+        // Clear the server timeout
+        if (spinResponseTimeout) {
+          clearTimeout(spinResponseTimeout);
+          spinResponseTimeout = null;
+        }
+
         // Stop reels sequentially, then show win message and confetti
         stopRolling(data.symbols, () => {
           if (data.winAmount > 0) {
@@ -580,18 +599,22 @@
       });
 
       socket.on('slots:error', (err) => {
+        // Clear the server timeout
+        if (spinResponseTimeout) {
+          clearTimeout(spinResponseTimeout);
+          spinResponseTimeout = null;
+        }
         abortSpin();
-        // Optionally reset reels to a neutral state
         setReels([0, 0, 0]);
         resultMsg.textContent = err;
       });
 
-      // Polling for balance updates
+      // Optional: periodic balance sync (increased interval to 30 seconds to reduce noise)
       setInterval(() => {
         if (currentUserId && !spinning) {
           socket.emit('getUserData', { userId: currentUserId });
         }
-      }, 10000);
+      }, 30000);
 
       // Stats modal
       window.showStats = function() {
