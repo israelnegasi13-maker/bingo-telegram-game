@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>Agent Portal - ETHIO GAMES</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -840,51 +840,6 @@
             color: var(--text);
         }
         
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .dashboard-content {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .header-top {
-                flex-direction: column;
-                text-align: center;
-                gap: 15px;
-            }
-            
-            .agent-info {
-                text-align: center;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .nav {
-                flex-wrap: wrap;
-            }
-            
-            .nav-btn {
-                min-width: 120px;
-            }
-            
-            th, td {
-                padding: 10px;
-                font-size: 0.9rem;
-            }
-            
-            .connection-controls {
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-        }
-        
         /* Utility Classes */
         .text-primary { color: var(--primary); }
         .text-success { color: var(--success); }
@@ -992,6 +947,257 @@
         
         .main-content.authenticated {
             display: block;
+        }
+
+        /* ========== MOBILE OPTIMIZATIONS ========== */
+        @media (max-width: 768px) {
+            /* General spacing */
+            .container {
+                padding: 12px;
+            }
+
+            .header {
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+
+            .agent-info {
+                text-align: left;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+            }
+
+            .agent-name {
+                font-size: 1.3rem;
+                margin-bottom: 0;
+            }
+
+            .logout-btn {
+                margin-top: 0;
+                padding: 12px 24px;
+                font-size: 1rem;
+            }
+
+            .connection-controls {
+                flex-wrap: wrap;
+            }
+
+            .connection-btn, .refresh-toggle-btn {
+                flex: 1 1 auto;
+                padding: 12px;
+                font-size: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr 1fr; /* two columns on tablets */
+                gap: 12px;
+            }
+
+            .stat-card {
+                padding: 15px;
+            }
+
+            .stat-value {
+                font-size: 1.8rem;
+            }
+
+            /* Navigation: horizontal scroll */
+            .nav {
+                overflow-x: auto;
+                white-space: nowrap;
+                justify-content: flex-start;
+                padding: 8px;
+                gap: 8px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+            .nav::-webkit-scrollbar {
+                display: none;
+            }
+            .nav-btn {
+                flex: 0 0 auto;
+                padding: 14px 20px;
+                font-size: 0.95rem;
+                min-width: max-content;
+            }
+
+            /* Dashboard layout: stack */
+            .dashboard-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr; /* stack */
+            }
+
+            .action-btn {
+                padding: 18px;
+            }
+
+            .section {
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+
+            .section-title {
+                font-size: 1.2rem;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .refresh-btn {
+                padding: 10px 16px;
+            }
+
+            /* Tables: already scrollable, ensure cell padding is comfortable */
+            th, td {
+                padding: 12px 10px;
+                font-size: 0.9rem;
+            }
+
+            /* Modals: full width with comfortable margins */
+            .modal-content {
+                padding: 25px 20px;
+                max-width: 95%;
+            }
+
+            .modal-title {
+                font-size: 1.3rem;
+            }
+
+            .form-input, .search-input, .textarea-input {
+                padding: 16px 18px;
+                font-size: 1rem;
+            }
+
+            .submit-btn {
+                padding: 18px;
+                font-size: 1.1rem;
+            }
+
+            .add-btn {
+                padding: 10px 20px;
+            }
+
+            /* Commission items */
+            .commission-item {
+                padding: 15px;
+            }
+
+            .commission-amount {
+                font-size: 1.2rem;
+            }
+
+            /* Debug panel buttons */
+            .debug-panel {
+                padding: 15px;
+            }
+            .debug-btn {
+                width: 100%;
+                margin-top: 8px;
+                padding: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr; /* single column on phones */
+            }
+
+            .agent-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .agent-name {
+                font-size: 1.2rem;
+            }
+
+            .logout-btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .nav-btn {
+                padding: 12px 16px;
+                font-size: 0.9rem;
+            }
+
+            .quick-actions {
+                gap: 10px;
+            }
+
+            .action-btn {
+                padding: 15px;
+                gap: 12px;
+            }
+
+            .action-icon {
+                width: 44px;
+                height: 44px;
+                font-size: 1.3rem;
+            }
+
+            .section {
+                padding: 16px;
+            }
+
+            .table-container {
+                border-radius: 12px;
+            }
+
+            th, td {
+                padding: 10px 8px;
+                font-size: 0.85rem;
+            }
+
+            .user-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 1rem;
+            }
+
+            .balance-amount {
+                font-size: 1.8rem;
+            }
+
+            .withdrawal-form {
+                padding: 20px;
+            }
+
+            .notifications {
+                max-width: 90%;
+                right: 5%;
+                top: 10px;
+            }
+
+            .notification {
+                padding: 12px;
+                font-size: 0.95rem;
+            }
+
+            .login-card {
+                padding: 30px 20px;
+                max-width: 90%;
+            }
+
+            .login-logo {
+                font-size: 2rem;
+            }
+
+            .login-title {
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
