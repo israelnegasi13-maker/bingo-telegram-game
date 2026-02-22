@@ -584,8 +584,12 @@
           spinResponseTimeout = null;
         }
 
-        // Stop reels sequentially, then show win message and confetti
+        // Stop reels sequentially, then show win message and confetti,
+        // and only then update the balance.
         stopRolling(data.symbols, () => {
+          // Update balance after reels have stopped
+          updateBalance(data.newBalance);
+
           if (data.winAmount > 0) {
             resultMsg.innerHTML = `🎉 WIN! +${data.winAmount} ETB (x${data.multiplier.toFixed(2)}) 🎉`;
             reelsContainer.classList.add('win-glow');
@@ -595,7 +599,7 @@
           }
         });
 
-        updateBalance(data.newBalance);
+        // Note: updateBalance is no longer called immediately here.
       });
 
       socket.on('slots:error', (err) => {
