@@ -104,9 +104,6 @@ class SlotsGame {
         newBalance: user.balance
       });
 
-      // Broadcast updated balance
-      this.io.to(socket.id).emit('balanceUpdate', user.balance);
-
       // Update internal stats
       this.stats.totalGames++;
       this.stats.totalWagered += bet;
