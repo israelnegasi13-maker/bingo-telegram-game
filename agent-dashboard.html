@@ -949,22 +949,23 @@
             display: block;
         }
 
-        /* ========== MOBILE OPTIMIZATIONS ========== */
+        /* ========== PROFESSIONAL MOBILE OPTIMIZATIONS ========== */
         @media (max-width: 768px) {
-            /* General spacing */
+            /* Overall spacing */
             .container {
                 padding: 12px;
             }
 
+            /* Header: stacked but compact */
             .header {
-                padding: 20px;
-                margin-bottom: 20px;
+                padding: 20px 16px;
+                margin-bottom: 16px;
             }
 
             .header-top {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 15px;
+                gap: 12px;
             }
 
             .agent-info {
@@ -973,7 +974,7 @@
                 flex-wrap: wrap;
                 align-items: center;
                 justify-content: space-between;
-                gap: 10px;
+                gap: 8px;
             }
 
             .agent-name {
@@ -983,51 +984,74 @@
 
             .logout-btn {
                 margin-top: 0;
-                padding: 12px 24px;
+                padding: 12px 20px;
                 font-size: 1rem;
             }
 
             .connection-controls {
                 flex-wrap: wrap;
+                gap: 8px;
             }
 
             .connection-btn, .refresh-toggle-btn {
                 flex: 1 1 auto;
                 padding: 12px;
-                font-size: 1rem;
+                font-size: 0.95rem;
             }
 
+            /* Stats grid: 2 columns on mobile, 1 on very small */
             .stats-grid {
-                grid-template-columns: 1fr 1fr; /* two columns on tablets */
+                grid-template-columns: repeat(2, 1fr);
                 gap: 12px;
             }
 
             .stat-card {
-                padding: 15px;
+                padding: 16px 12px;
             }
 
             .stat-value {
-                font-size: 1.8rem;
+                font-size: 1.6rem;
             }
 
-            /* Navigation: horizontal scroll */
+            .stat-label {
+                font-size: 0.8rem;
+            }
+
+            /* Navigation: bottom bar style (original top nav hidden on mobile, new bottom nav added) */
+            /* We'll keep the original .nav but reposition it to the bottom and make it sticky */
             .nav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                margin: 0;
+                border-radius: 20px 20px 0 0;
+                padding: 8px 4px;
+                background: var(--dark-light);
+                border: 1px solid var(--border);
+                border-bottom: none;
+                z-index: 100;
+                box-shadow: 0 -4px 20px var(--shadow);
+                display: flex;
+                justify-content: space-around;
                 overflow-x: auto;
-                white-space: nowrap;
-                justify-content: flex-start;
-                padding: 8px;
-                gap: 8px;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
             }
             .nav::-webkit-scrollbar {
                 display: none;
             }
+
             .nav-btn {
                 flex: 0 0 auto;
-                padding: 14px 20px;
-                font-size: 0.95rem;
+                padding: 12px 16px;
+                font-size: 0.9rem;
                 min-width: max-content;
+            }
+
+            /* Add bottom padding to main content to avoid being hidden behind nav */
+            .main-content {
+                padding-bottom: 80px;
             }
 
             /* Dashboard layout: stack */
@@ -1036,39 +1060,65 @@
                 gap: 20px;
             }
 
+            /* Quick actions: vertical stack */
             .quick-actions {
-                grid-template-columns: 1fr; /* stack */
+                grid-template-columns: 1fr;
+                gap: 12px;
             }
 
             .action-btn {
-                padding: 18px;
+                padding: 16px;
             }
 
+            /* Sections */
             .section {
                 padding: 20px;
                 margin-bottom: 20px;
+                border-radius: 24px;
             }
 
             .section-title {
                 font-size: 1.2rem;
                 flex-wrap: wrap;
-                gap: 10px;
+                gap: 8px;
             }
 
             .refresh-btn {
-                padding: 10px 16px;
-            }
-
-            /* Tables: already scrollable, ensure cell padding is comfortable */
-            th, td {
-                padding: 12px 10px;
+                padding: 8px 14px;
                 font-size: 0.9rem;
             }
 
-            /* Modals: full width with comfortable margins */
+            /* Tables: keep scroll, better padding */
+            .table-container {
+                border-radius: 16px;
+            }
+
+            th, td {
+                padding: 12px 10px;
+                font-size: 0.85rem;
+            }
+
+            /* User avatar */
+            .user-avatar {
+                width: 36px;
+                height: 36px;
+                font-size: 0.9rem;
+            }
+
+            /* Commission items */
+            .commission-item {
+                padding: 16px;
+            }
+
+            .commission-amount {
+                font-size: 1.2rem;
+            }
+
+            /* Modals: full width with comfortable padding */
             .modal-content {
-                padding: 25px 20px;
+                padding: 24px 20px;
                 max-width: 95%;
+                border-radius: 28px;
             }
 
             .modal-title {
@@ -1076,105 +1126,35 @@
             }
 
             .form-input, .search-input, .textarea-input {
-                padding: 16px 18px;
+                padding: 14px 18px;
                 font-size: 1rem;
             }
 
             .submit-btn {
-                padding: 18px;
+                padding: 16px;
                 font-size: 1.1rem;
             }
 
-            .add-btn {
-                padding: 10px 20px;
-            }
-
-            /* Commission items */
-            .commission-item {
-                padding: 15px;
-            }
-
-            .commission-amount {
-                font-size: 1.2rem;
-            }
-
-            /* Debug panel buttons */
-            .debug-panel {
-                padding: 15px;
-            }
-            .debug-btn {
-                width: 100%;
-                margin-top: 8px;
-                padding: 14px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .stats-grid {
-                grid-template-columns: 1fr; /* single column on phones */
-            }
-
-            .agent-info {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .agent-name {
-                font-size: 1.2rem;
-            }
-
-            .logout-btn {
-                width: 100%;
-                text-align: center;
-            }
-
-            .nav-btn {
-                padding: 12px 16px;
-                font-size: 0.9rem;
-            }
-
-            .quick-actions {
-                gap: 10px;
-            }
-
-            .action-btn {
-                padding: 15px;
-                gap: 12px;
-            }
-
-            .action-icon {
-                width: 44px;
-                height: 44px;
-                font-size: 1.3rem;
-            }
-
-            .section {
-                padding: 16px;
-            }
-
-            .table-container {
-                border-radius: 12px;
-            }
-
-            th, td {
-                padding: 10px 8px;
-                font-size: 0.85rem;
-            }
-
-            .user-avatar {
-                width: 36px;
-                height: 36px;
-                font-size: 1rem;
+            /* Withdrawal form */
+            .withdrawal-form {
+                padding: 20px;
             }
 
             .balance-amount {
                 font-size: 1.8rem;
             }
 
-            .withdrawal-form {
-                padding: 20px;
+            /* Debug panel buttons */
+            .debug-panel {
+                padding: 16px;
+            }
+            .debug-btn {
+                width: 100%;
+                margin-top: 8px;
+                padding: 14px;
             }
 
+            /* Notifications */
             .notifications {
                 max-width: 90%;
                 right: 5%;
@@ -1186,6 +1166,7 @@
                 font-size: 0.95rem;
             }
 
+            /* Login card */
             .login-card {
                 padding: 30px 20px;
                 max-width: 90%;
@@ -1198,6 +1179,71 @@
             .login-title {
                 font-size: 1.2rem;
             }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .agent-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .logout-btn {
+                width: 100%;
+            }
+
+            .nav-btn {
+                padding: 10px 12px;
+                font-size: 0.85rem;
+            }
+
+            .action-btn {
+                padding: 14px;
+                gap: 10px;
+            }
+
+            .action-icon {
+                width: 44px;
+                height: 44px;
+                font-size: 1.3rem;
+            }
+
+            .section {
+                padding: 16px;
+            }
+
+            th, td {
+                padding: 10px 8px;
+                font-size: 0.8rem;
+            }
+
+            .user-avatar {
+                width: 32px;
+                height: 32px;
+            }
+
+            .balance-amount {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Additional polish: better card shadows, smoother transitions */
+        .section, .stat-card, .action-btn, .withdrawal-form, .modal-content {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .section:hover, .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.7);
+        }
+
+        /* Make buttons more tappable */
+        button, .nav-btn, .action-btn, .add-btn, .refresh-btn, .submit-btn, .logout-btn, .connection-btn {
+            min-height: 48px;
         }
     </style>
 </head>
