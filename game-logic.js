@@ -79,7 +79,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (STRONG 10/20 BIAS, AGGRESSIVE RETRY) ==========
+// ========== ENHANCED BOT CLASS (STRONG 10/20 BIAS, AGGRESSIVE RETRY, STATE SYNC) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -186,7 +186,72 @@ class Bot {
     ).catch(() => {}); // ignore errors, claim may fail
   }
 
-  _decideNextAction() {
+  /**
+   * Synchronise bot state with the database.
+   * Clears stale room assignments and ensures internal state matches reality.
+   */
+  async syncState() {
+    try {
+      const user = await models.User.findOne({ userId: this.userId });
+      if (!user) return;
+
+      const dbRoom = user.currentRoom;
+      const dbBox = user.box;
+
+      // If DB says we're in a room, validate it
+      if (dbRoom) {
+        const room = await getRoomWithCache(dbRoom);
+        const stillInRoom = room && room.players.includes(this.userId);
+
+        if (stillInRoom) {
+          // Valid room – sync internal state
+          this.currentRoom = dbRoom;
+          this.box = dbBox;
+          // Cancel any pending retry (we're already in a room)
+          if (this.retryTimer) {
+            clearTimeout(this.retryTimer);
+            this.retryTimer = null;
+          }
+          // Set wait timeout if the game hasn't started
+          if (room.status === 'waiting' || room.status === 'starting') {
+            if (!this.waitTimeout) {
+              this.waitTimeout = setTimeout(() => this._leaveRoom(), CONFIG.BOT_WAIT_TIMEOUT);
+            }
+          }
+        } else {
+          // Stale room – clear DB and internal state
+          console.log(`🧹 Bot ${this.userName} clearing stale room ${dbRoom}`);
+          await models.User.updateOne(
+            { userId: this.userId },
+            { currentRoom: null, box: null }
+          );
+          this.currentRoom = null;
+          this.box = null;
+          // Also remove from room if it exists but user missing (shouldn't happen, but safe)
+          if (room && room.players.includes(this.userId)) {
+            const index = room.players.indexOf(this.userId);
+            if (index > -1) room.players.splice(index, 1);
+            if (dbBox) {
+              const boxIndex = room.takenBoxes.indexOf(dbBox);
+              if (boxIndex > -1) room.takenBoxes.splice(boxIndex, 1);
+            }
+            await room.save();
+            updateRoomCache(room.stake, room);
+          }
+        }
+      } else {
+        // DB says no room – ensure internal state matches
+        this.currentRoom = null;
+        this.box = null;
+      }
+    } catch (error) {
+      console.error(`❌ Error syncing bot ${this.userName} state:`, error);
+    }
+  }
+
+  async _decideNextAction() {
+    await this.syncState(); // 👈 Ensure fresh state
+
     if (this.currentRoom) {
       console.log(`🤖 Bot ${this.userName} already in room ${this.currentRoom}, skipping action`);
       return;
@@ -290,9 +355,14 @@ class Bot {
     // Use provided delay or default 5-10 seconds
     const retryDelay = delay || (5000 + Math.random() * 5000);
     console.log(`🤖 Bot ${this.userName} scheduling retry in ${Math.round(retryDelay/1000)}s`);
-    this.retryTimer = setTimeout(() => {
+    this.retryTimer = setTimeout(async () => {
       this.retryTimer = null;
-      this._decideNextAction();
+      try {
+        await this._decideNextAction();
+      } catch (error) {
+        console.error(`❌ Bot ${this.userName} error in retry:`, error);
+        this._scheduleRetry(5000); // reschedule on error
+      }
     }, retryDelay);
   }
 }
@@ -423,6 +493,14 @@ async function initializeBots() {
       await user.save();
     } else {
       bot.balance = user.balance;
+    }
+
+    // 🔥 FIX: Clear any stale room assignment from previous server runs
+    if (user.currentRoom) {
+      console.log(`🧹 Bot ${bot.userName} clearing stale room ${user.currentRoom} on init`);
+      user.currentRoom = null;
+      user.box = null;
+      await user.save();
     }
 
     // Add to maps
