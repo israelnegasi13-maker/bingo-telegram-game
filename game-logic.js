@@ -79,7 +79,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== BOT CLASS (VIRTUAL SOCKET) ==========
+// ========== ENHANCED BOT CLASS (STRONG 10/20 BIAS, AGGRESSIVE RETRY) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -95,15 +95,7 @@ class Bot {
     this.isInGame = false;
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
-    this._deciding = false;                  // prevent concurrent decideNextAction calls
-    // Periodic idle check – ensures bot never gets stuck
-    this.retryInterval = setInterval(() => {
-      if (!this.currentRoom && !this.isInGame) {
-        console.log(`🤖 Bot ${this.userName} (${this.userId}) – idle check triggered, calling _decideNextAction()`);
-        this._decideNextAction();
-      }
-    }, 30000);
-    console.log(`🤖 Bot created: ${this.userName} (${this.userId})`);
+    this.retryTimer = null;                  // timer for next action attempt
   }
 
   _createSocket() {
@@ -117,7 +109,6 @@ class Bot {
   }
 
   _handleEvent(event, data) {
-    console.log(`🤖 Bot ${this.userName} received event: ${event}`, data);
     switch (event) {
       case 'ballDrawn':
         this._onBallDrawn(data);
@@ -131,16 +122,6 @@ class Bot {
       case 'balanceUpdate':
         this.balance = data;
         break;
-      case 'joinedRoom':
-        // Server sends this, but we already update state via direct call in joinRoom handler.
-        // Still, we can log it.
-        console.log(`🤖 Bot ${this.userName} successfully joined room (event received)`);
-        break;
-      case 'joinFailed':
-        console.log(`🤖 Bot ${this.userName} join failed: ${data.reason} – ${data.message}`);
-        // Retry after a short delay
-        setTimeout(() => this._decideNextAction(), 5000 + Math.random() * 5000);
-        break;
       // Add other events if needed
     }
   }
@@ -148,8 +129,7 @@ class Bot {
   _onBallDrawn({ room, num, letter }) {
     if (room !== this.currentRoom) return;
     this.calledNumbers.add(num);
-    // ✅ Only mark if the drawn number is on the card
-    if (this.grid.includes(num)) {
+    if (this.grid.includes(num) || (num === 'FREE' && this.grid.includes('FREE'))) {
       this.markedNumbers.add(num);
     }
     if (this._checkBingo()) {
@@ -161,7 +141,7 @@ class Bot {
 
   _onGameStarted({ room }) {
     if (room !== this.currentRoom) return;
-    console.log(`🤖 Bot ${this.userName} – game started in room ${room}`);
+    console.log(`🤖 Bot ${this.userName} game started in room ${room}`);
     this.isInGame = true;
     // Clear the wait timeout because game has started
     if (this.waitTimeout) {
@@ -176,7 +156,7 @@ class Bot {
 
   _onGameOver({ room }) {
     if (room !== this.currentRoom) return;
-    console.log(`🤖 Bot ${this.userName} – game over in room ${room}`);
+    console.log(`🤖 Bot ${this.userName} game over in room ${room}`);
     this.isInGame = false;
     this.currentRoom = null;
     this.box = null;
@@ -185,8 +165,8 @@ class Bot {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
-    // Decide next action after a short pause
-    setTimeout(() => this._decideNextAction(), 3000 + Math.random() * 5000);
+    // Schedule next action after a short pause (2-5 seconds for quick re-entry)
+    this._scheduleRetry(2000 + Math.random() * 3000);
   }
 
   _checkBingo() {
@@ -207,59 +187,77 @@ class Bot {
   }
 
   _decideNextAction() {
-    if (this.currentRoom || this.isInGame || this._deciding) {
-      console.log(`🤖 Bot ${this.userName} – _decideNextAction skipped (currentRoom=${this.currentRoom}, isInGame=${this.isInGame}, _deciding=${this._deciding})`);
+    if (this.currentRoom) {
+      console.log(`🤖 Bot ${this.userName} already in room ${this.currentRoom}, skipping action`);
       return;
     }
-    this._deciding = true;
-    console.log(`🤖 Bot ${this.userName} – _decideNextAction started`);
 
-    try {
-      // Weighted stake selection: 40% 10, 40% 20, 10% 50, 10% 100
-      const rand = Math.random();
-      let stake;
-      if (rand < 0.4) stake = 10;
-      else if (rand < 0.8) stake = 20;
-      else if (rand < 0.9) stake = 50;
-      else stake = 100;
+    // Strong preference for 10 and 20 ETB rooms (60% 10, 30% 20, 5% 50, 5% 100)
+    const rand = Math.random();
+    let stake;
+    if (rand < 0.6) stake = 10;
+    else if (rand < 0.9) stake = 20;
+    else if (rand < 0.95) stake = 50;
+    else stake = 100;
 
-      const roomStatus = getRoomStatus(stake);
-      console.log(`🤖 Bot ${this.userName} – selected stake ${stake}, roomStatus:`, roomStatus);
+    console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
 
-      // If room exists and is locked or full, try another stake later
-      if (roomStatus && (roomStatus.locked || roomStatus.playerCount >= 100)) {
-        console.log(`🤖 Bot ${this.userName} – room ${stake} locked/full, will retry later`);
-        setTimeout(() => this._decideNextAction(), 5000 + Math.random() * 5000);
-        return;
-      }
-
-      // Determine available boxes (if roomStatus missing, assume empty)
-      const taken = roomStatus ? roomStatus.takenBoxes : [];
-      const available = [];
-      for (let i = 1; i <= 100; i++) {
-        if (!taken.includes(i)) available.push(i);
-      }
-      if (available.length === 0) {
-        console.log(`🤖 Bot ${this.userName} – no available boxes in room ${stake}, will retry later`);
-        setTimeout(() => this._decideNextAction(), 5000 + Math.random() * 5000);
-        return;
-      }
-
-      const box = available[Math.floor(Math.random() * available.length)];
-      console.log(`🤖 Bot ${this.userName} – attempting to join room ${stake} with box ${box}`);
-
-      // Join the room using the stored joinRoom handler
+    // Get room status from cache (may be null if not yet cached)
+    const roomStatus = getRoomStatus(stake);
+    if (!roomStatus) {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} status unknown, will attempt join anyway (fallback)`);
+      // Proceed to attempt join with a random box (1-100)
+      const box = Math.floor(Math.random() * 100) + 1;
+      console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake} (fallback)`);
       const fakeData = { room: stake, box, userName: this.userName };
       const fakeCallback = null;
       socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
-    } finally {
-      this._deciding = false;
+      return;
     }
+
+    console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
+
+    if (roomStatus.locked) {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} is locked (game in progress), retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000); // 5-10 seconds
+      return;
+    }
+
+    if (roomStatus.playerCount >= 100) {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000);
+      return;
+    }
+
+    const taken = roomStatus.takenBoxes || [];
+    const available = [];
+    for (let i = 1; i <= 100; i++) {
+      if (!taken.includes(i)) available.push(i);
+    }
+    if (available.length === 0) {
+      console.log(`🤖 Bot ${this.userName}: no free boxes in room ${stake}, retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000);
+      return;
+    }
+
+    const box = available[Math.floor(Math.random() * available.length)];
+    console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake}`);
+
+    // Attempt to join the room
+    const fakeData = { room: stake, box, userName: this.userName };
+    const fakeCallback = null;
+    socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
+    // The joinRoom handler will call onJoinedRoom if successful
   }
 
   // Called after successful join
   onJoinedRoom(room, box) {
-    console.log(`🤖 Bot ${this.userName} – successfully joined room ${room} with box ${box} (direct callback)`);
+    console.log(`🤖 Bot ${this.userName} successfully joined room ${room} box ${box}`);
+    // Clear any pending retry timer
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     this.currentRoom = room;
     this.box = box;
     // Set a timeout to leave if game doesn't start within CONFIG.BOT_WAIT_TIMEOUT
@@ -271,14 +269,31 @@ class Bot {
 
   _leaveRoom() {
     if (!this.currentRoom) return;
-    console.log(`🤖 Bot ${this.userName} – leaving room ${this.currentRoom} manually`);
+    console.log(`🤖 Bot ${this.userName} leaving room ${this.currentRoom}`);
     // Use the stored leaveRoom handler
     socketHandlers.leaveRoom.call(this.socket, {});
-    // Clear wait timeout (will also be cleared in _onGameOver but do it now)
+    // Clear timers
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
+    // Schedule a retry after leaving (3-8 seconds)
+    this._scheduleRetry(3000 + Math.random() * 5000);
+  }
+
+  _scheduleRetry(delay) {
+    // Clear any existing retry timer
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    // Use provided delay or default 5-10 seconds
+    const retryDelay = delay || (5000 + Math.random() * 5000);
+    console.log(`🤖 Bot ${this.userName} scheduling retry in ${Math.round(retryDelay/1000)}s`);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this._decideNextAction();
+    }, retryDelay);
   }
 }
 
@@ -422,10 +437,7 @@ async function initializeBots() {
     );
 
     // Schedule first action after a random delay
-    setTimeout(() => {
-      console.log(`🤖 Bot ${bot.userName} – initial scheduled action`);
-      bot._decideNextAction();
-    }, 5000 + Math.random() * 10000);
+    bot._scheduleRetry(5000 + Math.random() * 10000);
   }
   console.log(`🤖 ${bots.length} bots initialized.`);
 }
@@ -3327,35 +3339,28 @@ function setupSocketHandlers() {
         const { room, box, userName } = data;
         const userId = socketToUser.get(this.id) || this.userId;
 
-        // Identify if this is a bot socket
-        const isBot = this.id && this.id.startsWith('bot_');
-
         if (!userId) {
-          if (isBot) this.emit('joinFailed', { reason: 'not_initialized', message: 'Player not initialized' });
-          else this.emit('error', 'Player not initialized');
+          this.emit('error', 'Player not initialized');
           if (callback) callback({ success: false, message: 'Player not initialized' });
           return;
         }
 
         // Rate limiting for room joins
         if (!checkRateLimit(userId, 'joinRoom')) {
-          if (isBot) this.emit('joinFailed', { reason: 'rate_limited', message: 'Too many requests' });
-          else this.emit('error', 'Too many join requests. Please wait.');
+          this.emit('error', 'Too many join requests. Please wait.');
           if (callback) callback({ success: false, message: 'Too many requests' });
           return;
         }
 
         const user = await models.User.findOne({ userId: userId });
         if (!user) {
-          if (isBot) this.emit('joinFailed', { reason: 'user_not_found', message: 'User not found' });
-          else this.emit('error', 'User not found');
+          this.emit('error', 'User not found');
           if (callback) callback({ success: false, message: 'User not found' });
           return;
         }
 
         if (user.balance < room) {
-          if (isBot) this.emit('joinFailed', { reason: 'insufficient_funds', message: 'Insufficient funds' });
-          else this.emit('insufficientFunds');
+          this.emit('insufficientFunds');
           if (callback) callback({ success: false, message: 'Insufficient funds' });
           return;
         }
@@ -3378,28 +3383,22 @@ function setupSocketHandlers() {
 
         // Check if room is locked (game is playing)
         if (roomData.status === 'playing') {
-          if (isBot) {
-            this.emit('joinFailed', { reason: 'room_locked', message: 'Game in progress' });
-          } else {
-            this.emit('roomLocked', {
-              room: room,
-              message: 'Game is in progress. Please wait for the current game to finish.'
-            });
-          }
+          this.emit('roomLocked', {
+            room: room,
+            message: 'Game is in progress. Please wait for the current game to finish.'
+          });
           if (callback) callback({ success: false, message: 'Room is locked - game in progress' });
           return;
         }
 
         if (box < 1 || box > 100) {
-          if (isBot) this.emit('joinFailed', { reason: 'invalid_box', message: 'Invalid box number' });
-          else this.emit('error', 'Invalid box number. Must be between 1 and 100');
+          this.emit('error', 'Invalid box number. Must be between 1 and 100');
           if (callback) callback({ success: false, message: 'Invalid box number' });
           return;
         }
 
         if (roomData.takenBoxes.includes(box)) {
-          if (isBot) this.emit('joinFailed', { reason: 'box_taken', message: 'Box already taken' });
-          else this.emit('boxTaken');
+          this.emit('boxTaken');
           if (callback) callback({ success: false, message: 'Box already taken' });
           return;
         }
@@ -3421,8 +3420,7 @@ function setupSocketHandlers() {
               // Fall through to normal join logic
             }
           } else {
-            if (isBot) this.emit('joinFailed', { reason: 'in_different_room', message: 'Already in a different room' });
-            else this.emit('error', 'Already in a different room');
+            this.emit('error', 'Already in a different room');
             if (callback) callback({ success: false, message: 'Already in different room' });
             return;
           }
@@ -3548,9 +3546,7 @@ function setupSocketHandlers() {
 
       } catch (error) {
         console.error('Error joining room:', error);
-        const isBot = this.id && this.id.startsWith('bot_');
-        if (isBot) this.emit('joinFailed', { reason: 'server_error', message: 'Server error' });
-        else this.emit('error', 'Server error while joining room');
+        this.emit('error', 'Server error while joining room');
         if (callback) callback({ success: false, message: 'Server error' });
       }
     };
