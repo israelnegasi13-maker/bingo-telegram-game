@@ -257,15 +257,15 @@ class Bot {
       return;
     }
 
-    // Strong preference for 10 and 20 ETB rooms (60% 10, 30% 20, 5% 50, 5% 100)
+    // Strong preference for 10 ETB rooms (80% 10, 10% 20, 5% 50, 5% 100)
     const rand = Math.random();
     let stake;
-    if (rand < 0.6) stake = 10;
+    if (rand < 0.8) stake = 10;
     else if (rand < 0.9) stake = 20;
     else if (rand < 0.95) stake = 50;
     else stake = 100;
 
-    console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
+    console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB (stake chosen: ${stake})`);
 
     // Get room status from cache (may be null if not yet cached)
     const roomStatus = getRoomStatus(stake);
