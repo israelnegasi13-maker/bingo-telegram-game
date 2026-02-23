@@ -95,6 +95,7 @@ class Bot {
     this.isInGame = false;
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
+    this.retryTimer = null;                  // timer for next action attempt
   }
 
   _createSocket() {
@@ -162,8 +163,8 @@ class Bot {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
-    // Decide next action after a short pause
-    setTimeout(() => this._decideNextAction(), 3000 + Math.random() * 5000);
+    // Schedule next action after a short pause
+    this._scheduleRetry(3000 + Math.random() * 5000);
   }
 
   _checkBingo() {
@@ -195,25 +196,39 @@ class Bot {
     else stake = 100;
 
     const roomStatus = getRoomStatus(stake);
-    if (!roomStatus || roomStatus.locked || roomStatus.playerCount >= 100) return;
+    if (!roomStatus || roomStatus.locked || roomStatus.playerCount >= 100) {
+      // Room not available – schedule a retry
+      this._scheduleRetry();
+      return;
+    }
 
     const taken = roomStatus.takenBoxes || [];
     const available = [];
     for (let i = 1; i <= 100; i++) {
       if (!taken.includes(i)) available.push(i);
     }
-    if (available.length === 0) return;
+    if (available.length === 0) {
+      // No free boxes – schedule a retry
+      this._scheduleRetry();
+      return;
+    }
 
     const box = available[Math.floor(Math.random() * available.length)];
 
-    // Join the room using the stored joinRoom handler
+    // Attempt to join the room
     const fakeData = { room: stake, box, userName: this.userName };
     const fakeCallback = null;
     socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
+    // The joinRoom handler will call onJoinedRoom if successful
   }
 
   // Called after successful join
   onJoinedRoom(room, box) {
+    // Clear any pending retry timer
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     this.currentRoom = room;
     this.box = box;
     // Set a timeout to leave if game doesn't start within CONFIG.BOT_WAIT_TIMEOUT
@@ -227,11 +242,27 @@ class Bot {
     if (!this.currentRoom) return;
     // Use the stored leaveRoom handler
     socketHandlers.leaveRoom.call(this.socket, {});
-    // Clear wait timeout (will also be cleared in _onGameOver but do it now)
+    // Clear timers
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
+    // Schedule a retry after leaving
+    this._scheduleRetry(5000 + Math.random() * 10000);
+  }
+
+  _scheduleRetry(delay) {
+    // Clear any existing retry timer
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    // Default delay 10–20 seconds if not specified
+    const retryDelay = delay || (10000 + Math.random() * 10000);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this._decideNextAction();
+    }, retryDelay);
   }
 }
 
@@ -375,7 +406,7 @@ async function initializeBots() {
     );
 
     // Schedule first action after a random delay
-    setTimeout(() => bot._decideNextAction(), 5000 + Math.random() * 10000);
+    bot._scheduleRetry(5000 + Math.random() * 10000);
   }
   console.log(`🤖 ${bots.length} bots initialized.`);
 }
