@@ -1,5 +1,5 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
-// ========== FULLY UPDATED – ADDED 10 ETHIOPIAN BOTS ==========
+// ========== FULLY UPDATED – 20 BOTS, PREFER 10/20 ETB, LEAVE STUCK ROOMS ==========
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -24,7 +24,8 @@ const CONFIG = {
   GAME_TIMEOUT_MINUTES: 7,
   TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
   MIN_WITHDRAWAL: 50,
-  MAX_WITHDRAWAL: 10000
+  MAX_WITHDRAWAL: 10000,
+  BOT_WAIT_TIMEOUT: 60000 // 60 seconds before leaving a room that never starts
 };
 
 // ========== GLOBAL STATE ==========
@@ -53,16 +54,21 @@ const RATE_LIMIT_WINDOW = 1000; // 1 second
 const MAX_EVENTS_PER_WINDOW = 10;
 
 // ========== ETHIOPIAN BOT NAMES ==========
-const ETHIOPIAN_NAMES = [
+// First 10 full names (first + last)
+const ETHIOPIAN_FULL_NAMES = [
   "Abebe Kebede", "Almaz Tesfaye", "Ayele Mengistu", "Berhanu Demeke", "Chaltu Dibaba",
-  "Desta Fikre", "Etetu Gemeda", "Fikre Lemma", "Genet Bekele", "Hailu Gebre",
-  "Kebede Assefa", "Lemlem Haile", "Mekdes Tsegaye", "Negasi Wolde", "Selam Teshome"
+  "Desta Fikre", "Etetu Gemeda", "Fikre Lemma", "Genet Bekele", "Hailu Gebre"
+];
+// Next 10 only first names
+const ETHIOPIAN_FIRST_NAMES = [
+  "Kebede", "Lemlem", "Mekdes", "Negasi", "Selam",
+  "Tigist", "Wondimu", "Yonas", "Zeritu", "Abebech"
 ];
 
 // ========== BOT MANAGEMENT ==========
 let bots = [];
 let botSockets = new Map(); // botId -> virtual socket object
-const BOT_COUNT = 10;
+const BOT_COUNT = 20;
 
 // Helper to get a socket (real or bot) by its ID
 function getEndpoint(socketId) {
@@ -88,6 +94,7 @@ class Bot {
     this.balance = 5000;                   // starting balance
     this.isInGame = false;
     this.claimTimeout = null;
+    this.waitTimeout = null;                // timeout for waiting to start
   }
 
   _createSocket() {
@@ -134,6 +141,11 @@ class Bot {
   _onGameStarted({ room }) {
     if (room !== this.currentRoom) return;
     this.isInGame = true;
+    // Clear the wait timeout because game has started
+    if (this.waitTimeout) {
+      clearTimeout(this.waitTimeout);
+      this.waitTimeout = null;
+    }
     // Generate card using seeded random based on box number
     this.grid = generateTraditionalBingoCard(this.box);
     this.markedNumbers = new Set(['FREE']);
@@ -146,6 +158,10 @@ class Bot {
     this.currentRoom = null;
     this.box = null;
     if (this.claimTimeout) clearTimeout(this.claimTimeout);
+    if (this.waitTimeout) {
+      clearTimeout(this.waitTimeout);
+      this.waitTimeout = null;
+    }
     // Decide next action after a short pause
     setTimeout(() => this._decideNextAction(), 3000 + Math.random() * 5000);
   }
@@ -169,30 +185,53 @@ class Bot {
 
   _decideNextAction() {
     if (this.currentRoom) return; // already in a room
-    const stakes = [10, 20, 50, 100];
-    const stake = stakes[Math.floor(Math.random() * stakes.length)];
+
+    // Weighted stake selection: 40% 10, 40% 20, 10% 50, 10% 100
+    const rand = Math.random();
+    let stake;
+    if (rand < 0.4) stake = 10;
+    else if (rand < 0.8) stake = 20;
+    else if (rand < 0.9) stake = 50;
+    else stake = 100;
+
     const roomStatus = getRoomStatus(stake);
     if (!roomStatus || roomStatus.locked || roomStatus.playerCount >= 100) return;
+
     const taken = roomStatus.takenBoxes || [];
     const available = [];
     for (let i = 1; i <= 100; i++) {
       if (!taken.includes(i)) available.push(i);
     }
     if (available.length === 0) return;
+
     const box = available[Math.floor(Math.random() * available.length)];
+
     // Join the room using the stored joinRoom handler
     const fakeData = { room: stake, box, userName: this.userName };
     const fakeCallback = null;
-    const fakeSocket = this.socket;
-    // We need to call the joinRoom handler with (socket, data, callback) style
-    // The handler is stored in socketHandlers.joinRoom
-    socketHandlers.joinRoom.call(fakeSocket, fakeData, fakeCallback);
+    socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
   }
 
   // Called after successful join
   onJoinedRoom(room, box) {
     this.currentRoom = room;
     this.box = box;
+    // Set a timeout to leave if game doesn't start within CONFIG.BOT_WAIT_TIMEOUT
+    this.waitTimeout = setTimeout(() => {
+      console.log(`⏰ Bot ${this.userName} leaving room ${room} – game didn't start in time`);
+      this._leaveRoom();
+    }, CONFIG.BOT_WAIT_TIMEOUT);
+  }
+
+  _leaveRoom() {
+    if (!this.currentRoom) return;
+    // Use the stored leaveRoom handler
+    socketHandlers.leaveRoom.call(this.socket, {});
+    // Clear wait timeout (will also be cleared in _onGameOver but do it now)
+    if (this.waitTimeout) {
+      clearTimeout(this.waitTimeout);
+      this.waitTimeout = null;
+    }
   }
 }
 
@@ -292,9 +331,16 @@ async function initialize(socketIo, dbModels) {
 
 // ========== INITIALIZE BOTS ==========
 async function initializeBots() {
-  console.log('🤖 Initializing 10 Ethiopian bots...');
+  console.log('🤖 Initializing 20 Ethiopian bots...');
   for (let i = 0; i < BOT_COUNT; i++) {
-    const name = ETHIOPIAN_NAMES[i % ETHIOPIAN_NAMES.length];
+    // First 10 bots get full names, next 10 get only first names
+    let name;
+    if (i < 10) {
+      name = ETHIOPIAN_FULL_NAMES[i % ETHIOPIAN_FULL_NAMES.length];
+    } else {
+      name = ETHIOPIAN_FIRST_NAMES[(i - 10) % ETHIOPIAN_FIRST_NAMES.length];
+    }
+
     const bot = new Bot(i, name, {
       generateTraditionalBingoCard,
       checkBingo,
@@ -3515,11 +3561,11 @@ function setupSocketHandlers() {
     });
 
     // ========== FIXED: player:leaveRoom - NO REFUND DURING COUNTDOWN ==========
-    socket.on('player:leaveRoom', async (data) => {
+    socketHandlers.leaveRoom = async function(data) {
       try {
-        const userId = socketToUser.get(socket.id) || socket.userId;
+        const userId = socketToUser.get(this.id) || this.userId;
         if (!userId) {
-          socket.emit('error', 'User not found');
+          this.emit('error', 'User not found');
           return;
         }
 
@@ -3527,7 +3573,7 @@ function setupSocketHandlers() {
 
         const user = await models.User.findOne({ userId: userId });
         if (!user || !user.currentRoom) {
-          socket.emit('leftRoom', { message: 'Not in a room' });
+          this.emit('leftRoom', { message: 'Not in a room' });
           return;
         }
 
@@ -3539,14 +3585,14 @@ function setupSocketHandlers() {
           user.currentRoom = null;
           user.box = null;
           await user.save();
-          socket.emit('leftRoom', { message: 'Left room (room not found)' });
+          this.emit('leftRoom', { message: 'Left room (room not found)' });
           return;
         }
 
         // Prevent leaving if game is already playing
         if (room.status === 'playing') {
           console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
-          socket.emit('error', 'Cannot leave room during active game! Wait for game to end.');
+          this.emit('error', 'Cannot leave room during active game! Wait for game to end.');
           return;
         }
 
@@ -3598,7 +3644,7 @@ function setupSocketHandlers() {
           });
           await transaction.save();
 
-          socket.emit('balanceUpdate', user.balance);
+          this.emit('balanceUpdate', user.balance);
         } else if (room.status === 'starting') {
           console.log(`⚠️ Player ${user.userName} left during countdown - NO REFUND given`);
           // Record that player forfeited stake
@@ -3619,7 +3665,7 @@ function setupSocketHandlers() {
         broadcastTakenBoxes(roomStake, room.takenBoxes);
 
         // Send success message
-        socket.emit('leftRoom', {
+        this.emit('leftRoom', {
           message: room.status === 'starting'
             ? 'Left room successfully - No refund (countdown in progress)'
             : 'Left room successfully',
@@ -3660,9 +3706,11 @@ function setupSocketHandlers() {
 
       } catch (error) {
         console.error('❌ Error in player:leaveRoom:', error);
-        socket.emit('error', 'Failed to leave room: ' + error.message);
+        this.emit('error', 'Failed to leave room: ' + error.message);
       }
-    });
+    };
+
+    socket.on('player:leaveRoom', socketHandlers.leaveRoom);
 
     // Add new event for getting room info
     socket.on('getRoomInfo', async (data) => {
