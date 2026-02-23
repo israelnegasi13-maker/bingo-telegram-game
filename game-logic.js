@@ -96,6 +96,7 @@ class Bot {
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
     this.retryTimer = null;                  // timer for next action attempt
+    this._eventHandlers = {};                // store event handlers if needed
   }
 
   _createSocket() {
@@ -103,7 +104,11 @@ class Bot {
     return {
       id: bot.userId,
       emit: (event, data) => bot._handleEvent(event, data),
-      on: () => {},                        // not used for bots
+      on: (event, handler) => {
+        // Store handlers for error events (optional)
+        if (!bot._eventHandlers) bot._eventHandlers = {};
+        bot._eventHandlers[event] = handler;
+      },
       disconnect: () => {},                 // stub
     };
   }
@@ -121,6 +126,13 @@ class Bot {
         break;
       case 'balanceUpdate':
         this.balance = data;
+        break;
+      case 'boxTaken':
+      case 'roomLocked':
+      case 'insufficientFunds':
+        // Any join failure – schedule a retry
+        console.log(`🤖 Bot ${this.userName} received ${event}, will retry later`);
+        this._scheduleRetry(5000 + Math.random() * 5000);
         break;
       // Add other events if needed
     }
@@ -257,7 +269,7 @@ class Bot {
       return;
     }
 
-    // Strong preference for 10 ETB rooms (80% 10, 10% 20, 5% 50, 5% 100)
+    // 80% chance for 10 ETB, 10% for 20, 5% for 50, 5% for 100
     const rand = Math.random();
     let stake;
     if (rand < 0.8) stake = 10;
@@ -265,7 +277,7 @@ class Bot {
     else if (rand < 0.95) stake = 50;
     else stake = 100;
 
-    console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB (stake chosen: ${stake})`);
+    console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
 
     // Get room status from cache (may be null if not yet cached)
     const roomStatus = getRoomStatus(stake);
@@ -275,8 +287,13 @@ class Bot {
       const box = Math.floor(Math.random() * 100) + 1;
       console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake} (fallback)`);
       const fakeData = { room: stake, box, userName: this.userName };
-      const fakeCallback = null;
-      socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
+      const joinCallback = (result) => {
+        if (!result || !result.success) {
+          console.log(`🤖 Bot ${this.userName} join failed (fallback): ${result?.message || 'unknown'}`);
+          this._scheduleRetry(5000 + Math.random() * 5000);
+        }
+      };
+      socketHandlers.joinRoom.call(this.socket, fakeData, joinCallback);
       return;
     }
 
@@ -310,8 +327,13 @@ class Bot {
 
     // Attempt to join the room
     const fakeData = { room: stake, box, userName: this.userName };
-    const fakeCallback = null;
-    socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
+    const joinCallback = (result) => {
+      if (!result || !result.success) {
+        console.log(`🤖 Bot ${this.userName} join failed: ${result?.message || 'unknown'}`);
+        this._scheduleRetry(5000 + Math.random() * 5000);
+      }
+    };
+    socketHandlers.joinRoom.call(this.socket, fakeData, joinCallback);
     // The joinRoom handler will call onJoinedRoom if successful
   }
 
