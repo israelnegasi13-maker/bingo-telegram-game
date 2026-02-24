@@ -1,6 +1,6 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 // ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
-// FIX: Orphaned boxes cleanup in bot syncState
+// FIX: Orphaned boxes cleanup in bot syncState + periodic orphaned box cleanup
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -2166,6 +2166,33 @@ async function cleanupStuckCountdowns() {
   }
 }
 
+// ========== NEW: CLEANUP ORPHANED BOXES ==========
+async function cleanupOrphanedBoxes() {
+  try {
+    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting'] } });
+    for (const room of rooms) {
+      // Get all players in this room with their boxes
+      const users = await models.User.find({ userId: { $in: room.players } }, 'userId box');
+      const validBoxes = new Set();
+      users.forEach(user => {
+        if (user.box) validBoxes.add(user.box);
+      });
+      // Filter takenBoxes to only those that are valid
+      const originalLength = room.takenBoxes.length;
+      room.takenBoxes = room.takenBoxes.filter(box => validBoxes.has(box));
+      if (room.takenBoxes.length !== originalLength) {
+        console.log(`🧹 Cleaned up ${originalLength - room.takenBoxes.length} orphaned boxes in room ${room.stake}`);
+        await room.save();
+        updateRoomCache(room.stake, room);
+        // Broadcast updated boxes
+        broadcastTakenBoxes(room.stake, room.takenBoxes);
+      }
+    }
+  } catch (error) {
+    console.error('Error cleaning orphaned boxes:', error);
+  }
+}
+
 // ========== ROOM CLEANUP FUNCTION ==========
 async function cleanupStaleRooms() {
   try {
@@ -4051,6 +4078,9 @@ function startPeriodicTasks() {
 
   // Countdown cleanup (every 10 seconds)
   setInterval(cleanupStuckCountdowns, 10000);
+
+  // Orphaned boxes cleanup (every 30 seconds)
+  setInterval(cleanupOrphanedBoxes, 30000);
 
   // Stale connections cleanup (every 60 seconds)
   setInterval(cleanupStaleConnections, 60000);
