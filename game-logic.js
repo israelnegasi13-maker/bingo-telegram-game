@@ -258,6 +258,7 @@ class Bot {
     }
   }
 
+  // ========== FIXED BOX SELECTION ==========
   async _decideNextAction() {
     await this.syncState(); // 👈 Ensure fresh state
 
@@ -270,73 +271,66 @@ class Bot {
     const stake = 10;
     console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
 
-    // Get room status from cache (may be null if not yet cached)
+    // Quick checks using cached room status
     const roomStatus = getRoomStatus(stake);
-    if (!roomStatus) {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} status unknown, fetching room directly...`);
-      let room = null;
+    let room = null;
+
+    if (roomStatus) {
+      console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
+      if (roomStatus.locked) {
+        console.log(`🤖 Bot ${this.userName}: room ${stake} is locked, retrying later`);
+        this._scheduleRetry(5000 + Math.random() * 5000);
+        return;
+      }
+      if (roomStatus.playerCount >= 100) {
+        console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
+        this._scheduleRetry(5000 + Math.random() * 5000);
+        return;
+      }
+      // Fetch the actual room to get the taken boxes array
       try {
         room = await this.getRoomWithCache(stake);
       } catch (e) {
         console.error(`Bot ${this.userName} error fetching room:`, e);
+        this._scheduleRetry(5000);
+        return;
       }
-      let box;
-      if (room) {
-        const taken = room.takenBoxes || [];
-        const available = [];
-        for (let i = 1; i <= 100; i++) {
-          if (!taken.includes(i)) available.push(i);
-        }
-        if (available.length === 0) {
-          console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
-          this._scheduleRetry(5000 + Math.random() * 5000);
-          return;
-        }
-        box = available[Math.floor(Math.random() * available.length)];
-      } else {
-        // Room doesn't exist yet – any box is free
-        box = Math.floor(Math.random() * 100) + 1;
+    } else {
+      // No cache entry – fetch room directly
+      try {
+        room = await this.getRoomWithCache(stake);
+      } catch (e) {
+        console.error(`Bot ${this.userName} error fetching room:`, e);
+        this._scheduleRetry(5000);
+        return;
       }
-      console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake} (fallback)`);
+    }
+
+    if (!room) {
+      // Room does not exist – any box is free
+      const box = Math.floor(Math.random() * 100) + 1;
+      console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake} (new room)`);
       const fakeData = { room: stake, box, userName: this.userName };
-      const fakeCallback = null;
-      socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
+      socketHandlers.joinRoom.call(this.socket, fakeData, null);
       return;
     }
 
-    console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
-
-    if (roomStatus.locked) {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} is locked (game in progress), retrying later`);
-      this._scheduleRetry(5000 + Math.random() * 5000);
-      return;
-    }
-
-    if (roomStatus.playerCount >= 100) {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
-      this._scheduleRetry(5000 + Math.random() * 5000);
-      return;
-    }
-
-    const taken = roomStatus.takenBoxes || [];
+    const taken = room.takenBoxes || [];
     const available = [];
     for (let i = 1; i <= 100; i++) {
       if (!taken.includes(i)) available.push(i);
     }
+
     if (available.length === 0) {
-      console.log(`🤖 Bot ${this.userName}: no free boxes in room ${stake}, retrying later`);
+      console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
       this._scheduleRetry(5000 + Math.random() * 5000);
       return;
     }
 
     const box = available[Math.floor(Math.random() * available.length)];
     console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake}`);
-
-    // Attempt to join the room
     const fakeData = { room: stake, box, userName: this.userName };
-    const fakeCallback = null;
-    socketHandlers.joinRoom.call(this.socket, fakeData, fakeCallback);
-    // The joinRoom handler will call onJoinedRoom if successful
+    socketHandlers.joinRoom.call(this.socket, fakeData, null);
   }
 
   // Called after successful join
