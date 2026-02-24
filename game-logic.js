@@ -79,7 +79,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (ONLY 10 ETB, AGGRESSIVE RETRY, STATE SYNC) ==========
+// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -209,7 +209,7 @@ class Bot {
 
       // If DB says we're in a room, validate it
       if (dbRoom) {
-        const room = await getRoomWithCache(dbRoom);
+        const room = await this.getRoomWithCache(dbRoom);
         const stillInRoom = room && room.players.includes(this.userId);
 
         if (stillInRoom) {
@@ -355,12 +355,17 @@ class Bot {
     console.log(`🤖 Bot ${this.userName} leaving room ${this.currentRoom}`);
     // Use the stored leaveRoom handler
     socketHandlers.leaveRoom.call(this.socket, {});
-    // Clear timers
+    // Immediately clear internal state to prevent being stuck
+    this.currentRoom = null;
+    this.box = null;
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
-    // Schedule a retry after leaving (3-8 seconds)
+    if (this.claimTimeout) {
+      clearTimeout(this.claimTimeout);
+      this.claimTimeout = null;
+    }
     this._scheduleRetry(3000 + Math.random() * 5000);
   }
 
