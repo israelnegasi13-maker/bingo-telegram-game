@@ -1,5 +1,6 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 // ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
+// FIX: Orphaned boxes cleanup in bot syncState
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -198,6 +199,7 @@ class Bot {
   /**
    * Synchronise bot state with the database.
    * Clears stale room assignments and ensures internal state matches reality.
+   * Also removes orphaned box from room if needed.
    */
   async syncState() {
     try {
@@ -236,16 +238,26 @@ class Bot {
           );
           this.currentRoom = null;
           this.box = null;
-          // Also remove from room if it exists but user missing (shouldn't happen, but safe)
+
+          // Clean up the room's takenBoxes if the bot's box is still there
+          if (room && dbBox && room.takenBoxes.includes(dbBox)) {
+            const boxIndex = room.takenBoxes.indexOf(dbBox);
+            if (boxIndex > -1) {
+              room.takenBoxes.splice(boxIndex, 1);
+              await room.save();
+              updateRoomCache(room.stake, room);
+              console.log(`🧹 Removed orphaned box ${dbBox} from room ${dbRoom}`);
+            }
+          }
+
+          // Also remove from players if present (safety)
           if (room && room.players.includes(this.userId)) {
             const index = room.players.indexOf(this.userId);
-            if (index > -1) room.players.splice(index, 1);
-            if (dbBox) {
-              const boxIndex = room.takenBoxes.indexOf(dbBox);
-              if (boxIndex > -1) room.takenBoxes.splice(boxIndex, 1);
+            if (index > -1) {
+              room.players.splice(index, 1);
+              await room.save();
+              updateRoomCache(room.stake, room);
             }
-            await room.save();
-            updateRoomCache(room.stake, room);
           }
         }
       } else {
