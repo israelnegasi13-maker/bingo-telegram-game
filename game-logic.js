@@ -1,6 +1,7 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
 // ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
-// FIX: Orphaned boxes cleanup in bot syncState + periodic orphaned box cleanup
+// FIX: Orphaned boxes cleanup in bot syncState
+// FIX: Block joins during 'ended' state, bots wait for room reset
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -289,8 +290,9 @@ class Bot {
 
     if (roomStatus) {
       console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
-      if (roomStatus.locked) {
-        console.log(`🤖 Bot ${this.userName}: room ${stake} is locked, retrying later`);
+      // 👇 FIX: Also block 'ended' status – treat as unavailable
+      if (roomStatus.locked || roomStatus.status === 'ended') {
+        console.log(`🤖 Bot ${this.userName}: room ${stake} is not available (${roomStatus.status}), retrying later`);
         this._scheduleRetry(5000 + Math.random() * 5000);
         return;
       }
@@ -875,7 +877,7 @@ async function broadcastRoomStatus() {
     }
     lastRoomStatusBroadcast = now;
 
-    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing', 'ended'] } });
     const roomStatus = {};
 
     // Process rooms in parallel
@@ -887,14 +889,14 @@ async function broadcastRoomStatus() {
       const houseFee = commissionPerPlayer * onlinePlayers.length;
       const potentialPrizeWithBonus = potentialPrize + CONFIG.FOUR_CORNERS_BONUS;
 
-      // Mark room as locked if game is playing
-      const isLocked = room.status === 'playing';
+      // 👇 FIX: Mark room as locked if game is playing OR ended
+      const isLocked = room.status === 'playing' || room.status === 'ended';
 
       roomStatus[room.stake] = {
         stake: room.stake,
         playerCount: onlinePlayers.length,
         totalPlayers: room.players.length,
-        status: isLocked ? 'locked' : room.status,
+        status: room.status,
         locked: isLocked,
         takenBoxes: room.takenBoxes.length,
         commissionPerPlayer: commissionPerPlayer,
@@ -992,7 +994,7 @@ async function updateAdminPanel() {
 
     // Get room data
     const roomsData = {};
-    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing'] } });
+    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting', 'playing', 'ended'] } });
 
     for (const room of rooms) {
       const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
@@ -1007,7 +1009,7 @@ async function updateAdminPanel() {
         totalPlayers: room.players.length,
         takenBoxes: room.takenBoxes,
         status: room.status,
-        locked: room.status === 'playing',
+        locked: room.status === 'playing' || room.status === 'ended',
         currentBall: room.currentBall,
         ballsDrawn: room.ballsDrawn,
         commissionPerPlayer: commissionPerPlayer,
@@ -2163,33 +2165,6 @@ async function cleanupStuckCountdowns() {
     }
   } catch (error) {
     console.error('Error in cleanupStuckCountdowns:', error);
-  }
-}
-
-// ========== NEW: CLEANUP ORPHANED BOXES ==========
-async function cleanupOrphanedBoxes() {
-  try {
-    const rooms = await models.Room.find({ status: { $in: ['waiting', 'starting'] } });
-    for (const room of rooms) {
-      // Get all players in this room with their boxes
-      const users = await models.User.find({ userId: { $in: room.players } }, 'userId box');
-      const validBoxes = new Set();
-      users.forEach(user => {
-        if (user.box) validBoxes.add(user.box);
-      });
-      // Filter takenBoxes to only those that are valid
-      const originalLength = room.takenBoxes.length;
-      room.takenBoxes = room.takenBoxes.filter(box => validBoxes.has(box));
-      if (room.takenBoxes.length !== originalLength) {
-        console.log(`🧹 Cleaned up ${originalLength - room.takenBoxes.length} orphaned boxes in room ${room.stake}`);
-        await room.save();
-        updateRoomCache(room.stake, room);
-        // Broadcast updated boxes
-        broadcastTakenBoxes(room.stake, room.takenBoxes);
-      }
-    }
-  } catch (error) {
-    console.error('Error cleaning orphaned boxes:', error);
   }
 }
 
@@ -3522,13 +3497,15 @@ function setupSocketHandlers() {
           updateRoomCache(room, roomData);
         }
 
-        // Check if room is locked (game is playing)
-        if (roomData.status === 'playing') {
+        // 👇 FIX: Also reject rooms in 'ended' state (winner celebration / reset window)
+        if (roomData.status === 'playing' || roomData.status === 'ended') {
           this.emit('roomLocked', {
             room: room,
-            message: 'Game is in progress. Please wait for the current game to finish.'
+            message: roomData.status === 'ended'
+              ? 'Game has ended – please wait for the room to reset.'
+              : 'Game is in progress. Please wait for the current game to finish.'
           });
-          if (callback) callback({ success: false, message: 'Room is locked - game in progress' });
+          if (callback) callback({ success: false, message: `Room is locked (${roomData.status})` });
           return;
         }
 
@@ -4078,9 +4055,6 @@ function startPeriodicTasks() {
 
   // Countdown cleanup (every 10 seconds)
   setInterval(cleanupStuckCountdowns, 10000);
-
-  // Orphaned boxes cleanup (every 30 seconds)
-  setInterval(cleanupOrphanedBoxes, 30000);
 
   // Stale connections cleanup (every 60 seconds)
   setInterval(cleanupStaleConnections, 60000);
