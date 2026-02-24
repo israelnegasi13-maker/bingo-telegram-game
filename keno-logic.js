@@ -2230,6 +2230,31 @@ module.exports = {
         
         return Math.max(0.7, Math.min(1.3, adjustment)); // Clamp between 0.7x and 1.3x
     },
+
+    // Helper to compute payouts for a given draw (including player adjustments)
+    calculatePayoutsForDraw: function(draw, bets) {
+        let maxWin = 0;
+        const betsArray = Object.values(bets).map(bet => ({
+            numbers: bet.numbers,
+            amount: bet.amount,
+            selectionCount: bet.selectionCount || bet.numbers.length,
+            playerId: bet.playerId || null,
+            isNewPlayer: bet.isNewPlayer || false,
+            consecutiveLosses: bet.consecutiveLosses || 0,
+            sessionWagered: bet.sessionWagered || 0
+        }));
+
+        for (const bet of betsArray) {
+            const matches = this.countMatches(bet.numbers, draw);
+            const payoutMultiplier = this.CONFIG.PAYOUT_TABLE[bet.selectionCount]?.[matches] || 0;
+            // Apply player‑specific odds adjustment (same as in simulateAndSelectDraw)
+            const sessionData = this.playerSessionData.get(bet.playerId);
+            const oddsAdjustment = this.calculatePlayerOddsAdjustment(bet.playerId, sessionData);
+            const winAmount = bet.amount * payoutMultiplier * oddsAdjustment;
+            if (winAmount > maxWin) maxWin = winAmount;
+        }
+        return maxWin;
+    },
     
     // Update player session data after round
     updatePlayerSessionData: function(userId, won, winAmount, betAmount) {
@@ -2665,7 +2690,7 @@ module.exports = {
         return selected.draw;
     },
     
-    // Draw Keno numbers - UPDATED with Balanced Profit Control
+    // Draw Keno numbers - UPDATED with Balanced Profit Control + 700 ETB threshold
     drawKenoNumbers: async function() {
         const self = this;
         const activeGame = self.getActiveKenoGame();
@@ -2704,9 +2729,22 @@ module.exports = {
             // Generate the draw using ENHANCED PROFIT CONTROL
             let drawnNumbers;
             if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
-                drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
+                // First, generate a purely random draw and check if it respects the 700 ETB cap
+                const randomDraw = self.generateRandomDraw();
+                const maxWin = self.calculatePayoutsForDraw(randomDraw, activeGame.bets);
+                
+                // If the random draw keeps all individual wins ≤ 700, use it
+                if (maxWin <= 700) {
+                    drawnNumbers = randomDraw;
+                    console.log(`🎲 Using random draw (max win ${maxWin.toFixed(2)} ETB ≤ 700)`);
+                } else {
+                    // Otherwise, let the profit control system select a draw
+                    drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
+                    console.log(`🎯 Using profit‑controlled draw (random draw would exceed 700 ETB)`);
+                }
             } else {
                 drawnNumbers = self.generateRandomDraw();
+                console.log('🎲 Profit control disabled or no bets – using random draw');
             }
             
             // Store in original random order
