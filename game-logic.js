@@ -54,15 +54,14 @@ const RATE_LIMIT_WINDOW = 1000; // 1 second
 const MAX_EVENTS_PER_WINDOW = 10;
 
 // ========== ETHIOPIAN BOT NAMES ==========
-// First 10 full names (first + last)
+// Updated to the requested names
 const ETHIOPIAN_FULL_NAMES = [
-  "Abebe Kebede", "Almaz Tesfaye", "Ayele Mengistu", "Berhanu Demeke", "Chaltu Dibaba",
-  "Desta Fikre", "Etetu Gemeda", "Fikre Lemma", "Genet Bekele", "Hailu Gebre"
+  "beki", "fx", "hailu", "grmawi", "tsehay",
+  "natan", "ashee", "Mika", "abel", "adu"
 ];
-// Next 10 only first names
 const ETHIOPIAN_FIRST_NAMES = [
-  "Kebede", "Lemlem", "Mekdes", "Negasi", "Selam",
-  "Tigist", "Wondimu", "Yonas", "Zeritu", "Abebech"
+  "alex", "alula getu", "Devani", "snipe fx", "beki cr7",
+  "Betty", "Lalisee", "Abdi", "mamee", "tsegu"
 ];
 
 // ========== BOT MANAGEMENT ==========
