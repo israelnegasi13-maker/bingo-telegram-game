@@ -2,6 +2,7 @@
 // ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
 // FIX: Orphaned boxes cleanup in bot syncState
 // FIX: Block joins during 'ended' state, bots wait for room reset
+// NEW: Random bot participation – at least 10, random additional bots
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -81,7 +82,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS) ==========
+// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + RANDOM PARTICIPATION) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -271,7 +272,7 @@ class Bot {
     }
   }
 
-  // ========== FIXED BOX SELECTION ==========
+  // ========== FIXED BOX SELECTION + RANDOM PARTICIPATION ==========
   async _decideNextAction() {
     await this.syncState(); // 👈 Ensure fresh state
 
@@ -301,6 +302,25 @@ class Bot {
         this._scheduleRetry(5000 + Math.random() * 5000);
         return;
       }
+
+      // ----- RANDOM PARTICIPATION LOGIC -----
+      // Ensure at least 10 bots join, then randomly add more
+      const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
+      if (currentPlayers >= 10) {
+        // 50% chance to join if we already have 10+ players
+        if (Math.random() < 0.5) {
+          console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
+        } else {
+          console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
+          // Schedule a long retry to skip this game cycle
+          this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
+          return;
+        }
+      } else {
+        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
+      }
+      // --------------------------------------
+
       // Fetch the actual room to get the taken boxes array
       try {
         room = await this.getRoomWithCache(stake);
