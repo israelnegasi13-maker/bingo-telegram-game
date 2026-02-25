@@ -2589,22 +2589,18 @@ function setupSocketHandlers() {
       userId: query.userId || 'unknown'
     });
 
-    // ========== ADMIN AUTHENTICATION ==========
+    // ========== ADMIN AUTHENTICATION (PASSWORDLESS) ==========
     socket.on('admin:auth', (password) => {
-      if (password === CONFIG.ADMIN_PASSWORD) {
-        adminSockets.add(socket.id);
-        socket.emit('admin:authSuccess');
-        updateAdminPanel();
+      // Always authenticate – passwordless mode
+      adminSockets.add(socket.id);
+      socket.emit('admin:authSuccess');
+      updateAdminPanel();
 
-        // Send Telebirr number to admin
-        socket.emit('admin:telebirrNumber', telebirrNumber);
+      // Send Telebirr number to admin
+      socket.emit('admin:telebirrNumber', telebirrNumber);
 
-        logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
-        console.log(`✅ Admin authenticated: ${socket.id}`);
-      } else {
-        console.log(`❌ Admin auth failed for socket ${socket.id}`);
-        socket.emit('admin:authError', 'Invalid password');
-      }
+      logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
+      console.log(`✅ Admin authenticated (passwordless): ${socket.id}`);
     });
 
     socket.on('admin:getData', () => {
@@ -3211,16 +3207,11 @@ function setupSocketHandlers() {
 
     // ========== BOT MANAGEMENT EVENTS ==========
     socket.on('admin:getBotsList', async () => {
-      if (!adminSockets.has(socket.id)) {
-        console.log(`⚠️ Unauthorized attempt to get bots list from socket ${socket.id}`);
-        return;
-      }
+      if (!adminSockets.has(socket.id)) return;
       try {
-        console.log(`📋 Admin ${socket.id} requested bots list`);
-        const list = await getBotsList(); // getBotsList is sync, but we keep async for consistency
+        const list = await getBotsList();
         socket.emit('admin:botsList', list);
       } catch (err) {
-        console.error('❌ Error fetching bots list:', err);
         socket.emit('admin:error', err.message);
       }
     });
