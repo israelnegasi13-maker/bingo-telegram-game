@@ -13,21 +13,27 @@
     }
     .container { max-width: 1200px; margin: 0 auto; }
     h1 { color: #3b82f6; border-bottom: 1px solid #262d36; padding-bottom: 10px; }
-    .admin-login {
-      background: #13171c;
-      border: 1px solid #262d36;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-      max-width: 400px;
-    }
-    input, button {
-      background: #0a0c10;
-      border: 1px solid #262d36;
+    .error-message {
+      background: #ef4444;
       color: white;
       padding: 10px;
       border-radius: 8px;
-      margin: 5px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .top-actions {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button, input {
+      background: #0a0c10;
+      border: 1px solid #262d36;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 14px;
     }
     button {
       background: #3b82f6;
@@ -58,30 +64,26 @@
       font-size: 12px;
     }
     .add-funds-input { width: 70px; }
-    .top-actions {
-      margin-bottom: 20px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
     }
-    .error { color: #ef4444; }
-    .success { color: #10b981; }
+    .status-active { background: #10b98120; color: #10b981; border: 1px solid #10b981; }
+    .status-inactive { background: #ef444420; color: #ef4444; border: 1px solid #ef4444; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🤖 Bots Control Panel</h1>
+    <h1>🤖 Bots Control Panel (Passwordless)</h1>
 
-    <!-- Admin Login (hidden after auth) -->
-    <div id="loginSection" class="admin-login">
-      <h3>Admin Login</h3>
-      <input type="password" id="adminPassword" placeholder="Admin password">
-      <button onclick="adminLogin()">Login</button>
-      <div id="loginError" class="error"></div>
-    </div>
+    <!-- Error display -->
+    <div id="errorMessage" class="error-message"></div>
 
-    <!-- Bot Management (visible after auth) -->
-    <div id="managementSection" style="display: none;">
+    <!-- Bot Management -->
+    <div id="managementSection">
       <div class="top-actions">
         <input type="text" id="newBotName" placeholder="New bot name (optional)">
         <button onclick="addNewBot()">➕ Add New Bot</button>
@@ -118,20 +120,19 @@
     const socket = io();
     let authenticated = false;
 
-    function adminLogin() {
-      const pwd = document.getElementById('adminPassword').value;
-      socket.emit('admin:auth', pwd);
-    }
+    // Automatically try to authenticate with default password
+    socket.emit('admin:auth', 'admin1234');
 
     socket.on('admin:authSuccess', () => {
       authenticated = true;
-      document.getElementById('loginSection').style.display = 'none';
-      document.getElementById('managementSection').style.display = 'block';
+      document.getElementById('errorMessage').style.display = 'none';
       refreshBots();
     });
 
     socket.on('admin:authError', (msg) => {
-      document.getElementById('loginError').textContent = msg;
+      document.getElementById('errorMessage').textContent = 'Authentication failed: ' + msg + ' – using fallback password admin123?';
+      // Try fallback password
+      socket.emit('admin:auth', 'admin123');
     });
 
     socket.on('admin:botsList', (bots) => {
@@ -147,6 +148,10 @@
     });
 
     function refreshBots() {
+      if (!authenticated) {
+        alert('Not authenticated yet. Please wait.');
+        return;
+      }
       socket.emit('admin:getBotsList');
     }
 
@@ -158,7 +163,7 @@
       }
       let html = '';
       bots.forEach(bot => {
-        const statusClass = bot.active ? 'active' : 'inactive';
+        const statusClass = bot.active ? 'status-active' : 'status-inactive';
         const statusText = bot.active ? 'Active' : 'Inactive';
         const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
         html += `
@@ -172,7 +177,7 @@
               <span id="balance-${bot.userId}">${bot.balance.toFixed(2)}</span>
               <input type="number" id="funds-${bot.userId}" placeholder="Amount" class="add-funds-input" style="display:none;">
             </td>
-            <td class="${statusClass}">${statusText}</td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>${roomInfo}</td>
             <td class="actions">
               <button onclick="toggleRename('${bot.userId}')">✏️ Rename</button>
@@ -226,7 +231,7 @@
     }
 
     function setAllBotsActive(active) {
-      // We need the bot list to iterate; we can request then update
+      // We need the bot list to iterate; request fresh list
       socket.emit('admin:getBotsList', (bots) => {
         bots.forEach(bot => {
           socket.emit('admin:setBotActive', { botId: bot.userId, active });
