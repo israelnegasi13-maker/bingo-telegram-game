@@ -1,271 +1,664 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Bots Control Panel - ETHIO GAMES</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bots Control Panel · ETHIO GAMES</title>
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
-    * { box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0c10;
-      color: #f0f4fa;
-      padding: 20px;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: #0b0f17;
+      color: #e9edf5;
+      padding: 1.5rem;
+      min-height: 100vh;
     }
-    .container { max-width: 1200px; margin: 0 auto; }
-    h1 { color: #3b82f6; border-bottom: 1px solid #262d36; padding-bottom: 10px; }
-    .error-message {
-      background: #ef4444;
-      color: white;
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      display: none;
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
     }
-    .top-actions {
-      margin-bottom: 20px;
+
+    /* Header */
+    .header {
       display: flex;
-      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
       flex-wrap: wrap;
+      gap: 1rem;
     }
-    button, input {
-      background: #0a0c10;
-      border: 1px solid #262d36;
-      color: white;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-    button {
-      background: #3b82f6;
-      border: none;
-      cursor: pointer;
+
+    .header h1 {
+      font-size: 1.8rem;
       font-weight: 600;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    button:active { background: #2563eb; }
+
+    .header h1 i {
+      background: #1e293b;
+      padding: 0.5rem;
+      border-radius: 14px;
+      color: #3b82f6;
+      font-size: 1.5rem;
+    }
+
+    /* Stats Cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: #131b26;
+      border: 1px solid #263241;
+      border-radius: 20px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .stat-label {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: white;
+      line-height: 1.2;
+    }
+
+    .stat-detail {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-top: 0.25rem;
+    }
+
+    /* Action Bar */
+    .action-bar {
+      background: #131b26;
+      border: 1px solid #263241;
+      border-radius: 20px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .action-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .action-group .divider {
+      width: 1px;
+      height: 30px;
+      background: #263241;
+      margin: 0 0.5rem;
+    }
+
+    .btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.6rem 1.2rem;
+      border-radius: 40px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .btn i {
+      font-size: 1rem;
+      color: #94a3b8;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary i {
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #3b82f6;
+      border-color: #60a5fa;
+    }
+
+    .btn-success {
+      background: #0f766e;
+      border-color: #14b8a6;
+    }
+
+    .btn-success:hover {
+      background: #14b8a6;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #334155;
+    }
+
+    .btn-outline:hover {
+      background: #1e293b;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+      box-shadow: none;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      display: flex;
+      align-items: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 40px;
+      padding: 0.3rem 0.3rem 0.3rem 1.2rem;
+    }
+
+    .search-box i {
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      padding: 0.5rem 0.8rem;
+      color: white;
+      width: 100%;
+      outline: none;
+      font-size: 0.95rem;
+    }
+
+    .search-box input::placeholder {
+      color: #5f6c80;
+    }
+
+    /* Error message */
+    .error-message {
+      background: #7f1d1d;
+      border: 1px solid #b91c1c;
+      color: #fecaca;
+      padding: 1rem 1.5rem;
+      border-radius: 16px;
+      margin-bottom: 2rem;
+      display: none;
+      align-items: center;
+      gap: 0.8rem;
+      font-weight: 500;
+    }
+
+    .error-message i {
+      font-size: 1.3rem;
+    }
+
+    /* Table Card */
+    .table-container {
+      background: #131b26;
+      border: 1px solid #263241;
+      border-radius: 24px;
+      padding: 0.2rem;
+      overflow-x: auto;
+      box-shadow: 0 15px 30px -10px #00000080;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      background: #13171c;
-      border-radius: 12px;
-      overflow: hidden;
+      min-width: 1000px;
     }
-    th, td {
-      padding: 12px;
+
+    th {
       text-align: left;
-      border-bottom: 1px solid #262d36;
-    }
-    th { background: #1e293b; color: #94a3b8; font-weight: 500; }
-    td { color: #f0f4fa; }
-    .active { color: #10b981; font-weight: bold; }
-    .inactive { color: #ef4444; }
-    .actions button {
-      margin: 2px;
-      padding: 5px 10px;
-      font-size: 12px;
-    }
-    .add-funds-input { width: 70px; }
-    .status-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 12px;
+      padding: 1.2rem 1rem;
+      font-size: 0.85rem;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+      background: #1a2533;
+      border-bottom: 1px solid #263241;
     }
-    .status-active { background: #10b98120; color: #10b981; border: 1px solid #10b981; }
-    .status-inactive { background: #ef444420; color: #ef4444; border: 1px solid #ef4444; }
+
+    td {
+      padding: 1rem;
+      border-bottom: 1px solid #1f2a36;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #1c2735;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.25rem 0.8rem;
+      border-radius: 30px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      width: fit-content;
+    }
+
+    .status-active {
+      background: #0a3622;
+      color: #4ade80;
+      border: 1px solid #22c55e;
+    }
+
+    .status-inactive {
+      background: #3b1c1c;
+      color: #f87171;
+      border: 1px solid #ef4444;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .action-icon {
+      background: #1f2a39;
+      border: none;
+      color: #cbd5e1;
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s;
+      font-size: 0.9rem;
+    }
+
+    .action-icon:hover {
+      background: #2d3a4c;
+      color: white;
+    }
+
+    .action-icon.save {
+      background: #0f766e;
+      color: white;
+    }
+
+    .action-icon.send {
+      background: #2563eb;
+      color: white;
+    }
+
+    .inline-input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.4rem 0.6rem;
+      color: white;
+      width: 90px;
+      font-size: 0.85rem;
+    }
+
+    .inline-input:focus {
+      outline: 2px solid #3b82f6;
+      border-color: transparent;
+    }
+
+    .name-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .balance-value {
+      font-weight: 600;
+      color: #fbbf24;
+    }
+
+    /* Empty state */
+    .empty-row td {
+      text-align: center;
+      padding: 3rem;
+      color: #5f6c80;
+      font-style: italic;
+    }
+
+    /* Responsive */
+    @media (max-width: 700px) {
+      body { padding: 0.8rem; }
+      .header h1 { font-size: 1.5rem; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🤖 Bots Control Panel (Passwordless)</h1>
-
-    <!-- Error display -->
-    <div id="errorMessage" class="error-message"></div>
-
-    <!-- Bot Management -->
-    <div id="managementSection">
-      <div class="top-actions">
-        <input type="text" id="newBotName" placeholder="New bot name (optional)">
-        <button onclick="addNewBot()">➕ Add New Bot</button>
-        <button onclick="refreshBots()">🔄 Refresh List</button>
-      </div>
-
-      <div class="top-actions">
-        <span style="color:#94a3b8;">Quick Actions:</span>
-        <button onclick="setAllBotsActive(true)">✅ Activate All</button>
-        <button onclick="setAllBotsActive(false)">❌ Deactivate All</button>
-        <button onclick="addFundsToAll()">💰 Add 1000 to All</button>
-      </div>
-
-      <table id="botsTable">
-        <thead>
-          <tr>
-            <th>Bot ID</th>
-            <th>Name</th>
-            <th>Balance</th>
-            <th>Status</th>
-            <th>Room/Box</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="botsTableBody">
-          <tr><td colspan="6">Loading bots...</td></tr>
-        </tbody>
-      </table>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>
+      <i class="fas fa-robot"></i> Bots Command Center
+    </h1>
+    <div class="action-group">
+      <button class="btn btn-outline" onclick="refreshBots()"><i class="fas fa-sync-alt"></i> Refresh</button>
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    let authenticated = false;
-    let botsList = []; // Store bots for quick actions
+  <!-- Stats cards (filled dynamically) -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <div class="stat-label"><i class="fas fa-robot"></i> Total bots</div>
+      <div class="stat-value" id="statTotalBots">0</div>
+      <div class="stat-detail">registered</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><i class="fas fa-circle-check"></i> Active</div>
+      <div class="stat-value" id="statActiveBots">0</div>
+      <div class="stat-detail">online & ready</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><i class="fas fa-coins"></i> Total balance</div>
+      <div class="stat-value" id="statTotalBalance">0</div>
+      <div class="stat-detail">ETB</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><i class="fas fa-door-open"></i> In rooms</div>
+      <div class="stat-value" id="statInRooms">0</div>
+      <div class="stat-detail">currently playing</div>
+    </div>
+  </div>
 
-    // Re-authenticate on every connect (including reconnects)
-    socket.on('connect', () => {
-      console.log('Socket connected, authenticating...');
-      socket.emit('admin:auth', 'passwordless');
-    });
+  <!-- Error display -->
+  <div id="errorMessage" class="error-message"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
 
-    socket.on('admin:authSuccess', () => {
-      authenticated = true;
-      document.getElementById('errorMessage').style.display = 'none';
-      refreshBots(); // Refresh list as soon as we're authenticated
-    });
+  <!-- Main action bar -->
+  <div class="action-bar">
+    <div class="action-group">
+      <input type="text" id="newBotName" class="inline-input" placeholder="Bot name" style="width:160px;">
+      <button class="btn btn-primary" onclick="addNewBot()"><i class="fas fa-plus-circle"></i> Add bot</button>
+    </div>
+    <div class="divider"></div>
+    <div class="action-group">
+      <button class="btn btn-success" onclick="setAllBotsActive(true)"><i class="fas fa-check-circle"></i> Activate all</button>
+      <button class="btn btn-outline" onclick="setAllBotsActive(false)"><i class="fas fa-ban"></i> Deactivate all</button>
+      <button class="btn" onclick="addFundsToAll()"><i class="fas fa-gift"></i> +1000 to all</button>
+    </div>
+    <div class="search-box">
+      <i class="fas fa-search"></i>
+      <input type="text" id="searchInput" placeholder="Filter by name or ID..." onkeyup="filterBots()">
+    </div>
+  </div>
 
-    socket.on('admin:authError', (msg) => {
-      // This should never happen with the updated server, but keep fallback
-      document.getElementById('errorMessage').textContent = 'Authentication failed, retrying...';
-      setTimeout(() => socket.emit('admin:auth', 'anypassword'), 1000);
-    });
+  <!-- Bots table -->
+  <div class="table-container">
+    <table id="botsTable">
+      <thead>
+        <tr>
+          <th>Bot ID</th>
+          <th>Name</th>
+          <th>Balance (ETB)</th>
+          <th>Status</th>
+          <th>Room / Box</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="botsTableBody">
+        <tr class="empty-row"><td colspan="6"><i class="fas fa-spinner fa-pulse"></i> Loading bots...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 
-    socket.on('admin:botsList', (bots) => {
-      botsList = bots; // store for later use
-      renderBotsTable(bots);
-    });
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  let authenticated = false;
+  let botsList = [];
+  let filteredBots = [];
 
-    socket.on('admin:error', (msg) => {
-      alert('Error: ' + msg);
-    });
+  // Re-authenticate on every connect
+  socket.on('connect', () => {
+    console.log('Socket connected, authenticating...');
+    socket.emit('admin:auth', 'passwordless');
+  });
 
-    socket.on('admin:success', (msg) => {
-      alert(msg);
-    });
+  socket.on('admin:authSuccess', () => {
+    authenticated = true;
+    document.getElementById('errorMessage').style.display = 'none';
+    refreshBots();
+  });
 
-    function refreshBots() {
-      if (!authenticated) {
-        alert('Not authenticated yet. Please wait.');
-        return;
-      }
-      socket.emit('admin:getBotsList');
+  socket.on('admin:authError', () => {
+    // Fallback: retry
+    setTimeout(() => socket.emit('admin:auth', 'anypassword'), 1000);
+  });
+
+  socket.on('admin:botsList', (bots) => {
+    botsList = bots;
+    filteredBots = bots; // initially no filter
+    renderBotsTable(bots);
+    updateStats(bots);
+  });
+
+  socket.on('admin:error', (msg) => {
+    alert('Error: ' + msg);
+  });
+
+  socket.on('admin:success', (msg) => {
+    alert(msg);
+  });
+
+  function refreshBots() {
+    if (!authenticated) {
+      alert('Not authenticated yet. Please wait.');
+      return;
+    }
+    socket.emit('admin:getBotsList');
+  }
+
+  // Stats update
+  function updateStats(bots) {
+    const total = bots.length;
+    const active = bots.filter(b => b.active).length;
+    const totalBalance = bots.reduce((acc, b) => acc + (b.balance || 0), 0).toFixed(2);
+    const inRooms = bots.filter(b => b.currentRoom).length;
+
+    document.getElementById('statTotalBots').innerText = total;
+    document.getElementById('statActiveBots').innerText = active;
+    document.getElementById('statTotalBalance').innerText = totalBalance;
+    document.getElementById('statInRooms').innerText = inRooms;
+  }
+
+  // Filter function
+  function filterBots() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    if (!query) {
+      filteredBots = botsList;
+    } else {
+      filteredBots = botsList.filter(bot => 
+        bot.userId.toLowerCase().includes(query) || 
+        bot.userName.toLowerCase().includes(query)
+      );
+    }
+    renderBotsTable(filteredBots);
+  }
+
+  function renderBotsTable(bots) {
+    const tbody = document.getElementById('botsTableBody');
+    if (!bots || bots.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">🤖 No bots found. Create one!</td></tr>';
+      return;
     }
 
-    function renderBotsTable(bots) {
-      const tbody = document.getElementById('botsTableBody');
-      if (!bots || bots.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6">No bots found.</td></tr>';
-        return;
-      }
-      let html = '';
-      bots.forEach(bot => {
-        const statusClass = bot.active ? 'status-active' : 'status-inactive';
-        const statusText = bot.active ? 'Active' : 'Inactive';
-        const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
-        html += `
-          <tr>
-            <td>${bot.userId}</td>
-            <td>
+    let html = '';
+    bots.forEach(bot => {
+      const statusClass = bot.active ? 'status-active' : 'status-inactive';
+      const statusText = bot.active ? 'Active' : 'Inactive';
+      const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
+
+      html += `
+        <tr id="row-${bot.userId}">
+          <td><span class="badge-id">${bot.userId}</span></td>
+          <td>
+            <div class="name-container">
               <span id="name-${bot.userId}">${bot.userName}</span>
-              <input type="text" id="rename-${bot.userId}" value="${bot.userName}" style="display:none; width:100px;">
-            </td>
-            <td>
-              <span id="balance-${bot.userId}">${bot.balance.toFixed(2)}</span>
-              <input type="number" id="funds-${bot.userId}" placeholder="Amount" class="add-funds-input" style="display:none;">
-            </td>
-            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-            <td>${roomInfo}</td>
-            <td class="actions">
-              <button onclick="toggleRename('${bot.userId}')">✏️ Rename</button>
-              <button onclick="saveRename('${bot.userId}')" style="display:none;" id="save-${bot.userId}">Save</button>
-              <button onclick="toggleAddFunds('${bot.userId}')">💰 Add</button>
-              <button onclick="addFunds('${bot.userId}')" style="display:none;" id="addBtn-${bot.userId}">Send</button>
-              <button onclick="setActive('${bot.userId}', ${!bot.active})">${bot.active ? '🔴 Deactivate' : '🟢 Activate'}</button>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-    }
-
-    function toggleRename(botId) {
-      document.getElementById(`name-${botId}`).style.display = 'none';
-      document.getElementById(`rename-${botId}`).style.display = 'inline';
-      document.getElementById(`save-${botId}`).style.display = 'inline';
-    }
-
-    function saveRename(botId) {
-      const newName = document.getElementById(`rename-${botId}`).value;
-      socket.emit('admin:renameBot', { botId, newName });
-      document.getElementById(`name-${botId}`).textContent = newName;
-      document.getElementById(`name-${botId}`).style.display = 'inline';
-      document.getElementById(`rename-${botId}`).style.display = 'none';
-      document.getElementById(`save-${botId}`).style.display = 'none';
-    }
-
-    function toggleAddFunds(botId) {
-      document.getElementById(`funds-${botId}`).style.display = 'inline';
-      document.getElementById(`addBtn-${botId}`).style.display = 'inline';
-    }
-
-    function addFunds(botId) {
-      const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
-      if (isNaN(amount) || amount <= 0) return alert('Enter a positive amount');
-      socket.emit('admin:addBotFunds', { botId, amount });
-      document.getElementById(`funds-${botId}`).style.display = 'none';
-      document.getElementById(`addBtn-${botId}`).style.display = 'none';
-    }
-
-    function setActive(botId, active) {
-      socket.emit('admin:setBotActive', { botId, active });
-    }
-
-    function addNewBot() {
-      const name = document.getElementById('newBotName').value.trim() || undefined;
-      socket.emit('admin:addNewBot', { name });
-      document.getElementById('newBotName').value = '';
-    }
-
-    // Quick actions using stored botsList
-    function setAllBotsActive(active) {
-      if (!botsList.length) {
-        refreshBots();
-        setTimeout(() => setAllBotsActive(active), 500);
-        return;
-      }
-      botsList.forEach(bot => {
-        if (bot.active !== active) {
-          socket.emit('admin:setBotActive', { botId: bot.userId, active });
-        }
-      });
-    }
-
-    function addFundsToAll() {
-      const amount = 1000;
-      if (!botsList.length) {
-        refreshBots();
-        setTimeout(() => addFundsToAll(), 500);
-        return;
-      }
-      botsList.forEach(bot => {
-        socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
-      });
-    }
-
-    // Also update the table when we receive bot updates from other admins
-    socket.on('admin:botsList', (bots) => {
-      botsList = bots;
-      renderBotsTable(bots);
+              <input type="text" id="rename-${bot.userId}" class="inline-input" value="${bot.userName}" style="display:none;">
+            </div>
+          </td>
+          <td>
+            <span id="balance-${bot.userId}" class="balance-value">${bot.balance.toFixed(2)}</span>
+            <input type="number" id="funds-${bot.userId}" class="inline-input" placeholder="Amount" style="display:none; width:80px;">
+          </td>
+          <td><span class="status-badge ${statusClass}"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> ${statusText}</span></td>
+          <td>${roomInfo}</td>
+          <td class="actions">
+            <!-- Rename group -->
+            <button class="action-icon" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
+            <button class="action-icon save" id="save-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
+            
+            <!-- Add funds group -->
+            <button class="action-icon" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
+            <button class="action-icon send" id="addBtn-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
+            
+            <!-- Activate / Deactivate -->
+            <button class="action-icon" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
+              <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+            </button>
+          </td>
+        </tr>
+      `;
     });
-  </script>
+    tbody.innerHTML = html;
+  }
+
+  // ---------- action functions (identical logic, just UI enhanced) ----------
+  function toggleRename(botId) {
+    document.getElementById(`name-${botId}`).style.display = 'none';
+    document.getElementById(`rename-${botId}`).style.display = 'inline-block';
+    document.getElementById(`save-${botId}`).style.display = 'inline-flex';
+  }
+
+  function saveRename(botId) {
+    const newName = document.getElementById(`rename-${botId}`).value;
+    socket.emit('admin:renameBot', { botId, newName });
+    document.getElementById(`name-${botId}`).textContent = newName;
+    document.getElementById(`name-${botId}`).style.display = 'inline';
+    document.getElementById(`rename-${botId}`).style.display = 'none';
+    document.getElementById(`save-${botId}`).style.display = 'none';
+  }
+
+  function toggleAddFunds(botId) {
+    document.getElementById(`funds-${botId}`).style.display = 'inline-block';
+    document.getElementById(`addBtn-${botId}`).style.display = 'inline-flex';
+  }
+
+  function addFunds(botId) {
+    const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
+    if (isNaN(amount) || amount <= 0) return alert('Enter a positive amount');
+    socket.emit('admin:addBotFunds', { botId, amount });
+    document.getElementById(`funds-${botId}`).style.display = 'none';
+    document.getElementById(`addBtn-${botId}`).style.display = 'none';
+  }
+
+  function setActive(botId, active) {
+    socket.emit('admin:setBotActive', { botId, active });
+  }
+
+  function addNewBot() {
+    const name = document.getElementById('newBotName').value.trim() || undefined;
+    socket.emit('admin:addNewBot', { name });
+    document.getElementById('newBotName').value = '';
+  }
+
+  // Quick actions using stored botsList
+  function setAllBotsActive(active) {
+    if (!botsList.length) {
+      refreshBots();
+      setTimeout(() => setAllBotsActive(active), 500);
+      return;
+    }
+    botsList.forEach(bot => {
+      if (bot.active !== active) {
+        socket.emit('admin:setBotActive', { botId: bot.userId, active });
+      }
+    });
+  }
+
+  function addFundsToAll() {
+    const amount = 1000;
+    if (!botsList.length) {
+      refreshBots();
+      setTimeout(() => addFundsToAll(), 500);
+      return;
+    }
+    botsList.forEach(bot => {
+      socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
+    });
+  }
+
+  // Keep table synced and filtered on updates
+  socket.on('admin:botsList', (bots) => {
+    botsList = bots;
+    filterBots(); // reapply current filter
+    updateStats(bots);
+  });
+
+  // Optional: hide error if needed
+  window.refreshBots = refreshBots;
+  window.addNewBot = addNewBot;
+  window.setAllBotsActive = setAllBotsActive;
+  window.addFundsToAll = addFundsToAll;
+  window.toggleRename = toggleRename;
+  window.saveRename = saveRename;
+  window.toggleAddFunds = toggleAddFunds;
+  window.addFunds = addFunds;
+  window.setActive = setActive;
+  window.filterBots = filterBots;
+</script>
 </body>
 </html>
