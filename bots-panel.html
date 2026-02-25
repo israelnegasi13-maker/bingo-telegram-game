@@ -121,13 +121,16 @@
     let authenticated = false;
     let botsList = []; // Store bots for quick actions
 
-    // Immediately try to authenticate with any dummy password (server accepts all)
-    socket.emit('admin:auth', 'passwordless');
+    // Re-authenticate on every connect (including reconnects)
+    socket.on('connect', () => {
+      console.log('Socket connected, authenticating...');
+      socket.emit('admin:auth', 'passwordless');
+    });
 
     socket.on('admin:authSuccess', () => {
       authenticated = true;
       document.getElementById('errorMessage').style.display = 'none';
-      refreshBots();
+      refreshBots(); // Refresh list as soon as we're authenticated
     });
 
     socket.on('admin:authError', (msg) => {
