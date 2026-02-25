@@ -3211,11 +3211,16 @@ function setupSocketHandlers() {
 
     // ========== BOT MANAGEMENT EVENTS ==========
     socket.on('admin:getBotsList', async () => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        console.log(`⚠️ Unauthorized attempt to get bots list from socket ${socket.id}`);
+        return;
+      }
       try {
-        const list = await getBotsList();
+        console.log(`📋 Admin ${socket.id} requested bots list`);
+        const list = await getBotsList(); // getBotsList is sync, but we keep async for consistency
         socket.emit('admin:botsList', list);
       } catch (err) {
+        console.error('❌ Error fetching bots list:', err);
         socket.emit('admin:error', err.message);
       }
     });
