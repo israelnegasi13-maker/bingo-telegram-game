@@ -554,44 +554,48 @@ async function initializeBots() {
     });
 
     // Ensure bot user exists in database (with starting balance)
-    let user = await models.User.findOne({ userId: bot.userId });
-    if (!user) {
-      user = new models.User({
-        userId: bot.userId,
-        userName: bot.userName,
-        balance: bot.balance,
-        referralCode: generateReferralCode(bot.userId),
-        isBot: true,
-        botActive: true
-      });
-      await user.save();
-    } else {
-      bot.balance = user.balance;
-      bot.active = user.botActive !== false;
-    }
+    try {
+      let user = await models.User.findOne({ userId: bot.userId });
+      if (!user) {
+        user = new models.User({
+          userId: bot.userId,
+          userName: bot.userName,
+          balance: bot.balance,
+          referralCode: generateReferralCode(bot.userId),
+          isBot: true,
+          botActive: true
+        });
+        await user.save();
+      } else {
+        bot.balance = Number(user.balance) || 5000;   // ensure number
+        bot.active = user.botActive !== false;
+      }
 
-    // 🔥 FIX: Clear any stale room assignment from previous server runs
-    if (user.currentRoom) {
-      console.log(`🧹 Bot ${bot.userName} clearing stale room ${user.currentRoom} on init`);
-      user.currentRoom = null;
-      user.box = null;
-      await user.save();
-    }
+      // 🔥 FIX: Clear any stale room assignment from previous server runs
+      if (user.currentRoom) {
+        console.log(`🧹 Bot ${bot.userName} clearing stale room ${user.currentRoom} on init`);
+        user.currentRoom = null;
+        user.box = null;
+        await user.save();
+      }
 
-    // Add to maps
-    bots.push(bot);
-    botSockets.set(bot.userId, bot.socket);
-    socketToUser.set(bot.userId, bot.userId); // map socketId (which is userId) to userId
+      // Add to maps
+      bots.push(bot);
+      botSockets.set(bot.userId, bot.socket);
+      socketToUser.set(bot.userId, bot.userId); // map socketId (which is userId) to userId
 
-    // Make bot "online" in database
-    await models.User.updateOne(
-      { userId: bot.userId },
-      { isOnline: true, lastSeen: new Date() }
-    );
+      // Make bot "online" in database
+      await models.User.updateOne(
+        { userId: bot.userId },
+        { isOnline: true, lastSeen: new Date() }
+      );
 
-    // Schedule first action after a random delay (only if active)
-    if (bot.active) {
-      bot._scheduleRetry(5000 + Math.random() * 10000);
+      // Schedule first action after a random delay (only if active)
+      if (bot.active) {
+        bot._scheduleRetry(5000 + Math.random() * 10000);
+      }
+    } catch (err) {
+      console.error(`❌ Failed to initialize bot ${i}:`, err);
     }
   }
   console.log(`🤖 ${bots.length} bots initialized.`);
@@ -1138,26 +1142,30 @@ async function updateAdminPanel() {
 }
 
 function logActivity(type, details, adminSocketId = null) {
-  const activity = {
-    id: Date.now().toString(),
-    timestamp: new Date().toISOString(),
-    type: type,
-    details: details,
-    adminSocketId: adminSocketId
-  };
-  activityLog.unshift(activity);
+  try {
+    const activity = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      type: type,
+      details: details,
+      adminSocketId: adminSocketId
+    };
+    activityLog.unshift(activity);
 
-  if (activityLog.length > 200) {
-    activityLog = activityLog.slice(0, 200);
-  }
-
-  // Send to admin panels
-  adminSockets.forEach(socketId => {
-    const socket = getEndpoint(socketId);
-    if (socket && socket.connected !== false) {
-      socket.emit('admin:activity', activity);
+    if (activityLog.length > 200) {
+      activityLog = activityLog.slice(0, 200);
     }
-  });
+
+    // Send to admin panels
+    adminSockets.forEach(socketId => {
+      const socket = getEndpoint(socketId);
+      if (socket && socket.connected !== false) {
+        socket.emit('admin:activity', activity);
+      }
+    });
+  } catch (err) {
+    console.error('Error in logActivity:', err);
+  }
 }
 
 // ========== AUTO-CLEAR LONG RUNNING GAMES (7 MINUTES) ==========
@@ -2476,7 +2484,7 @@ async function getBotsList() {
   return bots.map(bot => ({
     userId: bot.userId,
     userName: bot.userName,
-    balance: bot.balance,
+    balance: Number(bot.balance).toFixed(2),   // ensure number and format
     active: bot.active,
     currentRoom: bot.currentRoom,
     box: bot.box
@@ -3207,17 +3215,24 @@ function setupSocketHandlers() {
 
     // ========== BOT MANAGEMENT EVENTS ==========
     socket.on('admin:getBotsList', async () => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
       try {
         const list = await getBotsList();
         socket.emit('admin:botsList', list);
       } catch (err) {
-        socket.emit('admin:error', err.message);
+        console.error('Error fetching bots list:', err);
+        socket.emit('admin:error', 'Failed to fetch bots list');
       }
     });
 
     socket.on('admin:addBotFunds', async ({ botId, amount }) => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
       try {
         const result = await addBotFunds(botId, parseFloat(amount));
         socket.emit('admin:botFundsAdded', result);
@@ -3233,7 +3248,10 @@ function setupSocketHandlers() {
     });
 
     socket.on('admin:renameBot', async ({ botId, newName }) => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
       try {
         await renameBot(botId, newName);
         const list = await getBotsList();
@@ -3248,7 +3266,10 @@ function setupSocketHandlers() {
     });
 
     socket.on('admin:setBotActive', async ({ botId, active }) => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
       try {
         await setBotActive(botId, active);
         const list = await getBotsList();
@@ -3263,7 +3284,10 @@ function setupSocketHandlers() {
     });
 
     socket.on('admin:addNewBot', async ({ name }) => {
-      if (!adminSockets.has(socket.id)) return;
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
       try {
         await addNewBot(name);
         const list = await getBotsList();
