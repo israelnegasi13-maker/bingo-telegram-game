@@ -747,7 +747,8 @@ io.on('connection', (socket) => {
   
   // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', async (password) => {
-    if (password === (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
+    // Use the same password as gameLogic.CONFIG.ADMIN_PASSWORD (default "admin1234")
+    if (password === (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin1234')) {
       socket.admin = true;
       // 👇 FIX #1: Give admin super‑admin privileges in agent system
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
@@ -794,7 +795,7 @@ io.on('connection', (socket) => {
       console.log(`💰 Deposit request from ${data.userName} (${data.userId}): ${data.amount} ETB, Receipt: ${data.receiptNumber}`);
       
       // Create a transaction record
-      const transaction = new models.Transaction({
+      const transaction = new Transaction({
         type: 'DEPOSIT_REQUEST',
         userId: data.userId,
         userName: data.userName,
@@ -837,7 +838,7 @@ io.on('connection', (socket) => {
       console.log(`💰 Withdrawal request from ${data.userName} (${data.userId}): ${data.amount} ETB to ${data.phoneNumber}`);
       
       // Check if user has sufficient balance
-      const user = await models.User.findOne({ userId: data.userId });
+      const user = await User.findOne({ userId: data.userId });
       if (!user) {
         socket.emit('wallet:error', 'User not found');
         return;
@@ -864,7 +865,7 @@ io.on('connection', (socket) => {
       }
       
       // Create a transaction record
-      const transaction = new models.Transaction({
+      const transaction = new Transaction({
         type: 'WITHDRAW_REQUEST',
         userId: data.userId,
         userName: data.userName,
