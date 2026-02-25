@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
+    /* (same as original, keep unchanged) */
     * {
       margin: 0;
       padding: 0;
@@ -456,209 +457,243 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket = io();
-  let authenticated = false;
-  let botsList = [];
-  let filteredBots = [];
+  (function() {
+    const socket = io();
+    let authenticated = false;
+    let botsList = [];
+    let filteredBots = [];
 
-  // Re-authenticate on every connect
-  socket.on('connect', () => {
-    console.log('Socket connected, authenticating...');
-    socket.emit('admin:auth', 'passwordless');
-  });
+    // UI elements
+    const errorDiv = document.getElementById('errorMessage');
+    const errorSpan = errorDiv.querySelector('span');
 
-  socket.on('admin:authSuccess', () => {
-    authenticated = true;
-    document.getElementById('errorMessage').style.display = 'none';
-    refreshBots();
-  });
-
-  socket.on('admin:authError', () => {
-    // Fallback: retry
-    setTimeout(() => socket.emit('admin:auth', 'anypassword'), 1000);
-  });
-
-  socket.on('admin:botsList', (bots) => {
-    botsList = bots;
-    filteredBots = bots; // initially no filter
-    renderBotsTable(bots);
-    updateStats(bots);
-  });
-
-  socket.on('admin:error', (msg) => {
-    alert('Error: ' + msg);
-  });
-
-  socket.on('admin:success', (msg) => {
-    alert(msg);
-  });
-
-  function refreshBots() {
-    if (!authenticated) {
-      alert('Not authenticated yet. Please wait.');
-      return;
-    }
-    socket.emit('admin:getBotsList');
-  }
-
-  // Stats update
-  function updateStats(bots) {
-    const total = bots.length;
-    const active = bots.filter(b => b.active).length;
-    const totalBalance = bots.reduce((acc, b) => acc + (b.balance || 0), 0).toFixed(2);
-    const inRooms = bots.filter(b => b.currentRoom).length;
-
-    document.getElementById('statTotalBots').innerText = total;
-    document.getElementById('statActiveBots').innerText = active;
-    document.getElementById('statTotalBalance').innerText = totalBalance;
-    document.getElementById('statInRooms').innerText = inRooms;
-  }
-
-  // Filter function
-  function filterBots() {
-    const query = document.getElementById('searchInput').value.toLowerCase();
-    if (!query) {
-      filteredBots = botsList;
-    } else {
-      filteredBots = botsList.filter(bot => 
-        bot.userId.toLowerCase().includes(query) || 
-        bot.userName.toLowerCase().includes(query)
-      );
-    }
-    renderBotsTable(filteredBots);
-  }
-
-  function renderBotsTable(bots) {
-    const tbody = document.getElementById('botsTableBody');
-    if (!bots || bots.length === 0) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">🤖 No bots found. Create one!</td></tr>';
-      return;
+    function showError(msg) {
+      errorSpan.textContent = msg;
+      errorDiv.style.display = 'flex';
     }
 
-    let html = '';
-    bots.forEach(bot => {
-      const statusClass = bot.active ? 'status-active' : 'status-inactive';
-      const statusText = bot.active ? 'Active' : 'Inactive';
-      const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
+    function hideError() {
+      errorDiv.style.display = 'none';
+    }
 
-      html += `
-        <tr id="row-${bot.userId}">
-          <td><span class="badge-id">${bot.userId}</span></td>
-          <td>
-            <div class="name-container">
-              <span id="name-${bot.userId}">${bot.userName}</span>
-              <input type="text" id="rename-${bot.userId}" class="inline-input" value="${bot.userName}" style="display:none;">
-            </div>
-          </td>
-          <td>
-            <span id="balance-${bot.userId}" class="balance-value">${bot.balance.toFixed(2)}</span>
-            <input type="number" id="funds-${bot.userId}" class="inline-input" placeholder="Amount" style="display:none; width:80px;">
-          </td>
-          <td><span class="status-badge ${statusClass}"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> ${statusText}</span></td>
-          <td>${roomInfo}</td>
-          <td class="actions">
-            <!-- Rename group -->
-            <button class="action-icon" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
-            <button class="action-icon save" id="save-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
-            
-            <!-- Add funds group -->
-            <button class="action-icon" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
-            <button class="action-icon send" id="addBtn-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
-            
-            <!-- Activate / Deactivate -->
-            <button class="action-icon" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
-              <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
-            </button>
-          </td>
-        </tr>
-      `;
+    // Re-authenticate on every connect
+    socket.on('connect', () => {
+      console.log('Socket connected, authenticating...');
+      socket.emit('admin:auth', 'passwordless');
+      // fallback: if no auth response in 5 seconds, show error
+      setTimeout(() => {
+        if (!authenticated) {
+          showError('Authentication timeout – check server or refresh');
+        }
+      }, 5000);
     });
-    tbody.innerHTML = html;
-  }
 
-  // ---------- action functions (identical logic, just UI enhanced) ----------
-  function toggleRename(botId) {
-    document.getElementById(`name-${botId}`).style.display = 'none';
-    document.getElementById(`rename-${botId}`).style.display = 'inline-block';
-    document.getElementById(`save-${botId}`).style.display = 'inline-flex';
-  }
-
-  function saveRename(botId) {
-    const newName = document.getElementById(`rename-${botId}`).value;
-    socket.emit('admin:renameBot', { botId, newName });
-    document.getElementById(`name-${botId}`).textContent = newName;
-    document.getElementById(`name-${botId}`).style.display = 'inline';
-    document.getElementById(`rename-${botId}`).style.display = 'none';
-    document.getElementById(`save-${botId}`).style.display = 'none';
-  }
-
-  function toggleAddFunds(botId) {
-    document.getElementById(`funds-${botId}`).style.display = 'inline-block';
-    document.getElementById(`addBtn-${botId}`).style.display = 'inline-flex';
-  }
-
-  function addFunds(botId) {
-    const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
-    if (isNaN(amount) || amount <= 0) return alert('Enter a positive amount');
-    socket.emit('admin:addBotFunds', { botId, amount });
-    document.getElementById(`funds-${botId}`).style.display = 'none';
-    document.getElementById(`addBtn-${botId}`).style.display = 'none';
-  }
-
-  function setActive(botId, active) {
-    socket.emit('admin:setBotActive', { botId, active });
-  }
-
-  function addNewBot() {
-    const name = document.getElementById('newBotName').value.trim() || undefined;
-    socket.emit('admin:addNewBot', { name });
-    document.getElementById('newBotName').value = '';
-  }
-
-  // Quick actions using stored botsList
-  function setAllBotsActive(active) {
-    if (!botsList.length) {
+    socket.on('admin:authSuccess', () => {
+      authenticated = true;
+      hideError();
       refreshBots();
-      setTimeout(() => setAllBotsActive(active), 500);
-      return;
-    }
-    botsList.forEach(bot => {
-      if (bot.active !== active) {
-        socket.emit('admin:setBotActive', { botId: bot.userId, active });
+    });
+
+    socket.on('admin:authError', (err) => {
+      showError('Authentication failed: ' + (err || 'unknown reason'));
+      // retry after a delay
+      setTimeout(() => socket.emit('admin:auth', 'passwordless'), 3000);
+    });
+
+    // Single listener for bots list
+    socket.on('admin:botsList', (bots) => {
+      botsList = bots;
+      filterBots(); // reapply current filter
+      updateStats(bots);
+    });
+
+    // Handle errors from server
+    socket.on('admin:error', (msg) => {
+      showError('Server error: ' + msg);
+    });
+
+    socket.on('admin:success', (msg) => {
+      // optional: show a temporary success message
+      console.log('Admin success:', msg);
+    });
+
+    // Refresh bots list
+    function refreshBots() {
+      if (!authenticated) {
+        showError('Not authenticated yet. Please wait.');
+        return;
       }
-    });
-  }
-
-  function addFundsToAll() {
-    const amount = 1000;
-    if (!botsList.length) {
-      refreshBots();
-      setTimeout(() => addFundsToAll(), 500);
-      return;
+      socket.emit('admin:getBotsList');
     }
-    botsList.forEach(bot => {
-      socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
+
+    // Stats update
+    function updateStats(bots) {
+      const total = bots.length;
+      const active = bots.filter(b => b.active).length;
+      const totalBalance = bots.reduce((acc, b) => acc + (Number(b.balance) || 0), 0).toFixed(2);
+      const inRooms = bots.filter(b => b.currentRoom).length;
+
+      document.getElementById('statTotalBots').innerText = total;
+      document.getElementById('statActiveBots').innerText = active;
+      document.getElementById('statTotalBalance').innerText = totalBalance;
+      document.getElementById('statInRooms').innerText = inRooms;
+    }
+
+    // Filter function
+    function filterBots() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      if (!query) {
+        filteredBots = botsList;
+      } else {
+        filteredBots = botsList.filter(bot => 
+          bot.userId.toLowerCase().includes(query) || 
+          bot.userName.toLowerCase().includes(query)
+        );
+      }
+      renderBotsTable(filteredBots);
+    }
+
+    function renderBotsTable(bots) {
+      const tbody = document.getElementById('botsTableBody');
+      if (!bots || bots.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">🤖 No bots found. Create one!</td></tr>';
+        return;
+      }
+
+      let html = '';
+      bots.forEach(bot => {
+        const statusClass = bot.active ? 'status-active' : 'status-inactive';
+        const statusText = bot.active ? 'Active' : 'Inactive';
+        const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
+        // Safely format balance
+        const balance = Number(bot.balance).toFixed(2);
+
+        html += `
+          <tr id="row-${bot.userId}">
+            <td><span class="badge-id">${bot.userId}</span></td>
+            <td>
+              <div class="name-container">
+                <span id="name-${bot.userId}">${bot.userName}</span>
+                <input type="text" id="rename-${bot.userId}" class="inline-input" value="${bot.userName}" style="display:none;">
+              </div>
+            </td>
+            <td>
+              <span id="balance-${bot.userId}" class="balance-value">${balance}</span>
+              <input type="number" id="funds-${bot.userId}" class="inline-input" placeholder="Amount" style="display:none; width:80px;">
+            </td>
+            <td><span class="status-badge ${statusClass}"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> ${statusText}</span></td>
+            <td>${roomInfo}</td>
+            <td class="actions">
+              <!-- Rename group -->
+              <button class="action-icon" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
+              <button class="action-icon save" id="save-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
+              
+              <!-- Add funds group -->
+              <button class="action-icon" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
+              <button class="action-icon send" id="addBtn-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
+              
+              <!-- Activate / Deactivate -->
+              <button class="action-icon" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
+                <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    // ---------- action functions ----------
+    window.toggleRename = function(botId) {
+      document.getElementById(`name-${botId}`).style.display = 'none';
+      document.getElementById(`rename-${botId}`).style.display = 'inline-block';
+      document.getElementById(`save-${botId}`).style.display = 'inline-flex';
+    };
+
+    window.saveRename = function(botId) {
+      const newName = document.getElementById(`rename-${botId}`).value;
+      socket.emit('admin:renameBot', { botId, newName });
+      document.getElementById(`name-${botId}`).textContent = newName;
+      document.getElementById(`name-${botId}`).style.display = 'inline';
+      document.getElementById(`rename-${botId}`).style.display = 'none';
+      document.getElementById(`save-${botId}`).style.display = 'none';
+    };
+
+    window.toggleAddFunds = function(botId) {
+      document.getElementById(`funds-${botId}`).style.display = 'inline-block';
+      document.getElementById(`addBtn-${botId}`).style.display = 'inline-flex';
+    };
+
+    window.addFunds = function(botId) {
+      const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
+      if (isNaN(amount) || amount <= 0) return alert('Enter a positive amount');
+      socket.emit('admin:addBotFunds', { botId, amount });
+      document.getElementById(`funds-${botId}`).style.display = 'none';
+      document.getElementById(`addBtn-${botId}`).style.display = 'none';
+    };
+
+    window.setActive = function(botId, active) {
+      socket.emit('admin:setBotActive', { botId, active });
+    };
+
+    window.addNewBot = function() {
+      const name = document.getElementById('newBotName').value.trim() || undefined;
+      socket.emit('admin:addNewBot', { name });
+      document.getElementById('newBotName').value = '';
+    };
+
+    // Bulk actions with safe retry
+    let pendingBulkAction = false;
+    function ensureBotsList(callback) {
+      if (botsList.length) {
+        callback();
+      } else if (!pendingBulkAction) {
+        pendingBulkAction = true;
+        refreshBots();
+        const interval = setInterval(() => {
+          if (botsList.length) {
+            clearInterval(interval);
+            pendingBulkAction = false;
+            callback();
+          }
+        }, 200);
+        // timeout after 5 seconds
+        setTimeout(() => {
+          clearInterval(interval);
+          pendingBulkAction = false;
+          showError('Could not fetch bots list for bulk action');
+        }, 5000);
+      }
+    }
+
+    window.setAllBotsActive = function(active) {
+      ensureBotsList(() => {
+        botsList.forEach(bot => {
+          if (bot.active !== active) {
+            socket.emit('admin:setBotActive', { botId: bot.userId, active });
+          }
+        });
+      });
+    };
+
+    window.addFundsToAll = function() {
+      ensureBotsList(() => {
+        const amount = 1000;
+        botsList.forEach(bot => {
+          socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
+        });
+      });
+    };
+
+    window.filterBots = filterBots;
+    window.refreshBots = refreshBots;
+
+    // Optional: handle reconnection
+    socket.on('disconnect', () => {
+      authenticated = false;
+      showError('Disconnected from server – reconnecting...');
     });
-  }
-
-  // Keep table synced and filtered on updates
-  socket.on('admin:botsList', (bots) => {
-    botsList = bots;
-    filterBots(); // reapply current filter
-    updateStats(bots);
-  });
-
-  // Optional: hide error if needed
-  window.refreshBots = refreshBots;
-  window.addNewBot = addNewBot;
-  window.setAllBotsActive = setAllBotsActive;
-  window.addFundsToAll = addFundsToAll;
-  window.toggleRename = toggleRename;
-  window.saveRename = saveRename;
-  window.toggleAddFunds = toggleAddFunds;
-  window.addFunds = addFunds;
-  window.setActive = setActive;
-  window.filterBots = filterBots;
+  })();
 </script>
 </body>
 </html>
