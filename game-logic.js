@@ -3,6 +3,7 @@
 // FIX: Orphaned boxes cleanup in bot syncState
 // FIX: Block joins during 'ended' state, bots wait for room reset
 // NEW: Random bot participation – at least 10, random additional bots
+// NEW: Bot management panel support – active flag, add funds, rename, create new bots
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -100,6 +101,7 @@ class Bot {
     this.waitTimeout = null;                // timeout for waiting to start
     this.retryTimer = null;                  // timer for next action attempt
     this.getRoomWithCache = serverContext.getRoomWithCache; // for smarter fallback
+    this.active = true;                      // will be updated from DB
   }
 
   _createSocket() {
@@ -139,6 +141,7 @@ class Bot {
   }
 
   _onBallDrawn({ room, num, letter }) {
+    if (!this.active) return; // ignore if deactivated
     if (room !== this.currentRoom) return;
     this.calledNumbers.add(num);
     if (this.grid.includes(num) || (num === 'FREE' && this.grid.includes('FREE'))) {
@@ -152,6 +155,7 @@ class Bot {
   }
 
   _onGameStarted({ room }) {
+    if (!this.active) return;
     if (room !== this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} game started in room ${room}`);
     this.isInGame = true;
@@ -167,6 +171,7 @@ class Bot {
   }
 
   _onGameOver({ room }) {
+    if (!this.active) return;
     if (room !== this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} game over in room ${room}`);
     this.isInGame = false;
@@ -187,7 +192,7 @@ class Bot {
   }
 
   _claimBingo() {
-    if (!this.isInGame) return;
+    if (!this.isInGame || !this.active) return;
     processBingoClaim(
       `${this.currentRoom}_${this.userId}_${Date.now()}`,
       this.userId,
@@ -210,6 +215,9 @@ class Bot {
 
       const dbRoom = user.currentRoom;
       const dbBox = user.box;
+
+      // Update active flag from DB
+      this.active = user.botActive !== false;
 
       // If DB says we're in a room, validate it
       if (dbRoom) {
@@ -274,6 +282,13 @@ class Bot {
 
   // ========== FIXED BOX SELECTION + RANDOM PARTICIPATION ==========
   async _decideNextAction() {
+    // If bot is deactivated, do nothing and schedule a long re-check
+    if (!this.active) {
+      console.log(`🤖 Bot ${this.userName} is inactive, sleeping.`);
+      this._scheduleRetry(30000); // check again in 30 seconds
+      return;
+    }
+
     await this.syncState(); // 👈 Ensure fresh state
 
     if (this.currentRoom) {
@@ -546,11 +561,13 @@ async function initializeBots() {
         userName: bot.userName,
         balance: bot.balance,
         referralCode: generateReferralCode(bot.userId),
-        isBot: true
+        isBot: true,
+        botActive: true
       });
       await user.save();
     } else {
       bot.balance = user.balance;
+      bot.active = user.botActive !== false;
     }
 
     // 🔥 FIX: Clear any stale room assignment from previous server runs
@@ -572,8 +589,10 @@ async function initializeBots() {
       { isOnline: true, lastSeen: new Date() }
     );
 
-    // Schedule first action after a random delay
-    bot._scheduleRetry(5000 + Math.random() * 10000);
+    // Schedule first action after a random delay (only if active)
+    if (bot.active) {
+      bot._scheduleRetry(5000 + Math.random() * 10000);
+    }
   }
   console.log(`🤖 ${bots.length} bots initialized.`);
 }
@@ -1008,7 +1027,9 @@ async function updateAdminPanel() {
         telegramId: user.telegramId || '',
         phoneNumber: user.phoneNumber || '',
         joinedAt: user.joinedAt,
-        sessionCount: user.sessionCount || 1
+        sessionCount: user.sessionCount || 1,
+        isBot: user.isBot || false,
+        botActive: user.botActive !== false
       };
     });
 
@@ -2450,6 +2471,103 @@ async function disconnectUser(userId, adminSocketId) {
   }
 }
 
+// ========== BOT MANAGEMENT API ==========
+async function getBotsList() {
+  return bots.map(bot => ({
+    userId: bot.userId,
+    userName: bot.userName,
+    balance: bot.balance,
+    active: bot.active,
+    currentRoom: bot.currentRoom,
+    box: bot.box
+  }));
+}
+
+async function addBotFunds(botId, amount) {
+  const bot = bots.find(b => b.userId === botId);
+  if (!bot) throw new Error('Bot not found');
+  bot.balance += amount;
+  // Update database
+  await models.User.findOneAndUpdate(
+    { userId: botId },
+    { $inc: { balance: amount } }
+  );
+  return { success: true, newBalance: bot.balance };
+}
+
+async function renameBot(botId, newName) {
+  const bot = bots.find(b => b.userId === botId);
+  if (!bot) throw new Error('Bot not found');
+  bot.userName = newName;
+  await models.User.findOneAndUpdate(
+    { userId: botId },
+    { userName: newName }
+  );
+  return { success: true };
+}
+
+async function setBotActive(botId, active) {
+  const bot = bots.find(b => b.userId === botId);
+  if (!bot) throw new Error('Bot not found');
+  bot.active = active;
+  await models.User.findOneAndUpdate(
+    { userId: botId },
+    { botActive: active }
+  );
+  // If deactivated, clear any pending timers and force a long retry
+  if (!active) {
+    if (bot.retryTimer) {
+      clearTimeout(bot.retryTimer);
+      bot.retryTimer = null;
+    }
+    if (bot.waitTimeout) {
+      clearTimeout(bot.waitTimeout);
+      bot.waitTimeout = null;
+    }
+    if (bot.claimTimeout) {
+      clearTimeout(bot.claimTimeout);
+      bot.claimTimeout = null;
+    }
+    // If in a room, leave it
+    if (bot.currentRoom) {
+      bot._leaveRoom();
+    }
+  } else {
+    // Reactivate – schedule a retry soon
+    bot._scheduleRetry(5000);
+  }
+  return { success: true };
+}
+
+async function addNewBot(name) {
+  const newId = bots.length; // simple incremental ID
+  const botName = name || `Bot${newId+1}`;
+  const bot = new Bot(newId, botName, {
+    generateTraditionalBingoCard,
+    checkBingo,
+    processBingoClaim,
+    getRoomStatus,
+    getRoomWithCache
+  });
+  // Create DB user
+  const user = new models.User({
+    userId: bot.userId,
+    userName: bot.userName,
+    balance: bot.balance,
+    referralCode: generateReferralCode(bot.userId),
+    isBot: true,
+    botActive: true
+  });
+  await user.save();
+  bots.push(bot);
+  botSockets.set(bot.userId, bot.socket);
+  socketToUser.set(bot.userId, bot.userId);
+  if (bot.active) {
+    bot._scheduleRetry(5000); // start its loop
+  }
+  return { success: true, bot: bot.userId };
+}
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 function setupSocketHandlers() {
   io.on('connection', (socket) => {
@@ -3088,6 +3206,78 @@ function setupSocketHandlers() {
         const onlinePlayers = await getOnlinePlayersInRoomWithCache(room.stake);
 
         socket.emit('admin:success', `Room ${roomStake}: ${room.status}, ${onlinePlayers.length} online, ${room.players.length} total, countdown active: ${roomTimers.has(`countdown_${roomStake}`)}`);
+      }
+    });
+
+    // ========== BOT MANAGEMENT EVENTS ==========
+    socket.on('admin:getBotsList', async () => {
+      if (!adminSockets.has(socket.id)) return;
+      try {
+        const list = await getBotsList();
+        socket.emit('admin:botsList', list);
+      } catch (err) {
+        socket.emit('admin:error', err.message);
+      }
+    });
+
+    socket.on('admin:addBotFunds', async ({ botId, amount }) => {
+      if (!adminSockets.has(socket.id)) return;
+      try {
+        const result = await addBotFunds(botId, parseFloat(amount));
+        socket.emit('admin:botFundsAdded', result);
+        // Refresh list for all admins
+        const list = await getBotsList();
+        adminSockets.forEach(sid => {
+          const s = getEndpoint(sid);
+          if (s && s.connected !== false) s.emit('admin:botsList', list);
+        });
+      } catch (err) {
+        socket.emit('admin:error', err.message);
+      }
+    });
+
+    socket.on('admin:renameBot', async ({ botId, newName }) => {
+      if (!adminSockets.has(socket.id)) return;
+      try {
+        await renameBot(botId, newName);
+        const list = await getBotsList();
+        adminSockets.forEach(sid => {
+          const s = getEndpoint(sid);
+          if (s && s.connected !== false) s.emit('admin:botsList', list);
+        });
+        socket.emit('admin:success', 'Bot renamed');
+      } catch (err) {
+        socket.emit('admin:error', err.message);
+      }
+    });
+
+    socket.on('admin:setBotActive', async ({ botId, active }) => {
+      if (!adminSockets.has(socket.id)) return;
+      try {
+        await setBotActive(botId, active);
+        const list = await getBotsList();
+        adminSockets.forEach(sid => {
+          const s = getEndpoint(sid);
+          if (s && s.connected !== false) s.emit('admin:botsList', list);
+        });
+        socket.emit('admin:success', `Bot ${active ? 'activated' : 'deactivated'}`);
+      } catch (err) {
+        socket.emit('admin:error', err.message);
+      }
+    });
+
+    socket.on('admin:addNewBot', async ({ name }) => {
+      if (!adminSockets.has(socket.id)) return;
+      try {
+        await addNewBot(name);
+        const list = await getBotsList();
+        adminSockets.forEach(sid => {
+          const s = getEndpoint(sid);
+          if (s && s.connected !== false) s.emit('admin:botsList', list);
+        });
+        socket.emit('admin:success', 'New bot added');
+      } catch (err) {
+        socket.emit('admin:error', err.message);
       }
     });
 
@@ -4167,5 +4357,12 @@ module.exports = {
   generateTraditionalBingoCard,
   processBingoClaim,
   getRoomStatus,
+
+  // ========== NEW: Bot Management API ==========
+  getBotsList,
+  addBotFunds,
+  renameBot,
+  setBotActive,
+  addNewBot,
   bots: () => bots
 };
