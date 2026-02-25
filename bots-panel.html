@@ -119,9 +119,10 @@
   <script>
     const socket = io();
     let authenticated = false;
+    let botsList = []; // Store bots for quick actions
 
-    // Automatically try to authenticate with default password
-    socket.emit('admin:auth', 'admin1234');
+    // Immediately try to authenticate with any dummy password (server accepts all)
+    socket.emit('admin:auth', 'passwordless');
 
     socket.on('admin:authSuccess', () => {
       authenticated = true;
@@ -130,12 +131,13 @@
     });
 
     socket.on('admin:authError', (msg) => {
-      document.getElementById('errorMessage').textContent = 'Authentication failed: ' + msg + ' – using fallback password admin123?';
-      // Try fallback password
-      socket.emit('admin:auth', 'admin123');
+      // This should never happen with the updated server, but keep fallback
+      document.getElementById('errorMessage').textContent = 'Authentication failed, retrying...';
+      setTimeout(() => socket.emit('admin:auth', 'anypassword'), 1000);
     });
 
     socket.on('admin:botsList', (bots) => {
+      botsList = bots; // store for later use
       renderBotsTable(bots);
     });
 
@@ -230,23 +232,37 @@
       document.getElementById('newBotName').value = '';
     }
 
+    // Quick actions using stored botsList
     function setAllBotsActive(active) {
-      // We need the bot list to iterate; request fresh list
-      socket.emit('admin:getBotsList', (bots) => {
-        bots.forEach(bot => {
+      if (!botsList.length) {
+        refreshBots();
+        setTimeout(() => setAllBotsActive(active), 500);
+        return;
+      }
+      botsList.forEach(bot => {
+        if (bot.active !== active) {
           socket.emit('admin:setBotActive', { botId: bot.userId, active });
-        });
+        }
       });
     }
 
     function addFundsToAll() {
       const amount = 1000;
-      socket.emit('admin:getBotsList', (bots) => {
-        bots.forEach(bot => {
-          socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
-        });
+      if (!botsList.length) {
+        refreshBots();
+        setTimeout(() => addFundsToAll(), 500);
+        return;
+      }
+      botsList.forEach(bot => {
+        socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
       });
     }
+
+    // Also update the table when we receive bot updates from other admins
+    socket.on('admin:botsList', (bots) => {
+      botsList = bots;
+      renderBotsTable(bots);
+    });
   </script>
 </body>
 </html>
