@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bots Control Panel - ETHIO GAMES</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0c10;
+      color: #f0f4fa;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #3b82f6; border-bottom: 1px solid #262d36; padding-bottom: 10px; }
+    .admin-login {
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      max-width: 400px;
+    }
+    input, button {
+      background: #0a0c10;
+      border: 1px solid #262d36;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 5px;
+    }
+    button {
+      background: #3b82f6;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:active { background: #2563eb; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #13171c;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #262d36;
+    }
+    th { background: #1e293b; color: #94a3b8; font-weight: 500; }
+    td { color: #f0f4fa; }
+    .active { color: #10b981; font-weight: bold; }
+    .inactive { color: #ef4444; }
+    .actions button {
+      margin: 2px;
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    .add-funds-input { width: 70px; }
+    .top-actions {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .error { color: #ef4444; }
+    .success { color: #10b981; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Bots Control Panel</h1>
+
+    <!-- Admin Login (hidden after auth) -->
+    <div id="loginSection" class="admin-login">
+      <h3>Admin Login</h3>
+      <input type="password" id="adminPassword" placeholder="Admin password">
+      <button onclick="adminLogin()">Login</button>
+      <div id="loginError" class="error"></div>
+    </div>
+
+    <!-- Bot Management (visible after auth) -->
+    <div id="managementSection" style="display: none;">
+      <div class="top-actions">
+        <input type="text" id="newBotName" placeholder="New bot name (optional)">
+        <button onclick="addNewBot()">➕ Add New Bot</button>
+        <button onclick="refreshBots()">🔄 Refresh List</button>
+      </div>
+
+      <div class="top-actions">
+        <span style="color:#94a3b8;">Quick Actions:</span>
+        <button onclick="setAllBotsActive(true)">✅ Activate All</button>
+        <button onclick="setAllBotsActive(false)">❌ Deactivate All</button>
+        <button onclick="addFundsToAll()">💰 Add 1000 to All</button>
+      </div>
+
+      <table id="botsTable">
+        <thead>
+          <tr>
+            <th>Bot ID</th>
+            <th>Name</th>
+            <th>Balance</th>
+            <th>Status</th>
+            <th>Room/Box</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="botsTableBody">
+          <tr><td colspan="6">Loading bots...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let authenticated = false;
+
+    function adminLogin() {
+      const pwd = document.getElementById('adminPassword').value;
+      socket.emit('admin:auth', pwd);
+    }
+
+    socket.on('admin:authSuccess', () => {
+      authenticated = true;
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('managementSection').style.display = 'block';
+      refreshBots();
+    });
+
+    socket.on('admin:authError', (msg) => {
+      document.getElementById('loginError').textContent = msg;
+    });
+
+    socket.on('admin:botsList', (bots) => {
+      renderBotsTable(bots);
+    });
+
+    socket.on('admin:error', (msg) => {
+      alert('Error: ' + msg);
+    });
+
+    socket.on('admin:success', (msg) => {
+      alert(msg);
+    });
+
+    function refreshBots() {
+      socket.emit('admin:getBotsList');
+    }
+
+    function renderBotsTable(bots) {
+      const tbody = document.getElementById('botsTableBody');
+      if (!bots || bots.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">No bots found.</td></tr>';
+        return;
+      }
+      let html = '';
+      bots.forEach(bot => {
+        const statusClass = bot.active ? 'active' : 'inactive';
+        const statusText = bot.active ? 'Active' : 'Inactive';
+        const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
+        html += `
+          <tr>
+            <td>${bot.userId}</td>
+            <td>
+              <span id="name-${bot.userId}">${bot.userName}</span>
+              <input type="text" id="rename-${bot.userId}" value="${bot.userName}" style="display:none; width:100px;">
+            </td>
+            <td>
+              <span id="balance-${bot.userId}">${bot.balance.toFixed(2)}</span>
+              <input type="number" id="funds-${bot.userId}" placeholder="Amount" class="add-funds-input" style="display:none;">
+            </td>
+            <td class="${statusClass}">${statusText}</td>
+            <td>${roomInfo}</td>
+            <td class="actions">
+              <button onclick="toggleRename('${bot.userId}')">✏️ Rename</button>
+              <button onclick="saveRename('${bot.userId}')" style="display:none;" id="save-${bot.userId}">Save</button>
+              <button onclick="toggleAddFunds('${bot.userId}')">💰 Add</button>
+              <button onclick="addFunds('${bot.userId}')" style="display:none;" id="addBtn-${bot.userId}">Send</button>
+              <button onclick="setActive('${bot.userId}', ${!bot.active})">${bot.active ? '🔴 Deactivate' : '🟢 Activate'}</button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function toggleRename(botId) {
+      document.getElementById(`name-${botId}`).style.display = 'none';
+      document.getElementById(`rename-${botId}`).style.display = 'inline';
+      document.getElementById(`save-${botId}`).style.display = 'inline';
+    }
+
+    function saveRename(botId) {
+      const newName = document.getElementById(`rename-${botId}`).value;
+      socket.emit('admin:renameBot', { botId, newName });
+      document.getElementById(`name-${botId}`).textContent = newName;
+      document.getElementById(`name-${botId}`).style.display = 'inline';
+      document.getElementById(`rename-${botId}`).style.display = 'none';
+      document.getElementById(`save-${botId}`).style.display = 'none';
+    }
+
+    function toggleAddFunds(botId) {
+      document.getElementById(`funds-${botId}`).style.display = 'inline';
+      document.getElementById(`addBtn-${botId}`).style.display = 'inline';
+    }
+
+    function addFunds(botId) {
+      const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
+      if (isNaN(amount) || amount <= 0) return alert('Enter a positive amount');
+      socket.emit('admin:addBotFunds', { botId, amount });
+      document.getElementById(`funds-${botId}`).style.display = 'none';
+      document.getElementById(`addBtn-${botId}`).style.display = 'none';
+    }
+
+    function setActive(botId, active) {
+      socket.emit('admin:setBotActive', { botId, active });
+    }
+
+    function addNewBot() {
+      const name = document.getElementById('newBotName').value.trim() || undefined;
+      socket.emit('admin:addNewBot', { name });
+      document.getElementById('newBotName').value = '';
+    }
+
+    function setAllBotsActive(active) {
+      // We need the bot list to iterate; we can request then update
+      socket.emit('admin:getBotsList', (bots) => {
+        bots.forEach(bot => {
+          socket.emit('admin:setBotActive', { botId: bot.userId, active });
+        });
+      });
+    }
+
+    function addFundsToAll() {
+      const amount = 1000;
+      socket.emit('admin:getBotsList', (bots) => {
+        bots.forEach(bot => {
+          socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
+        });
+      });
+    }
+  </script>
+</body>
+</html>
