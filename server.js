@@ -87,6 +87,7 @@ const requiredFiles = {
       <a href="/keno" class="btn" style="background: #8b5cf6;">🎰 Play Keno</a>
       <a href="/crash" class="btn" style="background: #f97316;">✈️ Play Crash</a>
       <a href="/slots" class="btn" style="background: #eab308;">🎰 Play Slots</a>
+      <a href="/bots-panel.html" class="btn" style="background: #f59e0b;">🤖 Bots Panel</a>
     </div>
   </div>
 </body>
@@ -233,7 +234,10 @@ const userSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
   referredBy: { type: String, default: null }, // 'telegram_link', 'manual', 'bulk_manual', 'admin_assigned'
-  agentCommissionEarned: { type: Number, default: 0 }
+  agentCommissionEarned: { type: Number, default: 0 },
+  // ========== NEW: Bot management fields ==========
+  isBot: { type: Boolean, default: false },
+  botActive: { type: Boolean, default: true }
 });
 
 // Room Schema
@@ -554,6 +558,16 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
   }
 }));
+
+// ========== NEW: Serve bots panel from root folder ==========
+app.get('/bots-panel.html', (req, res) => {
+  const filePath = path.join(__dirname, 'bots-panel.html');
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).send('bots-panel.html not found in root directory. Please place it next to server.js');
+  }
+});
 
 // ========== NEW: Serve assets folder for images and sounds ==========
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
@@ -1948,6 +1962,7 @@ app.get('/', async (req, res) => {
               <a href="/keno" class="btn" style="background: #8b5cf6;" target="_blank">🎰 Keno Game</a>
               <a href="/crash" class="btn btn-crash" target="_blank">✈️ Crash Game</a>
               <a href="/slots" class="btn btn-slots" target="_blank">🎰 Slots Game</a>
+              <a href="/bots-panel.html" class="btn" style="background: #f59e0b;" target="_blank">🤖 Bots Panel</a>
             </div>
             <div style="margin-top: 20px;">
               <a href="/health" class="btn" style="background: #64748b;" target="_blank">📊 Health Check</a>
@@ -4212,6 +4227,7 @@ app.use((req, res) => {
           <a href="/keno" class="btn" style="background: #8b5cf6;">🎰 Play Keno</a>
           <a href="/crash" class="btn" style="background: #f97316;">✈️ Play Crash</a>
           <a href="/slots" class="btn" style="background: #eab308;">🎰 Play Slots</a>
+          <a href="/bots-panel.html" class="btn" style="background: #f59e0b;">🤖 Bots Panel</a>
         </div>
       </div>
     </body>
