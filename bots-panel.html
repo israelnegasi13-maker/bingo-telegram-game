@@ -7,7 +7,6 @@
   <!-- Font Awesome 6 (free) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
-    /* ----- GLOBAL STYLES ----- */
     * {
       margin: 0;
       padding: 0;
@@ -28,7 +27,7 @@
       margin: 0 auto;
     }
 
-    /* ----- GLASS HEADER ----- */
+    /* Glass header */
     .glass-header {
       background: rgba(10, 20, 30, 0.6);
       backdrop-filter: blur(15px);
@@ -81,7 +80,7 @@
       box-shadow: 0 0 15px #3b82f640;
     }
 
-    /* ----- STATS CARDS (GLASS) ----- */
+    /* Stats cards */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -130,7 +129,7 @@
       margin-top: 0.3rem;
     }
 
-    /* ----- CONTROL BAR ----- */
+    /* Control bar */
     .control-bar {
       background: rgba(8, 16, 24, 0.8);
       backdrop-filter: blur(12px);
@@ -201,10 +200,10 @@
     }
     .search-wrapper input::placeholder { color: #4a607a; }
 
-    /* ----- BOTS GRID (GLASS CARDS) ----- */
+    /* Bots grid */
     .bots-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 1.5rem;
       margin-top: 1rem;
     }
@@ -220,6 +219,7 @@
       transition: all 0.25s;
       position: relative;
       overflow: hidden;
+      cursor: pointer;
     }
 
     .bot-card::before {
@@ -262,27 +262,11 @@
     .bot-name {
       font-weight: 700;
       font-size: 1.2rem;
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
     }
-    .bot-name span { cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 8px; transition: background 0.1s; }
-    .bot-name span:hover { background: #253c54; }
     .bot-id {
       font-size: 0.7rem;
       color: #7f9bc0;
       font-family: monospace;
-    }
-
-    .inline-edit-input {
-      background: #0e1a26;
-      border: 1px solid #3b82f6;
-      border-radius: 30px;
-      padding: 0.3rem 1rem;
-      color: white;
-      font-size: 1rem;
-      width: 100%;
-      outline: none;
     }
 
     .balance-box {
@@ -307,64 +291,145 @@
       font-size: 0.75rem;
       color: #8fc9ff;
       border: 1px solid #3b82f6;
+      display: inline-block;
     }
 
-    .status-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 0.8rem 0;
-    }
     .status-badge {
       padding: 0.2rem 1rem;
       border-radius: 40px;
       font-size: 0.7rem;
       font-weight: 600;
       text-transform: uppercase;
+      display: inline-block;
     }
     .status-active { background: #0a3f2b; color: #6fcf97; border: 1px solid #27ae60; }
     .status-inactive { background: #441e1e; color: #f29091; border: 1px solid #eb5757; }
 
-    .action-buttons {
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
       display: flex;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      justify-content: flex-end;
-    }
-    .icon-btn {
-      background: #1c3144;
-      border: none;
-      color: #cfddee;
-      width: 38px;
-      height: 38px;
-      border-radius: 40px;
-      display: inline-flex;
       align-items: center;
       justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: #1a2938;
+      border: 1px solid #3b82f6;
+      border-radius: 40px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 30px 50px -20px black;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .modal-avatar {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(145deg, #1e3a5f, #0f2b44);
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      font-weight: 600;
+      color: #a5d8ff;
+      border: 2px solid #3b82f6;
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .form-group label {
+      font-size: 0.8rem;
+      color: #8fadc9;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      background: #0e1a26;
+      border: 1px solid #2d4057;
+      border-radius: 30px;
+      padding: 0.7rem 1.2rem;
+      color: white;
+      font-size: 1rem;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: #3b82f6;
+    }
+
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .toggle-switch button {
+      background: #1f3142;
+      border: 1px solid #3a506b;
+      color: white;
+      padding: 0.5rem 1.5rem;
+      border-radius: 40px;
+      font-weight: 600;
       cursor: pointer;
       transition: 0.15s;
-      font-size: 1rem;
     }
-    .icon-btn:hover { background: #2d4b66; color: white; }
-    .icon-btn.green:hover { background: #0f766e; }
-    .icon-btn.blue:hover { background: #2563eb; }
-    .icon-btn.red:hover { background: #991b1b; }
+    .toggle-switch button.active {
+      background: #2563eb;
+      border-color: #3b82f6;
+    }
 
-    /* Add funds inline */
-    .add-funds-row {
-      margin: 0.5rem 0;
+    .modal-actions {
       display: flex;
-      gap: 0.5rem;
-      align-items: center;
+      gap: 1rem;
+      margin-top: 1.5rem;
     }
-    .add-funds-input {
-      background: #0e1a26;
-      border: 1px solid #3b82f6;
-      border-radius: 30px;
-      padding: 0.4rem 1rem;
-      color: white;
-      width: 120px;
-      font-size: 0.85rem;
+    .modal-actions .btn {
+      flex: 1;
+      justify-content: center;
     }
 
     /* Toast */
@@ -372,7 +437,7 @@
       position: fixed;
       top: 20px;
       right: 20px;
-      z-index: 1000;
+      z-index: 1001;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -451,7 +516,7 @@
   <!-- Control Bar -->
   <div class="control-bar">
     <div class="control-group">
-      <input type="text" id="newBotName" class="inline-edit-input" placeholder="Bot name" style="width:160px;">
+      <input type="text" id="newBotName" class="form-input" placeholder="Bot name" style="width:160px;">
       <button class="btn btn-primary" onclick="addNewBot()"><i class="fas fa-plus-circle"></i> Add bot</button>
     </div>
     <div class="control-group">
@@ -475,6 +540,37 @@
   </div>
 </div>
 
+<!-- Modal Overlay -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="botModal">
+    <div class="modal-header">
+      <div class="modal-avatar" id="modalAvatar">B</div>
+      <div class="modal-title" id="modalTitle">Bot Name</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Rename</label>
+        <input type="text" id="modalRenameInput" class="form-input" placeholder="New name">
+      </div>
+      <div class="form-group">
+        <label>Add funds (ETB)</label>
+        <input type="number" id="modalAddFundsInput" class="form-input" placeholder="Amount" min="1" step="any">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <div class="toggle-switch">
+          <button id="modalActivateBtn" class="active" onclick="setModalActive(true)">Active</button>
+          <button id="modalDeactivateBtn" onclick="setModalActive(false)">Inactive</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveModalChanges()"><i class="fas fa-save"></i> Save</button>
+      <button class="btn btn-outline" onclick="closeModal()"><i class="fas fa-times"></i> Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Stack -->
 <div class="toast-stack" id="toastStack"></div>
 
@@ -486,12 +582,20 @@
     let authenticated = false;
     let botsList = [];
     let filteredBots = [];
+    let currentBot = null; // for modal
 
     // DOM elements
     const connectionStatus = document.getElementById('connectionStatus');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const botsGrid = document.getElementById('botsGrid');
     const toastStack = document.getElementById('toastStack');
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalAvatar = document.getElementById('modalAvatar');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalRenameInput = document.getElementById('modalRenameInput');
+    const modalAddFundsInput = document.getElementById('modalAddFundsInput');
+    const modalActivateBtn = document.getElementById('modalActivateBtn');
+    const modalDeactivateBtn = document.getElementById('modalDeactivateBtn');
 
     // Stats elements
     const statTotalBots = document.getElementById('statTotalBots');
@@ -543,40 +647,21 @@
         const avatarLetter = bot.userName.charAt(0).toUpperCase();
 
         html += `
-          <div class="bot-card" id="card-${bot.userId}" data-userid="${bot.userId}">
+          <div class="bot-card" onclick="openModal('${bot.userId}')">
             <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
               <div class="bot-avatar">${avatarLetter}</div>
               <div class="bot-info">
-                <div class="bot-name" id="nameContainer-${bot.userId}">
-                  <span id="nameSpan-${bot.userId}" onclick="startRename('${bot.userId}')">${bot.userName}</span>
-                  <input type="text" id="renameInput-${bot.userId}" class="inline-edit-input" value="${bot.userName}" style="display:none;" onblur="saveRename('${bot.userId}')" onkeypress="if(event.key==='Enter'){this.blur();}">
-                </div>
+                <div class="bot-name">${bot.userName}</div>
                 <div class="bot-id">${bot.userId}</div>
               </div>
             </div>
-
             <div class="balance-box">
               <span><i class="fas fa-coins" style="color:#fbbf24;"></i> Balance</span>
-              <span class="balance-amount" id="balanceDisplay-${bot.userId}">${balance} ETB</span>
+              <span class="balance-amount">${balance} ETB</span>
             </div>
-
-            <!-- Add funds inline (hidden by default) -->
-            <div id="fundsRow-${bot.userId}" class="add-funds-row" style="display:none;">
-              <input type="number" id="fundsInput-${bot.userId}" class="add-funds-input" placeholder="Amount" min="1" step="any">
-              <button class="icon-btn green" onclick="addFunds('${bot.userId}')" title="Send"><i class="fas fa-paper-plane"></i></button>
-              <button class="icon-btn" onclick="cancelAddFunds('${bot.userId}')" title="Cancel"><i class="fas fa-times"></i></button>
-            </div>
-
-            <div class="status-toggle">
-              <span class="status-badge ${statusClass}" id="statusBadge-${bot.userId}">${statusText}</span>
-              <span class="room-badge">${roomInfo}</span>
-            </div>
-
-            <div class="action-buttons">
-              <button class="icon-btn blue" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
-              <button class="icon-btn ${bot.active ? 'red' : 'blue'}" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
-                <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
-              </button>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="status-badge ${statusClass}">${statusText}</span>
+              ${roomInfo}
             </div>
           </div>
         `;
@@ -593,63 +678,67 @@
       renderBotsGrid(filteredBots);
     };
 
-    // ---------- RENAME (inline) ----------
-    window.startRename = function(botId) {
-      const span = document.getElementById(`nameSpan-${botId}`);
-      const input = document.getElementById(`renameInput-${botId}`);
-      if (!span || !input) return;
-      span.style.display = 'none';
-      input.style.display = 'inline-block';
-      input.value = span.innerText; // ensure fresh
-      input.focus();
-      input.select();
+    // ---------- MODAL ----------
+    window.openModal = function(botId) {
+      const bot = botsList.find(b => b.userId === botId);
+      if (!bot) return;
+      currentBot = bot;
+      modalAvatar.innerText = bot.userName.charAt(0).toUpperCase();
+      modalTitle.innerText = bot.userName;
+      modalRenameInput.value = bot.userName;
+      modalAddFundsInput.value = '';
+      setModalActiveUI(bot.active);
+      modalOverlay.classList.add('active');
     };
 
-    window.saveRename = function(botId) {
-      const input = document.getElementById(`renameInput-${botId}`);
-      const span = document.getElementById(`nameSpan-${botId}`);
-      const newName = input.value.trim();
-      if (!newName) {
-        showToast('Name cannot be empty', 'error');
-        input.style.display = 'none';
-        span.style.display = 'inline';
-        return;
+    window.closeModal = function() {
+      modalOverlay.classList.remove('active');
+      currentBot = null;
+    };
+
+    window.setModalActive = function(active) {
+      if (!currentBot) return;
+      setModalActiveUI(active);
+    };
+
+    function setModalActiveUI(active) {
+      if (active) {
+        modalActivateBtn.classList.add('active');
+        modalDeactivateBtn.classList.remove('active');
+      } else {
+        modalActivateBtn.classList.remove('active');
+        modalDeactivateBtn.classList.add('active');
       }
-      // Emit rename event
-      socket.emit('admin:renameBot', { botId, newName });
-      // Optimistic update
-      span.innerText = newName;
-      span.style.display = 'inline';
-      input.style.display = 'none';
-    };
+    }
 
-    // ---------- ADD FUNDS ----------
-    window.toggleAddFunds = function(botId) {
-      // Hide any other open fund rows
-      document.querySelectorAll('[id^="fundsRow-"]').forEach(row => row.style.display = 'none');
-      const row = document.getElementById(`fundsRow-${botId}`);
-      if (row) row.style.display = 'flex';
-    };
+    window.saveModalChanges = function() {
+      if (!currentBot) return;
+      const newName = modalRenameInput.value.trim();
+      const funds = parseFloat(modalAddFundsInput.value);
+      const newActive = modalActivateBtn.classList.contains('active'); // true if active button is highlighted
 
-    window.cancelAddFunds = function(botId) {
-      document.getElementById(`fundsRow-${botId}`).style.display = 'none';
-    };
-
-    window.addFunds = function(botId) {
-      const input = document.getElementById(`fundsInput-${botId}`);
-      const amount = parseFloat(input.value);
-      if (isNaN(amount) || amount <= 0) {
-        showToast('Enter a valid positive amount', 'error');
-        return;
+      // Rename if changed
+      if (newName && newName !== currentBot.userName) {
+        socket.emit('admin:renameBot', { botId: currentBot.userId, newName });
+        // Optimistic update
+        currentBot.userName = newName;
       }
-      socket.emit('admin:addBotFunds', { botId, amount });
-      document.getElementById(`fundsRow-${botId}`).style.display = 'none';
-      input.value = '';
-    };
 
-    // ---------- SET ACTIVE ----------
-    window.setActive = function(botId, active) {
-      socket.emit('admin:setBotActive', { botId, active });
+      // Add funds if valid
+      if (!isNaN(funds) && funds > 0) {
+        socket.emit('admin:addBotFunds', { botId: currentBot.userId, amount: funds });
+      }
+
+      // Change active status if different
+      if (newActive !== currentBot.active) {
+        socket.emit('admin:setBotActive', { botId: currentBot.userId, active: newActive });
+        currentBot.active = newActive;
+      }
+
+      closeModal();
+      showToast('Changes saved', 'success');
+      // Refresh list to get updated data
+      refreshBots();
     };
 
     // ---------- ADD NEW BOT ----------
