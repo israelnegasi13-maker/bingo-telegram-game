@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>BOTS COMMAND CENTER · ELITE</title>
+  <title>BOTS ELITE · COMMAND CENTER</title>
   <!-- Font Awesome 6 (free) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
+    /* ----- GLOBAL STYLES ----- */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 
     body {
-      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: radial-gradient(circle at 10% 20%, #0f1825, #03060b);
-      color: #f0f4fa;
+      background: radial-gradient(circle at 20% 30%, #0c1420, #020408);
       min-height: 100vh;
       padding: 1.5rem;
+      color: #f0f4fa;
       line-height: 1.5;
     }
 
@@ -27,61 +28,60 @@
       margin: 0 auto;
     }
 
-    /* Header with glassmorphism */
-    .header {
+    /* ----- GLASS HEADER ----- */
+    .glass-header {
+      background: rgba(10, 20, 30, 0.6);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 40px;
+      padding: 1rem 2rem;
+      margin-bottom: 2rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 1rem;
-      margin-bottom: 2rem;
-      padding: 1rem 1.5rem;
-      background: rgba(15, 25, 35, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(74, 144, 226, 0.25);
-      border-radius: 40px;
-      box-shadow: 0 15px 35px -10px #00000080;
+      box-shadow: 0 20px 40px -10px #00000080;
     }
 
-    .header h1 {
-      font-size: 1.9rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #a5d8ff, #7aa2f7);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .logo {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 1rem;
     }
 
-    .header h1 i {
-      background: #1e2a3a;
-      padding: 0.6rem;
-      border-radius: 50%;
-      color: #3b82f6;
-      font-size: 1.4rem;
-      box-shadow: 0 0 15px #3b82f640;
+    .logo i {
+      font-size: 2rem;
+      background: linear-gradient(135deg, #3b82f6, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 10px #3b82f6);
+    }
+
+    .logo h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #b3d9ff, #ffffff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
     }
 
     .connection-badge {
       background: #1a2938;
-      padding: 0.5rem 1.2rem;
-      border-radius: 60px;
-      border: 1px solid #2d4055;
-      font-size: 0.85rem;
-      font-weight: 500;
+      padding: 0.5rem 1.5rem;
+      border-radius: 40px;
+      border: 1px solid #3b82f6;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      letter-spacing: 0.3px;
+      gap: 0.6rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      box-shadow: 0 0 15px #3b82f640;
     }
 
-    .connection-badge i {
-      font-size: 0.7rem;
-    }
-
-    /* Stats Cards (glossy) */
+    /* ----- STATS CARDS (GLASS) ----- */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -90,17 +90,19 @@
     }
 
     .stat-card {
-      background: linear-gradient(145deg, #141f2c, #0b131e);
-      border: 1px solid #2c3f54;
+      background: rgba(15, 25, 35, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #2d4055;
       border-radius: 28px;
       padding: 1.5rem 1.2rem;
-      box-shadow: 0 12px 28px -8px #00000080;
-      transition: transform 0.2s, border-color 0.2s;
+      box-shadow: 0 12px 28px -8px black;
+      transition: 0.2s;
     }
 
     .stat-card:hover {
       border-color: #3b82f6;
-      transform: translateY(-3px);
+      transform: translateY(-4px);
     }
 
     .stat-label {
@@ -128,12 +130,12 @@
       margin-top: 0.3rem;
     }
 
-    /* Control Bar */
+    /* ----- CONTROL BAR ----- */
     .control-bar {
-      background: rgba(12, 22, 33, 0.85);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid #2d4057;
+      background: rgba(8, 16, 24, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid #2a4055;
       border-radius: 50px;
       padding: 0.8rem 1.5rem;
       margin-bottom: 2rem;
@@ -147,7 +149,7 @@
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.5rem;
     }
 
     .btn {
@@ -162,44 +164,24 @@
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: 0.15s;
       box-shadow: 0 4px 12px #00000030;
     }
 
-    .btn i {
-      font-size: 1rem;
-      color: #7f9bc0;
-    }
-
-    .btn-primary {
-      background: #2563eb;
-      border-color: #4b8bff;
-      color: white;
-    }
+    .btn i { font-size: 1rem; color: #7f9bc0; }
+    .btn-primary { background: #2563eb; border-color: #4b8bff; color: white; }
     .btn-primary i { color: white; }
     .btn-primary:hover { background: #3b82f6; }
-
-    .btn-success {
-      background: #0b6b5e;
-      border-color: #1e9b87;
-    }
+    .btn-success { background: #0b6b5e; border-color: #1e9b87; }
     .btn-success:hover { background: #14b8a6; }
-
-    .btn-warning {
-      background: #b45309;
-      border-color: #ea9b3e;
-    }
+    .btn-warning { background: #b45309; border-color: #ea9b3e; }
     .btn-warning:hover { background: #d97706; }
-
-    .btn-outline {
-      background: transparent;
-      border-color: #3a506b;
-    }
+    .btn-outline { background: transparent; }
     .btn-outline:hover { background: #1f3142; }
 
     .search-wrapper {
       flex: 1;
-      min-width: 250px;
+      min-width: 240px;
       display: flex;
       align-items: center;
       background: #0e1a26;
@@ -207,9 +189,7 @@
       border-radius: 40px;
       padding: 0.2rem 0.2rem 0.2rem 1.2rem;
     }
-    .search-wrapper i {
-      color: #6f8cac;
-    }
+    .search-wrapper i { color: #6f8cac; }
     .search-wrapper input {
       background: transparent;
       border: none;
@@ -219,27 +199,25 @@
       outline: none;
       font-size: 0.95rem;
     }
-    .search-wrapper input::placeholder {
-      color: #4a607a;
-    }
+    .search-wrapper input::placeholder { color: #4a607a; }
 
-    /* Bot Cards Grid */
+    /* ----- BOTS GRID (GLASS CARDS) ----- */
     .bots-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
       gap: 1.5rem;
       margin-top: 1rem;
     }
 
     .bot-card {
-      background: linear-gradient(145deg, #15222f, #0c1722);
-      border: 1px solid #2a3d52;
+      background: rgba(18, 28, 38, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid #2d4057;
       border-radius: 30px;
-      padding: 1.5rem 1.2rem;
-      box-shadow: 0 20px 30px -12px #000000b3;
+      padding: 1.5rem;
+      box-shadow: 0 20px 30px -12px black;
       transition: all 0.25s;
-      display: flex;
-      flex-direction: column;
       position: relative;
       overflow: hidden;
     }
@@ -250,153 +228,146 @@
       top: 0;
       left: 0;
       width: 100%;
-      height: 6px;
+      height: 4px;
       background: linear-gradient(90deg, #3b82f6, #a855f7, #ec4899);
-      opacity: 0.7;
+      opacity: 0.8;
     }
 
     .bot-card:hover {
+      border-color: #3b82f6;
       transform: scale(1.02);
-      border-color: #4b7bec;
-      box-shadow: 0 25px 40px -10px #1e3a8a80;
-    }
-
-    .bot-header {
-      display: flex;
-      align-items: center;
-      gap: 0.8rem;
-      margin-bottom: 1rem;
+      box-shadow: 0 30px 40px -10px #1e3a8a;
     }
 
     .bot-avatar {
-      width: 48px;
-      height: 48px;
-      background: #1c3144;
-      border-radius: 24px;
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(145deg, #1e3a5f, #0f2b44);
+      border-radius: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
+      font-size: 1.8rem;
       font-weight: 600;
-      color: #8cb3f0;
+      color: #a5d8ff;
       border: 2px solid #3b82f6;
-      box-shadow: 0 0 10px #3b82f6;
+      box-shadow: 0 0 15px #3b82f6;
+    }
+
+    .bot-info {
+      flex: 1;
+      margin-left: 1rem;
     }
 
     .bot-name {
       font-weight: 700;
       font-size: 1.2rem;
-      line-height: 1.3;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
     }
+    .bot-name span { cursor: pointer; padding: 0.2rem 0.4rem; border-radius: 8px; transition: background 0.1s; }
+    .bot-name span:hover { background: #253c54; }
     .bot-id {
       font-size: 0.7rem;
-      color: #6f8cac;
+      color: #7f9bc0;
       font-family: monospace;
     }
 
-    .bot-detail {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #0d1a26;
-      border-radius: 20px;
-      padding: 0.8rem 1rem;
-      margin: 0.8rem 0;
-      border: 1px solid #1e3243;
+    .inline-edit-input {
+      background: #0e1a26;
+      border: 1px solid #3b82f6;
+      border-radius: 30px;
+      padding: 0.3rem 1rem;
+      color: white;
+      font-size: 1rem;
+      width: 100%;
+      outline: none;
     }
 
     .balance-box {
+      background: #0d1a26;
+      border-radius: 30px;
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
-      color: #fbbf24;
+      justify-content: space-between;
+      border: 1px solid #2e5775;
+    }
+    .balance-amount {
       font-weight: 700;
+      color: #fbbf24;
       font-size: 1.2rem;
     }
-    .balance-box i {
-      font-size: 1rem;
-      color: #fbbf24;
-    }
-
     .room-badge {
-      background: #0f2a3b;
-      border: 1px solid #2e5775;
+      background: #1c3f5c;
       border-radius: 30px;
-      padding: 0.3rem 0.9rem;
-      font-size: 0.8rem;
+      padding: 0.2rem 1rem;
+      font-size: 0.75rem;
       color: #8fc9ff;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
+      border: 1px solid #3b82f6;
     }
 
     .status-toggle {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin: 0.5rem 0;
+      justify-content: space-between;
+      margin: 0.8rem 0;
     }
     .status-badge {
-      padding: 0.25rem 0.9rem;
+      padding: 0.2rem 1rem;
       border-radius: 40px;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
-    .status-active {
-      background: #0a3f2b;
-      color: #6fcf97;
-      border: 1px solid #27ae60;
-    }
-    .status-inactive {
-      background: #441e1e;
-      color: #f29091;
-      border: 1px solid #eb5757;
-    }
+    .status-active { background: #0a3f2b; color: #6fcf97; border: 1px solid #27ae60; }
+    .status-inactive { background: #441e1e; color: #f29091; border: 1px solid #eb5757; }
 
     .action-buttons {
       display: flex;
-      flex-wrap: wrap;
       gap: 0.5rem;
-      margin-top: 0.8rem;
+      margin-top: 1rem;
       justify-content: flex-end;
     }
-
     .icon-btn {
       background: #1c3144;
       border: none;
       color: #cfddee;
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       border-radius: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: 0.15s;
-      font-size: 0.9rem;
+      font-size: 1rem;
     }
     .icon-btn:hover { background: #2d4b66; color: white; }
     .icon-btn.green:hover { background: #0f766e; }
     .icon-btn.blue:hover { background: #2563eb; }
     .icon-btn.red:hover { background: #991b1b; }
 
-    .inline-input {
+    /* Add funds inline */
+    .add-funds-row {
+      margin: 0.5rem 0;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .add-funds-input {
       background: #0e1a26;
-      border: 1px solid #2d4b68;
+      border: 1px solid #3b82f6;
       border-radius: 30px;
       padding: 0.4rem 1rem;
       color: white;
       width: 120px;
-      font-size: 0.8rem;
-    }
-    .inline-input:focus {
-      outline: 2px solid #3b82f6;
-      border-color: transparent;
+      font-size: 0.85rem;
     }
 
-    /* Toast Notifications */
+    /* Toast */
     .toast-stack {
       position: fixed;
       top: 20px;
@@ -437,36 +408,33 @@
     }
 
     .loading-skeleton {
-      display: flex;
-      justify-content: center;
-      padding: 3rem;
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem;
       color: #4d688b;
     }
-    .fa-spinner {
-      font-size: 2rem;
-      animation: spin 1s linear infinite;
-    }
+    .fa-spinner { animation: spin 1s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
     .empty-state {
       grid-column: 1 / -1;
       text-align: center;
       padding: 4rem;
-      background: #0f1a25;
+      background: rgba(15, 25, 35, 0.7);
       border-radius: 40px;
       color: #6f8cac;
-      font-size: 1.2rem;
       border: 2px dashed #2d4b68;
     }
   </style>
 </head>
 <body>
 <div class="container">
-  <!-- Header -->
-  <div class="header">
-    <h1>
-      <i class="fas fa-microchip"></i> BOT COMMAND CENTER
-    </h1>
+  <!-- Glass Header -->
+  <div class="glass-header">
+    <div class="logo">
+      <i class="fas fa-microchip"></i>
+      <h1>BOTS ELITE</h1>
+    </div>
     <div class="connection-badge" id="connectionStatus">
       <i class="fas fa-circle" style="color: #f59e0b;"></i> Connecting...
     </div>
@@ -483,7 +451,7 @@
   <!-- Control Bar -->
   <div class="control-bar">
     <div class="control-group">
-      <input type="text" id="newBotName" class="inline-input" placeholder="Bot name" style="width:150px;">
+      <input type="text" id="newBotName" class="inline-edit-input" placeholder="Bot name" style="width:160px;">
       <button class="btn btn-primary" onclick="addNewBot()"><i class="fas fa-plus-circle"></i> Add bot</button>
     </div>
     <div class="control-group">
@@ -493,7 +461,7 @@
     </div>
     <div class="search-wrapper">
       <i class="fas fa-search"></i>
-      <input type="text" id="searchInput" placeholder="Filter by name or ID..." onkeyup="filterBots()">
+      <input type="text" id="searchInput" placeholder="Filter by name or ID..." oninput="filterBots()">
     </div>
     <button class="btn btn-outline" onclick="refreshBots()"><i class="fas fa-sync-alt"></i> Refresh</button>
   </div>
@@ -513,11 +481,11 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
   (function() {
-    // ---------- State ----------
+    // ---------- STATE ----------
     const socket = io();
     let authenticated = false;
-    let botsList = [];               // all bots from server
-    let filteredBots = [];           // after search filter
+    let botsList = [];
+    let filteredBots = [];
 
     // DOM elements
     const connectionStatus = document.getElementById('connectionStatus');
@@ -531,7 +499,7 @@
     const statTotalBalance = document.getElementById('statTotalBalance');
     const statInRooms = document.getElementById('statInRooms');
 
-    // ---------- Helper: Show Toast ----------
+    // ---------- HELPERS ----------
     function showToast(message, type = 'info', duration = 4000) {
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -545,7 +513,6 @@
       setTimeout(() => toast.remove(), duration);
     }
 
-    // ---------- Update Stats ----------
     function updateStats(bots) {
       const total = bots.length;
       const active = bots.filter(b => b.active).length;
@@ -557,7 +524,7 @@
       statInRooms.innerText = inRooms;
     }
 
-    // ---------- Render Bots Grid ----------
+    // ---------- RENDER GRID ----------
     function renderBotsGrid(bots) {
       botsGrid.style.display = 'grid';
       loadingIndicator.style.display = 'none';
@@ -572,47 +539,41 @@
         const balance = Number(bot.balance).toFixed(2);
         const statusClass = bot.active ? 'status-active' : 'status-inactive';
         const statusText = bot.active ? 'Active' : 'Inactive';
-        const roomInfo = bot.currentRoom ? `<span class="room-badge"><i class="fas fa-door-open"></i> ${bot.currentRoom} ETB / Box ${bot.box}</span>` : '<span class="room-badge" style="opacity:0.4;">—</span>';
+        const roomInfo = bot.currentRoom ? `<span class="room-badge"><i class="fas fa-door-open"></i> ${bot.currentRoom} ETB / Box ${bot.box}</span>` : '<span class="room-badge">—</span>';
         const avatarLetter = bot.userName.charAt(0).toUpperCase();
 
         html += `
-          <div class="bot-card" id="card-${bot.userId}">
-            <div class="bot-header">
+          <div class="bot-card" id="card-${bot.userId}" data-userid="${bot.userId}">
+            <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
               <div class="bot-avatar">${avatarLetter}</div>
-              <div style="flex:1;">
-                <div class="bot-name" id="name-${bot.userId}">${bot.userName}</div>
+              <div class="bot-info">
+                <div class="bot-name" id="nameContainer-${bot.userId}">
+                  <span id="nameSpan-${bot.userId}" onclick="startRename('${bot.userId}')">${bot.userName}</span>
+                  <input type="text" id="renameInput-${bot.userId}" class="inline-edit-input" value="${bot.userName}" style="display:none;" onblur="saveRename('${bot.userId}')" onkeypress="if(event.key==='Enter'){this.blur();}">
+                </div>
                 <div class="bot-id">${bot.userId}</div>
               </div>
             </div>
 
-            <div class="bot-detail">
-              <div class="balance-box" id="balanceDisplay-${bot.userId}">
-                <i class="fas fa-coins"></i> ${balance} ETB
-              </div>
-              ${roomInfo}
+            <div class="balance-box">
+              <span><i class="fas fa-coins" style="color:#fbbf24;"></i> Balance</span>
+              <span class="balance-amount" id="balanceDisplay-${bot.userId}">${balance} ETB</span>
             </div>
 
-            <!-- Inline rename input (hidden by default) -->
-            <div id="renameRow-${bot.userId}" style="display:none; margin:0.5rem 0;">
-              <input type="text" id="renameInput-${bot.userId}" class="inline-input" value="${bot.userName}" placeholder="New name" style="width:100%;">
-            </div>
-
-            <!-- Inline add funds input (hidden by default) -->
-            <div id="fundsRow-${bot.userId}" style="display:none; margin:0.5rem 0;">
-              <input type="number" id="fundsInput-${bot.userId}" class="inline-input" placeholder="Amount" min="1" step="any" style="width:100%;">
+            <!-- Add funds inline (hidden by default) -->
+            <div id="fundsRow-${bot.userId}" class="add-funds-row" style="display:none;">
+              <input type="number" id="fundsInput-${bot.userId}" class="add-funds-input" placeholder="Amount" min="1" step="any">
+              <button class="icon-btn green" onclick="addFunds('${bot.userId}')" title="Send"><i class="fas fa-paper-plane"></i></button>
+              <button class="icon-btn" onclick="cancelAddFunds('${bot.userId}')" title="Cancel"><i class="fas fa-times"></i></button>
             </div>
 
             <div class="status-toggle">
               <span class="status-badge ${statusClass}" id="statusBadge-${bot.userId}">${statusText}</span>
+              <span class="room-badge">${roomInfo}</span>
             </div>
 
             <div class="action-buttons">
-              <button class="icon-btn blue" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
-              <button class="icon-btn green" id="saveRename-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
-
               <button class="icon-btn blue" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
-              <button class="icon-btn green" id="sendFunds-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
-
               <button class="icon-btn ${bot.active ? 'red' : 'blue'}" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
                 <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
               </button>
@@ -623,7 +584,7 @@
       botsGrid.innerHTML = html;
     }
 
-    // ---------- Filter bots based on search input ----------
+    // ---------- FILTER ----------
     window.filterBots = function() {
       const query = document.getElementById('searchInput').value.toLowerCase();
       filteredBots = query
@@ -632,89 +593,73 @@
       renderBotsGrid(filteredBots);
     };
 
-    // ---------- Socket Events ----------
-    socket.on('connect', () => {
-      connectionStatus.innerHTML = '<i class="fas fa-circle" style="color:#10b981;"></i> Connected';
-      socket.emit('admin:auth', 'passwordless');
-    });
-
-    socket.on('disconnect', () => {
-      connectionStatus.innerHTML = '<i class="fas fa-circle" style="color:#ef4444;"></i> Disconnected';
-      authenticated = false;
-    });
-
-    socket.on('admin:authSuccess', () => {
-      authenticated = true;
-      showToast('Authenticated successfully', 'success');
-      refreshBots();
-    });
-
-    socket.on('admin:authError', (err) => {
-      showToast('Auth failed: ' + (err || 'unknown'), 'error');
-      // Retry after 3 sec
-      setTimeout(() => socket.emit('admin:auth', 'passwordless'), 3000);
-    });
-
-    socket.on('admin:botsList', (bots) => {
-      botsList = bots;
-      updateStats(botsList);
-      filterBots();  // applies search and renders
-    });
-
-    socket.on('admin:error', (msg) => {
-      showToast('Error: ' + msg, 'error');
-    });
-
-    socket.on('admin:success', (msg) => {
-      showToast(msg, 'success');
-    });
-
-    socket.on('admin:botFundsAdded', (result) => {
-      showToast(`Funds added, new balance: ${result.newBalance.toFixed(2)} ETB`, 'success');
-      refreshBots(); // refresh list to update UI
-    });
-
-    // ---------- Action Functions ----------
-    window.toggleRename = function(botId) {
-      document.getElementById(`renameRow-${botId}`).style.display = 'block';
-      document.getElementById(`saveRename-${botId}`).style.display = 'inline-flex';
+    // ---------- RENAME (inline) ----------
+    window.startRename = function(botId) {
+      const span = document.getElementById(`nameSpan-${botId}`);
+      const input = document.getElementById(`renameInput-${botId}`);
+      if (!span || !input) return;
+      span.style.display = 'none';
+      input.style.display = 'inline-block';
+      input.value = span.innerText; // ensure fresh
+      input.focus();
+      input.select();
     };
 
     window.saveRename = function(botId) {
-      const newName = document.getElementById(`renameInput-${botId}`).value.trim();
-      if (!newName) return showToast('Name cannot be empty', 'error');
+      const input = document.getElementById(`renameInput-${botId}`);
+      const span = document.getElementById(`nameSpan-${botId}`);
+      const newName = input.value.trim();
+      if (!newName) {
+        showToast('Name cannot be empty', 'error');
+        input.style.display = 'none';
+        span.style.display = 'inline';
+        return;
+      }
+      // Emit rename event
       socket.emit('admin:renameBot', { botId, newName });
-      // hide rename row and button
-      document.getElementById(`renameRow-${botId}`).style.display = 'none';
-      document.getElementById(`saveRename-${botId}`).style.display = 'none';
-      // optimistic update
-      document.getElementById(`name-${botId}`).innerText = newName;
+      // Optimistic update
+      span.innerText = newName;
+      span.style.display = 'inline';
+      input.style.display = 'none';
     };
 
+    // ---------- ADD FUNDS ----------
     window.toggleAddFunds = function(botId) {
-      document.getElementById(`fundsRow-${botId}`).style.display = 'block';
-      document.getElementById(`sendFunds-${botId}`).style.display = 'inline-flex';
+      // Hide any other open fund rows
+      document.querySelectorAll('[id^="fundsRow-"]').forEach(row => row.style.display = 'none');
+      const row = document.getElementById(`fundsRow-${botId}`);
+      if (row) row.style.display = 'flex';
+    };
+
+    window.cancelAddFunds = function(botId) {
+      document.getElementById(`fundsRow-${botId}`).style.display = 'none';
     };
 
     window.addFunds = function(botId) {
-      const amount = parseFloat(document.getElementById(`fundsInput-${botId}`).value);
-      if (isNaN(amount) || amount <= 0) return showToast('Enter a valid positive amount', 'error');
+      const input = document.getElementById(`fundsInput-${botId}`);
+      const amount = parseFloat(input.value);
+      if (isNaN(amount) || amount <= 0) {
+        showToast('Enter a valid positive amount', 'error');
+        return;
+      }
       socket.emit('admin:addBotFunds', { botId, amount });
       document.getElementById(`fundsRow-${botId}`).style.display = 'none';
-      document.getElementById(`sendFunds-${botId}`).style.display = 'none';
+      input.value = '';
     };
 
+    // ---------- SET ACTIVE ----------
     window.setActive = function(botId, active) {
       socket.emit('admin:setBotActive', { botId, active });
     };
 
+    // ---------- ADD NEW BOT ----------
     window.addNewBot = function() {
       const name = document.getElementById('newBotName').value.trim();
       socket.emit('admin:addNewBot', { name: name || undefined });
       document.getElementById('newBotName').value = '';
     };
 
-    // Bulk actions
+    // ---------- BULK ACTIONS ----------
     window.bulkActivate = function(active) {
       const action = active ? 'activate' : 'deactivate';
       if (!confirm(`Are you sure you want to ${action} ALL bots?`)) return;
@@ -739,6 +684,47 @@
       }
       socket.emit('admin:getBotsList');
     };
+
+    // ---------- SOCKET EVENTS ----------
+    socket.on('connect', () => {
+      connectionStatus.innerHTML = '<i class="fas fa-circle" style="color:#10b981;"></i> Connected';
+      socket.emit('admin:auth', 'passwordless');
+    });
+
+    socket.on('disconnect', () => {
+      connectionStatus.innerHTML = '<i class="fas fa-circle" style="color:#ef4444;"></i> Disconnected';
+      authenticated = false;
+    });
+
+    socket.on('admin:authSuccess', () => {
+      authenticated = true;
+      showToast('Authenticated successfully', 'success');
+      refreshBots();
+    });
+
+    socket.on('admin:authError', (err) => {
+      showToast('Auth failed: ' + (err || 'unknown'), 'error');
+      setTimeout(() => socket.emit('admin:auth', 'passwordless'), 3000);
+    });
+
+    socket.on('admin:botsList', (bots) => {
+      botsList = bots;
+      updateStats(botsList);
+      filterBots(); // applies search and renders
+    });
+
+    socket.on('admin:error', (msg) => {
+      showToast('Error: ' + msg, 'error');
+    });
+
+    socket.on('admin:success', (msg) => {
+      showToast(msg, 'success');
+    });
+
+    socket.on('admin:botFundsAdded', (result) => {
+      showToast(`Funds added, new balance: ${result.newBalance.toFixed(2)} ETB`, 'success');
+      refreshBots(); // refresh to get updated balance
+    });
 
     // Auto-refresh every 30 seconds
     setInterval(() => {
