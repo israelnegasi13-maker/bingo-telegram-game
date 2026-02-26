@@ -751,6 +751,7 @@ io.on('connection', (socket) => {
     const validPassword = gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123';
     if (password === validPassword || password === 'passwordless') {
       socket.admin = true;
+      socket.join('admins'); // 👈 ADDED: join admin room for broadcasts
       // 👇 FIX #1: Give admin super‑admin privileges in agent system
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
       socket.emit('admin:authSuccess');
@@ -1704,6 +1705,87 @@ io.on('connection', (socket) => {
   // Handle socket errors
   socket.on('error', (error) => {
     console.error(`Socket error for ${socket.id}:`, error);
+  });
+
+  // ========== BOT MANAGEMENT EVENTS (ADMIN ONLY) ==========
+  // 👇 NEW: Get list of all bots
+  socket.on('admin:getBotsList', async () => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const bots = await gameLogic.getBotsList();
+      socket.emit('admin:botsList', bots);
+    } catch (err) {
+      console.error('Error fetching bots list:', err);
+      socket.emit('admin:error', 'Failed to fetch bots list');
+    }
+  });
+
+  // 👇 NEW: Add funds to a bot
+  socket.on('admin:addBotFunds', async ({ botId, amount }) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      const result = await gameLogic.addBotFunds(botId, parseFloat(amount));
+      socket.emit('admin:botFundsAdded', result);
+      // Refresh list for all admin sockets
+      const updatedList = await gameLogic.getBotsList();
+      io.to('admins').emit('admin:botsList', updatedList);
+    } catch (err) {
+      socket.emit('admin:error', err.message);
+    }
+  });
+
+  // 👇 NEW: Rename a bot
+  socket.on('admin:renameBot', async ({ botId, newName }) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      await gameLogic.renameBot(botId, newName);
+      const updatedList = await gameLogic.getBotsList();
+      io.to('admins').emit('admin:botsList', updatedList);
+      socket.emit('admin:success', 'Bot renamed');
+    } catch (err) {
+      socket.emit('admin:error', err.message);
+    }
+  });
+
+  // 👇 NEW: Activate/deactivate a bot
+  socket.on('admin:setBotActive', async ({ botId, active }) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      await gameLogic.setBotActive(botId, active);
+      const updatedList = await gameLogic.getBotsList();
+      io.to('admins').emit('admin:botsList', updatedList);
+      socket.emit('admin:success', `Bot ${active ? 'activated' : 'deactivated'}`);
+    } catch (err) {
+      socket.emit('admin:error', err.message);
+    }
+  });
+
+  // 👇 NEW: Add a new bot
+  socket.on('admin:addNewBot', async ({ name }) => {
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized');
+      return;
+    }
+    try {
+      await gameLogic.addNewBot(name);
+      const updatedList = await gameLogic.getBotsList();
+      io.to('admins').emit('admin:botsList', updatedList);
+      socket.emit('admin:success', 'New bot added');
+    } catch (err) {
+      socket.emit('admin:error', err.message);
+    }
   });
 });
 
