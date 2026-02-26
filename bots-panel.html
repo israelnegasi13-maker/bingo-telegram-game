@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Bots Command Center · ETHIO GAMES</title>
+  <title>BOTS COMMAND CENTER · ELITE</title>
   <!-- Font Awesome 6 (free) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
@@ -15,11 +15,11 @@
 
     body {
       font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0c10;
-      color: #e9edf5;
-      line-height: 1.5;
+      background: radial-gradient(circle at 10% 20%, #0f1825, #03060b);
+      color: #f0f4fa;
       min-height: 100vh;
       padding: 1.5rem;
+      line-height: 1.5;
     }
 
     .container {
@@ -27,20 +27,27 @@
       margin: 0 auto;
     }
 
-    /* Header */
+    /* Header with glassmorphism */
     .header {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 1rem;
       margin-bottom: 2rem;
+      padding: 1rem 1.5rem;
+      background: rgba(15, 25, 35, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(74, 144, 226, 0.25);
+      border-radius: 40px;
+      box-shadow: 0 15px 35px -10px #00000080;
     }
 
     .header h1 {
-      font-size: 1.8rem;
-      font-weight: 600;
-      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      font-size: 1.9rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a5d8ff, #7aa2f7);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       display: flex;
@@ -49,94 +56,104 @@
     }
 
     .header h1 i {
-      background: #1e293b;
-      padding: 0.5rem;
-      border-radius: 14px;
+      background: #1e2a3a;
+      padding: 0.6rem;
+      border-radius: 50%;
       color: #3b82f6;
-      font-size: 1.5rem;
+      font-size: 1.4rem;
+      box-shadow: 0 0 15px #3b82f640;
     }
 
-    .badge {
-      background: #1e293b;
-      color: #94a3b8;
-      padding: 0.25rem 0.75rem;
-      border-radius: 40px;
-      font-size: 0.8rem;
+    .connection-badge {
+      background: #1a2938;
+      padding: 0.5rem 1.2rem;
+      border-radius: 60px;
+      border: 1px solid #2d4055;
+      font-size: 0.85rem;
       font-weight: 500;
-      border: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      letter-spacing: 0.3px;
     }
 
-    /* Stats Grid */
+    .connection-badge i {
+      font-size: 0.7rem;
+    }
+
+    /* Stats Cards (glossy) */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1.2rem;
       margin-bottom: 2rem;
     }
 
     .stat-card {
-      background: #131b26;
-      border: 1px solid #263241;
-      border-radius: 20px;
-      padding: 1.25rem 1.5rem;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+      background: linear-gradient(145deg, #141f2c, #0b131e);
+      border: 1px solid #2c3f54;
+      border-radius: 28px;
+      padding: 1.5rem 1.2rem;
+      box-shadow: 0 12px 28px -8px #00000080;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .stat-card:hover {
+      border-color: #3b82f6;
+      transform: translateY(-3px);
     }
 
     .stat-label {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #94a3b8;
-      margin-bottom: 0.4rem;
+      letter-spacing: 1px;
+      color: #8fadc9;
+      margin-bottom: 0.3rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
 
     .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
+      font-size: 2.2rem;
+      font-weight: 800;
       color: white;
-      line-height: 1.2;
+      line-height: 1.1;
+      text-shadow: 0 2px 5px #00000060;
     }
 
     .stat-detail {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      margin-top: 0.25rem;
+      font-size: 0.8rem;
+      color: #6f8cac;
+      margin-top: 0.3rem;
     }
 
-    /* Action Bar */
-    .action-bar {
-      background: #131b26;
-      border: 1px solid #263241;
-      border-radius: 20px;
-      padding: 1.25rem 1.5rem;
+    /* Control Bar */
+    .control-bar {
+      background: rgba(12, 22, 33, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #2d4057;
+      border-radius: 50px;
+      padding: 0.8rem 1.5rem;
       margin-bottom: 2rem;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 1rem;
+      gap: 1rem 1.5rem;
     }
 
-    .action-group {
+    .control-group {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.75rem;
-    }
-
-    .divider {
-      width: 1px;
-      height: 30px;
-      background: #263241;
-      margin: 0 0.5rem;
+      gap: 0.6rem;
     }
 
     .btn {
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #f1f5f9;
+      background: #1f3142;
+      border: 1px solid #3a506b;
+      color: #e2eaf3;
       font-size: 0.9rem;
       font-weight: 500;
       padding: 0.6rem 1.2rem;
@@ -145,69 +162,242 @@
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
-      transition: all 0.15s ease;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      transition: all 0.15s;
+      box-shadow: 0 4px 12px #00000030;
     }
 
     .btn i {
       font-size: 1rem;
-      color: #94a3b8;
+      color: #7f9bc0;
     }
 
     .btn-primary {
       background: #2563eb;
-      border-color: #3b82f6;
+      border-color: #4b8bff;
       color: white;
     }
     .btn-primary i { color: white; }
     .btn-primary:hover { background: #3b82f6; }
 
     .btn-success {
-      background: #0f766e;
-      border-color: #14b8a6;
+      background: #0b6b5e;
+      border-color: #1e9b87;
     }
     .btn-success:hover { background: #14b8a6; }
 
     .btn-warning {
       background: #b45309;
-      border-color: #d97706;
+      border-color: #ea9b3e;
     }
     .btn-warning:hover { background: #d97706; }
 
     .btn-outline {
       background: transparent;
+      border-color: #3a506b;
     }
-    .btn-outline:hover { background: #1e293b; }
+    .btn-outline:hover { background: #1f3142; }
 
-    .btn:active { transform: translateY(1px); }
-
-    .search-box {
+    .search-wrapper {
       flex: 1;
-      min-width: 260px;
+      min-width: 250px;
       display: flex;
       align-items: center;
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: #0e1a26;
+      border: 1px solid #2d4057;
       border-radius: 40px;
-      padding: 0.3rem 0.3rem 0.3rem 1.2rem;
+      padding: 0.2rem 0.2rem 0.2rem 1.2rem;
     }
-    .search-box i {
-      color: #94a3b8;
-      font-size: 1rem;
+    .search-wrapper i {
+      color: #6f8cac;
     }
-    .search-box input {
+    .search-wrapper input {
       background: transparent;
       border: none;
-      padding: 0.5rem 0.8rem;
+      padding: 0.6rem 0.8rem;
       color: white;
       width: 100%;
       outline: none;
       font-size: 0.95rem;
     }
-    .search-box input::placeholder { color: #5f6c80; }
+    .search-wrapper input::placeholder {
+      color: #4a607a;
+    }
+
+    /* Bot Cards Grid */
+    .bots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .bot-card {
+      background: linear-gradient(145deg, #15222f, #0c1722);
+      border: 1px solid #2a3d52;
+      border-radius: 30px;
+      padding: 1.5rem 1.2rem;
+      box-shadow: 0 20px 30px -12px #000000b3;
+      transition: all 0.25s;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bot-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(90deg, #3b82f6, #a855f7, #ec4899);
+      opacity: 0.7;
+    }
+
+    .bot-card:hover {
+      transform: scale(1.02);
+      border-color: #4b7bec;
+      box-shadow: 0 25px 40px -10px #1e3a8a80;
+    }
+
+    .bot-header {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .bot-avatar {
+      width: 48px;
+      height: 48px;
+      background: #1c3144;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #8cb3f0;
+      border: 2px solid #3b82f6;
+      box-shadow: 0 0 10px #3b82f6;
+    }
+
+    .bot-name {
+      font-weight: 700;
+      font-size: 1.2rem;
+      line-height: 1.3;
+    }
+    .bot-id {
+      font-size: 0.7rem;
+      color: #6f8cac;
+      font-family: monospace;
+    }
+
+    .bot-detail {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0d1a26;
+      border-radius: 20px;
+      padding: 0.8rem 1rem;
+      margin: 0.8rem 0;
+      border: 1px solid #1e3243;
+    }
+
+    .balance-box {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #fbbf24;
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+    .balance-box i {
+      font-size: 1rem;
+      color: #fbbf24;
+    }
+
+    .room-badge {
+      background: #0f2a3b;
+      border: 1px solid #2e5775;
+      border-radius: 30px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.8rem;
+      color: #8fc9ff;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .status-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.5rem 0;
+    }
+    .status-badge {
+      padding: 0.25rem 0.9rem;
+      border-radius: 40px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-active {
+      background: #0a3f2b;
+      color: #6fcf97;
+      border: 1px solid #27ae60;
+    }
+    .status-inactive {
+      background: #441e1e;
+      color: #f29091;
+      border: 1px solid #eb5757;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.8rem;
+      justify-content: flex-end;
+    }
+
+    .icon-btn {
+      background: #1c3144;
+      border: none;
+      color: #cfddee;
+      width: 36px;
+      height: 36px;
+      border-radius: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.15s;
+      font-size: 0.9rem;
+    }
+    .icon-btn:hover { background: #2d4b66; color: white; }
+    .icon-btn.green:hover { background: #0f766e; }
+    .icon-btn.blue:hover { background: #2563eb; }
+    .icon-btn.red:hover { background: #991b1b; }
+
+    .inline-input {
+      background: #0e1a26;
+      border: 1px solid #2d4b68;
+      border-radius: 30px;
+      padding: 0.4rem 1rem;
+      color: white;
+      width: 120px;
+      font-size: 0.8rem;
+    }
+    .inline-input:focus {
+      outline: 2px solid #3b82f6;
+      border-color: transparent;
+    }
 
     /* Toast Notifications */
-    .toast-container {
+    .toast-stack {
       position: fixed;
       top: 20px;
       right: 20px;
@@ -217,16 +407,17 @@
       gap: 10px;
     }
     .toast {
-      background: #1e293b;
-      border-left: 4px solid;
-      border-radius: 12px;
+      background: #1f2c3b;
+      border-left: 6px solid;
+      border-radius: 20px;
       padding: 1rem 1.5rem;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+      box-shadow: 0 20px 30px -10px black;
       min-width: 280px;
       display: flex;
       align-items: center;
       gap: 1rem;
-      animation: slideIn 0.3s ease;
+      backdrop-filter: blur(10px);
+      animation: slideInRight 0.3s ease;
     }
     .toast.success { border-color: #10b981; }
     .toast.error { border-color: #ef4444; }
@@ -238,137 +429,34 @@
     .toast-close {
       margin-left: auto;
       cursor: pointer;
-      color: #94a3b8;
+      color: #9caec9;
     }
-    @keyframes slideIn {
+    @keyframes slideInRight {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
 
-    /* Table */
-    .table-container {
-      background: #131b26;
-      border: 1px solid #263241;
-      border-radius: 24px;
-      overflow-x: auto;
-      box-shadow: 0 15px 30px -10px #00000080;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 1000px;
-    }
-
-    th {
-      text-align: left;
-      padding: 1.2rem 1rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #94a3b8;
-      background: #1a2533;
-      border-bottom: 1px solid #263241;
-    }
-
-    td {
-      padding: 1rem;
-      border-bottom: 1px solid #1f2a36;
-      color: #e2e8f0;
-      font-size: 0.95rem;
-    }
-
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #1c2735; }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      padding: 0.25rem 0.8rem;
-      border-radius: 30px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      width: fit-content;
-    }
-    .status-active {
-      background: #0a3622;
-      color: #4ade80;
-      border: 1px solid #22c55e;
-    }
-    .status-inactive {
-      background: #3b1c1c;
-      color: #f87171;
-      border: 1px solid #ef4444;
-    }
-
-    .actions {
+    .loading-skeleton {
       display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-    }
-
-    .action-icon {
-      background: #1f2a39;
-      border: none;
-      color: #cbd5e1;
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      display: inline-flex;
-      align-items: center;
       justify-content: center;
-      cursor: pointer;
-      transition: 0.15s;
-      font-size: 0.9rem;
-    }
-    .action-icon:hover { background: #2d3a4c; color: white; }
-    .action-icon.save { background: #0f766e; color: white; }
-    .action-icon.send { background: #2563eb; color: white; }
-    .action-icon.danger:hover { background: #991b1b; color: white; }
-
-    .inline-input {
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 0.4rem 0.6rem;
-      color: white;
-      width: 100px;
-      font-size: 0.85rem;
-    }
-    .inline-input:focus {
-      outline: 2px solid #3b82f6;
-      border-color: transparent;
-    }
-
-    .balance-value {
-      font-weight: 600;
-      color: #fbbf24;
-    }
-
-    .empty-row td {
-      text-align: center;
       padding: 3rem;
-      color: #5f6c80;
-      font-style: italic;
+      color: #4d688b;
     }
-
-    .loading {
-      display: inline-block;
-      width: 1rem;
-      height: 1rem;
-      border: 2px solid #94a3b8;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .fa-spinner {
+      font-size: 2rem;
+      animation: spin 1s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
 
-    /* Responsive */
-    @media (max-width: 700px) {
-      body { padding: 0.8rem; }
-      .header h1 { font-size: 1.5rem; }
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem;
+      background: #0f1a25;
+      border-radius: 40px;
+      color: #6f8cac;
+      font-size: 1.2rem;
+      border: 2px dashed #2d4b68;
     }
   </style>
 </head>
@@ -377,91 +465,71 @@
   <!-- Header -->
   <div class="header">
     <h1>
-      <i class="fas fa-robot"></i> Bots Command Center
+      <i class="fas fa-microchip"></i> BOT COMMAND CENTER
     </h1>
-    <div class="badge" id="connectionStatus">
+    <div class="connection-badge" id="connectionStatus">
       <i class="fas fa-circle" style="color: #f59e0b;"></i> Connecting...
     </div>
   </div>
 
   <!-- Stats Cards -->
   <div class="stats-grid" id="statsGrid">
-    <div class="stat-card">
-      <div class="stat-label"><i class="fas fa-robot"></i> Total bots</div>
-      <div class="stat-value" id="statTotalBots">0</div>
-      <div class="stat-detail">registered</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><i class="fas fa-circle-check"></i> Active</div>
-      <div class="stat-value" id="statActiveBots">0</div>
-      <div class="stat-detail">online & ready</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><i class="fas fa-coins"></i> Total balance</div>
-      <div class="stat-value" id="statTotalBalance">0</div>
-      <div class="stat-detail">ETB</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label"><i class="fas fa-door-open"></i> In rooms</div>
-      <div class="stat-value" id="statInRooms">0</div>
-      <div class="stat-detail">currently playing</div>
-    </div>
+    <div class="stat-card"><div class="stat-label"><i class="fas fa-robot"></i> Total bots</div><div class="stat-value" id="statTotalBots">0</div><div class="stat-detail">registered</div></div>
+    <div class="stat-card"><div class="stat-label"><i class="fas fa-check-circle"></i> Active</div><div class="stat-value" id="statActiveBots">0</div><div class="stat-detail">ready</div></div>
+    <div class="stat-card"><div class="stat-label"><i class="fas fa-coins"></i> Total balance</div><div class="stat-value" id="statTotalBalance">0</div><div class="stat-detail">ETB</div></div>
+    <div class="stat-card"><div class="stat-label"><i class="fas fa-door-open"></i> In rooms</div><div class="stat-value" id="statInRooms">0</div><div class="stat-detail">playing</div></div>
   </div>
 
-  <!-- Action Bar -->
-  <div class="action-bar">
-    <div class="action-group">
-      <input type="text" id="newBotName" class="inline-input" placeholder="Bot name" style="width:160px;">
+  <!-- Control Bar -->
+  <div class="control-bar">
+    <div class="control-group">
+      <input type="text" id="newBotName" class="inline-input" placeholder="Bot name" style="width:150px;">
       <button class="btn btn-primary" onclick="addNewBot()"><i class="fas fa-plus-circle"></i> Add bot</button>
     </div>
-    <div class="divider"></div>
-    <div class="action-group">
-      <button class="btn btn-success" onclick="confirmBulkActivate(true)"><i class="fas fa-check-circle"></i> Activate all</button>
-      <button class="btn btn-warning" onclick="confirmBulkActivate(false)"><i class="fas fa-ban"></i> Deactivate all</button>
-      <button class="btn btn-outline" onclick="addFundsToAll()"><i class="fas fa-gift"></i> +1000 to all</button>
+    <div class="control-group">
+      <button class="btn btn-success" onclick="bulkActivate(true)"><i class="fas fa-power-off"></i> Activate all</button>
+      <button class="btn btn-warning" onclick="bulkActivate(false)"><i class="fas fa-power-off"></i> Deactivate all</button>
+      <button class="btn btn-outline" onclick="bulkAddFunds(1000)"><i class="fas fa-gift"></i> +1000 to all</button>
     </div>
-    <div class="search-box">
+    <div class="search-wrapper">
       <i class="fas fa-search"></i>
       <input type="text" id="searchInput" placeholder="Filter by name or ID..." onkeyup="filterBots()">
     </div>
     <button class="btn btn-outline" onclick="refreshBots()"><i class="fas fa-sync-alt"></i> Refresh</button>
   </div>
 
-  <!-- Bots Table -->
-  <div class="table-container">
-    <table id="botsTable">
-      <thead>
-        <tr>
-          <th>Bot ID</th>
-          <th>Name</th>
-          <th>Balance (ETB)</th>
-          <th>Status</th>
-          <th>Room / Box</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="botsTableBody">
-        <tr class="empty-row"><td colspan="6"><i class="fas fa-spinner fa-pulse"></i> Loading bots...</td></tr>
-      </tbody>
-    </table>
+  <!-- Bots Grid -->
+  <div id="botsGridContainer">
+    <div class="loading-skeleton" id="loadingIndicator">
+      <i class="fas fa-spinner"></i> &nbsp; Loading bots...
+    </div>
+    <div class="bots-grid" id="botsGrid" style="display: none;"></div>
   </div>
 </div>
 
-<!-- Toast Container -->
-<div class="toast-container" id="toastContainer"></div>
+<!-- Toast Stack -->
+<div class="toast-stack" id="toastStack"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
   (function() {
-    // ---------- Socket & State ----------
+    // ---------- State ----------
     const socket = io();
     let authenticated = false;
-    let botsList = [];
-    let filteredBots = [];
+    let botsList = [];               // all bots from server
+    let filteredBots = [];           // after search filter
 
-    // UI Elements
+    // DOM elements
     const connectionStatus = document.getElementById('connectionStatus');
-    const toastContainer = document.getElementById('toastContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const botsGrid = document.getElementById('botsGrid');
+    const toastStack = document.getElementById('toastStack');
+
+    // Stats elements
+    const statTotalBots = document.getElementById('statTotalBots');
+    const statActiveBots = document.getElementById('statActiveBots');
+    const statTotalBalance = document.getElementById('statTotalBalance');
+    const statInRooms = document.getElementById('statInRooms');
 
     // ---------- Helper: Show Toast ----------
     function showToast(message, type = 'info', duration = 4000) {
@@ -473,9 +541,96 @@
         <span>${message}</span>
         <i class="fas fa-times toast-close" onclick="this.parentElement.remove()"></i>
       `;
-      toastContainer.appendChild(toast);
+      toastStack.appendChild(toast);
       setTimeout(() => toast.remove(), duration);
     }
+
+    // ---------- Update Stats ----------
+    function updateStats(bots) {
+      const total = bots.length;
+      const active = bots.filter(b => b.active).length;
+      const totalBal = bots.reduce((acc, b) => acc + (Number(b.balance) || 0), 0).toFixed(2);
+      const inRooms = bots.filter(b => b.currentRoom).length;
+      statTotalBots.innerText = total;
+      statActiveBots.innerText = active;
+      statTotalBalance.innerText = totalBal;
+      statInRooms.innerText = inRooms;
+    }
+
+    // ---------- Render Bots Grid ----------
+    function renderBotsGrid(bots) {
+      botsGrid.style.display = 'grid';
+      loadingIndicator.style.display = 'none';
+
+      if (!bots || bots.length === 0) {
+        botsGrid.innerHTML = '<div class="empty-state"><i class="fas fa-robot" style="font-size:3rem; opacity:0.4;"></i><br>No bots found. Create one!</div>';
+        return;
+      }
+
+      let html = '';
+      bots.forEach(bot => {
+        const balance = Number(bot.balance).toFixed(2);
+        const statusClass = bot.active ? 'status-active' : 'status-inactive';
+        const statusText = bot.active ? 'Active' : 'Inactive';
+        const roomInfo = bot.currentRoom ? `<span class="room-badge"><i class="fas fa-door-open"></i> ${bot.currentRoom} ETB / Box ${bot.box}</span>` : '<span class="room-badge" style="opacity:0.4;">—</span>';
+        const avatarLetter = bot.userName.charAt(0).toUpperCase();
+
+        html += `
+          <div class="bot-card" id="card-${bot.userId}">
+            <div class="bot-header">
+              <div class="bot-avatar">${avatarLetter}</div>
+              <div style="flex:1;">
+                <div class="bot-name" id="name-${bot.userId}">${bot.userName}</div>
+                <div class="bot-id">${bot.userId}</div>
+              </div>
+            </div>
+
+            <div class="bot-detail">
+              <div class="balance-box" id="balanceDisplay-${bot.userId}">
+                <i class="fas fa-coins"></i> ${balance} ETB
+              </div>
+              ${roomInfo}
+            </div>
+
+            <!-- Inline rename input (hidden by default) -->
+            <div id="renameRow-${bot.userId}" style="display:none; margin:0.5rem 0;">
+              <input type="text" id="renameInput-${bot.userId}" class="inline-input" value="${bot.userName}" placeholder="New name" style="width:100%;">
+            </div>
+
+            <!-- Inline add funds input (hidden by default) -->
+            <div id="fundsRow-${bot.userId}" style="display:none; margin:0.5rem 0;">
+              <input type="number" id="fundsInput-${bot.userId}" class="inline-input" placeholder="Amount" min="1" step="any" style="width:100%;">
+            </div>
+
+            <div class="status-toggle">
+              <span class="status-badge ${statusClass}" id="statusBadge-${bot.userId}">${statusText}</span>
+            </div>
+
+            <div class="action-buttons">
+              <button class="icon-btn blue" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
+              <button class="icon-btn green" id="saveRename-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
+
+              <button class="icon-btn blue" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
+              <button class="icon-btn green" id="sendFunds-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
+
+              <button class="icon-btn ${bot.active ? 'red' : 'blue'}" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
+                <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      botsGrid.innerHTML = html;
+    }
+
+    // ---------- Filter bots based on search input ----------
+    window.filterBots = function() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      filteredBots = query
+        ? botsList.filter(bot => bot.userId.toLowerCase().includes(query) || bot.userName.toLowerCase().includes(query))
+        : botsList;
+      renderBotsGrid(filteredBots);
+    };
 
     // ---------- Socket Events ----------
     socket.on('connect', () => {
@@ -490,24 +645,24 @@
 
     socket.on('admin:authSuccess', () => {
       authenticated = true;
-      showToast('Authentication successful', 'success');
+      showToast('Authenticated successfully', 'success');
       refreshBots();
     });
 
     socket.on('admin:authError', (err) => {
-      showToast('Authentication failed: ' + (err || 'Unknown error'), 'error');
-      // Retry after 3 seconds
+      showToast('Auth failed: ' + (err || 'unknown'), 'error');
+      // Retry after 3 sec
       setTimeout(() => socket.emit('admin:auth', 'passwordless'), 3000);
     });
 
     socket.on('admin:botsList', (bots) => {
       botsList = bots;
-      filterBots();
-      updateStats(bots);
+      updateStats(botsList);
+      filterBots();  // applies search and renders
     });
 
     socket.on('admin:error', (msg) => {
-      showToast('Server error: ' + msg, 'error');
+      showToast('Error: ' + msg, 'error');
     });
 
     socket.on('admin:success', (msg) => {
@@ -516,103 +671,37 @@
 
     socket.on('admin:botFundsAdded', (result) => {
       showToast(`Funds added, new balance: ${result.newBalance.toFixed(2)} ETB`, 'success');
+      refreshBots(); // refresh list to update UI
     });
 
-    // ---------- Stats Update ----------
-    function updateStats(bots) {
-      const total = bots.length;
-      const active = bots.filter(b => b.active).length;
-      const totalBalance = bots.reduce((acc, b) => acc + (Number(b.balance) || 0), 0).toFixed(2);
-      const inRooms = bots.filter(b => b.currentRoom).length;
-
-      document.getElementById('statTotalBots').innerText = total;
-      document.getElementById('statActiveBots').innerText = active;
-      document.getElementById('statTotalBalance').innerText = totalBalance;
-      document.getElementById('statInRooms').innerText = inRooms;
-    }
-
-    // ---------- Filter & Render ----------
-    function filterBots() {
-      const query = document.getElementById('searchInput').value.toLowerCase();
-      filteredBots = query
-        ? botsList.filter(bot => bot.userId.toLowerCase().includes(query) || bot.userName.toLowerCase().includes(query))
-        : botsList;
-      renderBotsTable(filteredBots);
-    }
-
-    function renderBotsTable(bots) {
-      const tbody = document.getElementById('botsTableBody');
-      if (!bots || bots.length === 0) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">🤖 No bots found. Create one!</td></tr>';
-        return;
-      }
-
-      let html = '';
-      bots.forEach(bot => {
-        const statusClass = bot.active ? 'status-active' : 'status-inactive';
-        const statusText = bot.active ? 'Active' : 'Inactive';
-        const roomInfo = bot.currentRoom ? `${bot.currentRoom} ETB / Box ${bot.box}` : '—';
-        const balance = Number(bot.balance).toFixed(2);
-
-        html += `
-          <tr id="row-${bot.userId}">
-            <td><code>${bot.userId}</code></td>
-            <td>
-              <span id="name-${bot.userId}">${bot.userName}</span>
-              <input type="text" id="rename-${bot.userId}" class="inline-input" value="${bot.userName}" style="display:none;">
-            </td>
-            <td>
-              <span id="balance-${bot.userId}" class="balance-value">${balance}</span>
-              <input type="number" id="funds-${bot.userId}" class="inline-input" placeholder="Amount" style="display:none; width:80px;">
-            </td>
-            <td><span class="status-badge ${statusClass}"><i class="fas fa-circle" style="font-size: 0.5rem;"></i> ${statusText}</span></td>
-            <td>${roomInfo}</td>
-            <td class="actions">
-              <!-- Rename -->
-              <button class="action-icon" onclick="toggleRename('${bot.userId}')" title="Rename"><i class="fas fa-pen"></i></button>
-              <button class="action-icon save" id="save-${bot.userId}" onclick="saveRename('${bot.userId}')" style="display:none;" title="Save name"><i class="fas fa-check"></i></button>
-              <!-- Add Funds -->
-              <button class="action-icon" onclick="toggleAddFunds('${bot.userId}')" title="Add funds"><i class="fas fa-coins"></i></button>
-              <button class="action-icon send" id="addBtn-${bot.userId}" onclick="addFunds('${bot.userId}')" style="display:none;" title="Send"><i class="fas fa-paper-plane"></i></button>
-              <!-- Activate/Deactivate -->
-              <button class="action-icon" onclick="setActive('${bot.userId}', ${!bot.active})" title="${bot.active ? 'Deactivate' : 'Activate'}">
-                <i class="fas ${bot.active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
-              </button>
-            </td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-    }
-
-    // ---------- Action Functions (Emit Socket Events) ----------
+    // ---------- Action Functions ----------
     window.toggleRename = function(botId) {
-      document.getElementById(`name-${botId}`).style.display = 'none';
-      document.getElementById(`rename-${botId}`).style.display = 'inline-block';
-      document.getElementById(`save-${botId}`).style.display = 'inline-flex';
+      document.getElementById(`renameRow-${botId}`).style.display = 'block';
+      document.getElementById(`saveRename-${botId}`).style.display = 'inline-flex';
     };
 
     window.saveRename = function(botId) {
-      const newName = document.getElementById(`rename-${botId}`).value;
-      if (!newName.trim()) return showToast('Name cannot be empty', 'error');
+      const newName = document.getElementById(`renameInput-${botId}`).value.trim();
+      if (!newName) return showToast('Name cannot be empty', 'error');
       socket.emit('admin:renameBot', { botId, newName });
-      document.getElementById(`name-${botId}`).textContent = newName;
-      document.getElementById(`name-${botId}`).style.display = 'inline';
-      document.getElementById(`rename-${botId}`).style.display = 'none';
-      document.getElementById(`save-${botId}`).style.display = 'none';
+      // hide rename row and button
+      document.getElementById(`renameRow-${botId}`).style.display = 'none';
+      document.getElementById(`saveRename-${botId}`).style.display = 'none';
+      // optimistic update
+      document.getElementById(`name-${botId}`).innerText = newName;
     };
 
     window.toggleAddFunds = function(botId) {
-      document.getElementById(`funds-${botId}`).style.display = 'inline-block';
-      document.getElementById(`addBtn-${botId}`).style.display = 'inline-flex';
+      document.getElementById(`fundsRow-${botId}`).style.display = 'block';
+      document.getElementById(`sendFunds-${botId}`).style.display = 'inline-flex';
     };
 
     window.addFunds = function(botId) {
-      const amount = parseFloat(document.getElementById(`funds-${botId}`).value);
-      if (isNaN(amount) || amount <= 0) return showToast('Enter a positive amount', 'error');
+      const amount = parseFloat(document.getElementById(`fundsInput-${botId}`).value);
+      if (isNaN(amount) || amount <= 0) return showToast('Enter a valid positive amount', 'error');
       socket.emit('admin:addBotFunds', { botId, amount });
-      document.getElementById(`funds-${botId}`).style.display = 'none';
-      document.getElementById(`addBtn-${botId}`).style.display = 'none';
+      document.getElementById(`fundsRow-${botId}`).style.display = 'none';
+      document.getElementById(`sendFunds-${botId}`).style.display = 'none';
     };
 
     window.setActive = function(botId, active) {
@@ -620,13 +709,13 @@
     };
 
     window.addNewBot = function() {
-      const name = document.getElementById('newBotName').value.trim() || undefined;
-      socket.emit('admin:addNewBot', { name });
+      const name = document.getElementById('newBotName').value.trim();
+      socket.emit('admin:addNewBot', { name: name || undefined });
       document.getElementById('newBotName').value = '';
     };
 
-    // Bulk actions with confirmation
-    window.confirmBulkActivate = function(active) {
+    // Bulk actions
+    window.bulkActivate = function(active) {
       const action = active ? 'activate' : 'deactivate';
       if (!confirm(`Are you sure you want to ${action} ALL bots?`)) return;
       botsList.forEach(bot => {
@@ -636,23 +725,22 @@
       });
     };
 
-    window.addFundsToAll = function() {
-      if (!confirm('Add 1000 ETB to ALL bots?')) return;
+    window.bulkAddFunds = function(amount) {
+      if (!confirm(`Add ${amount} ETB to ALL bots?`)) return;
       botsList.forEach(bot => {
-        socket.emit('admin:addBotFunds', { botId: bot.userId, amount: 1000 });
+        socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
       });
     };
 
-    window.filterBots = filterBots;
     window.refreshBots = function() {
       if (!authenticated) {
-        showToast('Not authenticated, please wait...', 'error');
+        showToast('Not authenticated, waiting...', 'error');
         return;
       }
       socket.emit('admin:getBotsList');
     };
 
-    // Auto‑refresh every 30 seconds
+    // Auto-refresh every 30 seconds
     setInterval(() => {
       if (authenticated) socket.emit('admin:getBotsList');
     }, 30000);
