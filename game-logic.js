@@ -1,9 +1,9 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
-// ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
+// ========== FULLY UPDATED – UNLIMITED BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
 // FIX: Orphaned boxes cleanup in bot syncState
 // FIX: Block joins during 'ended' state, bots wait for room reset
 // NEW: Random bot participation – at least 10, random additional bots
-// NEW: Bot management panel support – active flag, add funds, rename, create new bots
+// NEW: Bot management panel support – active flag, add funds, rename, create new bots (unlimited)
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -57,22 +57,9 @@ let playerRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 1000; // 1 second
 const MAX_EVENTS_PER_WINDOW = 10;
 
-// ========== ETHIOPIAN BOT NAMES ==========
-// First 10 full names (first + last)
-const ETHIOPIAN_FULL_NAMES = [
-  "Abebe Kebede", "Almaz Tesfaye", "Ayele Mengistu", "Berhanu Demeke", "Chaltu Dibaba",
-  "Desta Fikre", "Etetu Gemeda", "Fikre Lemma", "Genet Bekele", "Hailu Gebre"
-];
-// Next 10 only first names
-const ETHIOPIAN_FIRST_NAMES = [
-  "Kebede", "Lemlem", "Mekdes", "Negasi", "Selam",
-  "Tigist", "Wondimu", "Yonas", "Zeritu", "Abebech"
-];
-
 // ========== BOT MANAGEMENT ==========
 let bots = [];
 let botSockets = new Map(); // botId -> virtual socket object
-const BOT_COUNT = 20;
 
 // Helper to get a socket (real or bot) by its ID
 function getEndpoint(socketId) {
@@ -83,11 +70,13 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + RANDOM PARTICIPATION) ==========
+// ========== ENHANCED BOT CLASS (DYNAMIC) ==========
 class Bot {
-  constructor(id, name, serverContext) {
-    this.userId = `bot_${id}`;
-    this.userName = name;
+  constructor(userId, userName, balance, active, serverContext) {
+    this.userId = userId;
+    this.userName = userName;
+    this.balance = balance;
+    this.active = active;
     this.server = serverContext;          // reference to game-logic exports
     this.socket = this._createSocket();
     this.currentRoom = null;
@@ -95,13 +84,11 @@ class Bot {
     this.grid = [];
     this.markedNumbers = new Set(['FREE']);
     this.calledNumbers = new Set();
-    this.balance = 5000;                   // starting balance
     this.isInGame = false;
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
     this.retryTimer = null;                  // timer for next action attempt
     this.getRoomWithCache = serverContext.getRoomWithCache; // for smarter fallback
-    this.active = true;                      // will be updated from DB
   }
 
   _createSocket() {
@@ -533,56 +520,30 @@ async function initialize(socketIo, dbModels) {
   await initializeBots();
 }
 
-// ========== INITIALIZE BOTS ==========
+// ========== INITIALIZE BOTS FROM DATABASE ==========
 async function initializeBots() {
-  console.log('🤖 Initializing 20 Ethiopian bots...');
-  for (let i = 0; i < BOT_COUNT; i++) {
-    // First 10 bots get full names, next 10 get only first names
-    let name;
-    if (i < 10) {
-      name = ETHIOPIAN_FULL_NAMES[i % ETHIOPIAN_FULL_NAMES.length];
-    } else {
-      name = ETHIOPIAN_FIRST_NAMES[(i - 10) % ETHIOPIAN_FIRST_NAMES.length];
-    }
-
-    const bot = new Bot(i, name, {
-      generateTraditionalBingoCard,
-      checkBingo,
-      processBingoClaim,
-      getRoomStatus,
-      getRoomWithCache,    // 👈 Added for smarter fallback
-    });
-
-    // Ensure bot user exists in database (with starting balance)
+  console.log('🤖 Loading bots from database...');
+  const botUsers = await models.User.find({ isBot: true });
+  for (const user of botUsers) {
     try {
-      let user = await models.User.findOne({ userId: bot.userId });
-      if (!user) {
-        user = new models.User({
-          userId: bot.userId,
-          userName: bot.userName,
-          balance: bot.balance,
-          referralCode: generateReferralCode(bot.userId),
-          isBot: true,
-          botActive: true
-        });
-        await user.save();
-      } else {
-        bot.balance = Number(user.balance) || 5000;   // ensure number
-        bot.active = user.botActive !== false;
-      }
-
-      // 🔥 FIX: Clear any stale room assignment from previous server runs
-      if (user.currentRoom) {
-        console.log(`🧹 Bot ${bot.userName} clearing stale room ${user.currentRoom} on init`);
-        user.currentRoom = null;
-        user.box = null;
-        await user.save();
-      }
+      const bot = new Bot(
+        user.userId,
+        user.userName,
+        Number(user.balance) || 5000,
+        user.botActive !== false,
+        {
+          generateTraditionalBingoCard,
+          checkBingo,
+          processBingoClaim,
+          getRoomStatus,
+          getRoomWithCache,
+        }
+      );
 
       // Add to maps
       bots.push(bot);
       botSockets.set(bot.userId, bot.socket);
-      socketToUser.set(bot.userId, bot.userId); // map socketId (which is userId) to userId
+      socketToUser.set(bot.userId, bot.userId);
 
       // Make bot "online" in database
       await models.User.updateOne(
@@ -590,15 +551,15 @@ async function initializeBots() {
         { isOnline: true, lastSeen: new Date() }
       );
 
-      // Schedule first action after a random delay (only if active)
+      // Schedule first action if active
       if (bot.active) {
         bot._scheduleRetry(5000 + Math.random() * 10000);
       }
     } catch (err) {
-      console.error(`❌ Failed to initialize bot ${i}:`, err);
+      console.error(`❌ Failed to initialize bot ${user.userId}:`, err);
     }
   }
-  console.log(`🤖 ${bots.length} bots initialized.`);
+  console.log(`🤖 ${bots.length} bots loaded.`);
 }
 
 // ========== TELEBIRR NUMBER FUNCTIONS ==========
@@ -2484,7 +2445,7 @@ async function getBotsList() {
   return bots.map(bot => ({
     userId: bot.userId,
     userName: bot.userName,
-    balance: Number(bot.balance).toFixed(2),   // ensure number and format
+    balance: Number(bot.balance).toFixed(2),
     active: bot.active,
     currentRoom: bot.currentRoom,
     box: bot.box
@@ -2547,33 +2508,48 @@ async function setBotActive(botId, active) {
   return { success: true };
 }
 
+// ========== NEW: ADD A BOT (DYNAMIC) ==========
 async function addNewBot(name) {
-  const newId = bots.length; // simple incremental ID
-  const botName = name || `Bot${newId+1}`;
-  const bot = new Bot(newId, botName, {
-    generateTraditionalBingoCard,
-    checkBingo,
-    processBingoClaim,
-    getRoomStatus,
-    getRoomWithCache
-  });
-  // Create DB user
+  // Generate a unique userId (e.g., bot_<timestamp>_<random>)
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  const userId = `bot_${timestamp}_${random}`;
+
+  // Create the user document
   const user = new models.User({
-    userId: bot.userId,
-    userName: bot.userName,
-    balance: bot.balance,
-    referralCode: generateReferralCode(bot.userId),
+    userId,
+    userName: name || `Bot${bots.length + 1}`,
+    balance: 5000,                        // default starting balance
+    referralCode: generateReferralCode(userId),
     isBot: true,
     botActive: true
   });
   await user.save();
+
+  // Instantiate the bot
+  const bot = new Bot(
+    userId,
+    user.userName,
+    user.balance,
+    true,
+    {
+      generateTraditionalBingoCard,
+      checkBingo,
+      processBingoClaim,
+      getRoomStatus,
+      getRoomWithCache,
+    }
+  );
+
+  // Add to in‑memory structures
   bots.push(bot);
   botSockets.set(bot.userId, bot.socket);
   socketToUser.set(bot.userId, bot.userId);
-  if (bot.active) {
-    bot._scheduleRetry(5000); // start its loop
-  }
-  return { success: true, bot: bot.userId };
+
+  // Start its activity loop
+  bot._scheduleRetry(5000 + Math.random() * 10000);
+
+  return { success: true, bot: userId };
 }
 
 // ========== SOCKET.IO EVENT HANDLERS ==========
@@ -3487,8 +3463,8 @@ function setupSocketHandlers() {
             balance: user.balance,
             referralCode: user.referralCode,
             phoneNumber: user.phoneNumber || '',
-            currentRoom: user.currentRoom,   // 👈 ADD THIS LINE
-            box: user.box                     // 👈 ADD THIS LINE
+            currentRoom: user.currentRoom,
+            box: user.box
           });
 
           // Send Telebirr number to player
