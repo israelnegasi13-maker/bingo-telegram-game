@@ -582,7 +582,7 @@
     let authenticated = false;
     let botsList = [];
     let filteredBots = [];
-    let currentBot = null; // for modal
+    let currentBot = null;
 
     // DOM elements
     const connectionStatus = document.getElementById('connectionStatus');
@@ -628,7 +628,7 @@
       statInRooms.innerText = inRooms;
     }
 
-    // ---------- RENDER GRID ----------
+    // ---------- RENDER GRID (with click handler attached via JS) ----------
     function renderBotsGrid(bots) {
       botsGrid.style.display = 'grid';
       loadingIndicator.style.display = 'none';
@@ -647,7 +647,7 @@
         const avatarLetter = bot.userName.charAt(0).toUpperCase();
 
         html += `
-          <div class="bot-card" onclick="openModal('${bot.userId}')">
+          <div class="bot-card" data-userid="${bot.userId}">
             <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
               <div class="bot-avatar">${avatarLetter}</div>
               <div class="bot-info">
@@ -667,21 +667,32 @@
         `;
       });
       botsGrid.innerHTML = html;
+
+      // Attach click listeners to each card
+      document.querySelectorAll('.bot-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const userId = card.dataset.userid;
+          openModal(userId);
+        });
+      });
     }
 
     // ---------- FILTER ----------
-    window.filterBots = function() {
+    function filterBots() {
       const query = document.getElementById('searchInput').value.toLowerCase();
       filteredBots = query
         ? botsList.filter(bot => bot.userId.toLowerCase().includes(query) || bot.userName.toLowerCase().includes(query))
         : botsList;
       renderBotsGrid(filteredBots);
-    };
+    }
 
     // ---------- MODAL ----------
-    window.openModal = function(botId) {
+    function openModal(botId) {
       const bot = botsList.find(b => b.userId === botId);
-      if (!bot) return;
+      if (!bot) {
+        console.error('Bot not found:', botId);
+        return;
+      }
       currentBot = bot;
       modalAvatar.innerText = bot.userName.charAt(0).toUpperCase();
       modalTitle.innerText = bot.userName;
@@ -689,17 +700,17 @@
       modalAddFundsInput.value = '';
       setModalActiveUI(bot.active);
       modalOverlay.classList.add('active');
-    };
+    }
 
-    window.closeModal = function() {
+    function closeModal() {
       modalOverlay.classList.remove('active');
       currentBot = null;
-    };
+    }
 
-    window.setModalActive = function(active) {
+    function setModalActive(active) {
       if (!currentBot) return;
       setModalActiveUI(active);
-    };
+    }
 
     function setModalActiveUI(active) {
       if (active) {
@@ -711,11 +722,11 @@
       }
     }
 
-    window.saveModalChanges = function() {
+    function saveModalChanges() {
       if (!currentBot) return;
       const newName = modalRenameInput.value.trim();
       const funds = parseFloat(modalAddFundsInput.value);
-      const newActive = modalActivateBtn.classList.contains('active'); // true if active button is highlighted
+      const newActive = modalActivateBtn.classList.contains('active');
 
       // Rename if changed
       if (newName && newName !== currentBot.userName) {
@@ -737,19 +748,18 @@
 
       closeModal();
       showToast('Changes saved', 'success');
-      // Refresh list to get updated data
-      refreshBots();
-    };
+      refreshBots(); // refresh to get updated data
+    }
 
     // ---------- ADD NEW BOT ----------
-    window.addNewBot = function() {
+    function addNewBot() {
       const name = document.getElementById('newBotName').value.trim();
       socket.emit('admin:addNewBot', { name: name || undefined });
       document.getElementById('newBotName').value = '';
-    };
+    }
 
     // ---------- BULK ACTIONS ----------
-    window.bulkActivate = function(active) {
+    function bulkActivate(active) {
       const action = active ? 'activate' : 'deactivate';
       if (!confirm(`Are you sure you want to ${action} ALL bots?`)) return;
       botsList.forEach(bot => {
@@ -757,22 +767,32 @@
           socket.emit('admin:setBotActive', { botId: bot.userId, active });
         }
       });
-    };
+    }
 
-    window.bulkAddFunds = function(amount) {
+    function bulkAddFunds(amount) {
       if (!confirm(`Add ${amount} ETB to ALL bots?`)) return;
       botsList.forEach(bot => {
         socket.emit('admin:addBotFunds', { botId: bot.userId, amount });
       });
-    };
+    }
 
-    window.refreshBots = function() {
+    function refreshBots() {
       if (!authenticated) {
         showToast('Not authenticated, waiting...', 'error');
         return;
       }
       socket.emit('admin:getBotsList');
-    };
+    }
+
+    // ---------- EXPOSE FUNCTIONS GLOBALLY (for onclick attributes) ----------
+    window.filterBots = filterBots;
+    window.addNewBot = addNewBot;
+    window.bulkActivate = bulkActivate;
+    window.bulkAddFunds = bulkAddFunds;
+    window.refreshBots = refreshBots;
+    window.closeModal = closeModal;
+    window.setModalActive = setModalActive;
+    window.saveModalChanges = saveModalChanges;
 
     // ---------- SOCKET EVENTS ----------
     socket.on('connect', () => {
