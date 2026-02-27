@@ -1,6 +1,6 @@
 // slots-logic.js - Server-side Slots Galaxy game logic (3‑reel classic)
-// Updated: 10 symbols, any pair wins 2x, three-of-a-kind multipliers up to 50x
-// Overall RTP: 92.4% (house edge 7.6%)
+// Updated: 10 symbols, any pair wins 2x, three-of-a-kind disabled (never drawn)
+// Overall RTP: approx 54.5% (house edge 45.5%) due to pair‑only wins
 
 const crypto = require('crypto');
 
@@ -17,16 +17,13 @@ class SlotsGame {
 
     // Single payline: indices 0,1,2 (the three reels)
     this.paylines = [[0, 1, 2]];
-
-    // Payout multipliers for three of a kind (10 symbols, sum = 384)
-    // Pair wins are always 2x
-    this.symbolPayouts = [50, 37, 37, 37, 37, 37, 37, 37, 37, 38];
+    // No symbolPayouts array needed – only 2× for any pair
   }
 
   initialize(io, models) {
     this.io = io;
     this.models = models;
-    console.log('✅ Slots Galaxy initialized (10 symbols, top multiplier 50x, 92.4% RTP)');
+    console.log('✅ Slots Galaxy initialized (10 symbols, only pair wins 2×, triplets disabled)');
   }
 
   handleSlotsConnection(socket) {
@@ -62,8 +59,8 @@ class SlotsGame {
       user.balance -= bet;
       user.totalWagered = (user.totalWagered || 0) + bet;
 
-      // Generate 3 random symbols (0‑9)
-      const symbols = this.generateRandomSymbols(3);
+      // Generate 3 random symbols (0‑9) ensuring they are NOT all identical
+      const symbols = this.generateRandomSymbolsNoTriplets();
       const winAmount = this.calculateWin(symbols, bet);
 
       let netWin = 0;
@@ -98,7 +95,7 @@ class SlotsGame {
 
       // Send result to client
       socket.emit('slots:spinResult', {
-        symbols,          // e.g. [2,2,2]
+        symbols,          // e.g. [2,2,5] – never three identical
         winAmount,
         multiplier: winAmount / bet,
         newBalance: user.balance
@@ -115,25 +112,23 @@ class SlotsGame {
     }
   }
 
-  generateRandomSymbols(count) {
-    const symbols = [];
-    for (let i = 0; i < count; i++) {
-      symbols.push(Math.floor(Math.random() * 10)); // 0‑9
-    }
-    return symbols;
+  // Generate three symbols (0‑9) with the guarantee that they are NOT all the same
+  generateRandomSymbolsNoTriplets() {
+    let a, b, c;
+    do {
+      a = Math.floor(Math.random() * 10);
+      b = Math.floor(Math.random() * 10);
+      c = Math.floor(Math.random() * 10);
+    } while (a === b && b === c); // repeat while all three are equal
+    return [a, b, c];
   }
 
-  // Win if all three same (using symbolPayouts) OR any two same (2×)
+  // Win if any two symbols match (pair) → 2× bet
+  // Three‑of‑a‑kind never occurs due to generation, but if it somehow did, it would also pay 2×.
   calculateWin(symbols, bet) {
     const [a, b, c] = symbols;
-    // Three of a kind
-    if (a === b && b === c) {
-      const multiplier = this.symbolPayouts[a];
-      return Math.round(bet * multiplier * 100) / 100;
-    }
-    // Two of a kind
     if (a === b || a === c || b === c) {
-      return Math.round(bet * 2 * 100) / 100; // 2×
+      return Math.round(bet * 2 * 100) / 100; // 2×, rounded to 2 decimals
     }
     return 0;
   }
