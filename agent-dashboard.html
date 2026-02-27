@@ -522,14 +522,15 @@
     <!-- NOTIFICATIONS (GLASS) -->
     <div class="notifications" id="notifications"></div>
 
-    <!-- LOGIN OVERLAY (LIQUID) -->
+    <!-- LOGIN OVERLAY (LIQUID) - ALWAYS SHOWN FIRST -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-card">
             <div class="login-logo neon-text">👑 AGENT</div>
             <div style="color:#2563eb; text-align:center; margin-bottom:20px;">ETHIO GAMES</div>
             <div id="loginSocketStatus" style="color:#60a5fa; text-align:center; margin-bottom:15px;">🔌 Connecting...</div>
-            <input type="text" id="loginUsername" class="login-input" placeholder="Username" value="admin">
-            <input type="password" id="loginPassword" class="login-input" placeholder="Password" value="admin123">
+            <!-- FIELDS ARE NOW BLANK - NO DEFAULT VALUES -->
+            <input type="text" id="loginUsername" class="login-input" placeholder="Username">
+            <input type="password" id="loginPassword" class="login-input" placeholder="Password">
             <button class="login-btn" id="loginButton">🔑 ENTER</button>
             <div id="loginError" class="login-error" style="color:#ef4444; text-align:center; margin-top:15px; display:none;"></div>
         </div>
@@ -694,9 +695,13 @@
     <div class="modal" id="debugModal"><div class="modal-content"><div class="modal-header"><div class="modal-title">🐛 Debug</div><button class="close-btn" onclick="closeModal('debugModal')">×</button></div><div id="debugContent">...</div></div></div>
 
     <script>
-        // ==================== ORIGINAL SCRIPT (fully preserved) ====================
+        // ==================== MODIFIED: MANUAL LOGIN ONLY (NO AUTO-LOGIN) ====================
         (function() {
             'use strict';
+
+            // Clear any previously stored token to prevent auto‑login
+            localStorage.removeItem('agentToken');
+
             const loginOverlay = document.getElementById('loginOverlay');
             const mainContent = document.getElementById('mainContent');
             const loginBtn = document.getElementById('loginButton');
@@ -727,7 +732,8 @@
 
             socket.on('agent:loginSuccess', (data) => {
                 loginBtn.disabled = false; loginBtn.textContent = '🔑 Login';
-                localStorage.setItem('agentToken', data.id);
+                // DO NOT store token – we want manual login every time
+                // localStorage.setItem('agentToken', data.id);  // removed
                 window.currentAgent = data;
                 loginOverlay.style.display = 'none';
                 mainContent.style.display = 'block';
@@ -736,7 +742,9 @@
                 showNotification('✅ Welcome ' + data.name, 'success');
             });
             socket.on('agent:tokenVerified', (data) => {
-                localStorage.setItem('agentToken', data.id);
+                // This event is no longer used because we never send a token.
+                // Keep it only as a fallback (won't be triggered).
+                localStorage.removeItem('agentToken');
                 window.currentAgent = data;
                 loginOverlay.style.display = 'none';
                 mainContent.style.display = 'block';
@@ -744,17 +752,16 @@
                 else socket.emit('agent:getDashboard');
             });
             socket.on('agent:loginError', (msg) => { loginError.style.display = 'block'; loginError.textContent = msg; loginBtn.disabled = false; loginBtn.textContent = '🔑 Login'; });
-            socket.on('agent:tokenInvalid', () => { localStorage.removeItem('agentToken'); loginOverlay.style.display = 'flex'; mainContent.style.display = 'none'; });
+            socket.on('agent:tokenInvalid', () => {
+                // Just in case a token was stored elsewhere, clear it
+                localStorage.removeItem('agentToken');
+                loginOverlay.style.display = 'flex';
+                mainContent.style.display = 'none';
+            });
 
-            function checkAutoLogin() {
-                const saved = localStorage.getItem('agentToken');
-                if (saved) {
-                    if (socket.connected) socket.emit('agent:verifyToken', { token: saved });
-                    else socket.once('connect', () => socket.emit('agent:verifyToken', { token: saved }));
-                } else { loginOverlay.style.display = 'flex'; mainContent.style.display = 'none'; }
-            }
-            if (socket.connected) checkAutoLogin(); else socket.once('connect', checkAutoLogin);
-            setTimeout(() => { if (!window.currentAgent && !localStorage.getItem('agentToken')) { loginOverlay.style.display = 'flex'; mainContent.style.display = 'none'; } }, 5000);
+            // No auto‑login – always show the login overlay
+            loginOverlay.style.display = 'flex';
+            mainContent.style.display = 'none';
         })();
 
         (function() {
@@ -1034,7 +1041,11 @@
                 if (!confirm('Logout?')) return;
                 document.querySelector('.logout-btn').disabled = true; document.querySelector('.logout-btn').innerHTML = '⏳...';
                 if (connectionCheckInterval) clearInterval(connectionCheckInterval);
+                // Clear any token (just in case) and show login overlay
+                localStorage.removeItem('agentToken');
                 socket.emit('agent:logout');
+                loginOverlay.style.display = 'flex';
+                mainContent.style.display = 'none';
             }
             window.dashboardLogout = dashboardLogout;
 
