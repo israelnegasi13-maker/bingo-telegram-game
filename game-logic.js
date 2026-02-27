@@ -985,8 +985,16 @@ async function updateAdminPanel() {
     const connectedPlayers = getConnectedUsers().length;
     const activeGames = await models.Room.countDocuments({ status: 'playing' });
 
-    // Get all users (limited to 100 for performance)
-    const users = await models.User.find({}).sort({ balance: -1 }).limit(100);
+    // 👇 UPDATED: Get users with balance > 0 OR active in last 5 days, sorted by lastSeen and balance
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const users = await models.User.find({
+      $or: [
+        { balance: { $gt: 0 } },
+        { lastSeen: { $gte: fiveDaysAgo } }
+      ]
+    })
+    .sort({ lastSeen: -1, balance: -1 })
+    .limit(1000);   // Increased limit to 1000
 
     // Get connected user IDs for real-time status
     const connectedUserIds = new Set(getConnectedUsers());
