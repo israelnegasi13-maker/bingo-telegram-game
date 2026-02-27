@@ -796,6 +796,20 @@ io.on('connection', (socket) => {
     try {
       console.log(`💰 Deposit request from ${data.userName} (${data.userId}): ${data.amount} ETB, Receipt: ${data.receiptNumber}`);
       
+      // ========== DUPLICATE DETECTION ==========
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const existing = await Transaction.findOne({
+        userId: data.userId,
+        type: 'DEPOSIT_REQUEST',
+        receiptNumber: data.receiptNumber,
+        amount: parseFloat(data.amount),
+        createdAt: { $gte: fiveMinsAgo }
+      });
+      if (existing) {
+        console.log(`⏳ Duplicate deposit request blocked for ${data.userName} (receipt ${data.receiptNumber})`);
+        return socket.emit('wallet:error', 'Duplicate deposit request – please wait a few minutes.');
+      }
+      
       // Create a transaction record
       const transaction = new models.Transaction({
         type: 'DEPOSIT_REQUEST',
@@ -864,6 +878,20 @@ io.on('connection', (socket) => {
       if (data.amount > MAX_WITHDRAWAL) {
         socket.emit('wallet:error', `Maximum withdrawal amount is ${MAX_WITHDRAWAL} ETB`);
         return;
+      }
+      
+      // ========== DUPLICATE DETECTION ==========
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const existing = await Transaction.findOne({
+        userId: data.userId,
+        type: 'WITHDRAW_REQUEST',
+        amount: -parseFloat(data.amount), // withdrawals are stored as negative
+        phoneNumber: data.phoneNumber,
+        createdAt: { $gte: fiveMinsAgo }
+      });
+      if (existing) {
+        console.log(`⏳ Duplicate withdrawal request blocked for ${data.userName} (amount ${data.amount})`);
+        return socket.emit('wallet:error', 'Duplicate withdrawal request – please wait a few minutes.');
       }
       
       // Create a transaction record
