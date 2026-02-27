@@ -796,18 +796,16 @@ io.on('connection', (socket) => {
     try {
       console.log(`💰 Deposit request from ${data.userName} (${data.userId}): ${data.amount} ETB, Receipt: ${data.receiptNumber}`);
       
-      // ========== DUPLICATE DETECTION ==========
-      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const existing = await Transaction.findOne({
-        userId: data.userId,
+      // ========== NEW: Check for duplicate pending deposit with same receipt ==========
+      const existingDeposit = await models.Transaction.findOne({
         type: 'DEPOSIT_REQUEST',
         receiptNumber: data.receiptNumber,
-        amount: parseFloat(data.amount),
-        createdAt: { $gte: fiveMinsAgo }
+        status: 'pending'
       });
-      if (existing) {
-        console.log(`⏳ Duplicate deposit request blocked for ${data.userName} (receipt ${data.receiptNumber})`);
-        return socket.emit('wallet:error', 'Duplicate deposit request – please wait a few minutes.');
+      if (existingDeposit) {
+        console.log(`⚠️ Duplicate deposit request blocked: receipt ${data.receiptNumber} already pending`);
+        socket.emit('wallet:error', 'This receipt number is already pending approval. Please wait or contact admin.');
+        return;
       }
       
       // Create a transaction record
@@ -880,18 +878,20 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // ========== DUPLICATE DETECTION ==========
-      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const existing = await Transaction.findOne({
-        userId: data.userId,
+      // ========== NEW: Check for duplicate pending withdrawal (same user, amount, phone) within last 5 minutes ==========
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const existingWithdrawal = await models.Transaction.findOne({
         type: 'WITHDRAW_REQUEST',
-        amount: -parseFloat(data.amount), // withdrawals are stored as negative
+        userId: data.userId,
+        amount: -parseFloat(data.amount), // withdrawal is negative amount
         phoneNumber: data.phoneNumber,
-        createdAt: { $gte: fiveMinsAgo }
+        status: 'pending',
+        createdAt: { $gte: fiveMinutesAgo }
       });
-      if (existing) {
-        console.log(`⏳ Duplicate withdrawal request blocked for ${data.userName} (amount ${data.amount})`);
-        return socket.emit('wallet:error', 'Duplicate withdrawal request – please wait a few minutes.');
+      if (existingWithdrawal) {
+        console.log(`⚠️ Duplicate withdrawal request blocked for user ${data.userId}`);
+        socket.emit('wallet:error', 'A similar withdrawal request was submitted recently. Please wait for it to be processed.');
+        return;
       }
       
       // Create a transaction record
