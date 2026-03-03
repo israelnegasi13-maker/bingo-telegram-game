@@ -7,6 +7,7 @@
 // - Added validation for commission rates (0-100).
 // - Better error handling when updating transaction.
 // - Normalize phone numbers before save and search.
+// - Added full support for Crash and Slots commissions.
 
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -55,7 +56,7 @@ class ManualAgentSystem {
         this.startCommissionCalculationJob();
         this.startCleanupJob();
         this.startHeartbeatJob();
-        console.log('👑 Manual Agent system ready with 40% Bingo and 10% Keno commissions');
+        console.log('👑 Manual Agent system ready with 40% Bingo, 10% Keno, 10% Crash, 10% Slots commissions');
     }
 
     setGameLogic(gameLogic) {
@@ -81,6 +82,8 @@ class ManualAgentSystem {
                     name: 'System Administrator',
                     commissionRateBingo: 40,
                     commissionRateKeno: 10,
+                    commissionRateCrash: 10,
+                    commissionRateSlots: 10,
                     totalEarnings: 0,
                     totalReferrals: 0,
                     activeReferrals: 0,
@@ -149,6 +152,8 @@ class ManualAgentSystem {
                 name: agent.name,
                 commissionRateBingo: agent.commissionRateBingo,
                 commissionRateKeno: agent.commissionRateKeno,
+                commissionRateCrash: agent.commissionRateCrash,
+                commissionRateSlots: agent.commissionRateSlots,
                 totalEarnings: agent.totalEarnings,
                 totalReferrals: agent.totalReferrals,
                 activeReferrals: agent.activeReferrals,
@@ -194,6 +199,8 @@ class ManualAgentSystem {
                 name: agent.name,
                 commissionRateBingo: agent.commissionRateBingo,
                 commissionRateKeno: agent.commissionRateKeno,
+                commissionRateCrash: agent.commissionRateCrash,
+                commissionRateSlots: agent.commissionRateSlots,
                 totalEarnings: agent.totalEarnings,
                 totalReferrals: agent.totalReferrals,
                 activeReferrals: agent.activeReferrals,
@@ -306,6 +313,8 @@ class ManualAgentSystem {
                     name: updatedAgent.name,
                     commissionRateBingo: updatedAgent.commissionRateBingo,
                     commissionRateKeno: updatedAgent.commissionRateKeno,
+                    commissionRateCrash: updatedAgent.commissionRateCrash,
+                    commissionRateSlots: updatedAgent.commissionRateSlots,
                     totalEarnings: updatedAgent.totalEarnings,
                     totalReferrals: updatedAgent.totalReferrals,
                     activeReferrals: updatedAgent.activeReferrals,
@@ -926,6 +935,8 @@ class ManualAgentSystem {
             const totalCommission = commissions.reduce((sum, c) => sum + c.commissionAmount, 0);
             const bingoCommission = commissions.filter(c => c.gameType === 'BINGO').reduce((sum, c) => sum + c.commissionAmount, 0);
             const kenoCommission = commissions.filter(c => c.gameType === 'KENO').reduce((sum, c) => sum + c.commissionAmount, 0);
+            const crashCommission = commissions.filter(c => c.gameType === 'CRASH').reduce((sum, c) => sum + c.commissionAmount, 0);
+            const slotsCommission = commissions.filter(c => c.gameType === 'SLOTS').reduce((sum, c) => sum + c.commissionAmount, 0);
 
             socket.emit('agent:report', {
                 period,
@@ -934,9 +945,13 @@ class ManualAgentSystem {
                     totalCommission,
                     bingoCommission,
                     kenoCommission,
+                    crashCommission,
+                    slotsCommission,
                     totalGames: commissions.length,
                     bingoGames: commissions.filter(c => c.gameType === 'BINGO').length,
                     kenoGames: commissions.filter(c => c.gameType === 'KENO').length,
+                    crashGames: commissions.filter(c => c.gameType === 'CRASH').length,
+                    slotsGames: commissions.filter(c => c.gameType === 'SLOTS').length,
                     newReferrals: referrals.length
                 },
                 commissions: commissions.slice(0, 100).map(c => ({
@@ -1208,6 +1223,8 @@ class ManualAgentSystem {
                 phoneNumber: a.phoneNumber,
                 commissionRateBingo: a.commissionRateBingo,
                 commissionRateKeno: a.commissionRateKeno,
+                commissionRateCrash: a.commissionRateCrash,
+                commissionRateSlots: a.commissionRateSlots,
                 totalEarnings: a.totalEarnings,
                 totalReferrals: a.totalReferrals,
                 activeReferrals: a.activeReferrals,
@@ -1231,14 +1248,14 @@ class ManualAgentSystem {
                 return;
             }
 
-            const { username, password, name, phoneNumber, bingoRate = 40, kenoRate = 10 } = data;
+            const { username, password, name, phoneNumber, bingoRate = 40, kenoRate = 10, crashRate = 10, slotsRate = 10 } = data;
             if (!username || !password || !name) {
                 socket.emit('agent:error', 'Username, password and name are required');
                 return;
             }
 
             // Validate commission rates
-            if (bingoRate < 0 || bingoRate > 100 || kenoRate < 0 || kenoRate > 100) {
+            if (bingoRate < 0 || bingoRate > 100 || kenoRate < 0 || kenoRate > 100 || crashRate < 0 || crashRate > 100 || slotsRate < 0 || slotsRate > 100) {
                 socket.emit('agent:error', 'Commission rates must be between 0 and 100');
                 return;
             }
@@ -1258,6 +1275,8 @@ class ManualAgentSystem {
                 phoneNumber: normalizePhone(phoneNumber) || phoneNumber,
                 commissionRateBingo: bingoRate,
                 commissionRateKeno: kenoRate,
+                commissionRateCrash: crashRate,
+                commissionRateSlots: slotsRate,
                 referralCode: `${username}_${Date.now().toString(36)}`.toUpperCase(),
                 authToken,
                 isActive: true,
@@ -1276,6 +1295,8 @@ class ManualAgentSystem {
                     phoneNumber: agent.phoneNumber,
                     commissionRateBingo: agent.commissionRateBingo,
                     commissionRateKeno: agent.commissionRateKeno,
+                    commissionRateCrash: agent.commissionRateCrash,
+                    commissionRateSlots: agent.commissionRateSlots,
                     referralCode: agent.referralCode,
                     authToken: agent.authToken
                 }
@@ -1295,7 +1316,7 @@ class ManualAgentSystem {
                 return;
             }
 
-            const { agentId, name, phoneNumber, bingoRate, kenoRate, isActive, password } = data;
+            const { agentId, name, phoneNumber, bingoRate, kenoRate, crashRate, slotsRate, isActive, password } = data;
             const update = { updatedAt: new Date() };
             if (name) update.name = name;
             if (phoneNumber) update.phoneNumber = normalizePhone(phoneNumber) || phoneNumber;
@@ -1312,6 +1333,20 @@ class ManualAgentSystem {
                     return;
                 }
                 update.commissionRateKeno = kenoRate;
+            }
+            if (crashRate !== undefined) {
+                if (crashRate < 0 || crashRate > 100) {
+                    socket.emit('agent:error', 'Crash commission rate must be between 0 and 100');
+                    return;
+                }
+                update.commissionRateCrash = crashRate;
+            }
+            if (slotsRate !== undefined) {
+                if (slotsRate < 0 || slotsRate > 100) {
+                    socket.emit('agent:error', 'Slots commission rate must be between 0 and 100');
+                    return;
+                }
+                update.commissionRateSlots = slotsRate;
             }
             if (typeof isActive === 'boolean') update.isActive = isActive;
             if (password) {
@@ -1333,6 +1368,8 @@ class ManualAgentSystem {
                     phoneNumber: agent.phoneNumber,
                     commissionRateBingo: agent.commissionRateBingo,
                     commissionRateKeno: agent.commissionRateKeno,
+                    commissionRateCrash: agent.commissionRateCrash,
+                    commissionRateSlots: agent.commissionRateSlots,
                     isActive: agent.isActive
                 }
             });
@@ -1376,7 +1413,7 @@ class ManualAgentSystem {
      * Record a commission for an agent based on a player win.
      * @param {ObjectId|string} agentId - The agent ID (if known directly, otherwise from transaction)
      * @param {string} userId - Player's userId
-     * @param {string} gameType - 'BINGO' or 'KENO'
+     * @param {string} gameType - 'BINGO', 'KENO', 'CRASH', or 'SLOTS'
      * @param {number} stake - Amount wagered
      * @param {number} winningAmount - Amount won by player
      * @param {string} transactionId - Optional: the transaction ID that caused this win (used for duplicate prevention and to fetch stored agentId)
@@ -1419,13 +1456,19 @@ class ManualAgentSystem {
                 // We still record it, but we log the discrepancy.
             }
 
-            // --- 5. Calculate commission ---
+            // --- 5. Calculate commission based on game type ---
             let commissionRate, commissionAmount;
             if (gameType === 'BINGO') {
                 commissionRate = agent.commissionRateBingo;
                 commissionAmount = (winningAmount * commissionRate) / 100;
             } else if (gameType === 'KENO') {
                 commissionRate = agent.commissionRateKeno;
+                commissionAmount = (winningAmount * commissionRate) / 100;
+            } else if (gameType === 'CRASH') {
+                commissionRate = agent.commissionRateCrash || 10; // default 10%
+                commissionAmount = (winningAmount * commissionRate) / 100;
+            } else if (gameType === 'SLOTS') {
+                commissionRate = agent.commissionRateSlots || 10; // default 10%
                 commissionAmount = (winningAmount * commissionRate) / 100;
             } else {
                 return 0;
@@ -1603,10 +1646,76 @@ class ManualAgentSystem {
                 return await this.processBingoWin(userId, { room, stake }, amount, _id);
             } else if (type === 'KENO_WIN') {
                 return await this.processKenoWin(userId, stake || 5, amount, _id);
+            } else if (type === 'CRASH_WIN') {
+                // For Crash, stake is the bet amount, winningAmount = amount
+                return await this.processCrashWin(userId, stake || 5, amount, _id);
+            } else if (type === 'SLOTS_WIN') {
+                // For Slots, stake is the bet amount, winningAmount = amount
+                return await this.processSlotsWin(userId, stake || 5, amount, _id);
             }
             return 0;
         } catch (error) {
             console.error('Process game transaction error:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Process a Crash win.
+     */
+    async processCrashWin(userId, stake, winningAmount, gameTransactionId = null) {
+        try {
+            let agentId = null;
+            if (gameTransactionId) {
+                const tx = await this.models.Transaction.findById(gameTransactionId).select('agentId').lean();
+                agentId = tx?.agentId;
+            }
+            if (!agentId) {
+                const user = await this.models.User.findOne({ userId }).select('agentId').lean();
+                agentId = user?.agentId;
+            }
+            if (!agentId) return 0;
+
+            return await this.recordCommission(
+                agentId,
+                userId,
+                'CRASH',
+                stake || 5,
+                winningAmount,
+                gameTransactionId
+            );
+        } catch (error) {
+            console.error('❌ Process Crash win error:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * Process a Slots win.
+     */
+    async processSlotsWin(userId, stake, winningAmount, gameTransactionId = null) {
+        try {
+            let agentId = null;
+            if (gameTransactionId) {
+                const tx = await this.models.Transaction.findById(gameTransactionId).select('agentId').lean();
+                agentId = tx?.agentId;
+            }
+            if (!agentId) {
+                const user = await this.models.User.findOne({ userId }).select('agentId').lean();
+                agentId = user?.agentId;
+            }
+            if (!agentId) return 0;
+
+            return await this.recordCommission(
+                agentId,
+                userId,
+                'SLOTS',
+                stake || 5,
+                winningAmount,
+                gameTransactionId
+            );
+        } catch (error) {
+            console.error('❌ Process Slots win error:', error);
             return 0;
         }
     }
@@ -1619,7 +1728,7 @@ class ManualAgentSystem {
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
             const winTransactions = await this.models.Transaction.find({
-                type: { $in: ['BINGO_WIN', 'KENO_WIN'] },
+                type: { $in: ['BINGO_WIN', 'KENO_WIN', 'CRASH_WIN', 'SLOTS_WIN'] },
                 commissionProcessed: { $ne: true },
                 createdAt: { $gte: sevenDaysAgo } // avoid infinite backlog
             }).limit(200);
@@ -1638,8 +1747,14 @@ class ManualAgentSystem {
                         continue;
                     }
 
-                    const gameType = tx.type === 'BINGO_WIN' ? 'BINGO' : 'KENO';
-                    const stake = tx.room || tx.stake || (gameType === 'BINGO' ? 10 : 5);
+                    let gameType;
+                    if (tx.type === 'BINGO_WIN') gameType = 'BINGO';
+                    else if (tx.type === 'KENO_WIN') gameType = 'KENO';
+                    else if (tx.type === 'CRASH_WIN') gameType = 'CRASH';
+                    else if (tx.type === 'SLOTS_WIN') gameType = 'SLOTS';
+                    else continue;
+
+                    const stake = tx.stake || (gameType === 'BINGO' ? 10 : 5); // fallback
                     
                     // Use the agentId stored at win time (if any)
                     let agentId = tx.agentId;
@@ -2127,11 +2242,11 @@ class ManualAgentSystem {
 
             const leaderboard = await this.models.AgentCommission.aggregate([
                 { $match: { createdAt: { $gte: startDate }, status: 'completed' } },
-                { $group: { _id: "$agentId", totalCommission: { $sum: "$commissionAmount" }, bingoCommission: { $sum: { $cond: [{ $eq: ["$gameType", "BINGO"] }, "$commissionAmount", 0] } }, kenoCommission: { $sum: { $cond: [{ $eq: ["$gameType", "KENO"] }, "$commissionAmount", 0] } }, totalGames: { $sum: 1 } } },
+                { $group: { _id: "$agentId", totalCommission: { $sum: "$commissionAmount" }, bingoCommission: { $sum: { $cond: [{ $eq: ["$gameType", "BINGO"] }, "$commissionAmount", 0] } }, kenoCommission: { $sum: { $cond: [{ $eq: ["$gameType", "KENO"] }, "$commissionAmount", 0] } }, crashCommission: { $sum: { $cond: [{ $eq: ["$gameType", "CRASH"] }, "$commissionAmount", 0] } }, slotsCommission: { $sum: { $cond: [{ $eq: ["$gameType", "SLOTS"] }, "$commissionAmount", 0] } }, totalGames: { $sum: 1 } } },
                 { $lookup: { from: 'agents', localField: '_id', foreignField: '_id', as: 'agent' } },
                 { $unwind: "$agent" },
                 { $match: { "agent.isActive": true } },
-                { $project: { agentId: "$_id", name: "$agent.name", username: "$agent.username", totalCommission: 1, bingoCommission: 1, kenoCommission: 1, totalGames: 1 } },
+                { $project: { agentId: "$_id", name: "$agent.name", username: "$agent.username", totalCommission: 1, bingoCommission: 1, kenoCommission: 1, crashCommission: 1, slotsCommission: 1, totalGames: 1 } },
                 { $sort: { totalCommission: -1 } },
                 { $limit: limit }
             ]);
@@ -2171,7 +2286,9 @@ class ManualAgentSystem {
                     totalReferrals: agent?.totalReferrals || 0,
                     activeReferrals,
                     commissionRateBingo: agent?.commissionRateBingo || 40,
-                    commissionRateKeno: agent?.commissionRateKeno || 10
+                    commissionRateKeno: agent?.commissionRateKeno || 10,
+                    commissionRateCrash: agent?.commissionRateCrash || 10,
+                    commissionRateSlots: agent?.commissionRateSlots || 10
                 }
             };
         } catch (error) {
@@ -2345,7 +2462,7 @@ class ManualAgentSystem {
     }
 
     // ========== UPDATE COMMISSION RATES ==========
-    async updateAgentCommissionRates(agentId, bingoRate, kenoRate) {
+    async updateAgentCommissionRates(agentId, bingoRate, kenoRate, crashRate, slotsRate) {
         try {
             // Validate
             if (bingoRate !== undefined && (bingoRate < 0 || bingoRate > 100)) {
@@ -2354,16 +2471,22 @@ class ManualAgentSystem {
             if (kenoRate !== undefined && (kenoRate < 0 || kenoRate > 100)) {
                 throw new Error('Keno rate must be between 0 and 100');
             }
+            if (crashRate !== undefined && (crashRate < 0 || crashRate > 100)) {
+                throw new Error('Crash rate must be between 0 and 100');
+            }
+            if (slotsRate !== undefined && (slotsRate < 0 || slotsRate > 100)) {
+                throw new Error('Slots rate must be between 0 and 100');
+            }
+
+            const updateObj = { updatedAt: new Date() };
+            if (bingoRate !== undefined) updateObj.commissionRateBingo = bingoRate;
+            if (kenoRate !== undefined) updateObj.commissionRateKeno = kenoRate;
+            if (crashRate !== undefined) updateObj.commissionRateCrash = crashRate;
+            if (slotsRate !== undefined) updateObj.commissionRateSlots = slotsRate;
 
             const agent = await this.models.Agent.findByIdAndUpdate(
                 agentId,
-                {
-                    $set: {
-                        commissionRateBingo: bingoRate ?? 40,
-                        commissionRateKeno: kenoRate ?? 10,
-                        updatedAt: new Date()
-                    }
-                },
+                { $set: updateObj },
                 { new: true }
             );
             if (!agent) return { success: false, message: 'Agent not found' };
@@ -2374,7 +2497,9 @@ class ManualAgentSystem {
                     id: agent._id,
                     name: agent.name,
                     commissionRateBingo: agent.commissionRateBingo,
-                    commissionRateKeno: agent.commissionRateKeno
+                    commissionRateKeno: agent.commissionRateKeno,
+                    commissionRateCrash: agent.commissionRateCrash,
+                    commissionRateSlots: agent.commissionRateSlots
                 }
             };
         } catch (error) {
@@ -2541,6 +2666,8 @@ class ManualAgentSystem {
                     username: agent.username,
                     commissionRateBingo: agent.commissionRateBingo,
                     commissionRateKeno: agent.commissionRateKeno,
+                    commissionRateCrash: agent.commissionRateCrash,
+                    commissionRateSlots: agent.commissionRateSlots,
                     totalEarnings: agent.totalEarnings,
                     totalReferrals: agent.totalReferrals
                 },
