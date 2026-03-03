@@ -6,7 +6,7 @@ const CONFIG = {
   ROUND_DURATION: 30 * 1000,                // 30 seconds total (including countdown)
   MULTIPLIER_UPDATE_INTERVAL: 100,           // 100ms updates
   MAX_MULTIPLIER: 100.0,                      // Hard cap at 100.0x
-  COMMISSION_RATE: 0.10,                     // 10% agent commission
+  COMMISSION_RATE: 0.10,                     // 10% agent commission (handled by agent system)
   ROUND_HISTORY_LIMIT: 10,
   // Base multiplier increment per step – actual increment becomes dynamic:
   // - below 2.0x: constant 0.005 (slow)
@@ -392,11 +392,14 @@ class CrashGame {
       user.balance += payout;
       await user.save();
 
+      // Create win transaction with stake and agentId for agent commission system
       const transaction = new this.models.Transaction({
         type: 'CRASH_WIN',
         userId,
         userName: user.userName,
         amount: payout,
+        stake: bet.amount,                     // original bet amount
+        agentId: user.agentId,                  // agent at win time
         description: `Crash game win – round ${this.currentRound.id} at ${multiplier.toFixed(2)}x`,
         roundId: this.currentRound.id,
         status: 'completed'
@@ -404,11 +407,6 @@ class CrashGame {
       await transaction.save();
 
       this.stats.totalPayouts += payout;
-
-      const netWin = payout - bet.amount;
-      if (netWin > 0 && user.agentId) {
-        await this.processAgentCommission(user, netWin, this.currentRound.id);
-      }
 
       socket.emit('crash:cashOutSuccess', { multiplier, payout });
       this.io.to('crash').emit('crash:playerCashedOut', { userId, multiplier });
@@ -429,22 +427,20 @@ class CrashGame {
       user.balance += payout;
       await user.save();
 
+      // Create win transaction with stake and agentId for agent commission system
       await this.models.Transaction.create({
         type: 'CRASH_WIN',
         userId,
         userName: user.userName,
         amount: payout,
+        stake: bet.amount,
+        agentId: user.agentId,
         description: `Crash game win (auto) – round ${this.currentRound.id} at ${multiplier.toFixed(2)}x`,
         roundId: this.currentRound.id,
         status: 'completed'
       });
 
       this.stats.totalPayouts += payout;
-
-      const netWin = payout - bet.amount;
-      if (netWin > 0 && user.agentId) {
-        await this.processAgentCommission(user, netWin, this.currentRound.id);
-      }
 
       // Notify all clients
       this.io.to('crash').emit('crash:playerCashedOut', { userId, multiplier });
@@ -466,41 +462,6 @@ class CrashGame {
       }
     );
     // No balance change (already deducted)
-  }
-
-  async processAgentCommission(user, netWin, roundId) {
-    try {
-      const agent = await this.models.Agent.findById(user.agentId);
-      if (!agent || !agent.isActive) return;
-
-      const commission = netWin * CONFIG.COMMISSION_RATE;
-      if (commission <= 0) return;
-
-      const commissionRecord = new this.models.AgentCommission({
-        agentId: agent._id,
-        userId: user.userId,
-        userName: user.userName,
-        telegramUsername: user.telegramUsername,
-        gameType: 'CRASH',
-        stake: netWin,
-        winningAmount: netWin,
-        commissionRate: CONFIG.COMMISSION_RATE,
-        commissionAmount: commission,
-        status: 'completed'
-      });
-      await commissionRecord.save();
-
-      agent.totalEarnings += commission;
-      agent.lastCommissionDate = new Date();
-      await agent.save();
-
-      user.agentCommissionEarned = (user.agentCommissionEarned || 0) + commission;
-      await user.save();
-
-      console.log(`💰 Agent ${agent.username} earned ${commission} ETB from crash game (user ${user.userName})`);
-    } catch (err) {
-      console.error('Error processing crash agent commission:', err);
-    }
   }
 
   sendHistory(socket) {
