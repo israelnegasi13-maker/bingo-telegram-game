@@ -3683,6 +3683,9 @@ function generateAppUserId(username) {
   return `app_${username}_${randomPart}`;
 }
 
+// ========== WELCOME BONUS AMOUNT FOR NEW REGISTRATIONS ==========
+const REGISTRATION_BONUS = 10; // ETB welcome bonus
+
 // Registration endpoint (improved)
 app.post('/api/register', async (req, res) => {
   try {
@@ -3714,19 +3717,29 @@ app.post('/api/register', async (req, res) => {
     // Generate a truly unique referral code for the new user (optional, but used for referral tracking)
     const userReferralCode = 'APP' + crypto.randomBytes(4).toString('hex').toUpperCase();
 
-    // Create the user document
+    // Create the user document with welcome bonus
     const newUser = new User({
       userId,
       userName: username,
       password: hashedPassword,
-      balance: 0,
+      balance: REGISTRATION_BONUS,                 // 👈 Welcome bonus
       referralCode: userReferralCode,
       joinedAt: new Date(),
       lastSeen: new Date()
     });
 
     await newUser.save();
-    console.log(`✅ New app user registered: ${username} (${userId})`);
+    console.log(`✅ New app user registered: ${username} (${userId}) – received ${REGISTRATION_BONUS} ETB welcome bonus`);
+
+    // Create bonus transaction
+    const bonusTransaction = new Transaction({
+      type: 'BONUS',
+      userId: userId,
+      userName: username,
+      amount: REGISTRATION_BONUS,
+      description: `Welcome bonus for new registration`
+    });
+    await bonusTransaction.save();
 
     // If a referral code was provided, process it (optional) – run in background
     if (referralCode && agentSystem && typeof agentSystem.processReferral === 'function') {
@@ -3822,12 +3835,22 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             userName: userName,
             telegramId: userId,
             telegramUsername: username,
-            balance: 0.00,
+            balance: REGISTRATION_BONUS,               // 👈 Welcome bonus
             referralCode: `TG${userId}`
           });
           await user.save();
           
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+          console.log(`👤 New Telegram user: ${userName} (@${username}) – received ${REGISTRATION_BONUS} ETB welcome bonus`);
+          
+          // Create bonus transaction
+          const bonusTransaction = new Transaction({
+            type: 'BONUS',
+            userId: user.userId,
+            userName: userName,
+            amount: REGISTRATION_BONUS,
+            description: `Welcome bonus for new Telegram user`
+          });
+          await bonusTransaction.save();
           
           // Process referral if present
           if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
