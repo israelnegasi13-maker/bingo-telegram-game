@@ -528,6 +528,54 @@
         .btn-agent { background: rgba(139, 92, 246, 0.15); color: var(--agent-color); }
         .btn-agent:hover { background: rgba(139, 92, 246, 0.25); }
 
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--dark-border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .pagination .active-page {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .pagination .page-numbers {
+            display: flex;
+            gap: 5px;
+        }
+
+        .pagination .page-numbers button {
+            min-width: 40px;
+            padding: 8px 12px;
+        }
+
         /* Quick Actions */
         .quick-actions {
             display: grid;
@@ -1650,6 +1698,14 @@
                             <!-- Users will be inserted here -->
                         </tbody>
                     </table>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="pagination" id="userPagination">
+                        <button class="btn-pagination" id="prevUserPage" onclick="changeUserPage(-1)">Previous</button>
+                        <div class="page-numbers" id="userPageNumbers"></div>
+                        <button class="btn-pagination" id="nextUserPage" onclick="changeUserPage(1)">Next</button>
+                    </div>
+                    
                     <div style="text-align: center; padding: 15px; color: var(--text-muted); font-size: 0.9rem;" id="userCountDisplay">
                         Showing 0 users
                     </div>
@@ -2681,7 +2737,10 @@
                 activeAgents: 0,
                 totalCommissions: 0,
                 referralUsers: 0
-            }
+            },
+            // Pagination state
+            currentUserPage: 1,
+            usersPerPage: 25
         };
 
         // Initialize
@@ -2836,8 +2895,9 @@
                 const previousUsers = [...state.users];
                 state.users = data;
                 updateUserDatalist(data);
+                // Reset to first page when new data arrives
+                state.currentUserPage = 1;
                 applyFilters();
-                updateUsersTable();
                 
                 const onlineCount = data.filter(user => {
                     if (user.isOnline) return true;
@@ -3551,7 +3611,10 @@
             }
             
             state.filteredUsers = filtered;
+            // Reset to first page when filters change
+            state.currentUserPage = 1;
             updateUsersTable();
+            renderUserPagination();
             
             document.getElementById('userCountDisplay').textContent = `Showing ${filtered.length} of ${state.users.length} users`;
         }
@@ -3581,7 +3644,12 @@
                 return;
             }
             
-            state.filteredUsers.forEach(user => {
+            // Pagination: calculate start and end indices
+            const start = (state.currentUserPage - 1) * state.usersPerPage;
+            const end = start + state.usersPerPage;
+            const pageUsers = state.filteredUsers.slice(start, end);
+            
+            pageUsers.forEach(user => {
                 const row = document.createElement('tr');
                 row.setAttribute('data-online', user.isOnline);
                 row.setAttribute('data-telegram', !!user.telegramId);
@@ -3733,6 +3801,75 @@
                 
                 tbody.appendChild(row);
             });
+        }
+
+        // Pagination functions
+        function renderUserPagination() {
+            const paginationDiv = document.getElementById('userPagination');
+            const pageNumbersDiv = document.getElementById('userPageNumbers');
+            const prevBtn = document.getElementById('prevUserPage');
+            const nextBtn = document.getElementById('nextUserPage');
+            
+            if (!paginationDiv) return;
+            
+            const totalUsers = state.filteredUsers.length;
+            const totalPages = Math.ceil(totalUsers / state.usersPerPage);
+            
+            if (totalPages <= 1) {
+                paginationDiv.style.display = 'none';
+                return;
+            } else {
+                paginationDiv.style.display = 'flex';
+            }
+            
+            // Enable/disable prev/next buttons
+            prevBtn.disabled = state.currentUserPage === 1;
+            nextBtn.disabled = state.currentUserPage === totalPages;
+            
+            // Generate page numbers
+            let pageNumbers = '';
+            const maxVisible = 5;
+            let startPage = Math.max(1, state.currentUserPage - Math.floor(maxVisible / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+            
+            if (endPage - startPage + 1 < maxVisible) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+            
+            if (startPage > 1) {
+                pageNumbers += `<button onclick="goToUserPage(1)">1</button>`;
+                if (startPage > 2) pageNumbers += `<span>...</span>`;
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                pageNumbers += `<button onclick="goToUserPage(${i})" ${i === state.currentUserPage ? 'class="active-page"' : ''}>${i}</button>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) pageNumbers += `<span>...</span>`;
+                pageNumbers += `<button onclick="goToUserPage(${totalPages})">${totalPages}</button>`;
+            }
+            
+            pageNumbersDiv.innerHTML = pageNumbers;
+        }
+
+        function changeUserPage(delta) {
+            const totalPages = Math.ceil(state.filteredUsers.length / state.usersPerPage);
+            const newPage = state.currentUserPage + delta;
+            if (newPage >= 1 && newPage <= totalPages) {
+                state.currentUserPage = newPage;
+                updateUsersTable();
+                renderUserPagination();
+            }
+        }
+
+        function goToUserPage(page) {
+            const totalPages = Math.ceil(state.filteredUsers.length / state.usersPerPage);
+            if (page >= 1 && page <= totalPages) {
+                state.currentUserPage = page;
+                updateUsersTable();
+                renderUserPagination();
+            }
         }
 
         // Agent Management Functions
