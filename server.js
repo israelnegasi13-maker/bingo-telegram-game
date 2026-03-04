@@ -417,6 +417,9 @@ const AgentCommission = mongoose.model('AgentCommission', agentCommissionSchema)
 const AgentTransaction = mongoose.model('AgentTransaction', agentTransactionSchema);
 const Referral = mongoose.model('Referral', referralSchema);
 
+// ========== WELCOME BONUS AMOUNT FOR NEW REGISTRATIONS ==========
+const REGISTRATION_BONUS = 10; // ETB welcome bonus
+
 // ========== TELEBIRR NUMBER DATABASE FUNCTIONS ==========
 async function getTelebirrNumber() {
   try {
@@ -703,17 +706,34 @@ io.on('connection', (socket) => {
       // Find or create user
       let user = await User.findOne({ userId });
       if (!user) {
-        // Create new user (should normally exist from registration, but just in case)
+        // Detect Telegram user by userId pattern
+        const isTelegramUser = userId.startsWith('tg_');
+
+        // Create new user
         user = new User({
           userId,
-          userName: userName || 'AppUser',
-          balance: 0,
-          referralCode: `APP${Date.now()}`,
+          userName: userName || (isTelegramUser ? 'TelegramUser' : 'AppUser'),
+          balance: isTelegramUser ? REGISTRATION_BONUS : 0,
+          referralCode: isTelegramUser ? `TG${Date.now()}` : `APP${Date.now()}`,
           joinedAt: new Date(),
           lastSeen: new Date()
         });
         await user.save();
-        console.log(`✅ New app user created: ${userName} (${userId})`);
+
+        // If it's a new Telegram user, record the bonus transaction
+        if (isTelegramUser) {
+          const bonusTransaction = new Transaction({
+            type: 'BONUS',
+            userId: user.userId,
+            userName: user.userName,
+            amount: REGISTRATION_BONUS,
+            description: 'Welcome bonus for new Telegram user (direct entry)'
+          });
+          await bonusTransaction.save();
+          console.log(`✅ New Telegram user via direct entry: ${user.userName} (${userId}) – received ${REGISTRATION_BONUS} ETB welcome bonus`);
+        } else {
+          console.log(`✅ New app user created: ${userName} (${userId})`);
+        }
       } else {
         // Update existing user
         user.lastSeen = new Date();
@@ -3682,9 +3702,6 @@ function generateAppUserId(username) {
   const randomPart = crypto.randomBytes(4).toString('hex'); // 8 random hex chars
   return `app_${username}_${randomPart}`;
 }
-
-// ========== WELCOME BONUS AMOUNT FOR NEW REGISTRATIONS ==========
-const REGISTRATION_BONUS = 10; // ETB welcome bonus
 
 // Registration endpoint (improved)
 app.post('/api/register', async (req, res) => {
