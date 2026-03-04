@@ -148,8 +148,8 @@ class Bot {
       this.markedNumbers.add(num);
     }
     if (this._checkBingo()) {
-      // Random delay 500–2500ms to simulate human reaction
-      const delay = 500 + Math.random() * 2000;
+      // 🚀 Bots react extremely fast (50–200 ms) – effectively unbeatable
+      const delay = 50 + Math.random() * 150;
       this.claimTimeout = setTimeout(() => this._claimBingo(), delay);
     }
   }
