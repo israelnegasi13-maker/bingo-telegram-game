@@ -222,7 +222,8 @@ class Bot {
       // If DB says we're in a room, validate it
       if (dbRoom) {
         const room = await this.getRoomWithCache(dbRoom);
-        const stillInRoom = room && room.players.includes(this.userId);
+        // 👇 FIX: Treat 'ended' rooms as stale even if player is still listed
+        const stillInRoom = room && room.players.includes(this.userId) && room.status !== 'ended';
 
         if (stillInRoom) {
           // Valid room – sync internal state
