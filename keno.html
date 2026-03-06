@@ -3,794 +3,756 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>KENO ULTRA · GLASS SPHERE</title>
+    <title>KENO ULTRA · VIRTUAL SPHERE</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* ---------- ROOT & GLOBAL ---------- */
-        :root {
-            --primary: #3b82f6;
-            --primary-dark: #1e40af;
-            --primary-light: #60a5fa;
-            --accent: #f59e0b;
-            --success: #10b981;
-            --danger: #ef4444;
-            --dark-bg: #0a0f1e;
-            --surface: rgba(20, 30, 50, 0.8);
-            --surface-light: rgba(255, 255, 255, 0.05);
-            --border: rgba(255, 255, 255, 0.15);
-            --text: #f0f4fa;
-            --text-dim: #9ca9b9;
-            --sphere-bg: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), rgba(0,0,0,0.6));
-            --sphere-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 0 30px rgba(255,255,255,0.1);
-        }
-
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--dark-bg);
-            color: var(--text);
+            background: #0b0e1a;
+            color: #ffffff;
             min-height: 100vh;
-            font-size: 11px;
-            letter-spacing: 0.3px;
-            background-image: 
-                radial-gradient(at 20% 30%, #1e3a8a20 0px, transparent 60%),
-                radial-gradient(at 80% 70%, #7c3aed20 0px, transparent 60%);
-        }
-
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-            padding: 6px;
             display: flex;
-            flex-direction: column;
-            gap: 6px;
+            justify-content: center;
+            align-items: center;
+            padding: 8px;
+            background-image: radial-gradient(circle at 30% 10%, rgba(45, 85, 255, 0.15), transparent 40%),
+                              radial-gradient(circle at 80% 70%, rgba(160, 70, 255, 0.12), transparent 40%);
         }
 
-        /* ---------- HEADER & STATUS ---------- */
-        .app-header {
+        .game-container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(10, 15, 30, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 36px;
+            padding: 20px 16px;
+            box-shadow: 0 30px 50px rgba(0, 0, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.06);
+        }
+
+        /* header */
+        .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 8px 12px;
+            margin-bottom: 18px;
         }
-
-        .logo-section {
+        .logo {
             display: flex;
             align-items: center;
             gap: 8px;
         }
-
         .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(145deg, var(--primary), #8b5cf6);
-            border-radius: 12px;
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(145deg, #2e4bff, #9f4bff);
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
-            box-shadow: 0 4px 10px #3b82f650;
+            font-size: 22px;
+            box-shadow: 0 8px 18px #2e4bff40;
         }
-
-        .logo-text h1 {
-            font-size: 14px;
-            font-weight: 800;
-            background: linear-gradient(to right, #fff, #cbd5e1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        .logo-text h2 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
-
         .logo-text p {
-            font-size: 8px;
-            color: var(--text-dim);
-            letter-spacing: 0.5px;
-        }
-
-        .balance-card {
-            background: rgba(59,130,246,0.2);
-            border: 1px solid #3b82f680;
-            border-radius: 14px;
-            padding: 6px 12px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .balance-label {
-            font-size: 7px;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .balance-amount {
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--accent);
-        }
-
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(16,185,129,0.1);
-            border: 1px solid rgba(16,185,129,0.3);
-            border-radius: 30px;
-            padding: 6px 14px;
             font-size: 9px;
-            font-weight: 600;
-            color: var(--success);
-            backdrop-filter: blur(10px);
-        }
-
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--success);
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
-        }
-
-        /* ---------- ROUND TIMER (compact, above sphere) ---------- */
-        .round-timer {
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 8px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .timer-label {
-            font-size: 10px;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .timer-display {
-            font-size: 24px;
-            font-weight: 800;
-            font-family: monospace;
-            color: white;
-            text-shadow: 0 0 10px var(--primary);
-        }
-
-        .game-stats {
-            display: flex;
-            gap: 12px;
-        }
-
-        .stat-item {
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        .stat-label {
-            font-size: 7px;
-            color: var(--text-dim);
-        }
-
-        /* ---------- KENO MACHINE (GLASS SPHERE) ---------- */
-        .keno-machine {
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 40px;
-            padding: 16px;
-        }
-
-        .machine-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            padding: 0 6px;
-        }
-
-        .machine-title {
-            font-weight: 700;
-            color: var(--primary-light);
-            text-transform: uppercase;
+            opacity: 0.6;
             letter-spacing: 1px;
         }
-
-        .round-number {
-            background: rgba(255,255,255,0.1);
-            padding: 4px 12px;
+        .balance-badge {
+            background: rgba(255,255,255,0.05);
+            padding: 8px 14px;
             border-radius: 30px;
-            font-size: 10px;
-            font-weight: 600;
+            border: 1px solid rgba(255,215,0,0.3);
+            font-weight: 700;
+            font-size: 15px;
+            color: #ffd966;
+            box-shadow: 0 0 12px #ffd96620;
         }
 
-        .sphere-container {
-            display: flex;
-            justify-content: center;
-            margin: 10px 0;
-        }
-
-        .sphere-glass {
-            width: 280px;
-            height: 280px;
-            background: var(--sphere-bg);
-            backdrop-filter: blur(10px);
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.2);
-            box-shadow: var(--sphere-shadow);
+        /* connection status */
+        .status-bar {
             display: flex;
             align-items: center;
-            justify-content: center;
-            transition: box-shadow 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Shaking animation */
-        .sphere-glass.shaking {
-            animation: shake 0.3s infinite ease-in-out;
-        }
-
-        @keyframes shake {
-            0% { transform: translate(0, 0) rotate(0deg); }
-            20% { transform: translate(-3px, 2px) rotate(-1deg); }
-            40% { transform: translate(3px, -1px) rotate(1deg); }
-            60% { transform: translate(-2px, -2px) rotate(-0.5deg); }
-            80% { transform: translate(2px, 1px) rotate(0.5deg); }
-            100% { transform: translate(0, 0) rotate(0deg); }
-        }
-
-        /* Grid of 20 balls (5x4) inside the sphere */
-        .balls-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
             gap: 8px;
-            padding: 20px;
-            width: 100%;
-            height: 100%;
+            background: rgba(0,0,0,0.3);
+            border-radius: 40px;
+            padding: 6px 14px;
+            margin-bottom: 18px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.05);
         }
-
-        .ball-slot {
-            background: rgba(0, 0, 0, 0.3);
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #2cd46e;
             border-radius: 50%;
-            aspect-ratio: 1/1;
+            box-shadow: 0 0 12px #2cd46e;
+            animation: pulse 1.8s infinite;
+        }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+
+        /* betting phase */
+        .phase-betting {
+            transition: opacity 0.4s, transform 0.4s;
+        }
+        .phase-betting.hidden {
+            display: none;
+        }
+        .timer-panel {
+            background: rgba(20, 30, 55, 0.8);
+            border-radius: 50px;
+            padding: 12px 18px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            margin-bottom: 22px;
+            border: 1px solid #2e4bff40;
+            box-shadow: inset 0 1px 3px #00000080, 0 10px 20px -10px #000000;
+        }
+        .timer-display {
+            font-size: 32px;
             font-weight: 800;
-            font-size: 12px;
-            color: white;
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: inset 0 -2px 5px rgba(0,0,0,0.6), 0 2px 4px rgba(0,0,0,0.5);
-            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+            background: #0a0f1c;
+            padding: 4px 16px;
+            border-radius: 40px;
+            letter-spacing: 4px;
+            color: #f0c45a;
+            text-shadow: 0 0 12px #ffb347;
+        }
+        .round-info {
+            display: flex;
+            gap: 16px;
+            color: #a0b5dd;
+            font-size: 13px;
         }
 
-        .ball-slot.filled {
-            background: radial-gradient(circle at 30% 30%, #f0f0f0, var(--primary));
-            border-color: var(--accent);
-            box-shadow: 0 0 15px var(--primary);
-            transform: scale(1.05);
-            animation: popIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-        }
-
-        .ball-slot.filled.matched {
-            background: radial-gradient(circle at 30% 30%, #f0f0f0, var(--success));
-            box-shadow: 0 0 20px var(--success);
-        }
-
-        @keyframes popIn {
-            0% { transform: scale(0); opacity: 0; }
-            70% { transform: scale(1.1); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        .machine-footer {
-            text-align: center;
-            margin-top: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-dim);
-        }
-
-        #current-ball {
-            color: var(--accent);
-            font-size: 16px;
-        }
-
-        /* ---------- NUMBERS GRID (1-80) ---------- */
-        .game-board {
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 16px;
-        }
-
-        .board-header {
+        .grid-title {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 12px;
-        }
-
-        .board-title h2 {
+            margin: 12px 0 8px;
             font-size: 13px;
-            font-weight: 700;
-        }
-
-        .board-title p {
-            font-size: 9px;
-            color: var(--text-dim);
-        }
-
-        .selection-info {
-            background: rgba(59,130,246,0.2);
-            border: 1px solid #3b82f680;
-            border-radius: 30px;
-            padding: 4px 12px;
-            font-weight: 700;
+            color: #b7c9ff;
         }
 
         .numbers-grid {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
             gap: 4px;
-            margin: 12px 0;
+            margin-bottom: 20px;
         }
-
         .keno-number {
-            aspect-ratio: 1/1;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
+            aspect-ratio: 1;
+            background: rgba(20, 30, 55, 0.8);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 10px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .keno-number.selected {
-            background: linear-gradient(145deg, var(--primary), var(--primary-dark));
-            border-color: var(--accent);
-            transform: scale(1.05);
-            box-shadow: 0 4px 8px #3b82f680;
-        }
-
-        .keno-number.drawn {
-            background: linear-gradient(145deg, #475569, #1e293b);
-            border-color: var(--primary);
-        }
-
-        .keno-number.matched {
-            background: linear-gradient(145deg, var(--success), #059669);
-            border-color: var(--accent);
-        }
-
-        .quick-pick-btn {
-            width: 100%;
-            padding: 12px;
-            background: rgba(59,130,246,0.1);
-            border: 1px dashed #3b82f680;
-            border-radius: 30px;
-            color: var(--primary-light);
             font-weight: 700;
-            font-size: 11px;
+            font-size: 14px;
+            color: #c7d6ff;
+            border: 1px solid #2e4bff30;
+            transition: 0.15s;
+            box-shadow: 0 2px 4px #00000040;
             cursor: pointer;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+        }
+        .keno-number.selected {
+            background: linear-gradient(145deg, #4169ff, #9d4eff);
+            color: white;
+            border-color: #f6b83d;
+            transform: scale(1.04);
+            box-shadow: 0 0 18px #6a4eff;
         }
 
-        /* ---------- BET CONTROLS & ACTION BUTTONS ---------- */
-        .control-panel {
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 16px;
-        }
-
-        .action-buttons {
+        .chips {
             display: flex;
             gap: 8px;
-            margin: 12px 0;
+            justify-content: center;
+            margin: 20px 0 16px;
+        }
+        .chip {
+            background: #1e2740;
+            padding: 10px 18px;
+            border-radius: 40px;
+            font-weight: 800;
+            font-size: 14px;
+            color: #ffd966;
+            border: 1px solid #ffd96660;
+            cursor: pointer;
+            transition: 0.1s;
+            box-shadow: 0 4px 0 #0b0e1a;
+        }
+        .chip.selected {
+            background: #ffd966;
+            color: #0b0e1a;
+            border-color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 0 #a57c2e;
         }
 
+        .action-row {
+            display: flex;
+            gap: 10px;
+            margin: 8px 0 12px;
+        }
         .btn {
             flex: 1;
-            padding: 14px;
+            padding: 16px 10px;
             border: none;
-            border-radius: 40px;
-            font-weight: 700;
-            font-size: 12px;
+            border-radius: 60px;
+            font-weight: 800;
+            font-size: 16px;
+            background: #222c4a;
+            color: white;
+            box-shadow: 0 8px 0 #0d1225;
+            transition: 0.1s;
             cursor: pointer;
-            transition: 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
         }
-
         .btn-primary {
-            background: linear-gradient(145deg, var(--primary), #8b5cf6);
-            color: white;
-            box-shadow: 0 4px 15px #3b82f6b0;
+            background: linear-gradient(145deg, #4169ff, #7a4dff);
+            box-shadow: 0 8px 0 #1f2b70;
         }
+        .btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #0d1225; }
+        .btn:disabled { opacity: 0.4; transform: none; box-shadow: 0 4px 0 #0d1225; }
 
-        .btn-primary:disabled {
-            opacity: 0.4;
-            box-shadow: none;
-        }
-
-        .btn-secondary {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
-
-        .bet-amount-display {
-            display: flex;
-            justify-content: space-between;
+        /* ========== SPHERE DRAW PHASE ========== */
+        .phase-sphere {
+            display: none;
+            flex-direction: column;
             align-items: center;
-            margin: 12px 0 8px;
+            animation: fadeScale 0.6s ease;
+        }
+        .phase-sphere.active { display: flex; }
+
+        @keyframes fadeScale {
+            0% { opacity: 0; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1); }
         }
 
-        .current-bet {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--accent);
-        }
-
-        .chips-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 6px;
-        }
-
-        .chip {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--border);
-            border-radius: 40px;
-            padding: 10px 0;
-            text-align: center;
-            font-weight: 700;
-            font-size: 11px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .chip.selected {
-            background: var(--primary);
-            border-color: var(--accent);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--primary);
-        }
-
-        .waiting-message {
-            text-align: center;
-            padding: 8px;
-            background: rgba(245,158,11,0.2);
-            border-radius: 30px;
-            font-size: 10px;
-            color: var(--accent);
-            margin: 8px 0;
-            display: none;
-        }
-
-        .waiting-message.active { display: block; }
-
-        /* ---------- WIN RESULT & HISTORY ---------- */
-        .win-result {
-            background: linear-gradient(145deg, var(--success), #059669);
-            border-radius: 30px;
-            padding: 16px;
-            text-align: center;
-            margin: 10px 0;
-            display: none;
-        }
-
-        .win-title { font-size: 14px; font-weight: 800; }
-        .win-amount { font-size: 24px; font-weight: 900; color: var(--accent); }
-
-        .game-history {
-            background: var(--surface);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 12px;
-        }
-
-        .history-title {
-            color: var(--primary-light);
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .history-list {
-            max-height: 80px;
-            overflow-y: auto;
-        }
-
-        .history-item {
+        .sphere-window {
+            background: rgba(16, 22, 45, 0.9);
+            backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            border-radius: 70px 70px 50px 50px;
+            padding: 35px 25px 30px;
+            margin: 10px 0 25px;
+            width: 100%;
             display: flex;
-            justify-content: space-between;
-            padding: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            font-size: 10px;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: inset 0 -8px 20px #00000080, 0 25px 35px #000000, 0 0 0 2px #2e4bff20 inset;
         }
 
-        .history-item.win { border-left: 3px solid var(--success); }
-        .history-item.loss { border-left: 3px solid var(--danger); }
-
-        /* ---------- FOOTER ---------- */
-        .app-footer {
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 8px;
-            padding: 12px 0;
+        .sphere-glass {
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(220, 240, 255, 0.4), rgba(15, 30, 60, 0.9) 80%);
+            box-shadow: 0 0 0 3px rgba(255,255,240,0.2), 0 20px 40px rgba(0,0,0,0.8), inset 0 -15px 30px #182050, inset 0 15px 30px #89a6ff40;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,200,0.3);
+            transition: box-shadow 0.2s;
         }
 
-        /* ---------- NOTIFICATION & MODAL (unchanged) ---------- */
-        .notification { /* ... same as original ... */ }
-        .confirmation-modal { /* ... same as original ... */ }
-        /* (keep original styles for these) */
-
-        @media (max-width: 380px) {
-            .numbers-grid { grid-template-columns: repeat(8, 1fr); }
-            .sphere-glass { width: 240px; height: 240px; }
+        .sphere-glass.shaking {
+            animation: shake 0.25s infinite ease;
         }
+
+        @keyframes shake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-6px, 3px) rotate(-2deg); }
+            40% { transform: translate(6px, -3px) rotate(2deg); }
+            60% { transform: translate(-3px, -2px) rotate(-1deg); }
+            80% { transform: translate(3px, 2px) rotate(1deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        /* inner balls — tiny spheres inside */
+        .inner-balls {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        .mini-ball {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 35% 35%, #fff4c2, #e09f1f);
+            border-radius: 50%;
+            box-shadow: 0 2px 6px #00000080, inset -2px -2px 4px #00000060, inset 2px 2px 4px #ffeeaa;
+            border: 1px solid #ffd966;
+            transition: all 0.2s;
+            pointer-events: none;
+        }
+
+        /* drawn balls row */
+        .drawn-balls-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 30px 0 15px;
+            min-height: 58px;
+        }
+        .drawn-ball {
+            width: 48px;
+            height: 48px;
+            background: radial-gradient(circle at 30% 30%, #ffd966, #cc9a2e);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 18px;
+            color: #0b0e1a;
+            box-shadow: 0 8px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 8px 15px black;
+            transform: scale(1);
+            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .draw-footer {
+            font-size: 13px;
+            color: #aab9f0;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: #0e1428;
+            padding: 8px 28px;
+            border-radius: 40px;
+            border: 1px solid #f0b34b30;
+            margin-top: 8px;
+        }
+
+        /* history, footer small */
+        .game-history {
+            margin-top: 20px;
+            background: #0d1225b0;
+            border-radius: 30px;
+            padding: 14px;
+        }
+        .history-title { font-size: 12px; opacity: 0.7; margin-bottom: 8px; }
+        .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 70px; overflow-y: auto; }
+        .history-item { display: flex; justify-content: space-between; font-size: 11px; }
+
+        .reconnection-progress { display: none; } /* keep existing */
+        .confirmation-modal { /* keep original but we keep styles from original, simplified here */ }
+        /* we rely on existing modal styles, but include minimal */
+        .confirmation-modal {
+            position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .confirmation-modal.active { display: flex; }
+        .confirmation-content { background: #141c34; padding: 24px; border-radius: 32px; max-width: 300px; border: 1px solid gold; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Connection Status (unchanged) -->
-        <div class="connection-status" id="connection-status">
-            <div class="status-dot"></div>
-            <span id="status-text">CONNECTING...</span>
-            <button class="reconnect-btn" id="manual-reconnect">RECONNECT</button>
-        </div>
-        
-        <!-- Reconnection Progress (unchanged) -->
-        <div class="reconnection-progress" id="reconnection-progress">...</div>
-
-        <!-- Header -->
-        <header class="app-header">
-            <div class="telegram-back-btn" id="telegram-back"><i class="fas fa-arrow-left"></i></div>
-            <div class="logo-section">
-                <div class="logo-icon">🎰</div>
-                <div class="logo-text"><h1>KENO ULTRA</h1><p>GLASS SPHERE</p></div>
-            </div>
-            <div class="user-info">
-                <div class="balance-card" id="balance-card">
-                    <div class="balance-label">BALANCE</div>
-                    <div class="balance-amount" id="balance">0 ETB</div>
-                </div>
-            </div>
-        </header>
-
-        <!-- Round Timer (compact) -->
-        <div class="round-timer">
-            <span class="timer-label">NEXT DRAW</span>
-            <span class="timer-display" id="countdown">00:30</span>
-            <div class="game-stats">
-                <div class="stat-item"><span class="stat-value" id="players-count">0</span><span class="stat-label">PLAYERS</span></div>
-                <div class="stat-item"><span class="stat-value" id="bets-count">0</span><span class="stat-label">BETS</span></div>
+<div class="game-container">
+    <!-- header -->
+    <div class="header">
+        <div class="logo">
+            <div class="logo-icon">🎰</div>
+            <div class="logo-text">
+                <h2>KENO ULTRA</h2>
+                <p>VIRTUAL SPHERE</p>
             </div>
         </div>
-
-        <!-- KENO MACHINE (GLASS SPHERE) -->
-        <div class="keno-machine">
-            <div class="machine-header">
-                <span class="machine-title">🎰 LIVE DRAW</span>
-                <span class="round-number">ROUND #<span id="current-round">1</span></span>
-            </div>
-            <div class="sphere-container">
-                <div class="sphere-glass" id="sphere-glass">
-                    <div class="balls-grid" id="machine-balls-grid"></div>
-                </div>
-            </div>
-            <div class="machine-footer">
-                <span>BALL <span id="current-ball">0</span>/<span id="total-balls">20</span></span>
-            </div>
-        </div>
-
-        <!-- Number Selection Board -->
-        <div class="game-board">
-            <div class="board-header">
-                <div class="board-title"><h2>SELECT 1‑5 NUMBERS</h2><p>from 1‑80</p></div>
-                <div class="selection-info">SELECTED: <span id="selected-count">0</span>/5</div>
-            </div>
-            <div class="numbers-grid" id="keno-grid"></div>
-            <button class="quick-pick-btn" id="quick-pick"><i class="fas fa-random"></i> QUICK PICK (5 NUMBERS)</button>
-        </div>
-
-        <!-- Control Panel -->
-        <div class="control-panel">
-            <div class="waiting-message" id="waiting-message"><i class="fas fa-users"></i> Waiting for more players...</div>
-            <div class="action-buttons">
-                <button class="btn btn-primary" id="play-btn" disabled><i class="fas fa-play-circle"></i> PLACE BET</button>
-                <button class="btn btn-secondary" id="clear-btn"><i class="fas fa-undo"></i> CLEAR</button>
-            </div>
-            <div class="bet-controls">
-                <div class="bet-amount-display"><label>BET</label><div class="current-bet"><span id="current-bet">5</span> ETB</div></div>
-                <div class="chips-grid">
-                    <div class="chip selected" data-value="5">5 ETB</div>
-                    <div class="chip" data-value="10">10 ETB</div>
-                    <div class="chip" data-value="20">20 ETB</div>
-                    <div class="chip" data-value="50">50 ETB</div>
-                    <div class="chip" data-value="100">100 ETB</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Win Result & History -->
-        <div class="win-result" id="win-result">
-            <div class="win-title">🎉 YOU WON! 🎉</div>
-            <div class="win-amount"><span id="win-amount">0</span> ETB</div>
-            <div class="match-details">Matched <span id="match-count">0</span> of <span id="total-selected">5</span> numbers</div>
-        </div>
-        <div class="game-history">
-            <div class="history-title">RECENT GAMES</div>
-            <div class="history-list" id="history-list">...</div>
-        </div>
-
-        <!-- Footer -->
-        <footer class="app-footer">
-            <p>KENO ULTRA · 1‑5 numbers · 5‑100 ETB</p>
-        </footer>
+        <div class="balance-badge" id="balance">0 ETB</div>
     </div>
 
-    <!-- Confirmation Modal (unchanged) -->
-    <div class="confirmation-modal" id="confirmation-modal">...</div>
+    <!-- connection status -->
+    <div class="status-bar" id="connection-status">
+        <span class="dot"></span>
+        <span id="status-text">CONNECTING</span>
+    </div>
 
-    <script>
-        // ==================== MODIFIED JAVASCRIPT ====================
-        // (Only the parts that interact with the new sphere are shown.
-        //  All other functions remain identical to the original.)
+    <!-- ========== BETTING PHASE (visible by default) ========== -->
+    <div id="bettingPhase" class="phase-betting">
+        <div class="timer-panel">
+            <span class="round-info"><i class="fa-regular fa-clock"></i> ROUND <span id="roundNumber">1</span></span>
+            <span class="timer-display" id="countdown">00:30</span>
+        </div>
 
-        // --- Global reference to the sphere grid ---
-        let machineBallsGrid;
+        <div class="grid-title">
+            <span>🎯 SELECT 1–5 NUMBERS</span>
+            <span id="selectedCount">0/5</span>
+        </div>
+        <div class="numbers-grid" id="kenoGrid"></div>
 
-        // --- Initialize machine grid (call after DOM ready) ---
-        function createMachineBallsGrid() {
-            const grid = document.getElementById('machine-balls-grid');
-            grid.innerHTML = '';
-            for (let i = 0; i < 20; i++) {
-                const slot = document.createElement('div');
-                slot.className = 'ball-slot';
-                slot.id = `ball-slot-${i}`;
-                grid.appendChild(slot);
-            }
-            machineBallsGrid = grid;
+        <div style="text-align: center; margin: 4px 0 8px;">
+            <button class="quick-pick-btn" id="quickPick" style="background:none; border:1px solid #2e4bff; border-radius:40px; padding:8px 16px; color:#aac3ff"><i class="fa-solid fa-shuffle"></i> QUICK PICK</button>
+        </div>
+
+        <!-- chips -->
+        <div class="chips" id="chipContainer">
+            <div class="chip selected" data-value="5">5</div>
+            <div class="chip" data-value="10">10</div>
+            <div class="chip" data-value="20">20</div>
+            <div class="chip" data-value="50">50</div>
+            <div class="chip" data-value="100">100</div>
+        </div>
+
+        <!-- action -->
+        <div class="action-row">
+            <button class="btn btn-primary" id="playBtn" disabled><i class="fa-regular fa-circle-check"></i> PLACE BET</button>
+            <button class="btn" id="clearBtn"><i class="fa-regular fa-trash-can"></i> CLEAR</button>
+        </div>
+        <div class="waiting-message" id="waitingMessage" style="display:none; color:#f0b34b; text-align:center;">⏳ Waiting for players...</div>
+    </div>
+
+    <!-- ========== SPHERE DRAW PHASE (hidden initially) ========== -->
+    <div id="spherePhase" class="phase-sphere">
+        <div class="sphere-window">
+            <div class="sphere-glass" id="sphereGlass">
+                <div class="inner-balls" id="innerBallsContainer"></div>
+            </div>
+            <!-- drawn numbers appear below sphere -->
+            <div class="drawn-balls-row" id="drawnBallsRow"></div>
+            <div class="draw-footer">
+                <span id="currentBallCount">0</span> / <span id="totalBallsCount">20</span> BALLS DRAWN
+            </div>
+        </div>
+        <!-- small note: results appear also inside drawnBallsRow -->
+    </div>
+
+    <!-- game history (kept minimal) -->
+    <div class="game-history">
+        <div class="history-title">RECENT WINS</div>
+        <div class="history-list" id="historyList"></div>
+    </div>
+
+    <!-- confirmation modal (keep same structure from original) -->
+    <div class="confirmation-modal" id="confirmationModal">
+        <div class="confirmation-content">
+            <h3 style="color:gold;">CONFIRM BET</h3>
+            <div id="confirmDetails"></div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn" id="confirmCancel">CANCEL</button>
+                <button class="btn btn-primary" id="confirmOk">CONFIRM</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- Minimal game state & socket integration ----------
+        const tg = window.Telegram?.WebApp;
+        const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
+
+        // DOM elements
+        const bettingPhase = document.getElementById('bettingPhase');
+        const spherePhase = document.getElementById('spherePhase');
+        const sphereGlass = document.getElementById('sphereGlass');
+        const innerBalls = document.getElementById('innerBallsContainer');
+        const drawnBallsRow = document.getElementById('drawnBallsRow');
+        const currentBallSpan = document.getElementById('currentBallCount');
+        const totalBallsSpan = document.getElementById('totalBallsCount');
+        const countdownEl = document.getElementById('countdown');
+        const roundSpan = document.getElementById('roundNumber');
+        const selectedCountSpan = document.getElementById('selectedCount');
+        const balanceSpan = document.getElementById('balance');
+        const kenoGrid = document.getElementById('kenoGrid');
+        const playBtn = document.getElementById('playBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const quickPick = document.getElementById('quickPick');
+        const chips = document.querySelectorAll('.chip');
+        const waitingMsg = document.getElementById('waitingMessage');
+        const historyList = document.getElementById('historyList');
+        const confirmModal = document.getElementById('confirmationModal');
+
+        // state
+        let selectedNumbers = [];
+        let currentBet = 5;
+        let balance = 1000; // will be updated by server
+        let currentRound = 1;
+        let roundActive = false;
+        let hasPlacedBet = false;
+        let drawnNumbersSoFar = [];  // keep for sphere reset
+
+        // ---------- helper functions ----------
+        function updateBalance(val) { balance = val; balanceSpan.innerText = val.toLocaleString() + ' ETB'; }
+        function updateCountdown(sec) { 
+            const m = Math.floor(sec/60), s = sec%60;
+            countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
 
-        // --- Reset all ball slots (clear for new round) ---
-        function resetMachineBalls() {
-            document.querySelectorAll('.ball-slot').forEach(slot => {
-                slot.className = 'ball-slot';
-                slot.textContent = '';
-            });
-            // Also reset ball counter display
-            document.getElementById('current-ball').textContent = '0';
-        }
-
-        // --- Fill a specific slot with a number (used for immediate display on reconnect) ---
-        function fillBallSlot(index, number, isMatched = false) {
-            const slot = document.getElementById(`ball-slot-${index}`);
-            if (slot) {
-                slot.textContent = number;
-                slot.classList.add('filled');
-                if (isMatched) slot.classList.add('matched');
-            }
-        }
-
-        // --- Override handleNumberDrawn to fill slots sequentially ---
-        function handleNumberDrawn(data) {
-            // original logic for ball counter & grid highlighting...
-            // then fill next empty slot
-            const num = data.number;
-            const drawnCount = data.drawnCount; // 1‑based
-            const slotIndex = drawnCount - 1; // slots are 0‑based
-            const slot = document.getElementById(`ball-slot-${slotIndex}`);
-            if (slot) {
-                slot.textContent = num;
-                slot.classList.add('filled');
-                // Check if this number is in player's selection
-                if (gameState.selectedNumbers.includes(num)) {
-                    slot.classList.add('matched');
+        // create number grid
+        for (let i=1; i<=80; i++) {
+            const btn = document.createElement('div');
+            btn.className = 'keno-number';
+            btn.dataset.num = i;
+            btn.innerText = i;
+            btn.addEventListener('click', (e) => {
+                if (!roundActive || hasPlacedBet) return;
+                const num = i;
+                const idx = selectedNumbers.indexOf(num);
+                if (idx === -1) {
+                    if (selectedNumbers.length >= 5) return;
+                    selectedNumbers.push(num);
+                    btn.classList.add('selected');
+                } else {
+                    selectedNumbers.splice(idx,1);
+                    btn.classList.remove('selected');
                 }
+                selectedNumbers.sort((a,b)=>a-b);
+                selectedCountSpan.innerText = selectedNumbers.length+'/5';
+                playBtn.disabled = selectedNumbers.length === 0;
+            });
+            kenoGrid.appendChild(btn);
+        }
+
+        // chips
+        chips.forEach(c => {
+            c.addEventListener('click', () => {
+                if (!roundActive || hasPlacedBet) return;
+                chips.forEach(ch => ch.classList.remove('selected'));
+                c.classList.add('selected');
+                currentBet = parseInt(c.dataset.value);
+            });
+        });
+
+        quickPick.addEventListener('click', () => {
+            if (!roundActive || hasPlacedBet) return;
+            // clear old
+            selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.remove('selected'));
+            selectedNumbers = [];
+            while(selectedNumbers.length < 5) {
+                let r = Math.floor(Math.random()*80)+1;
+                if(!selectedNumbers.includes(r)) selectedNumbers.push(r);
             }
+            selectedNumbers.sort((a,b)=>a-b);
+            selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.add('selected'));
+            selectedCountSpan.innerText = '5/5';
+            playBtn.disabled = false;
+        });
 
-            // Update ball counter
-            document.getElementById('current-ball').textContent = drawnCount;
+        clearBtn.addEventListener('click', () => {
+            if (!roundActive || hasPlacedBet) return;
+            selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.remove('selected'));
+            selectedNumbers = [];
+            selectedCountSpan.innerText = '0/5';
+            playBtn.disabled = true;
+        });
 
-            // Also highlight the number in the main grid (original code already does this)
-            // ... (keep original highlighting)
+        // play button -> show confirmation (simplified)
+        playBtn.addEventListener('click', () => {
+            if (!roundActive || selectedNumbers.length===0 || hasPlacedBet) return;
+            document.getElementById('confirmDetails').innerHTML = `
+                <p>Round: #${currentRound}</p>
+                <p>Numbers: ${selectedNumbers.join(', ')}</p>
+                <p>Bet: ${currentBet} ETB</p>
+                <p style="color:gold;">Max win: ${currentBet * 200} ETB</p>
+            `;
+            confirmModal.classList.add('active');
+        });
+        document.getElementById('confirmCancel').addEventListener('click', ()=> confirmModal.classList.remove('active'));
+        document.getElementById('confirmOk').addEventListener('click', ()=> {
+            confirmModal.classList.remove('active');
+            if (socket.connected) {
+                socket.emit('keno:placeBet', { numbers: selectedNumbers, betAmount: currentBet });
+            }
+        });
+
+        // ---------- SPHERE MANAGEMENT ----------
+        function resetSphere(initialBallCount = 80) {
+            innerBalls.innerHTML = '';
+            for (let i=0; i<initialBallCount; i++) {
+                const ball = document.createElement('div');
+                ball.className = 'mini-ball';
+                // random position inside sphere (circle)
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = (Math.random() * 45 + 30) / 100; // 30% to 75% of radius
+                const left = 50 + 45 * radius * Math.cos(angle);
+                const top = 50 + 45 * radius * Math.sin(angle);
+                ball.style.left = left + '%';
+                ball.style.top = top + '%';
+                ball.style.transform = 'translate(-50%, -50%)';
+                ball.style.background = `radial-gradient(circle at 35% 35%, #fff4c2, #e09f${Math.floor(30+Math.random()*30)})`;
+                innerBalls.appendChild(ball);
+            }
+            drawnBallsRow.innerHTML = '';
+            drawnNumbersSoFar = [];
+            currentBallSpan.innerText = '0';
+            totalBallsSpan.innerText = '20';
+            sphereGlass.classList.remove('shaking');
         }
 
-        // --- Override displayNumbersImmediately (for reconnection) ---
-        function displayNumbersImmediately(drawnNumbers) {
-            resetMachineBalls();
-            drawnNumbers.forEach((num, idx) => {
-                if (idx < 20) {
-                    const slot = document.getElementById(`ball-slot-${idx}`);
-                    slot.textContent = num;
-                    slot.classList.add('filled');
-                    if (gameState.selectedNumbers.includes(num)) {
-                        slot.classList.add('matched');
-                    }
-                }
+        // remove one random mini-ball (simulate ball taken)
+        function removeRandomMiniBall() {
+            const balls = innerBalls.children;
+            if (balls.length === 0) return;
+            const idx = Math.floor(Math.random() * balls.length);
+            balls[idx].remove();
+        }
+
+        // add a drawn ball with number
+        function addDrawnBall(number) {
+            const ballDiv = document.createElement('div');
+            ballDiv.className = 'drawn-ball';
+            ballDiv.innerText = number;
+            drawnBallsRow.appendChild(ballDiv);
+            drawnNumbersSoFar.push(number);
+            currentBallSpan.innerText = drawnNumbersSoFar.length;
+        }
+
+        // show all drawn numbers at once (for late join)
+        function displayAllDrawnNumbers(numbers) {
+            drawnBallsRow.innerHTML = '';
+            numbers.forEach(n => {
+                const ballDiv = document.createElement('div');
+                ballDiv.className = 'drawn-ball';
+                ballDiv.innerText = n;
+                drawnBallsRow.appendChild(ballDiv);
             });
-            document.getElementById('current-ball').textContent = drawnNumbers.length;
-            document.getElementById('total-balls').textContent = drawnNumbers.length; // if draw complete
+            drawnNumbersSoFar = [...numbers];
+            currentBallSpan.innerText = numbers.length;
+            // also remove corresponding mini balls (remove count = numbers length)
+            for (let i=0; i<numbers.length; i++) {
+                if (innerBalls.children.length) removeRandomMiniBall();
+            }
         }
 
-        // --- Override clearDrawnNumbers ---
-        function clearDrawnNumbers() {
-            resetMachineBalls();
-            // original grid clearing...
-            document.querySelectorAll('.keno-number').forEach(el => {
-                el.classList.remove('drawn', 'matched');
-            });
-            document.getElementById('current-ball').textContent = '0';
-            document.getElementById('total-balls').textContent = '20';
-            // Remove shaking class
-            document.getElementById('sphere-glass').classList.remove('shaking');
-        }
+        // ---------- SOCKET HANDLERS (keno events) ----------
+        socket.on('connect', () => {
+            document.getElementById('status-text').innerText = 'CONNECTED';
+            // auth
+            const userId = 'test_' + Math.random().toString(36);
+            socket.emit('keno:auth', { userId, userName: 'Player' });
+        });
 
-        // --- Override handleDrawStart ---
-        function handleDrawStart(data) {
-            gameState.roundStatus = 'drawing';
-            gameState.roundActive = false;
-            // Add shaking class to sphere
-            document.getElementById('sphere-glass').classList.add('shaking');
-            // ... rest of original logic (show ball counter, etc.)
-            resetMachineBalls(); // clear any previous numbers
-            showNotification('DRAWING NUMBERS...', 'info');
-        }
+        socket.on('keno:welcome', (data) => {
+            balance = data.balance || 1000;
+            updateBalance(balance);
+            currentRound = data.currentRound || 1;
+            roundSpan.innerText = currentRound;
+            roundActive = data.isRoundActive || false;
+            updateCountdown(data.countdown || 30);
+            // if draw already started, switch to sphere
+            if (data.currentDrawnNumbers?.length > 0) {
+                bettingPhase.classList.add('hidden');
+                spherePhase.classList.add('active');
+                resetSphere(80 - data.currentDrawnNumbers.length);
+                displayAllDrawnNumbers(data.currentDrawnNumbers);
+                if (!data.isDrawComplete) sphereGlass.classList.add('shaking');
+            }
+        });
 
-        // --- Override handleRoundResults ---
-        function handleRoundResults(data) {
-            // Remove shaking
-            document.getElementById('sphere-glass').classList.remove('shaking');
-            // ... original logic
-            // ensure all balls are displayed (in case we missed any)
-            displayNumbersImmediately(data.drawnNumbers);
-        }
+        socket.on('keno:round_start', (d) => {
+            // switch to betting phase
+            spherePhase.classList.remove('active');
+            bettingPhase.classList.remove('hidden');
+            roundActive = true;
+            hasPlacedBet = false;
+            currentRound = d.round;
+            roundSpan.innerText = currentRound;
+            updateCountdown(d.duration || 30);
+            // reset grid selections (clear old)
+            document.querySelectorAll('.keno-number').forEach(el => el.classList.remove('selected'));
+            selectedNumbers = [];
+            selectedCountSpan.innerText = '0/5';
+            playBtn.disabled = true;
+            playBtn.innerText = 'PLACE BET';
+            waitingMsg.style.display = 'none';
+        });
 
-        // --- Add initialization of machine grid in initGame ---
-        const originalInitGame = initGame;
-        initGame = function() {
-            createMachineBallsGrid();
-            originalInitGame(); // call original (with Telegram setup etc.)
-        };
+        socket.on('keno:countdown_update', (d) => updateCountdown(d.countdown));
 
-        // --- All other functions (placeBet, updateBalance, etc.) remain exactly the same.
-        // --- The full script would be too long to repeat, but the modifications above
-        // --- are integrated into the original code.
+        socket.on('keno:draw_start', () => {
+            // switch to sphere
+            bettingPhase.classList.add('hidden');
+            spherePhase.classList.add('active');
+            resetSphere(80);
+            sphereGlass.classList.add('shaking');
+        });
 
-        // For brevity, we assume the rest of the original script is present.
-        // In a real implementation, you would copy the entire original script
-        // and insert/modify only these functions as shown.
-    </script>
-    <!-- Include the full original script here, with the above overrides placed appropriately -->
+        socket.on('keno:number_drawn', (d) => {
+            const num = d.number;
+            // remove one mini ball & add drawn ball
+            removeRandomMiniBall();
+            addDrawnBall(num);
+        });
+
+        socket.on('keno:round_results', (d) => {
+            // draw finished
+            sphereGlass.classList.remove('shaking');
+            if (d.drawnNumbers && d.drawnNumbers.length !== drawnNumbersSoFar.length) {
+                // if we missed some, show them all
+                displayAllDrawnNumbers(d.drawnNumbers);
+            }
+            totalBallsSpan.innerText = d.totalDrawn || 20;
+        });
+
+        socket.on('keno:round_result', (d) => {
+            // personal win/loss - add to history
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
+            historyList.prepend(item);
+            if (historyList.children.length > 5) historyList.lastChild.remove();
+            if (d.winnings > 0) updateBalance(d.newBalance);
+        });
+
+        socket.on('keno:betConfirmed', (d) => {
+            hasPlacedBet = true;
+            updateBalance(d.balance);
+            playBtn.disabled = true;
+            playBtn.innerText = '✔️ BET IN';
+        });
+
+        socket.on('keno:players_update', (d) => {
+            if (d.count === 0) waitingMsg.style.display = 'block';
+            else waitingMsg.style.display = 'none';
+        });
+
+        socket.on('keno:balance', (d) => updateBalance(d.balance));
+
+        socket.on('keno:error', (msg) => alert(msg));
+        socket.on('keno:warning', (msg) => alert(msg));
+
+        // reconnection etc (simplified)
+        // manual reconnect not critical
+
+        // also handle draw_state for late join
+        socket.on('keno:draw_state', (d) => {
+            bettingPhase.classList.add('hidden');
+            spherePhase.classList.add('active');
+            resetSphere(80 - d.currentBall);
+            // if we have drawn numbers but not yet full list, we need to fetch? but we can just wait for number_drawn events.
+            if (d.hasBet && d.drawnNumbers) {
+                displayAllDrawnNumbers(d.drawnNumbers);
+            }
+            if (d.currentBall > 0 && !d.drawnNumbers) {
+                // we only know count, not which numbers -> better wait for individual events or round_results
+            }
+        });
+
+        // start
+        resetSphere(80);
+    })();
+</script>
+<!-- include the rest of original confirmation modal styles if needed, but we already have minimal -->
 </body>
 </html>
