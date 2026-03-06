@@ -295,10 +295,9 @@
             position: absolute;
             width: 24px;
             height: 24px;
-            background: radial-gradient(circle at 35% 35%, #fff4c2, #e09f1f);
             border-radius: 50%;
-            box-shadow: 0 2px 6px #00000080, inset -2px -2px 4px #00000060, inset 2px 2px 4px #ffeeaa;
-            border: 1px solid #ffd966;
+            box-shadow: 0 2px 6px #00000080, inset -2px -2px 4px #00000060, inset 2px 2px 4px rgba(255,255,255,0.6);
+            border: 1px solid rgba(255,255,200,0.8);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -307,31 +306,33 @@
             color: #0b0e1a;
             text-shadow: 0 1px 2px rgba(255,255,200,0.8);
             pointer-events: none;
-            /* base transform will be set by JS for jitter */
-            transition: none; /* let JS handle movement */
+            /* smooth transition for jitter */
+            transition: transform 0.15s ease-in-out;
+            /* base transform: center the ball */
+            transform: translate(-50%, -50%);
         }
 
-        /* drawn balls row */
+        /* drawn balls row - smaller size */
         .drawn-balls-row {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
             margin: 30px 0 15px;
-            min-height: 58px;
+            min-height: 48px;
         }
         .drawn-ball {
-            width: 48px;
-            height: 48px;
+            width: 38px;
+            height: 38px;
             background: radial-gradient(circle at 30% 30%, #ffd966, #cc9a2e);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 18px;
+            font-size: 16px;
             color: #0b0e1a;
-            box-shadow: 0 8px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 8px 15px black;
+            box-shadow: 0 5px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 5px 10px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
@@ -566,7 +567,7 @@
         let roundActive = false;
         let hasPlacedBet = false;
         let drawnNumbersSoFar = [];
-        let jitterInterval = null; // for random ball movement
+        let jitterInterval = null; // for smooth ball movement
         let returnTimeout = null;   // safety timeout to return to betting
 
         // Original payout table
@@ -717,7 +718,7 @@
             }
         });
 
-        // ---------- SPHERE WITH RANDOM JITTER (JavaScript driven) ----------
+        // ---------- SPHERE WITH RANDOM COLORS & SMOOTH JITTER ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
             for (let i = 1; i <= 80; i++) {
@@ -732,10 +733,14 @@
                 const top = 50 + 45 * radius * Math.sin(angle);
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
-                // store base left/top as custom properties for jitter
+                // store base left/top as custom properties (though we now use transform for jitter)
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                ball.style.transform = 'translate(-50%, -50%)'; // base transform
+                // random color using HSL
+                const hue = Math.floor(Math.random() * 360);
+                ball.style.background = `radial-gradient(circle at 35% 35%, hsl(${hue}, 90%, 75%), hsl(${hue}, 80%, 45%))`;
+                // initial transform (centered)
+                ball.style.transform = 'translate(-50%, -50%)';
                 innerBalls.appendChild(ball);
             }
             drawnBallsRow.innerHTML = '';
@@ -745,23 +750,20 @@
             sphereGlass.classList.remove('spinning');
         }
 
-        // Random jitter function - moves each ball slightly around its base position
+        // Smooth random jitter using transform and CSS transition
         function startRandomJitter() {
             if (jitterInterval) clearInterval(jitterInterval);
             jitterInterval = setInterval(() => {
                 const balls = document.querySelectorAll('.mini-ball');
                 balls.forEach(ball => {
-                    // only jitter if ball still exists (not removed)
                     if (!ball.parentNode) return;
-                    const baseLeft = parseFloat(ball.dataset.baseLeft);
-                    const baseTop = parseFloat(ball.dataset.baseTop);
-                    // random offset between -3% and 3%
-                    const offsetX = (Math.random() * 6 - 3);
-                    const offsetY = (Math.random() * 6 - 3);
-                    ball.style.left = (baseLeft + offsetX) + '%';
-                    ball.style.top = (baseTop + offsetY) + '%';
+                    // random offsets between -5px and 5px (in pixels)
+                    const offsetX = (Math.random() * 10 - 5);
+                    const offsetY = (Math.random() * 10 - 5);
+                    // apply transform: keep centering plus offset
+                    ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
                 });
-            }, 100); // update every 100ms for lively effect
+            }, 150); // update every 150ms, transition smooths it
         }
 
         function removeNumberBall(number) {
