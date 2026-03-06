@@ -308,13 +308,13 @@
             text-shadow: 0 1px 2px rgba(255,255,200,0.8);
             pointer-events: none;
             transition: all 0.2s;
-            /* fast jiggle */
-            animation: fastJitter 0.15s infinite alternate ease-in-out;
+            /* shaky jitter effect */
+            animation: jitter 0.5s infinite alternate ease-in-out;
         }
 
-        @keyframes fastJitter {
+        @keyframes jitter {
             0% { transform: translate(-50%, -50%) translate(0, 0); }
-            100% { transform: translate(-50%, -50%) translate(3px, -2px); }
+            100% { transform: translate(-50%, -50%) translate(2px, -1px); }
         }
 
         /* drawn balls row */
@@ -358,30 +358,6 @@
             border: 1px solid #f0b34b30;
             margin-top: 8px;
         }
-
-        /* win/loss notification */
-        .result-banner {
-            position: fixed;
-            top: 20%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(10px);
-            padding: 16px 32px;
-            border-radius: 60px;
-            font-size: 22px;
-            font-weight: 900;
-            text-align: center;
-            z-index: 2000;
-            border: 2px solid gold;
-            box-shadow: 0 10px 30px black;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-        .result-banner.show { opacity: 1; }
-        .result-banner.win { color: #ffd966; border-color: gold; }
-        .result-banner.lose { color: #ff6b6b; border-color: #ff4444; }
 
         /* game history, footer small */
         .game-history {
@@ -490,9 +466,6 @@
             </div>
         </div>
     </div>
-
-    <!-- win/loss banner -->
-    <div id="resultBanner" class="result-banner"></div>
 </div>
 
 <script>
@@ -564,7 +537,6 @@
         const payoutBreakdown = document.getElementById('payoutBreakdown');
         const confirmCancel = document.getElementById('confirmCancel');
         const confirmOk = document.getElementById('confirmOk');
-        const resultBanner = document.getElementById('resultBanner');
 
         // Game state
         let selectedNumbers = [];
@@ -589,14 +561,6 @@
         function updateCountdown(sec) { 
             const m = Math.floor(sec/60), s = sec%60;
             countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-        }
-
-        function showResult(message, isWin) {
-            resultBanner.textContent = message;
-            resultBanner.className = `result-banner show ${isWin ? 'win' : 'lose'}`;
-            setTimeout(() => {
-                resultBanner.classList.remove('show');
-            }, 3000);
         }
 
         // Create number grid (1-80)
@@ -685,7 +649,7 @@
             }
         });
 
-        // ---------- SPHERE WITH NUMBERED BALLS (fast jiggle + rotate) ----------
+        // ---------- SPHERE WITH NUMBERED BALLS (shaky + rotating) ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
             for (let i = 1; i <= 80; i++) {
@@ -808,12 +772,7 @@
             item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
             historyList.prepend(item);
             if (historyList.children.length > 5) historyList.lastChild.remove();
-            if (d.winnings > 0) {
-                updateBalance(d.newBalance);
-                showResult(`🎉 YOU WIN ${d.winnings} ETB 🎉`, true);
-            } else {
-                showResult('😞 YOU LOSE', false);
-            }
+            if (d.winnings > 0) updateBalance(d.newBalance);
         });
 
         socket.on('keno:betConfirmed', (d) => {
@@ -829,13 +788,11 @@
 
         socket.on('keno:balance', (d) => updateBalance(d.balance));
 
-        // Suppress "10 seconds remaining" message
-        socket.on('keno:warning', (msg) => {
-            if (typeof msg === 'string' && msg.includes('10 seconds')) return;
+        // Fix for [object Object] messages
+        socket.on('keno:error', (msg) => {
             alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
         });
-
-        socket.on('keno:error', (msg) => {
+        socket.on('keno:warning', (msg) => {
             alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
         });
 
