@@ -347,7 +347,7 @@
             margin-top: 8px;
         }
 
-        /* history, footer small */
+        /* game history, footer small */
         .game-history {
             margin-top: 20px;
             background: #0d1225b0;
@@ -358,14 +358,14 @@
         .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 70px; overflow-y: auto; }
         .history-item { display: flex; justify-content: space-between; font-size: 11px; }
 
-        .reconnection-progress { display: none; } /* keep existing */
-        .confirmation-modal { /* keep original but we keep styles from original, simplified here */ }
-        /* we rely on existing modal styles, but include minimal */
+        /* reconnection progress (kept minimal) */
+        .reconnection-progress { display: none; }
         .confirmation-modal {
             position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 1000;
         }
         .confirmation-modal.active { display: flex; }
-        .confirmation-content { background: #141c34; padding: 24px; border-radius: 32px; max-width: 300px; border: 1px solid gold; }
+        .confirmation-content { background: #141c34; padding: 24px; border-radius: 32px; max-width: 300px; border: 1px solid gold; color: white; }
+        .confirmation-content h3 { color: gold; margin-bottom: 12px; }
     </style>
 </head>
 <body>
@@ -388,7 +388,7 @@
         <span id="status-text">CONNECTING</span>
     </div>
 
-    <!-- ========== BETTING PHASE (visible by default) ========== -->
+    <!-- ========== BETTING PHASE ========== -->
     <div id="bettingPhase" class="phase-betting">
         <div class="timer-panel">
             <span class="round-info"><i class="fa-regular fa-clock"></i> ROUND <span id="roundNumber">1</span></span>
@@ -422,31 +422,29 @@
         <div class="waiting-message" id="waitingMessage" style="display:none; color:#f0b34b; text-align:center;">⏳ Waiting for players...</div>
     </div>
 
-    <!-- ========== SPHERE DRAW PHASE (hidden initially) ========== -->
+    <!-- ========== SPHERE DRAW PHASE ========== -->
     <div id="spherePhase" class="phase-sphere">
         <div class="sphere-window">
             <div class="sphere-glass" id="sphereGlass">
                 <div class="inner-balls" id="innerBallsContainer"></div>
             </div>
-            <!-- drawn numbers appear below sphere -->
             <div class="drawn-balls-row" id="drawnBallsRow"></div>
             <div class="draw-footer">
                 <span id="currentBallCount">0</span> / <span id="totalBallsCount">20</span> BALLS DRAWN
             </div>
         </div>
-        <!-- small note: results appear also inside drawnBallsRow -->
     </div>
 
-    <!-- game history (kept minimal) -->
+    <!-- game history -->
     <div class="game-history">
         <div class="history-title">RECENT WINS</div>
         <div class="history-list" id="historyList"></div>
     </div>
 
-    <!-- confirmation modal (keep same structure from original) -->
+    <!-- confirmation modal -->
     <div class="confirmation-modal" id="confirmationModal">
         <div class="confirmation-content">
-            <h3 style="color:gold;">CONFIRM BET</h3>
+            <h3>CONFIRM BET</h3>
             <div id="confirmDetails"></div>
             <div style="display:flex; gap:10px; margin-top:20px;">
                 <button class="btn" id="confirmCancel">CANCEL</button>
@@ -458,8 +456,47 @@
 
 <script>
     (function() {
-        // ---------- Minimal game state & socket integration ----------
-        const tg = window.Telegram?.WebApp;
+        // ---------- ROBUST USER ID LOGIC (from original file) ----------
+        let userId, userName;
+        const appUserId = sessionStorage.getItem('appUserId');
+        const appUserName = sessionStorage.getItem('appUserName');
+        if (appUserId) {
+            userId = appUserId;
+            userName = appUserName || 'App User';
+        } else {
+            const tg = window.Telegram?.WebApp;
+            const user = tg?.initDataUnsafe?.user;
+            if (user) {
+                userId = `tg_${user.id}`;
+                userName = user.first_name || 'Player';
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username
+                }));
+            } else {
+                const savedUser = localStorage.getItem('telegramUser');
+                if (savedUser) {
+                    const userData = JSON.parse(savedUser);
+                    userId = `tg_${userData.id}`;
+                    userName = userData.firstName || 'Player';
+                } else {
+                    // persistent random ID
+                    let storedId = localStorage.getItem('kenoUserId');
+                    if (storedId) {
+                        userId = storedId;
+                        userName = localStorage.getItem('kenoUserName') || 'Player';
+                    } else {
+                        userId = 'test_' + Math.random().toString(36).substr(2, 9);
+                        userName = 'Test Player';
+                        localStorage.setItem('kenoUserId', userId);
+                        localStorage.setItem('kenoUserName', userName);
+                    }
+                }
+            }
+        }
+
+        // ---------- Socket connection ----------
         const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
 
         // DOM elements
@@ -482,24 +519,27 @@
         const waitingMsg = document.getElementById('waitingMessage');
         const historyList = document.getElementById('historyList');
         const confirmModal = document.getElementById('confirmationModal');
+        const confirmDetails = document.getElementById('confirmDetails');
+        const confirmCancel = document.getElementById('confirmCancel');
+        const confirmOk = document.getElementById('confirmOk');
 
-        // state
+        // Game state
         let selectedNumbers = [];
         let currentBet = 5;
-        let balance = 1000; // will be updated by server
+        let balance = 0;
         let currentRound = 1;
         let roundActive = false;
         let hasPlacedBet = false;
-        let drawnNumbersSoFar = [];  // keep for sphere reset
+        let drawnNumbersSoFar = [];
 
-        // ---------- helper functions ----------
+        // ---------- Helper functions ----------
         function updateBalance(val) { balance = val; balanceSpan.innerText = val.toLocaleString() + ' ETB'; }
         function updateCountdown(sec) { 
             const m = Math.floor(sec/60), s = sec%60;
             countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
 
-        // create number grid
+        // Create number grid (1-80)
         for (let i=1; i<=80; i++) {
             const btn = document.createElement('div');
             btn.className = 'keno-number';
@@ -524,7 +564,7 @@
             kenoGrid.appendChild(btn);
         }
 
-        // chips
+        // Chips
         chips.forEach(c => {
             c.addEventListener('click', () => {
                 if (!roundActive || hasPlacedBet) return;
@@ -534,9 +574,10 @@
             });
         });
 
+        // Quick pick
         quickPick.addEventListener('click', () => {
             if (!roundActive || hasPlacedBet) return;
-            // clear old
+            // Clear old
             selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.remove('selected'));
             selectedNumbers = [];
             while(selectedNumbers.length < 5) {
@@ -549,6 +590,7 @@
             playBtn.disabled = false;
         });
 
+        // Clear
         clearBtn.addEventListener('click', () => {
             if (!roundActive || hasPlacedBet) return;
             selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.remove('selected'));
@@ -557,10 +599,10 @@
             playBtn.disabled = true;
         });
 
-        // play button -> show confirmation (simplified)
+        // Play button -> show confirmation
         playBtn.addEventListener('click', () => {
             if (!roundActive || selectedNumbers.length===0 || hasPlacedBet) return;
-            document.getElementById('confirmDetails').innerHTML = `
+            confirmDetails.innerHTML = `
                 <p>Round: #${currentRound}</p>
                 <p>Numbers: ${selectedNumbers.join(', ')}</p>
                 <p>Bet: ${currentBet} ETB</p>
@@ -568,21 +610,20 @@
             `;
             confirmModal.classList.add('active');
         });
-        document.getElementById('confirmCancel').addEventListener('click', ()=> confirmModal.classList.remove('active'));
-        document.getElementById('confirmOk').addEventListener('click', ()=> {
+        confirmCancel.addEventListener('click', ()=> confirmModal.classList.remove('active'));
+        confirmOk.addEventListener('click', ()=> {
             confirmModal.classList.remove('active');
             if (socket.connected) {
                 socket.emit('keno:placeBet', { numbers: selectedNumbers, betAmount: currentBet });
             }
         });
 
-        // ---------- SPHERE MANAGEMENT ----------
+        // ---------- SPHERE ANIMATION ----------
         function resetSphere(initialBallCount = 80) {
             innerBalls.innerHTML = '';
             for (let i=0; i<initialBallCount; i++) {
                 const ball = document.createElement('div');
                 ball.className = 'mini-ball';
-                // random position inside sphere (circle)
                 const angle = Math.random() * 2 * Math.PI;
                 const radius = (Math.random() * 45 + 30) / 100; // 30% to 75% of radius
                 const left = 50 + 45 * radius * Math.cos(angle);
@@ -600,7 +641,6 @@
             sphereGlass.classList.remove('shaking');
         }
 
-        // remove one random mini-ball (simulate ball taken)
         function removeRandomMiniBall() {
             const balls = innerBalls.children;
             if (balls.length === 0) return;
@@ -608,7 +648,6 @@
             balls[idx].remove();
         }
 
-        // add a drawn ball with number
         function addDrawnBall(number) {
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
@@ -618,7 +657,6 @@
             currentBallSpan.innerText = drawnNumbersSoFar.length;
         }
 
-        // show all drawn numbers at once (for late join)
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
@@ -629,18 +667,16 @@
             });
             drawnNumbersSoFar = [...numbers];
             currentBallSpan.innerText = numbers.length;
-            // also remove corresponding mini balls (remove count = numbers length)
+            // remove corresponding mini balls
             for (let i=0; i<numbers.length; i++) {
                 if (innerBalls.children.length) removeRandomMiniBall();
             }
         }
 
-        // ---------- SOCKET HANDLERS (keno events) ----------
+        // ---------- SOCKET HANDLERS ----------
         socket.on('connect', () => {
             document.getElementById('status-text').innerText = 'CONNECTED';
-            // auth
-            const userId = 'test_' + Math.random().toString(36);
-            socket.emit('keno:auth', { userId, userName: 'Player' });
+            socket.emit('keno:auth', { userId, userName });
         });
 
         socket.on('keno:welcome', (data) => {
@@ -669,7 +705,7 @@
             currentRound = d.round;
             roundSpan.innerText = currentRound;
             updateCountdown(d.duration || 30);
-            // reset grid selections (clear old)
+            // clear grid selections
             document.querySelectorAll('.keno-number').forEach(el => el.classList.remove('selected'));
             selectedNumbers = [];
             selectedCountSpan.innerText = '0/5';
@@ -681,7 +717,6 @@
         socket.on('keno:countdown_update', (d) => updateCountdown(d.countdown));
 
         socket.on('keno:draw_start', () => {
-            // switch to sphere
             bettingPhase.classList.add('hidden');
             spherePhase.classList.add('active');
             resetSphere(80);
@@ -690,23 +725,19 @@
 
         socket.on('keno:number_drawn', (d) => {
             const num = d.number;
-            // remove one mini ball & add drawn ball
             removeRandomMiniBall();
             addDrawnBall(num);
         });
 
         socket.on('keno:round_results', (d) => {
-            // draw finished
             sphereGlass.classList.remove('shaking');
             if (d.drawnNumbers && d.drawnNumbers.length !== drawnNumbersSoFar.length) {
-                // if we missed some, show them all
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
             totalBallsSpan.innerText = d.totalDrawn || 20;
         });
 
         socket.on('keno:round_result', (d) => {
-            // personal win/loss - add to history
             const item = document.createElement('div');
             item.className = 'history-item';
             item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
@@ -723,36 +754,25 @@
         });
 
         socket.on('keno:players_update', (d) => {
-            if (d.count === 0) waitingMsg.style.display = 'block';
-            else waitingMsg.style.display = 'none';
+            waitingMsg.style.display = d.count === 0 ? 'block' : 'none';
         });
 
         socket.on('keno:balance', (d) => updateBalance(d.balance));
-
         socket.on('keno:error', (msg) => alert(msg));
         socket.on('keno:warning', (msg) => alert(msg));
 
-        // reconnection etc (simplified)
-        // manual reconnect not critical
-
-        // also handle draw_state for late join
         socket.on('keno:draw_state', (d) => {
             bettingPhase.classList.add('hidden');
             spherePhase.classList.add('active');
             resetSphere(80 - d.currentBall);
-            // if we have drawn numbers but not yet full list, we need to fetch? but we can just wait for number_drawn events.
             if (d.hasBet && d.drawnNumbers) {
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
-            if (d.currentBall > 0 && !d.drawnNumbers) {
-                // we only know count, not which numbers -> better wait for individual events or round_results
-            }
         });
 
-        // start
+        // initial reset
         resetSphere(80);
     })();
 </script>
-<!-- include the rest of original confirmation modal styles if needed, but we already have minimal -->
 </body>
 </html>
