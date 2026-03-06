@@ -2121,15 +2121,7 @@ module.exports = {
                 countdown: self.kenoCountdown
             });
             
-            // Last 10 seconds warning
-            if (self.kenoCountdown === 10) {
-                self.io.to('keno').emit('keno:warning', {
-                    message: '10 seconds remaining to place bets!',
-                    type: 'warning'
-                });
-            }
-            
-            // Last 5 seconds warning
+            // Last 5 seconds warning only (10-second warning removed)
             if (self.kenoCountdown <= 5 && self.kenoCountdown > 0) {
                 self.io.to('keno').emit('keno:countdown_warning', {
                     countdown: self.kenoCountdown,
