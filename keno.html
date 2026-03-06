@@ -293,23 +293,32 @@
 
         .mini-ball {
             position: absolute;
-            width: 24px;
-            height: 24px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
-            box-shadow: 0 2px 6px #00000080, inset -2px -2px 4px #00000060, inset 2px 2px 4px rgba(255,255,255,0.6);
-            border: 1px solid rgba(255,255,200,0.8);
+            /* 3D effect with multiple shadows */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.6), 
+                        0 0 0 1px rgba(255,255,200,0.5) inset,
+                        0 -2px 5px rgba(0,0,0,0.8) inset,
+                        2px 2px 8px rgba(255,255,255,0.3) inset;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 800;
-            color: #0b0e1a;
-            text-shadow: 0 1px 2px rgba(255,255,200,0.8);
+            color: #111;
+            text-shadow: 0 1px 2px rgba(255,255,200,0.9);
             pointer-events: none;
-            /* smooth transition for jitter */
-            transition: transform 0.15s ease-in-out;
+            /* smooth transition for jitter and color change */
+            transition: transform 0.1s ease-in-out, background 0.2s;
             /* base transform: center the ball */
             transform: translate(-50%, -50%);
+            /* default gradient (will be overridden by JS for random colors) */
+            background: radial-gradient(circle at 35% 35%, #fff4c2, #e09f1f);
+        }
+        .mini-ball.matched {
+            background: radial-gradient(circle at 35% 35%, #a3f0a3, #2e7d32) !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.6), 0 0 0 2px #a5d6a5 inset, 0 -2px 5px #1b5e20 inset;
         }
 
         /* drawn balls row - smaller size */
@@ -718,7 +727,7 @@
             }
         });
 
-        // ---------- SPHERE WITH RANDOM COLORS & SMOOTH JITTER ----------
+        // ---------- SPHERE WITH RANDOM COLORS, 3D, SMOOTH & ENHANCED JITTER ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
             for (let i = 1; i <= 80; i++) {
@@ -733,12 +742,11 @@
                 const top = 50 + 45 * radius * Math.sin(angle);
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
-                // store base left/top as custom properties (though we now use transform for jitter)
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // random color using HSL
+                // random color using HSL (more vibrant)
                 const hue = Math.floor(Math.random() * 360);
-                ball.style.background = `radial-gradient(circle at 35% 35%, hsl(${hue}, 90%, 75%), hsl(${hue}, 80%, 45%))`;
+                ball.style.background = `radial-gradient(circle at 35% 35%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%))`;
                 // initial transform (centered)
                 ball.style.transform = 'translate(-50%, -50%)';
                 innerBalls.appendChild(ball);
@@ -750,25 +758,36 @@
             sphereGlass.classList.remove('spinning');
         }
 
-        // Smooth random jitter using transform and CSS transition
+        // Enhanced random jitter: larger offsets, faster updates, smooth transition
         function startRandomJitter() {
             if (jitterInterval) clearInterval(jitterInterval);
             jitterInterval = setInterval(() => {
                 const balls = document.querySelectorAll('.mini-ball');
                 balls.forEach(ball => {
                     if (!ball.parentNode) return;
-                    // random offsets between -5px and 5px (in pixels)
-                    const offsetX = (Math.random() * 10 - 5);
-                    const offsetY = (Math.random() * 10 - 5);
+                    // random offsets between -12px and 12px
+                    const offsetX = (Math.random() * 24 - 12);
+                    const offsetY = (Math.random() * 24 - 12);
                     // apply transform: keep centering plus offset
                     ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
                 });
-            }, 150); // update every 150ms, transition smooths it
+            }, 70); // update every 70ms for lively effect
         }
 
         function removeNumberBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
             if (ball) ball.remove();
+        }
+
+        // Flash green and then remove
+        function flashAndRemoveBall(number) {
+            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (!ball) return;
+            ball.classList.add('matched');
+            // After a short delay, remove it
+            setTimeout(() => {
+                if (ball.parentNode) ball.remove();
+            }, 250);
         }
 
         function addDrawnBall(number) {
@@ -783,6 +802,7 @@
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
+                // remove mini ball without flash (since already drawn)
                 removeNumberBall(n);
                 const ballDiv = document.createElement('div');
                 ballDiv.className = 'drawn-ball';
@@ -848,7 +868,8 @@
         });
 
         socket.on('keno:number_drawn', (d) => {
-            removeNumberBall(d.number);
+            // Flash green then remove
+            flashAndRemoveBall(d.number);
             addDrawnBall(d.number);
         });
 
