@@ -307,16 +307,8 @@
             color: #0b0e1a;
             text-shadow: 0 1px 2px rgba(255,255,200,0.8);
             pointer-events: none;
-            /* FASTER JIGGLY */
-            animation: fastJitter 0.15s infinite alternate ease-in-out;
-        }
-
-        @keyframes fastJitter {
-            0% { transform: translate(-50%, -50%) translate(0, 0); }
-            25% { transform: translate(-50%, -50%) translate(3px, -2px); }
-            50% { transform: translate(-50%, -50%) translate(-2px, 3px); }
-            75% { transform: translate(-50%, -50%) translate(2px, 2px); }
-            100% { transform: translate(-50%, -50%) translate(-3px, -1px); }
+            /* base transform will be set by JS for jitter */
+            transition: none; /* let JS handle movement */
         }
 
         /* drawn balls row */
@@ -574,6 +566,8 @@
         let roundActive = false;
         let hasPlacedBet = false;
         let drawnNumbersSoFar = [];
+        let jitterInterval = null; // for random ball movement
+        let returnTimeout = null;   // safety timeout to return to betting
 
         // Original payout table
         const PAYOUT_TABLE = {
@@ -608,14 +602,38 @@
                 resultToast.classList.remove('show');
             }, 3000);
 
-            // Clear selections and switch back to betting phase after a short delay
+            // Clear any pending return timeout
+            if (returnTimeout) clearTimeout(returnTimeout);
+
+            // Switch back to betting phase after a short delay
             setTimeout(() => {
                 spherePhase.classList.remove('active');
                 bettingPhase.classList.remove('hidden');
                 clearAllSelections();
+                // stop jitter when leaving sphere
+                if (jitterInterval) {
+                    clearInterval(jitterInterval);
+                    jitterInterval = null;
+                }
                 // also ensure that the sphere is reset for next draw
                 resetSphere();
             }, 3000);
+        }
+
+        // Safety return if we never get personal result
+        function scheduleReturnToBetting() {
+            if (returnTimeout) clearTimeout(returnTimeout);
+            returnTimeout = setTimeout(() => {
+                console.log('⚠️ No personal result received, returning to betting phase');
+                spherePhase.classList.remove('active');
+                bettingPhase.classList.remove('hidden');
+                clearAllSelections();
+                if (jitterInterval) {
+                    clearInterval(jitterInterval);
+                    jitterInterval = null;
+                }
+                resetSphere();
+            }, 5000); // wait 5 seconds after draw results
         }
 
         // Create number grid (1-80)
@@ -699,7 +717,7 @@
             }
         });
 
-        // ---------- SPHERE ----------
+        // ---------- SPHERE WITH RANDOM JITTER (JavaScript driven) ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
             for (let i = 1; i <= 80; i++) {
@@ -707,13 +725,17 @@
                 ball.className = 'mini-ball';
                 ball.dataset.number = i;
                 ball.textContent = i;
+                // store original position percentages (will be used for jitter)
                 const angle = Math.random() * 2 * Math.PI;
-                const radius = (Math.random() * 45 + 30) / 100;
+                const radius = (Math.random() * 45 + 30) / 100; // 30% to 75% of radius
                 const left = 50 + 45 * radius * Math.cos(angle);
                 const top = 50 + 45 * radius * Math.sin(angle);
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
-                ball.style.transform = 'translate(-50%, -50%)';
+                // store base left/top as custom properties for jitter
+                ball.dataset.baseLeft = left;
+                ball.dataset.baseTop = top;
+                ball.style.transform = 'translate(-50%, -50%)'; // base transform
                 innerBalls.appendChild(ball);
             }
             drawnBallsRow.innerHTML = '';
@@ -721,6 +743,25 @@
             currentBallSpan.innerText = '0';
             totalBallsSpan.innerText = '20';
             sphereGlass.classList.remove('spinning');
+        }
+
+        // Random jitter function - moves each ball slightly around its base position
+        function startRandomJitter() {
+            if (jitterInterval) clearInterval(jitterInterval);
+            jitterInterval = setInterval(() => {
+                const balls = document.querySelectorAll('.mini-ball');
+                balls.forEach(ball => {
+                    // only jitter if ball still exists (not removed)
+                    if (!ball.parentNode) return;
+                    const baseLeft = parseFloat(ball.dataset.baseLeft);
+                    const baseTop = parseFloat(ball.dataset.baseTop);
+                    // random offset between -3% and 3%
+                    const offsetX = (Math.random() * 6 - 3);
+                    const offsetY = (Math.random() * 6 - 3);
+                    ball.style.left = (baseLeft + offsetX) + '%';
+                    ball.style.top = (baseTop + offsetY) + '%';
+                });
+            }, 100); // update every 100ms for lively effect
         }
 
         function removeNumberBall(number) {
@@ -769,7 +810,10 @@
                 resetSphere();
                 data.currentDrawnNumbers.forEach(n => removeNumberBall(n));
                 displayAllDrawnNumbers(data.currentDrawnNumbers);
-                if (!data.isDrawComplete) sphereGlass.classList.add('spinning');
+                if (!data.isDrawComplete) {
+                    sphereGlass.classList.add('spinning');
+                    startRandomJitter();
+                }
             }
         });
 
@@ -784,6 +828,11 @@
             clearAllSelections();
             playBtn.innerText = 'PLACE BET';
             waitingMsg.style.display = 'none';
+            // stop jitter if running
+            if (jitterInterval) {
+                clearInterval(jitterInterval);
+                jitterInterval = null;
+            }
         });
 
         socket.on('keno:countdown_update', (d) => updateCountdown(d.countdown));
@@ -793,6 +842,7 @@
             spherePhase.classList.add('active');
             resetSphere();
             sphereGlass.classList.add('spinning');
+            startRandomJitter();
         });
 
         socket.on('keno:number_drawn', (d) => {
@@ -806,9 +856,13 @@
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
             totalBallsSpan.innerText = d.totalDrawn || 20;
+            // Schedule safety return in case personal result doesn't arrive
+            scheduleReturnToBetting();
         });
 
         socket.on('keno:round_result', (d) => {
+            // Cancel safety timeout
+            if (returnTimeout) clearTimeout(returnTimeout);
             // Add to history
             const item = document.createElement('div');
             item.className = 'history-item';
@@ -837,9 +891,7 @@
         socket.on('keno:error', (msg) => {
             alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
         });
-        // warning still handled but the 10-second one is removed on server
         socket.on('keno:warning', (msg) => {
-            // keep other warnings if any, but we ignore the 10-sec (server doesn't send it)
             alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
         });
 
@@ -851,7 +903,10 @@
                 d.drawnNumbers.forEach(n => removeNumberBall(n));
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
-            if (!d.isDrawComplete) sphereGlass.classList.add('spinning');
+            if (!d.isDrawComplete) {
+                sphereGlass.classList.add('spinning');
+                startRandomJitter();
+            }
         });
 
         // initial reset
