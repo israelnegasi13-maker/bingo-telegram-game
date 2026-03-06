@@ -274,35 +274,40 @@
             transition: box-shadow 0.2s;
         }
 
-        .sphere-glass.shaking {
-            animation: shake 0.25s infinite ease;
+        /* spinning animation for inner balls */
+        .sphere-glass.spinning .inner-balls {
+            animation: rotateBalls 20s linear infinite;
         }
 
-        @keyframes shake {
-            0% { transform: translate(0, 0) rotate(0deg); }
-            20% { transform: translate(-6px, 3px) rotate(-2deg); }
-            40% { transform: translate(6px, -3px) rotate(2deg); }
-            60% { transform: translate(-3px, -2px) rotate(-1deg); }
-            80% { transform: translate(3px, 2px) rotate(1deg); }
-            100% { transform: translate(0, 0) rotate(0deg); }
+        @keyframes rotateBalls {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
-        /* inner balls — tiny spheres inside */
         .inner-balls {
             position: relative;
             width: 100%;
             height: 100%;
+            transform-origin: center center;
         }
+
         .mini-ball {
             position: absolute;
-            width: 16px;
-            height: 16px;
+            width: 24px;
+            height: 24px;
             background: radial-gradient(circle at 35% 35%, #fff4c2, #e09f1f);
             border-radius: 50%;
             box-shadow: 0 2px 6px #00000080, inset -2px -2px 4px #00000060, inset 2px 2px 4px #ffeeaa;
             border: 1px solid #ffd966;
-            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 800;
+            color: #0b0e1a;
+            text-shadow: 0 1px 2px rgba(255,255,200,0.8);
             pointer-events: none;
+            transition: all 0.2s;
         }
 
         /* drawn balls row */
@@ -618,12 +623,15 @@
             }
         });
 
-        // ---------- SPHERE ANIMATION ----------
-        function resetSphere(initialBallCount = 80) {
+        // ---------- SPHERE WITH NUMBERED BALLS ----------
+        function resetSphere() {
             innerBalls.innerHTML = '';
-            for (let i=0; i<initialBallCount; i++) {
+            for (let i = 1; i <= 80; i++) {
                 const ball = document.createElement('div');
                 ball.className = 'mini-ball';
+                ball.dataset.number = i;
+                ball.textContent = i;
+                // random position inside circle
                 const angle = Math.random() * 2 * Math.PI;
                 const radius = (Math.random() * 45 + 30) / 100; // 30% to 75% of radius
                 const left = 50 + 45 * radius * Math.cos(angle);
@@ -631,21 +639,18 @@
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
                 ball.style.transform = 'translate(-50%, -50%)';
-                ball.style.background = `radial-gradient(circle at 35% 35%, #fff4c2, #e09f${Math.floor(30+Math.random()*30)})`;
                 innerBalls.appendChild(ball);
             }
             drawnBallsRow.innerHTML = '';
             drawnNumbersSoFar = [];
             currentBallSpan.innerText = '0';
             totalBallsSpan.innerText = '20';
-            sphereGlass.classList.remove('shaking');
+            sphereGlass.classList.remove('spinning');
         }
 
-        function removeRandomMiniBall() {
-            const balls = innerBalls.children;
-            if (balls.length === 0) return;
-            const idx = Math.floor(Math.random() * balls.length);
-            balls[idx].remove();
+        function removeNumberBall(number) {
+            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (ball) ball.remove();
         }
 
         function addDrawnBall(number) {
@@ -660,6 +665,7 @@
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
+                removeNumberBall(n);
                 const ballDiv = document.createElement('div');
                 ballDiv.className = 'drawn-ball';
                 ballDiv.innerText = n;
@@ -667,10 +673,6 @@
             });
             drawnNumbersSoFar = [...numbers];
             currentBallSpan.innerText = numbers.length;
-            // remove corresponding mini balls
-            for (let i=0; i<numbers.length; i++) {
-                if (innerBalls.children.length) removeRandomMiniBall();
-            }
         }
 
         // ---------- SOCKET HANDLERS ----------
@@ -690,9 +692,11 @@
             if (data.currentDrawnNumbers?.length > 0) {
                 bettingPhase.classList.add('hidden');
                 spherePhase.classList.add('active');
-                resetSphere(80 - data.currentDrawnNumbers.length);
+                resetSphere();
+                // remove already drawn numbers from sphere and display them
+                data.currentDrawnNumbers.forEach(n => removeNumberBall(n));
                 displayAllDrawnNumbers(data.currentDrawnNumbers);
-                if (!data.isDrawComplete) sphereGlass.classList.add('shaking');
+                if (!data.isDrawComplete) sphereGlass.classList.add('spinning');
             }
         });
 
@@ -719,18 +723,17 @@
         socket.on('keno:draw_start', () => {
             bettingPhase.classList.add('hidden');
             spherePhase.classList.add('active');
-            resetSphere(80);
-            sphereGlass.classList.add('shaking');
+            resetSphere();
+            sphereGlass.classList.add('spinning');
         });
 
         socket.on('keno:number_drawn', (d) => {
-            const num = d.number;
-            removeRandomMiniBall();
-            addDrawnBall(num);
+            removeNumberBall(d.number);
+            addDrawnBall(d.number);
         });
 
         socket.on('keno:round_results', (d) => {
-            sphereGlass.classList.remove('shaking');
+            sphereGlass.classList.remove('spinning');
             if (d.drawnNumbers && d.drawnNumbers.length !== drawnNumbersSoFar.length) {
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
@@ -764,14 +767,20 @@
         socket.on('keno:draw_state', (d) => {
             bettingPhase.classList.add('hidden');
             spherePhase.classList.add('active');
-            resetSphere(80 - d.currentBall);
-            if (d.hasBet && d.drawnNumbers) {
+            resetSphere();
+            // remove already drawn balls if any
+            if (d.drawnNumbers) {
+                d.drawnNumbers.forEach(n => removeNumberBall(n));
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
+            if (d.currentBall > 0 && !d.drawnNumbers) {
+                // we don't know which numbers, so just trust future events
+            }
+            if (!d.isDrawComplete) sphereGlass.classList.add('spinning');
         });
 
         // initial reset
-        resetSphere(80);
+        resetSphere();
     })();
 </script>
 </body>
