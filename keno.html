@@ -293,32 +293,33 @@
 
         .mini-ball {
             position: absolute;
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            /* 3D effect with multiple shadows */
-            box-shadow: 0 4px 8px rgba(0,0,0,0.6), 
-                        0 0 0 1px rgba(255,255,200,0.5) inset,
-                        0 -2px 5px rgba(0,0,0,0.8) inset,
-                        2px 2px 8px rgba(255,255,255,0.3) inset;
+            /* Enhanced 3D effect */
+            background: radial-gradient(circle at 30% 30%, #fff9e6, #d4a017 70%, #8b6910);
+            box-shadow: 
+                0 8px 12px rgba(0,0,0,0.6),
+                0 0 0 2px rgba(255,255,200,0.4) inset,
+                0 -4px 6px rgba(0,0,0,0.8) inset,
+                4px 4px 12px rgba(255,255,255,0.5) inset,
+                -2px -2px 8px rgba(0,0,0,0.3) inset;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 800;
-            color: #111;
+            color: #1a1a1a;
             text-shadow: 0 1px 2px rgba(255,255,200,0.9);
             pointer-events: none;
-            /* smooth transition for jitter and color change */
-            transition: transform 0.1s ease-in-out, background 0.2s;
+            will-change: transform;
+            transition: background 0.2s, box-shadow 0.2s;
             /* base transform: center the ball */
             transform: translate(-50%, -50%);
-            /* default gradient (will be overridden by JS for random colors) */
-            background: radial-gradient(circle at 35% 35%, #fff4c2, #e09f1f);
         }
         .mini-ball.matched {
-            background: radial-gradient(circle at 35% 35%, #a3f0a3, #2e7d32) !important;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.6), 0 0 0 2px #a5d6a5 inset, 0 -2px 5px #1b5e20 inset;
+            background: radial-gradient(circle at 30% 30%, #b8f0b8, #2e7d32 70%, #1b5e20) !important;
+            box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
         }
 
         /* drawn balls row - smaller size */
@@ -576,8 +577,11 @@
         let roundActive = false;
         let hasPlacedBet = false;
         let drawnNumbersSoFar = [];
-        let jitterInterval = null; // for smooth ball movement
-        let returnTimeout = null;   // safety timeout to return to betting
+        let turbulenceInterval = null;
+        let returnTimeout = null;
+
+        // Turbulence data per ball
+        let ballTurbulence = new Map(); // key: ball element, value: { phaseX, phaseY, freqX, freqY, ampScale }
 
         // Original payout table
         const PAYOUT_TABLE = {
@@ -595,7 +599,6 @@
             countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
         }
 
-        // Clear all selected numbers from grid and state
         function clearAllSelections() {
             document.querySelectorAll('.keno-number').forEach(el => el.classList.remove('selected'));
             selectedNumbers = [];
@@ -603,7 +606,6 @@
             playBtn.disabled = true;
         }
 
-        // Show win/loss toast and then return to betting phase
         function showResultAndReturnToBetting(won, amount, betAmount) {
             resultToast.className = 'result-toast ' + (won ? 'win' : 'lose');
             resultToast.innerHTML = won ? `🎉 YOU WON ${amount} ETB!` : `💔 YOU LOST ${betAmount} ETB`;
@@ -612,25 +614,21 @@
                 resultToast.classList.remove('show');
             }, 3000);
 
-            // Clear any pending return timeout
             if (returnTimeout) clearTimeout(returnTimeout);
 
-            // Switch back to betting phase after a short delay
             setTimeout(() => {
                 spherePhase.classList.remove('active');
                 bettingPhase.classList.remove('hidden');
                 clearAllSelections();
-                // stop jitter when leaving sphere
-                if (jitterInterval) {
-                    clearInterval(jitterInterval);
-                    jitterInterval = null;
+                if (turbulenceInterval) {
+                    cancelAnimationFrame(turbulenceInterval);
+                    turbulenceInterval = null;
                 }
-                // also ensure that the sphere is reset for next draw
+                ballTurbulence.clear();
                 resetSphere();
             }, 3000);
         }
 
-        // Safety return if we never get personal result
         function scheduleReturnToBetting() {
             if (returnTimeout) clearTimeout(returnTimeout);
             returnTimeout = setTimeout(() => {
@@ -638,12 +636,13 @@
                 spherePhase.classList.remove('active');
                 bettingPhase.classList.remove('hidden');
                 clearAllSelections();
-                if (jitterInterval) {
-                    clearInterval(jitterInterval);
-                    jitterInterval = null;
+                if (turbulenceInterval) {
+                    cancelAnimationFrame(turbulenceInterval);
+                    turbulenceInterval = null;
                 }
+                ballTurbulence.clear();
                 resetSphere();
-            }, 5000); // wait 5 seconds after draw results
+            }, 5000);
         }
 
         // Create number grid (1-80)
@@ -684,7 +683,7 @@
         // Quick pick
         quickPick.addEventListener('click', () => {
             if (!roundActive || hasPlacedBet) return;
-            clearAllSelections(); // clear old ones
+            clearAllSelections();
             while(selectedNumbers.length < 5) {
                 let r = Math.floor(Math.random()*80)+1;
                 if(!selectedNumbers.includes(r)) selectedNumbers.push(r);
@@ -727,28 +726,36 @@
             }
         });
 
-        // ---------- SPHERE WITH RANDOM COLORS, 3D, SMOOTH & ENHANCED JITTER ----------
+        // ---------- SPHERE WITH TURBULENT MOVEMENT & 3D ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
+            ballTurbulence.clear();
             for (let i = 1; i <= 80; i++) {
                 const ball = document.createElement('div');
                 ball.className = 'mini-ball';
                 ball.dataset.number = i;
                 ball.textContent = i;
-                // store original position percentages (will be used for jitter)
+                // random position inside circle
                 const angle = Math.random() * 2 * Math.PI;
-                const radius = (Math.random() * 45 + 30) / 100; // 30% to 75% of radius
+                const radius = (Math.random() * 45 + 30) / 100;
                 const left = 50 + 45 * radius * Math.cos(angle);
                 const top = 50 + 45 * radius * Math.sin(angle);
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
+                // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // random color using HSL (more vibrant)
+                // random color using HSL (vibrant)
                 const hue = Math.floor(Math.random() * 360);
-                ball.style.background = `radial-gradient(circle at 35% 35%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%))`;
-                // initial transform (centered)
-                ball.style.transform = 'translate(-50%, -50%)';
+                ball.style.background = `radial-gradient(circle at 30% 30%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%) 70%, hsl(${hue}, 90%, 30%))`;
+                // turbulence parameters
+                ballTurbulence.set(ball, {
+                    phaseX: Math.random() * 2 * Math.PI,
+                    phaseY: Math.random() * 2 * Math.PI,
+                    freqX: 0.5 + Math.random() * 1.5,
+                    freqY: 0.5 + Math.random() * 1.5,
+                    ampScale: 0.8 + Math.random() * 0.7
+                });
                 innerBalls.appendChild(ball);
             }
             drawnBallsRow.innerHTML = '';
@@ -758,35 +765,45 @@
             sphereGlass.classList.remove('spinning');
         }
 
-        // Enhanced random jitter: larger offsets, faster updates, smooth transition
-        function startRandomJitter() {
-            if (jitterInterval) clearInterval(jitterInterval);
-            jitterInterval = setInterval(() => {
+        // Turbulent animation using requestAnimationFrame
+        function startTurbulence() {
+            if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
+            let startTime = performance.now();
+            function animate() {
+                const now = performance.now();
+                const t = (now - startTime) / 1000; // seconds
                 const balls = document.querySelectorAll('.mini-ball');
                 balls.forEach(ball => {
                     if (!ball.parentNode) return;
-                    // random offsets between -12px and 12px
-                    const offsetX = (Math.random() * 24 - 12);
-                    const offsetY = (Math.random() * 24 - 12);
-                    // apply transform: keep centering plus offset
+                    const data = ballTurbulence.get(ball);
+                    if (!data) return;
+                    // compute offsets using sine waves with different frequencies
+                    const offsetX = 8 * Math.sin(t * data.freqX * 2 + data.phaseX) * data.ampScale;
+                    const offsetY = 8 * Math.sin(t * data.freqY * 2.3 + data.phaseY) * data.ampScale;
                     ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
                 });
-            }, 70); // update every 70ms for lively effect
+                turbulenceInterval = requestAnimationFrame(animate);
+            }
+            turbulenceInterval = requestAnimationFrame(animate);
         }
 
         function removeNumberBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
-            if (ball) ball.remove();
+            if (ball) {
+                ballTurbulence.delete(ball);
+                ball.remove();
+            }
         }
 
-        // Flash green and then remove
         function flashAndRemoveBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
             if (!ball) return;
             ball.classList.add('matched');
-            // After a short delay, remove it
             setTimeout(() => {
-                if (ball.parentNode) ball.remove();
+                if (ball.parentNode) {
+                    ballTurbulence.delete(ball);
+                    ball.remove();
+                }
             }, 250);
         }
 
@@ -802,7 +819,6 @@
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
-                // remove mini ball without flash (since already drawn)
                 removeNumberBall(n);
                 const ballDiv = document.createElement('div');
                 ballDiv.className = 'drawn-ball';
@@ -834,7 +850,7 @@
                 displayAllDrawnNumbers(data.currentDrawnNumbers);
                 if (!data.isDrawComplete) {
                     sphereGlass.classList.add('spinning');
-                    startRandomJitter();
+                    startTurbulence();
                 }
             }
         });
@@ -850,10 +866,9 @@
             clearAllSelections();
             playBtn.innerText = 'PLACE BET';
             waitingMsg.style.display = 'none';
-            // stop jitter if running
-            if (jitterInterval) {
-                clearInterval(jitterInterval);
-                jitterInterval = null;
+            if (turbulenceInterval) {
+                cancelAnimationFrame(turbulenceInterval);
+                turbulenceInterval = null;
             }
         });
 
@@ -864,11 +879,10 @@
             spherePhase.classList.add('active');
             resetSphere();
             sphereGlass.classList.add('spinning');
-            startRandomJitter();
+            startTurbulence();
         });
 
         socket.on('keno:number_drawn', (d) => {
-            // Flash green then remove
             flashAndRemoveBall(d.number);
             addDrawnBall(d.number);
         });
@@ -879,14 +893,11 @@
                 displayAllDrawnNumbers(d.drawnNumbers);
             }
             totalBallsSpan.innerText = d.totalDrawn || 20;
-            // Schedule safety return in case personal result doesn't arrive
             scheduleReturnToBetting();
         });
 
         socket.on('keno:round_result', (d) => {
-            // Cancel safety timeout
             if (returnTimeout) clearTimeout(returnTimeout);
-            // Add to history
             const item = document.createElement('div');
             item.className = 'history-item';
             item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
@@ -894,7 +905,6 @@
             if (historyList.children.length > 5) historyList.lastChild.remove();
             if (d.winnings > 0) updateBalance(d.newBalance);
 
-            // Show win/loss toast and return to betting phase
             showResultAndReturnToBetting(d.winnings > 0, d.winnings, d.bet);
         });
 
@@ -928,7 +938,7 @@
             }
             if (!d.isDrawComplete) {
                 sphereGlass.classList.add('spinning');
-                startRandomJitter();
+                startTurbulence();
             }
         });
 
