@@ -321,7 +321,7 @@
             box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
         }
 
-        /* ===== NEW: FOUR RODS (top & bottom) ===== */
+        /* ===== FOUR RODS – now attached directly to the sphere ===== */
         .rod {
             position: absolute;
             width: 12px;
@@ -333,24 +333,20 @@
             pointer-events: none; /* don't block clicks */
         }
         .rod-top-left {
-            top: -8px;
-            left: 20%;
-            transform: translateX(-50%);
+            top: -5px;                 /* touches the sphere's top edge */
+            left: calc(50% - 130px - 6px); /* centered at sphere's left edge */
         }
         .rod-top-right {
-            top: -8px;
-            right: 20%;
-            transform: translateX(50%);
+            top: -5px;
+            left: calc(50% + 130px - 6px); /* centered at sphere's right edge */
         }
         .rod-bottom-left {
-            bottom: -8px;
-            left: 20%;
-            transform: translateX(-50%);
+            bottom: -5px;               /* touches the sphere's bottom edge */
+            left: calc(50% - 130px - 6px);
         }
         .rod-bottom-right {
-            bottom: -8px;
-            right: 20%;
-            transform: translateX(50%);
+            bottom: -5px;
+            left: calc(50% + 130px - 6px);
         }
 
         /* drawn balls row */
@@ -500,7 +496,7 @@
             <div class="sphere-glass" id="sphereGlass">
                 <div class="inner-balls" id="innerBallsContainer"></div>
             </div>
-            <!-- 🔧 FOUR RODS: two on top, two on bottom -->
+            <!-- 🔧 FOUR RODS: two on top, two on bottom – now touching the sphere -->
             <div class="rod rod-top-left"></div>
             <div class="rod rod-top-right"></div>
             <div class="rod rod-bottom-left"></div>
