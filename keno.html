@@ -474,6 +474,8 @@
         .confirmation-content { background: #141c34; padding: 24px; border-radius: 32px; max-width: 300px; border: 1px solid gold; color: white; }
         .confirmation-content h3 { color: gold; margin-bottom: 12px; }
         .payout-breakdown { font-size: 12px; color: #aac3ff; margin-top: 8px; }
+        /* Added clarification note */
+        .payout-note { font-size: 11px; color: #ffd966; margin-top: 8px; border-top: 1px solid #334; padding-top: 6px; }
     </style>
 </head>
 <body>
@@ -565,6 +567,8 @@
             <h3>CONFIRM BET</h3>
             <div id="confirmDetails"></div>
             <div id="payoutBreakdown" class="payout-breakdown"></div>
+            <!-- Added clarification note -->
+            <div class="payout-note">⚠️ Only one multiplier applies based on your matches. Multipliers do not stack.</div>
             <div style="display:flex; gap:10px; margin-top:20px;">
                 <button class="btn" id="confirmCancel">CANCEL</button>
                 <button class="btn btn-primary" id="confirmOk">CONFIRM</button>
