@@ -317,13 +317,14 @@
             width: 28px;
             height: 28px;
             border-radius: 50%;
+            /* The background will be set dynamically by JS, but we keep a fallback */
             background: radial-gradient(circle at 30% 30%, #fff9e6, #d4a017 70%, #8b6910);
             box-shadow: 
-                0 8px 12px rgba(0,0,0,0.6),
-                0 0 0 2px rgba(255,255,200,0.4) inset,
+                0 8px 12px rgba(0,0,0,0.7),
+                0 0 0 2px rgba(255,255,200,0.5) inset,
                 0 -4px 6px rgba(0,0,0,0.8) inset,
-                4px 4px 12px rgba(255,255,255,0.5) inset,
-                -2px -2px 8px rgba(0,0,0,0.3) inset;
+                4px 4px 12px rgba(255,255,255,0.6) inset,
+                -2px -2px 8px rgba(0,0,0,0.4) inset;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -410,7 +411,7 @@
             box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            background: radial-gradient(circle at 30% 30%, #fff9e6, #d4a017 70%, #8b6910); /* fallback, will be overridden by JS */
+            /* background will be set by JS */
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -718,11 +719,17 @@
             }, 5000);
         }
 
-        // Generate a consistent color for a given number (1-80)
+        // Generate a realistic glossy ball gradient for a given number (1-80)
         function getBallColor(number) {
             // Use golden ratio to spread hues evenly
             const hue = (number * 137) % 360; // 137 is a prime near 360/φ
-            return `radial-gradient(circle at 30% 30%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%) 70%, hsl(${hue}, 90%, 30%))`;
+            // Multi-stop radial gradient for a glossy, 3D sphere
+            return `radial-gradient(circle at 30% 30%, 
+                hsl(${hue}, 95%, 85%) 0%, 
+                hsl(${hue}, 90%, 65%) 20%, 
+                hsl(${hue}, 85%, 45%) 50%, 
+                hsl(${hue}, 90%, 30%) 80%,
+                hsl(${hue}, 95%, 20%) 100%)`;
         }
 
         // Create number grid (1-80)
@@ -825,7 +832,7 @@
                 // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // assign consistent color based on number
+                // assign glossy color based on number
                 const color = getBallColor(i);
                 ball.style.background = color;
                 ball.dataset.color = color; // store for later use
@@ -895,7 +902,7 @@
                 }
             }, 250); // matches popout transition duration
             
-            // Add drawn ball with the same color
+            // Add drawn ball with the same glossy color
             addDrawnBall(number, color);
         }
 
@@ -903,7 +910,7 @@
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
-            ballDiv.style.background = color; // use the same color as the sphere ball
+            ballDiv.style.background = color; // use the same glossy gradient
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
