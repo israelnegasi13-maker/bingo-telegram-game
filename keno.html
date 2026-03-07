@@ -317,9 +317,9 @@
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            /* Black pool ball with white circle for number */
+            /* Blue‑black billiard ball with glossy highlight and white number circle */
             background: radial-gradient(circle at 50% 50%, white 0%, white 40%, transparent 41%),
-                        radial-gradient(circle at 30% 30%, #444, #000 80%);
+                        radial-gradient(circle at 30% 30%, #3a4e9b, #0b1a3a 70%, #000 100%);
             box-shadow: 
                 0 8px 12px rgba(0,0,0,0.7),
                 0 0 0 2px rgba(255,255,200,0.5) inset,
@@ -412,7 +412,7 @@
             box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* background will be set by JS, same pool‑ball pattern */
+            /* background will be set by JS, same blue‑black pool‑ball pattern */
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -720,11 +720,11 @@
             }, 5000);
         }
 
-        // ---------- POOL BALL STYLING ----------
+        // ---------- BLUE‑BLACK BILLIARD BALL STYLING ----------
         function getBallColor(number) {
-            // Black pool ball with a white circle for the number and glossy highlight
+            // Realistic blue‑black billiard ball with glossy highlight and white number area
             return "radial-gradient(circle at 50% 50%, white 0%, white 40%, transparent 41%), " +
-                   "radial-gradient(circle at 30% 30%, #444, #000 80%)";
+                   "radial-gradient(circle at 30% 30%, #3a4e9b, #0b1a3a 70%, #000 100%)";
         }
 
         // Create number grid (1-80)
@@ -827,7 +827,7 @@
                 // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // assign pool‑ball color
+                // assign blue‑black billiard ball color
                 const color = getBallColor(i);
                 ball.style.background = color;
                 ball.dataset.color = color; // store for later use
@@ -905,7 +905,7 @@
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
-            ballDiv.style.background = color; // use the same pool‑ball gradient
+            ballDiv.style.background = color; // use the same blue‑black gradient
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
