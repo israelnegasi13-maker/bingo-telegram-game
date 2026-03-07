@@ -249,7 +249,6 @@
         }
 
         .sphere-window {
-            position: relative; /* for absolute rods */
             background: rgba(16, 22, 45, 0.9);
             backdrop-filter: blur(16px);
             border: 2px solid rgba(255, 215, 0, 0.3);
@@ -263,20 +262,27 @@
             box-shadow: inset 0 -8px 20px #00000080, 0 25px 35px #000000, 0 0 0 2px #2e4bff20 inset;
         }
 
-        /* ---------- UPDATED: DEEP 3D GLASS SPHERE ---------- */
-        .sphere-glass {
+        /* ----- WRAPPER TO ALIGN RODS DIRECTLY ON SPHERE ----- */
+        .sphere-wrapper {
+            position: relative;
             width: 260px;
             height: 260px;
+            margin: 0 auto;
+        }
+
+        .sphere-glass {
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
-            /* Deep radial gradient with multiple stops to simulate thick glass */
+            /* Deep 3D glass gradient */
             background: radial-gradient(
                 circle at 25% 25%,
-                rgba(255, 255, 255, 0.8) 0%,
-                rgba(220, 240, 255, 0.6) 15%,
-                rgba(140, 180, 240, 0.4) 35%,
-                rgba(40, 60, 120, 0.3) 60%,
-                rgba(10, 20, 40, 0.7) 85%,
-                rgba(5, 10, 20, 0.9) 100%
+                rgba(255, 255, 255, 0.9) 0%,
+                rgba(220, 240, 255, 0.7) 15%,
+                rgba(140, 180, 240, 0.5) 35%,
+                rgba(40, 60, 120, 0.4) 60%,
+                rgba(10, 20, 40, 0.8) 85%,
+                rgba(5, 10, 20, 1) 100%
             );
             box-shadow: 
                 0 0 0 3px rgba(255, 255, 240, 0.4),
@@ -336,32 +342,36 @@
             box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
         }
 
-        /* ===== FOUR RODS – now shorter and closer to sphere ===== */
+        /* ===== RODS – NOW POSITIONED DIRECTLY ON SPHERE EDGES ===== */
         .rod {
             position: absolute;
             width: 12px;
-            height: 25px;              /* shorter */
+            height: 25px;
             background: linear-gradient(145deg, #c0c0c0, #7a7a7a);
-            border-radius: 8px;         /* slightly curved */
+            border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 1px 4px #fff8;
             z-index: 10;
             pointer-events: none;
         }
         .rod-top-left {
-            top: -2px;                  /* touches sphere */
-            left: calc(50% - 130px - 6px); /* left edge */
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -50%);  /* center on top-left corner */
         }
         .rod-top-right {
-            top: -2px;
-            left: calc(50% + 130px - 6px); /* right edge */
+            top: 0;
+            left: 100%;
+            transform: translate(-50%, -50%);  /* center on top-right corner */
         }
         .rod-bottom-left {
-            bottom: -2px;
-            left: calc(50% - 130px - 6px);
+            top: 100%;
+            left: 0;
+            transform: translate(-50%, -50%);  /* center on bottom-left corner */
         }
         .rod-bottom-right {
-            bottom: -2px;
-            left: calc(50% + 130px - 6px);
+            top: 100%;
+            left: 100%;
+            transform: translate(-50%, -50%);  /* center on bottom-right corner */
         }
 
         /* drawn balls row – smaller numbers */
@@ -374,7 +384,7 @@
             min-height: 40px;
         }
         .drawn-ball {
-            width: 32px;                /* reduced from 38px */
+            width: 32px;
             height: 32px;
             background: radial-gradient(circle at 30% 30%, #ffd966, #cc9a2e);
             border-radius: 50%;
@@ -382,7 +392,7 @@
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 14px;            /* smaller font */
+            font-size: 14px;
             color: #0b0e1a;
             box-shadow: 0 4px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
@@ -508,15 +518,16 @@
     <!-- ========== SPHERE DRAW PHASE ========== -->
     <div id="spherePhase" class="phase-sphere">
         <div class="sphere-window">
-            <div class="sphere-glass" id="sphereGlass">
-                <div class="inner-balls" id="innerBallsContainer"></div>
+            <div class="sphere-wrapper">
+                <div class="sphere-glass" id="sphereGlass">
+                    <div class="inner-balls" id="innerBallsContainer"></div>
+                </div>
+                <!-- 🔧 FOUR RODS: now perfectly attached to sphere's corners -->
+                <div class="rod rod-top-left"></div>
+                <div class="rod rod-top-right"></div>
+                <div class="rod rod-bottom-left"></div>
+                <div class="rod rod-bottom-right"></div>
             </div>
-            <!-- 🔧 FOUR RODS: two on top, two on bottom – now shorter and touching -->
-            <div class="rod rod-top-left"></div>
-            <div class="rod rod-top-right"></div>
-            <div class="rod rod-bottom-left"></div>
-            <div class="rod rod-bottom-right"></div>
-
             <div class="drawn-balls-row" id="drawnBallsRow"></div>
             <div class="draw-footer">
                 <span id="currentBallCount">0</span> / <span id="totalBallsCount">20</span> BALLS DRAWN
