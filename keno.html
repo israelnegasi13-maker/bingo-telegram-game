@@ -72,6 +72,11 @@
             opacity: 0.6;
             letter-spacing: 1px;
         }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .balance-badge {
             background: rgba(255,255,255,0.05);
             padding: 8px 14px;
@@ -81,6 +86,24 @@
             font-size: 15px;
             color: #ffd966;
             box-shadow: 0 0 12px #ffd96620;
+        }
+        .sound-toggle {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 30px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .sound-toggle.muted {
+            background: rgba(255,80,80,0.2);
+            color: #ffa0a0;
         }
 
         /* connection status */
@@ -488,7 +511,10 @@
                 <p>VIRTUAL SPHERE</p>
             </div>
         </div>
-        <div class="balance-badge" id="balance">0 ETB</div>
+        <div class="header-actions">
+            <div class="balance-badge" id="balance">0 ETB</div>
+            <div class="sound-toggle" id="soundToggle"><i class="fa-solid fa-volume-high"></i></div>
+        </div>
     </div>
 
     <!-- connection status -->
@@ -643,6 +669,28 @@
         const confirmCancel = document.getElementById('confirmCancel');
         const confirmOk = document.getElementById('confirmOk');
         const resultToast = document.getElementById('resultToast');
+        const soundToggle = document.getElementById('soundToggle');
+        const soundIcon = soundToggle.querySelector('i');
+
+        // Sound state (default: on)
+        let soundEnabled = localStorage.getItem('kenoSound') !== 'off';
+        updateSoundIcon();
+
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('kenoSound', soundEnabled ? 'on' : 'off');
+            updateSoundIcon();
+        });
+
+        function updateSoundIcon() {
+            if (soundEnabled) {
+                soundIcon.className = 'fa-solid fa-volume-high';
+                soundToggle.classList.remove('muted');
+            } else {
+                soundIcon.className = 'fa-solid fa-volume-xmark';
+                soundToggle.classList.add('muted');
+            }
+        }
 
         // Game state
         let selectedNumbers = [];
@@ -666,6 +714,23 @@
             4: {4: 60, 3: 2, 2: 1},
             5: {5: 200, 4: 50, 3: 20, 2: 1}
         };
+
+        // ---------- VOICE ANNOUNCEMENT FUNCTION ----------
+        function speakNumber(num) {
+            if (!soundEnabled) return;
+            if (!window.speechSynthesis) {
+                console.warn('Speech synthesis not supported');
+                return;
+            }
+            // Cancel any ongoing speech to avoid overlapping
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(num.toString());
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9;      // slightly slower for clarity
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            window.speechSynthesis.speak(utterance);
+        }
 
         // ---------- Helper functions ----------
         function updateBalance(val) { balance = val; balanceSpan.innerText = val.toLocaleString() + ' ETB'; }
@@ -979,6 +1044,7 @@
         });
 
         socket.on('keno:number_drawn', (d) => {
+            speakNumber(d.number);      // voice announcement
             flashAndRemoveBall(d.number);
         });
 
