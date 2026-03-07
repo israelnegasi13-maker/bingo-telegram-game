@@ -1,4 +1,4 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH "UNBEATABLE" MODE
+// keno-logic.js - KENO GAME LOGIC MODULE WITH "UNBEATABLE" MODE (OPTIMIZED)
 // ========== MODIFIED TO DRAW NUMBERS OPPOSITE FROM PLAYER SELECTIONS ==========
 
 module.exports = {
@@ -38,7 +38,7 @@ module.exports = {
     // ==================== UNBEATABLE PROFIT CONTROL ====================
     PROFIT_CONTROL: {
         ENABLED: true,
-        SIMULATION_COUNT: 1000,
+        SIMULATION_COUNT: 500,                // Reduced from 1000 for performance (still highly profitable)
         TARGET_HOUSE_KEEP_PERCENTAGE: 100,      // Aim to keep everything
         MIN_HOUSE_KEEP_PERCENTAGE: 95,           // Never pay out more than 5%
         MAX_HOUSE_KEEP_PERCENTAGE: 100,
@@ -124,6 +124,7 @@ module.exports = {
         console.log('💰 House target: 100% profit (players lose almost always)');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
         console.log('👑 Agent commission: 10% on Keno wins');
+        console.log('⚡ Optimized simulation: 500 candidates (early exit enabled)');
         
         // Load existing stats
         this.loadKenoStats();
@@ -2186,7 +2187,7 @@ module.exports = {
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
             amount: bet.amount,
-            selectionCount: bet.selectionCount || bet.numbers.length,
+            selectionCount: Number(bet.selectionCount) || Number(bet.numbers.length), // Force number
             playerId: bet.playerId || null
         }));
 
@@ -2240,6 +2241,10 @@ module.exports = {
         // Simulate multiple draws
         const simulations = [];
         const startTime = Date.now();
+
+        // OPTIMIZATION: Stop early if we find a zero-payout draw
+        let bestDraw = null;
+        let bestScore = Infinity;
 
         for (let i = 0; i < pc.SIMULATION_COUNT; i++) {
             const candidateDraw = self.generateRandomDraw();
@@ -2307,7 +2312,8 @@ module.exports = {
                 score *= 0.9; // slight bonus
             }
 
-            simulations.push({
+            // Store simulation result
+            const result = {
                 draw: candidateDraw,
                 totalPayout,
                 houseKeep,
@@ -2317,11 +2323,24 @@ module.exports = {
                 bigWinsCount,
                 maxIndividualWin,
                 winnerCount
-            });
+            };
+            simulations.push(result);
+
+            // Check if this is the best so far
+            if (score < bestScore) {
+                bestScore = score;
+                bestDraw = result;
+            }
+
+            // EARLY EXIT: If we found a perfect draw (score 0), stop searching
+            if (score === 0) {
+                console.log('🎯 Found perfect zero-payout draw, stopping early.');
+                break;
+            }
         }
 
         const simulationTime = Date.now() - startTime;
-        console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
+        console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms (target ${pc.SIMULATION_COUNT})`);
 
         // Use randomness chance to sometimes pick a truly random draw
         if (Math.random() < pc.RANDOMNESS_CHANCE) {
@@ -2332,10 +2351,9 @@ module.exports = {
             return selected.draw;
         }
 
-        // Sort by score (lower is better – i.e., minimal payout)
+        // Sort by score (lower is better) – we already have bestDraw from early exit
+        // But we still want to pick from top 15 to avoid deterministic patterns
         simulations.sort((a, b) => a.score - b.score);
-
-        // Take top 15 candidates and pick randomly from them (to avoid deterministic patterns)
         const topCandidates = simulations.slice(0, 15);
         const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
@@ -2381,7 +2399,7 @@ module.exports = {
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate the draw using UNBEATABLE PROFIT CONTROL (no 700 ETB cap check)
+            // Generate the draw using UNBEATABLE PROFIT CONTROL
             let drawnNumbers;
             if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
                 drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
@@ -2457,7 +2475,7 @@ module.exports = {
         
         // Calculate winnings
         let winnings = 0;
-        const selectionCount = bet.selectionCount || bet.numbers.length;
+        const selectionCount = Number(bet.selectionCount) || Number(bet.numbers.length);
         
         if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
             const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
@@ -2505,7 +2523,7 @@ module.exports = {
                 
                 // Calculate winnings based on number of selections
                 let winnings = 0;
-                const selectionCount = bet.selectionCount || bet.numbers.length;
+                const selectionCount = Number(bet.selectionCount) || Number(bet.numbers.length);
                 
                 if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
                     const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
