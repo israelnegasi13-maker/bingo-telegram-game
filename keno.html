@@ -262,7 +262,6 @@
             box-shadow: inset 0 -8px 20px #00000080, 0 25px 35px #000000, 0 0 0 2px #2e4bff20 inset;
         }
 
-        /* ----- WRAPPER TO ALIGN RODS DIRECTLY ON SPHERE ----- */
         .sphere-wrapper {
             position: relative;
             width: 260px;
@@ -274,25 +273,25 @@
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            /* Deep 3D glass gradient */
+            /* Deep 3D glass gradient with extra highlights */
             background: radial-gradient(
                 circle at 25% 25%,
-                rgba(255, 255, 255, 0.9) 0%,
-                rgba(220, 240, 255, 0.7) 15%,
-                rgba(140, 180, 240, 0.5) 35%,
-                rgba(40, 60, 120, 0.4) 60%,
-                rgba(10, 20, 40, 0.8) 85%,
-                rgba(5, 10, 20, 1) 100%
+                rgba(255, 255, 255, 0.95) 0%,
+                rgba(240, 248, 255, 0.8) 10%,
+                rgba(180, 210, 255, 0.6) 25%,
+                rgba(80, 120, 200, 0.5) 45%,
+                rgba(20, 40, 80, 0.7) 70%,
+                rgba(5, 10, 25, 0.95) 100%
             );
             box-shadow: 
-                0 0 0 3px rgba(255, 255, 240, 0.4),
+                0 0 0 3px rgba(255, 255, 240, 0.5),
                 0 30px 50px rgba(0, 0, 0, 0.9),
                 inset 0 -20px 30px #0a1a3a,
-                inset 0 20px 40px rgba(200, 220, 255, 0.5),
-                inset 0 0 30px rgba(255, 255, 255, 0.3);
+                inset 0 20px 40px rgba(200, 220, 255, 0.6),
+                inset 0 0 30px rgba(255, 255, 255, 0.4);
             position: relative;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 200, 0.6);
+            border: 1px solid rgba(255, 255, 200, 0.7);
             transition: box-shadow 0.2s;
         }
 
@@ -342,36 +341,55 @@
             box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
         }
 
-        /* ===== RODS – NOW POSITIONED DIRECTLY ON SPHERE EDGES ===== */
+        /* ===== RODS – NOW ATTACHED DIRECTLY TO SPHERE SURFACE ===== */
         .rod {
             position: absolute;
-            width: 12px;
-            height: 25px;
-            background: linear-gradient(145deg, #c0c0c0, #7a7a7a);
+            width: 14px;                /* slightly wider */
+            height: 28px;                /* a bit taller */
+            background: linear-gradient(145deg, #d0d0d0, #8a8a8a);
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 1px 4px #fff8;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.7), inset 0 1px 4px #fffa, 0 0 0 1px #666 inset;
             z-index: 10;
             pointer-events: none;
         }
+
+        /* Top rods – positioned at top edge, horizontally at 20% and 80% */
         .rod-top-left {
-            top: 0;
-            left: 0;
-            transform: translate(-50%, -50%);  /* center on top-left corner */
+            top: -2px;                  /* slightly overlaps sphere */
+            left: 20%;
+            transform: translate(-50%, 0);
         }
         .rod-top-right {
-            top: 0;
-            left: 100%;
-            transform: translate(-50%, -50%);  /* center on top-right corner */
+            top: -2px;
+            left: 80%;
+            transform: translate(-50%, 0);
         }
+
+        /* Bottom rods – positioned at bottom edge */
         .rod-bottom-left {
-            top: 100%;
-            left: 0;
-            transform: translate(-50%, -50%);  /* center on bottom-left corner */
+            bottom: -2px;
+            left: 20%;
+            transform: translate(-50%, 0);
         }
         .rod-bottom-right {
-            top: 100%;
-            left: 100%;
-            transform: translate(-50%, -50%);  /* center on bottom-right corner */
+            bottom: -2px;
+            left: 80%;
+            transform: translate(-50%, 0);
+        }
+
+        /* Add tiny metallic caps at the rod ends (optional) */
+        .rod::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 6px;
+            background: radial-gradient(circle, #fff8, #aaa0);
+            border-radius: 4px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            filter: blur(1px);
+            opacity: 0.6;
         }
 
         /* drawn balls row – smaller numbers */
@@ -522,7 +540,7 @@
                 <div class="sphere-glass" id="sphereGlass">
                     <div class="inner-balls" id="innerBallsContainer"></div>
                 </div>
-                <!-- 🔧 FOUR RODS: now perfectly attached to sphere's corners -->
+                <!-- 🔧 FOUR RODS: two on top, two on bottom – now attached to sphere surface -->
                 <div class="rod rod-top-left"></div>
                 <div class="rod rod-top-right"></div>
                 <div class="rod rod-bottom-left"></div>
