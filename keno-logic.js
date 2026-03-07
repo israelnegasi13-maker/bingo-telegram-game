@@ -1,4 +1,4 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH "UNBEATABLE" MODE (OPTIMIZED)
+// keno-logic.js - KENO GAME LOGIC MODULE WITH "UNBEATABLE" MODE
 // ========== MODIFIED TO DRAW NUMBERS OPPOSITE FROM PLAYER SELECTIONS ==========
 
 module.exports = {
@@ -38,7 +38,7 @@ module.exports = {
     // ==================== UNBEATABLE PROFIT CONTROL ====================
     PROFIT_CONTROL: {
         ENABLED: true,
-        SIMULATION_COUNT: 500,                // Reduced from 1000 for performance (still highly profitable)
+        SIMULATION_COUNT: 1000,
         TARGET_HOUSE_KEEP_PERCENTAGE: 100,      // Aim to keep everything
         MIN_HOUSE_KEEP_PERCENTAGE: 95,           // Never pay out more than 5%
         MAX_HOUSE_KEEP_PERCENTAGE: 100,
@@ -124,7 +124,6 @@ module.exports = {
         console.log('💰 House target: 100% profit (players lose almost always)');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
         console.log('👑 Agent commission: 10% on Keno wins');
-        console.log('⚡ Optimized simulation: 500 candidates (early exit enabled)');
         
         // Load existing stats
         this.loadKenoStats();
@@ -544,7 +543,7 @@ module.exports = {
                     payoutTable: self.CONFIG.PAYOUT_TABLE,
                     playersCount: activeGame ? activeGame.players.length : 0,
                     totalBets: activeGame ? activeGame.totalBets : 0,
-                    // Send current drawn numbers if any exist
+                    // Send current drawn numbers if any exist (incremental during draw)
                     currentDrawnNumbers: currentDrawnNumbers,
                     isDrawComplete: activeGame.drawComplete || false,
                     hasBetInCurrentRound: playerHasBetInCurrentRound,
@@ -2187,7 +2186,7 @@ module.exports = {
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
             amount: bet.amount,
-            selectionCount: Number(bet.selectionCount) || Number(bet.numbers.length), // Force number
+            selectionCount: bet.selectionCount || bet.numbers.length,
             playerId: bet.playerId || null
         }));
 
@@ -2241,10 +2240,6 @@ module.exports = {
         // Simulate multiple draws
         const simulations = [];
         const startTime = Date.now();
-
-        // OPTIMIZATION: Stop early if we find a zero-payout draw
-        let bestDraw = null;
-        let bestScore = Infinity;
 
         for (let i = 0; i < pc.SIMULATION_COUNT; i++) {
             const candidateDraw = self.generateRandomDraw();
@@ -2312,8 +2307,7 @@ module.exports = {
                 score *= 0.9; // slight bonus
             }
 
-            // Store simulation result
-            const result = {
+            simulations.push({
                 draw: candidateDraw,
                 totalPayout,
                 houseKeep,
@@ -2323,24 +2317,11 @@ module.exports = {
                 bigWinsCount,
                 maxIndividualWin,
                 winnerCount
-            };
-            simulations.push(result);
-
-            // Check if this is the best so far
-            if (score < bestScore) {
-                bestScore = score;
-                bestDraw = result;
-            }
-
-            // EARLY EXIT: If we found a perfect draw (score 0), stop searching
-            if (score === 0) {
-                console.log('🎯 Found perfect zero-payout draw, stopping early.');
-                break;
-            }
+            });
         }
 
         const simulationTime = Date.now() - startTime;
-        console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms (target ${pc.SIMULATION_COUNT})`);
+        console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
 
         // Use randomness chance to sometimes pick a truly random draw
         if (Math.random() < pc.RANDOMNESS_CHANCE) {
@@ -2351,9 +2332,10 @@ module.exports = {
             return selected.draw;
         }
 
-        // Sort by score (lower is better) – we already have bestDraw from early exit
-        // But we still want to pick from top 15 to avoid deterministic patterns
+        // Sort by score (lower is better – i.e., minimal payout)
         simulations.sort((a, b) => a.score - b.score);
+
+        // Take top 15 candidates and pick randomly from them (to avoid deterministic patterns)
         const topCandidates = simulations.slice(0, 15);
         const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
@@ -2400,29 +2382,34 @@ module.exports = {
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
             // Generate the draw using UNBEATABLE PROFIT CONTROL
-            let drawnNumbers;
+            let fullDraw;
             if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
-                drawnNumbers = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
+                fullDraw = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
                 console.log('🎯 Using unbeatable profit‑controlled draw.');
             } else {
-                drawnNumbers = self.generateRandomDraw();
+                fullDraw = self.generateRandomDraw();
                 console.log('🎲 Profit control disabled or no bets – using random draw');
             }
             
-            // Store in original random order
-            activeGame.drawnNumbersOriginalOrder = [...drawnNumbers];
-            activeGame.drawnNumbers = drawnNumbers;
+            // Store the full draw for later use
+            activeGame.fullDrawnNumbers = fullDraw; // optional, for completeness
+            // Initialize incremental drawn numbers
+            activeGame.drawnNumbers = [];
             
-            console.log(`🎰 Numbers to draw (random order): ${drawnNumbers.join(', ')}`);
+            console.log(`🎰 Numbers to draw (random order): ${fullDraw.join(', ')}`);
             
             // Draw numbers one by one in RANDOM ORDER
-            for (let i = 0; i < drawnNumbers.length; i++) {
+            for (let i = 0; i < fullDraw.length; i++) {
                 setTimeout(() => {
+                    const number = fullDraw[i];
+                    // Append to the incremental array
+                    activeGame.drawnNumbers.push(number);
+                    
                     self.io.to('keno').emit('keno:number_drawn', {
-                        number: drawnNumbers[i],
+                        number: number,
                         index: i,
-                        total: drawnNumbers.length,
-                        drawnCount: i + 1,
+                        total: fullDraw.length,
+                        drawnCount: activeGame.drawnNumbers.length,
                         round: activeGame.roundNumber,
                         isRandomOrder: true
                     });
@@ -2431,32 +2418,32 @@ module.exports = {
             
             // After all numbers are drawn, send complete results IN SORTED ORDER for display
             setTimeout(() => {
-                const sortedForDisplay = [...drawnNumbers].sort((a, b) => a - b);
+                const sortedForDisplay = [...fullDraw].sort((a, b) => a - b);
+                
+                // Replace drawnNumbers with the final sorted list
+                activeGame.drawnNumbers = sortedForDisplay;
+                activeGame.drawComplete = true;
+                activeGame.status = 'completed';
+                self.isDrawing = false;
                 
                 self.io.to('keno').emit('keno:round_results', {
                     round: activeGame.roundNumber,
                     drawnNumbers: sortedForDisplay,
-                    originalOrder: drawnNumbers,
+                    originalOrder: fullDraw,
                     playersCount: activeGame.players.length,
                     totalBets: activeGame.totalBets,
-                    popInterval: self.CONFIG.NUMBER_POP_INTERVAL,
                     message: `Round ${activeGame.roundNumber} results!`,
-                    totalDrawn: drawnNumbers.length,
+                    totalDrawn: sortedForDisplay.length,
                     isDrawComplete: true,
                     wasRandomOrder: true
                 });
-                
-                // Mark draw as complete
-                activeGame.drawComplete = true;
-                activeGame.status = 'completed';
-                self.isDrawing = false;
                 
                 // Process results after numbers are shown
                 setTimeout(async () => {
                     await self.processKenoResults(activeGame);
                 }, 1000);
                 
-            }, (drawnNumbers.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
+            }, (fullDraw.length * self.CONFIG.NUMBER_POP_INTERVAL) + 1000);
             
         }, 2000);
     },
@@ -2475,7 +2462,7 @@ module.exports = {
         
         // Calculate winnings
         let winnings = 0;
-        const selectionCount = Number(bet.selectionCount) || Number(bet.numbers.length);
+        const selectionCount = bet.selectionCount || bet.numbers.length;
         
         if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
             const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
@@ -2523,7 +2510,7 @@ module.exports = {
                 
                 // Calculate winnings based on number of selections
                 let winnings = 0;
-                const selectionCount = Number(bet.selectionCount) || Number(bet.numbers.length);
+                const selectionCount = bet.selectionCount || bet.numbers.length;
                 
                 if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
                     const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
