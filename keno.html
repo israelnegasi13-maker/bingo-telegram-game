@@ -267,11 +267,11 @@
             width: 260px;
             height: 260px;
             border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, rgba(220, 240, 255, 0.4), rgba(15, 30, 60, 0.9) 80%);
-            box-shadow: 0 0 0 3px rgba(255,255,240,0.2), 0 20px 40px rgba(0,0,0,0.8), inset 0 -15px 30px #182050, inset 0 15px 30px #89a6ff40;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), rgba(200, 220, 255, 0.2) 40%, rgba(30, 40, 70, 0.9) 90%);
+            box-shadow: 0 0 0 3px rgba(255,255,240,0.3), 0 20px 40px rgba(0,0,0,0.8), inset 0 -15px 30px #182050, inset 0 15px 30px #aac0ff;
             position: relative;
             overflow: hidden;
-            border: 1px solid rgba(255,255,200,0.3);
+            border: 1px solid rgba(255,255,200,0.5);
             transition: box-shadow 0.2s;
         }
 
@@ -321,55 +321,55 @@
             box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
         }
 
-        /* ===== FOUR RODS – now attached directly to the sphere ===== */
+        /* ===== FOUR RODS – now shorter and closer to sphere ===== */
         .rod {
             position: absolute;
             width: 12px;
-            height: 40px;
+            height: 25px;              /* shorter */
             background: linear-gradient(145deg, #c0c0c0, #7a7a7a);
-            border-radius: 20px;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.6), inset 0 2px 6px #fff8;
+            border-radius: 8px;         /* slightly curved */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 1px 4px #fff8;
             z-index: 10;
-            pointer-events: none; /* don't block clicks */
+            pointer-events: none;
         }
         .rod-top-left {
-            top: -5px;                 /* touches the sphere's top edge */
-            left: calc(50% - 130px - 6px); /* centered at sphere's left edge */
+            top: -2px;                  /* touches sphere */
+            left: calc(50% - 130px - 6px); /* left edge */
         }
         .rod-top-right {
-            top: -5px;
-            left: calc(50% + 130px - 6px); /* centered at sphere's right edge */
+            top: -2px;
+            left: calc(50% + 130px - 6px); /* right edge */
         }
         .rod-bottom-left {
-            bottom: -5px;               /* touches the sphere's bottom edge */
+            bottom: -2px;
             left: calc(50% - 130px - 6px);
         }
         .rod-bottom-right {
-            bottom: -5px;
+            bottom: -2px;
             left: calc(50% + 130px - 6px);
         }
 
-        /* drawn balls row */
+        /* drawn balls row – smaller numbers */
         .drawn-balls-row {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
             margin: 30px 0 15px;
-            min-height: 48px;
+            min-height: 40px;
         }
         .drawn-ball {
-            width: 38px;
-            height: 38px;
+            width: 32px;                /* reduced from 38px */
+            height: 32px;
             background: radial-gradient(circle at 30% 30%, #ffd966, #cc9a2e);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 16px;
+            font-size: 14px;            /* smaller font */
             color: #0b0e1a;
-            box-shadow: 0 5px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 5px 10px black;
+            box-shadow: 0 4px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
@@ -496,7 +496,7 @@
             <div class="sphere-glass" id="sphereGlass">
                 <div class="inner-balls" id="innerBallsContainer"></div>
             </div>
-            <!-- 🔧 FOUR RODS: two on top, two on bottom – now touching the sphere -->
+            <!-- 🔧 FOUR RODS: two on top, two on bottom – now shorter and touching -->
             <div class="rod rod-top-left"></div>
             <div class="rod rod-top-right"></div>
             <div class="rod rod-bottom-left"></div>
