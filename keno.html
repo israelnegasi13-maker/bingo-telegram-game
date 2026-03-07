@@ -332,30 +332,29 @@
             color: #1a1a1a;
             text-shadow: 0 1px 2px rgba(255,255,200,0.9);
             pointer-events: none;
-            will-change: transform;
-            transition: background 0.2s, box-shadow 0.2s;
+            will-change: transform, opacity, filter;
+            transition: transform 0.25s ease-out, opacity 0.2s, filter 0.2s;
             transform: translate(-50%, -50%);
         }
-        .mini-ball.matched {
-            background: radial-gradient(circle at 30% 30%, #b8f0b8, #2e7d32 70%, #1b5e20) !important;
-            box-shadow: 0 8px 12px rgba(0,0,0,0.6), 0 0 0 3px #a5d6a5 inset, 0 -4px 6px #1b5e20 inset;
+        .mini-ball.popout {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0;
+            filter: brightness(1.5);
         }
 
-        /* ===== RODS – NOW ATTACHED DIRECTLY TO SPHERE SURFACE ===== */
+        /* ===== RODS – attached to sphere surface ===== */
         .rod {
             position: absolute;
-            width: 14px;                /* slightly wider */
-            height: 28px;                /* a bit taller */
+            width: 14px;
+            height: 28px;
             background: linear-gradient(145deg, #d0d0d0, #8a8a8a);
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.7), inset 0 1px 4px #fffa, 0 0 0 1px #666 inset;
             z-index: 10;
             pointer-events: none;
         }
-
-        /* Top rods – positioned at top edge, horizontally at 20% and 80% */
         .rod-top-left {
-            top: -2px;                  /* slightly overlaps sphere */
+            top: -2px;
             left: 20%;
             transform: translate(-50%, 0);
         }
@@ -364,8 +363,6 @@
             left: 80%;
             transform: translate(-50%, 0);
         }
-
-        /* Bottom rods – positioned at bottom edge */
         .rod-bottom-left {
             bottom: -2px;
             left: 20%;
@@ -376,8 +373,6 @@
             left: 80%;
             transform: translate(-50%, 0);
         }
-
-        /* Add tiny metallic caps at the rod ends (optional) */
         .rod::after {
             content: '';
             position: absolute;
@@ -392,7 +387,7 @@
             opacity: 0.6;
         }
 
-        /* drawn balls row – smaller numbers */
+        /* drawn balls row – now using same colors as sphere balls */
         .drawn-balls-row {
             display: flex;
             flex-wrap: wrap;
@@ -404,17 +399,18 @@
         .drawn-ball {
             width: 32px;
             height: 32px;
-            background: radial-gradient(circle at 30% 30%, #ffd966, #cc9a2e);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
             font-size: 14px;
-            color: #0b0e1a;
-            box-shadow: 0 4px 0 #7f571f, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
+            color: #1a1a1a;
+            text-shadow: 0 1px 2px rgba(255,255,200,0.9);
+            box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: radial-gradient(circle at 30% 30%, #fff9e6, #d4a017 70%, #8b6910); /* fallback, will be overridden by JS */
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -540,7 +536,7 @@
                 <div class="sphere-glass" id="sphereGlass">
                     <div class="inner-balls" id="innerBallsContainer"></div>
                 </div>
-                <!-- 🔧 FOUR RODS: two on top, two on bottom – now attached to sphere surface -->
+                <!-- four rods attached to sphere -->
                 <div class="rod rod-top-left"></div>
                 <div class="rod rod-top-right"></div>
                 <div class="rod rod-bottom-left"></div>
@@ -722,6 +718,13 @@
             }, 5000);
         }
 
+        // Generate a consistent color for a given number (1-80)
+        function getBallColor(number) {
+            // Use golden ratio to spread hues evenly
+            const hue = (number * 137) % 360; // 137 is a prime near 360/φ
+            return `radial-gradient(circle at 30% 30%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%) 70%, hsl(${hue}, 90%, 30%))`;
+        }
+
         // Create number grid (1-80)
         for (let i=1; i<=80; i++) {
             const btn = document.createElement('div');
@@ -822,9 +825,10 @@
                 // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // random color using HSL (vibrant)
-                const hue = Math.floor(Math.random() * 360);
-                ball.style.background = `radial-gradient(circle at 30% 30%, hsl(${hue}, 95%, 75%), hsl(${hue}, 85%, 45%) 70%, hsl(${hue}, 90%, 30%))`;
+                // assign consistent color based on number
+                const color = getBallColor(i);
+                ball.style.background = color;
+                ball.dataset.color = color; // store for later use
                 // turbulence parameters
                 ballTurbulence.set(ball, {
                     phaseX: Math.random() * 2 * Math.PI,
@@ -872,22 +876,34 @@
             }
         }
 
+        // Enhanced flash and remove: animate pop-out then remove, and add drawn ball with same color
         function flashAndRemoveBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
             if (!ball) return;
-            ball.classList.add('matched');
+            
+            // Get the ball's color from dataset
+            const color = ball.dataset.color || getBallColor(number);
+            
+            // Add popout class to trigger CSS animation
+            ball.classList.add('popout');
+            
+            // After animation ends, remove the ball and add drawn ball
             setTimeout(() => {
                 if (ball.parentNode) {
                     ballTurbulence.delete(ball);
                     ball.remove();
                 }
-            }, 250);
+            }, 250); // matches popout transition duration
+            
+            // Add drawn ball with the same color
+            addDrawnBall(number, color);
         }
 
-        function addDrawnBall(number) {
+        function addDrawnBall(number, color) {
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
+            ballDiv.style.background = color; // use the same color as the sphere ball
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
@@ -900,6 +916,7 @@
                 const ballDiv = document.createElement('div');
                 ballDiv.className = 'drawn-ball';
                 ballDiv.innerText = n;
+                ballDiv.style.background = getBallColor(n);
                 drawnBallsRow.appendChild(ballDiv);
             });
             drawnNumbersSoFar = [...numbers];
@@ -961,7 +978,6 @@
 
         socket.on('keno:number_drawn', (d) => {
             flashAndRemoveBall(d.number);
-            addDrawnBall(d.number);
         });
 
         socket.on('keno:round_results', (d) => {
