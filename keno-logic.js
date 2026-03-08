@@ -1,5 +1,5 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH "UNBEATABLE" MODE
-// ========== MODIFIED TO DRAW NUMBERS OPPOSITE FROM PLAYER SELECTIONS ==========
+// keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP (70 ETB)
+// ========== MODIFIED TO ENFORCE MAX WIN PER PLAYER = 70 ETB ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -12,7 +12,7 @@ module.exports = {
         KENO_TOTAL_NUMBERS: 80,
         KENO_DRAW_COUNT: 20,
         NUMBER_POP_INTERVAL: 3000, // 3 seconds between number pops
-        // UPDATED PAYOUT TABLE - same as original (but players will rarely see it)
+        // PAYOUT TABLE (unchanged) – but we will cap actual winnings
         PAYOUT_TABLE: {
             1: {1: 3, 0: 0},                     // Pick 1: Match 1 = 3x
             2: {2: 10, 1: 0, 0: 0},             // Pick 2: Match 2 = 10x
@@ -35,15 +35,17 @@ module.exports = {
         RECONNECT_BACKOFF: 2000,
     },
 
-    // ==================== UNBEATABLE PROFIT CONTROL ====================
+    // ==================== PROFIT CONTROL + MAX WIN CAP ====================
     PROFIT_CONTROL: {
         ENABLED: true,
         SIMULATION_COUNT: 1000,
-        TARGET_HOUSE_KEEP_PERCENTAGE: 100,      // Aim to keep everything
-        MIN_HOUSE_KEEP_PERCENTAGE: 95,           // Never pay out more than 5%
-        MAX_HOUSE_KEEP_PERCENTAGE: 100,
-        VARIANCE_PERCENTAGE: 5,                   // Very tight variance
-        RANDOMNESS_CHANCE: 0.05,                   // Only 5% random draws (for plausibility)
+        TARGET_HOUSE_KEEP_PERCENTAGE: 70,      // Aim to keep 70% (allow 30% payout)
+        MIN_HOUSE_KEEP_PERCENTAGE: 50,          // Allow as low as 50% house keep
+        MAX_HOUSE_KEEP_PERCENTAGE: 95,
+        VARIANCE_PERCENTAGE: 5,                  // Acceptable variance
+        RANDOMNESS_CHANCE: 0.05,                  // 5% random draws for plausibility
+        // NEW: Maximum win per player per round (capped at 70 ETB)
+        MAX_WIN_PER_PLAYER: 70,
         // Player‑unfriendly pattern settings (disabled)
         PATTERN_AVOIDANCE: {
             ENABLED: false,
@@ -53,15 +55,14 @@ module.exports = {
             NUMBER_FREQUENCY_CAP: 1.0,
             DIVERSITY_REQUIREMENT: 0,
         },
-        // Dynamic adjustment – now tuned to increase house profit
+        // Dynamic adjustment – now tuned to allow small wins
         DYNAMIC_ADJUSTMENT: {
             ENABLED: true,
-            LOW_PLAYER_ADJUSTMENT: 1.05,          // Increase profit when few players
-            HIGH_BET_ADJUSTMENT: 1.02,             // Slightly increase profit on big bets
-            LOW_SELECTION_ADJUSTMENT: 1.10,         // Counter 1‑number bets by increasing profit
-            JACKPOT_PROTECTION: false,              // No need – we want the house to win
+            LOW_PLAYER_ADJUSTMENT: 1.02,          // Slightly increase house keep when few players
+            HIGH_BET_ADJUSTMENT: 1.01,             // Slightly increase house keep on big bets
+            LOW_SELECTION_ADJUSTMENT: 1.05,         // Adjust for 1‑number bets
+            JACKPOT_PROTECTION: false,
             BALANCE_PROTECTION: true,
-            // Player retention features – disabled because we don't want players to win
             NEW_PLAYER_BONUS: 1.0,
             LOSING_STREAK_BOOST: 1.0,
             MINIMUM_WIN_RATE: 0.0,
@@ -114,14 +115,14 @@ module.exports = {
         this.recentNumbersFrequency = new Map();
         this.lastSelectedNumbers = [];
         
-        console.log('✅ Keno game logic initialized - UNBEATABLE MODE');
+        console.log('✅ Keno game logic initialized - MAX WIN CAP 70 ETB');
         console.log('🎰 UPDATED payout table loaded:');
         console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 20x, 2 hits = 1x');
         console.log('   4 Numbers: 4 hits = 60x, 3 hits = 2x, 2 hits = 1x');
         console.log('   3 Numbers: 3 hits = 20x, 2 hits = 2x');
         console.log('   2 Numbers: 2 hits = 10x');
         console.log('   1 Number:  1 hit = 3x');
-        console.log('💰 House target: 100% profit (players lose almost always)');
+        console.log('💰 House target: 70% profit, max win per player: 70 ETB');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
         console.log('👑 Agent commission: 10% on Keno wins');
         
@@ -185,7 +186,7 @@ module.exports = {
         this.recentNumbersFrequency.clear();
         this.lastSelectedNumbers = [];
         
-        console.log('🎯 Unbeatable Profit Control System initialized');
+        console.log('🎯 Profit Control System (with max win cap) initialized');
         
         // Clean up old profit history every hour
         setInterval(() => {
@@ -2143,6 +2144,7 @@ module.exports = {
         console.log(`   Winners: ${selected.winnerCount} players`);
         console.log(`   Big Wins: ${selected.bigWinsCount}`);
         console.log(`   Max Individual Win: ${selected.maxIndividualWin} ETB`);
+        console.log(`   Any Win Exceeds Cap: ${selected.anyExceedsCap ? 'YES' : 'NO'}`);
         
         // Add to history
         this.profitControlHistory.push({
@@ -2160,29 +2162,24 @@ module.exports = {
         if (houseKeepPercentage > 35) {
             this.consecutiveHighProfitRounds++;
             console.log(`⚠️  Consecutive High Profit Rounds: ${this.consecutiveHighProfitRounds}`);
-            
-            // If too many consecutive high profits, force a lower profit round next time (but we ignore)
-            if (this.consecutiveHighProfitRounds >= this.PROFIT_CONTROL.PATTERN_AVOIDANCE.MAX_CONSECUTIVE_HIGH_PROFIT) {
-                console.log('⚠️  Too many consecutive high profit rounds, will adjust next round (but we don\'t)');
-            }
         } else {
             this.consecutiveHighProfitRounds = 0;
         }
     },
     
-    // Simulate multiple draws and select one that maximises house profit (minimises matches)
+    // ==================== MODIFIED SIMULATION FUNCTION ====================
     simulateAndSelectDraw: function(bets, totalBetAmount) {
         const self = this;
         const pc = self.PROFIT_CONTROL;
+        const MAX_WIN = pc.MAX_WIN_PER_PLAYER; // 70 ETB
 
         // If no bets or profit control disabled, return random draw
         if (!pc.ENABLED || Object.keys(bets).length === 0) {
             return self.generateRandomDraw();
         }
 
-        console.log('🎯 Unbeatable Profit Control: Simulating draws to avoid player numbers...');
+        console.log('🎯 Profit Control + Max Win Cap: Simulating draws to keep wins ≤ 70 ETB...');
 
-        // Convert bets to array for easier processing
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
             amount: bet.amount,
@@ -2193,68 +2190,49 @@ module.exports = {
         const totalPlayers = betsArray.length;
         const totalWagered = totalBetAmount;
 
-        // For very small player counts, we can still use random draw (but chance is low)
-        if (totalPlayers <= 2) {
-            console.log('🎯 Very few players (≤2) – using random draw (but with low chance).');
-            if (Math.random() < pc.RANDOMNESS_CHANCE) {
-                return self.generateRandomDraw();
-            }
-        }
-
-        // Target house keep is 100% (we want no payout)
+        // Adjust target house keep based on player count etc.
         let targetHouseKeep = pc.TARGET_HOUSE_KEEP_PERCENTAGE;
-
-        // Optionally adjust target based on game conditions (but now we always aim high)
         if (pc.DYNAMIC_ADJUSTMENT.ENABLED) {
             if (totalPlayers < 3) {
                 targetHouseKeep *= pc.DYNAMIC_ADJUSTMENT.LOW_PLAYER_ADJUSTMENT;
-                console.log(`🎯 Low player count (${totalPlayers}), increasing house keep to ${targetHouseKeep.toFixed(1)}%`);
             }
-            // If average selection is low (1‑number bets), increase house keep further
             const avgSelection = betsArray.reduce((sum, b) => sum + b.selectionCount, 0) / totalPlayers;
             if (avgSelection <= 2.0) {
                 targetHouseKeep *= pc.DYNAMIC_ADJUSTMENT.LOW_SELECTION_ADJUSTMENT;
-                console.log(`🎯 Low average selection (≤2), increasing house keep to ${targetHouseKeep.toFixed(1)}%`);
             }
-            // Big bets – we can also increase profit slightly
-            const hasBigBets = betsArray.some(bet => bet.amount >= 50);
-            if (hasBigBets) {
+            if (betsArray.some(b => b.amount >= 50)) {
                 targetHouseKeep *= pc.DYNAMIC_ADJUSTMENT.HIGH_BET_ADJUSTMENT;
-                console.log(`🎯 Big bets detected, house keep: ${targetHouseKeep.toFixed(1)}%`);
             }
         }
-
-        // Clamp target between min and max
-        targetHouseKeep = Math.max(pc.MIN_HOUSE_KEEP_PERCENTAGE, 
-                                  Math.min(pc.MAX_HOUSE_KEEP_PERCENTAGE, targetHouseKeep));
-
-        // Target payout is almost zero
+        targetHouseKeep = Math.max(pc.MIN_HOUSE_KEEP_PERCENTAGE, Math.min(pc.MAX_HOUSE_KEEP_PERCENTAGE, targetHouseKeep));
         const targetPayout = totalWagered * ((100 - targetHouseKeep) / 100);
         const variance = totalWagered * (pc.VARIANCE_PERCENTAGE / 100);
 
-        console.log(`🎯 Profit Control: Total wagered: ${totalWagered} ETB, Target payout: ${targetPayout.toFixed(2)} ETB (${(100-targetHouseKeep).toFixed(1)}%)`);
+        console.log(`🎯 Target house keep: ${targetHouseKeep.toFixed(1)}%, target payout: ${targetPayout.toFixed(2)} ETB`);
 
-        // Get recent draw history (not used for pattern avoidance now)
-        const recentDraws = []; // not used
-
-        // Simulate multiple draws
         const simulations = [];
         const startTime = Date.now();
 
         for (let i = 0; i < pc.SIMULATION_COUNT; i++) {
             const candidateDraw = self.generateRandomDraw();
 
-            // Calculate total payout for this draw (no player adjustments)
+            // Calculate total payout and track individual wins
             let totalPayout = 0;
             let playerPayouts = [];
             let maxIndividualWin = 0;
             let bigWinsCount = 0;
             let winnerCount = 0;
+            let anyExceedsCap = false; // flag if any win > MAX_WIN
 
             for (const bet of betsArray) {
                 const matches = self.countMatches(bet.numbers, candidateDraw);
                 const payoutMultiplier = self.CONFIG.PAYOUT_TABLE[bet.selectionCount]?.[matches] || 0;
-                const winAmount = bet.amount * payoutMultiplier;
+                let winAmount = bet.amount * payoutMultiplier;
+
+                // Check if win exceeds cap
+                if (winAmount > MAX_WIN) {
+                    anyExceedsCap = true;
+                }
 
                 totalPayout += winAmount;
 
@@ -2267,13 +2245,8 @@ module.exports = {
                         matches,
                         selectionCount: bet.selectionCount
                     });
-
-                    if (winAmount > bet.amount * 10) {
-                        bigWinsCount++;
-                    }
-                    if (winAmount > maxIndividualWin) {
-                        maxIndividualWin = winAmount;
-                    }
+                    if (winAmount > bet.amount * 10) bigWinsCount++;
+                    if (winAmount > maxIndividualWin) maxIndividualWin = winAmount;
                 }
             }
 
@@ -2281,30 +2254,25 @@ module.exports = {
             const houseKeep = totalWagered - totalPayout;
             const houseKeepPercentage = (houseKeep / totalWagered) * 100;
 
-            // Score this simulation – lower score is better for us (max house profit)
-            let score = totalPayout; // lower total payout = better
+            // Score this simulation – lower score is better for house
+            let score = totalPayout; // base score = total payout
 
-            // Heavily penalise any win
-            if (winnerCount > 0) {
-                score += totalPayout * 1000; // massive penalty for any payout
+            // Heavily penalise if any win exceeds the cap
+            if (anyExceedsCap) {
+                score += totalPayout * 10000; // huge penalty
             }
 
-            // If totalPayout is zero, that's perfect
-            if (totalPayout === 0) {
-                score = 0;
+            // Penalise too many winners
+            score += winnerCount * 1000;
+
+            // Penalise if total payout exceeds target by too much
+            if (totalPayout > targetPayout + variance) {
+                score += (totalPayout - targetPayout) * 500;
             }
 
-            // Also penalise if multiple winners
-            score += winnerCount * 5000;
-
-            // If the payout exceeds target, add huge penalty
-            if (totalPayout > targetPayout) {
-                score += (totalPayout - targetPayout) * 10000;
-            }
-
-            // Bonus for being within variance (but we don't need it)
+            // Bonus for being within target range
             if (Math.abs(totalPayout - targetPayout) <= variance) {
-                score *= 0.9; // slight bonus
+                score *= 0.9;
             }
 
             simulations.push({
@@ -2316,31 +2284,31 @@ module.exports = {
                 playerPayouts,
                 bigWinsCount,
                 maxIndividualWin,
-                winnerCount
+                winnerCount,
+                anyExceedsCap
             });
         }
 
         const simulationTime = Date.now() - startTime;
         console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
 
-        // Use randomness chance to sometimes pick a truly random draw
+        // Random chance to pick a truly random draw
         if (Math.random() < pc.RANDOMNESS_CHANCE) {
-            console.log(`🎯 RANDOM MODE (${pc.RANDOMNESS_CHANCE*100}% chance): Picking truly random draw`);
+            console.log(`🎯 RANDOM MODE (${pc.RANDOMNESS_CHANCE*100}% chance): Picking truly random draw (may exceed cap)`);
             const randomIndex = Math.floor(Math.random() * simulations.length);
             const selected = simulations[randomIndex];
             self.logProfitControlResults(selected, totalWagered, 'RANDOM');
             return selected.draw;
         }
 
-        // Sort by score (lower is better – i.e., minimal payout)
+        // Sort by score (lower is better)
         simulations.sort((a, b) => a.score - b.score);
 
-        // Take top 15 candidates and pick randomly from them (to avoid deterministic patterns)
+        // Pick from top 15 to avoid deterministic patterns
         const topCandidates = simulations.slice(0, 15);
         const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
-        // Log results
-        self.logProfitControlResults(selected, totalWagered, 'UNBEATABLE');
+        self.logProfitControlResults(selected, totalWagered, 'CAPPED');
 
         return selected.draw;
     },
@@ -2352,7 +2320,7 @@ module.exports = {
         
         if (!activeGame || activeGame.status !== 'betting') return;
         
-        console.log('🎰 Drawing Keno numbers with UNBEATABLE Profit Control...');
+        console.log('🎰 Drawing Keno numbers with MAX WIN CAP (70 ETB)...');
         
         // Clear all intervals and timeouts first
         if (self.kenoCountdownInterval) {
@@ -2381,11 +2349,11 @@ module.exports = {
         
         // Wait 2 seconds for dramatic effect
         setTimeout(async () => {
-            // Generate the draw using UNBEATABLE PROFIT CONTROL
+            // Generate the draw using PROFIT CONTROL with cap
             let fullDraw;
             if (activeGame.totalBets > 0 && self.PROFIT_CONTROL.ENABLED) {
                 fullDraw = self.simulateAndSelectDraw(activeGame.bets, activeGame.totalBetAmount);
-                console.log('🎯 Using unbeatable profit‑controlled draw.');
+                console.log('🎯 Using profit‑controlled draw with max win cap.');
             } else {
                 fullDraw = self.generateRandomDraw();
                 console.log('🎲 Profit control disabled or no bets – using random draw');
@@ -2486,43 +2454,46 @@ module.exports = {
         });
     },
     
-    // Process Keno results with balanced profit control
+    // ==================== MODIFIED RESULTS PROCESSING ====================
     processKenoResults: async function(activeGame) {
         const self = this;
-        
-        console.log('🎰 Processing Keno results...');
-        
-        // Clear any existing timeout to prevent conflicts
+        const MAX_WIN = self.PROFIT_CONTROL.MAX_WIN_PER_PLAYER; // 70 ETB
+
+        console.log('🎰 Processing Keno results with max win cap...');
+
+        // Clear any existing timeout
         if (self.roundTransitionTimeout) {
             clearTimeout(self.roundTransitionTimeout);
             self.roundTransitionTimeout = null;
         }
-        
+
         let totalWinners = 0;
-        
+
         // Calculate winnings for each player
         for (const [playerId, bet] of Object.entries(activeGame.bets)) {
             try {
-                // Count matches
                 const matches = bet.numbers.filter(num => 
                     activeGame.drawnNumbers.includes(num)
                 ).length;
-                
-                // Calculate winnings based on number of selections
+
                 let winnings = 0;
                 const selectionCount = bet.selectionCount || bet.numbers.length;
-                
+
                 if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
                     const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
                     if (payout !== undefined && payout > 0) {
                         winnings = bet.amount * payout;
-                        console.log(`   ${bet.userName}: ${selectionCount} numbers, ${matches} matches, ${payout}x, ${bet.amount} ETB bet = ${winnings} ETB win`);
+                        // ✦ APPLY MAX WIN CAP ✦
+                        if (winnings > MAX_WIN) {
+                            console.log(`⚠️ Capping win for ${bet.userName} from ${winnings} to ${MAX_WIN} ETB`);
+                            winnings = MAX_WIN;
+                        }
                     }
                 }
-                
+
                 if (winnings > 0) {
                     totalWinners++;
-                    
+
                     // Update user balance
                     const user = await self.User.findOne({ userId: playerId });
                     if (user) {
@@ -2530,10 +2501,10 @@ module.exports = {
                         user.totalWins += winnings;
                         user.kenoWins = (user.kenoWins || 0) + 1;
                         await user.save();
-                        
-                        // ========== AGENT COMMISSION RECORDING (10%) ==========
+
+                        // Agent commission (10%)
                         if (user.agentId) {
-                            const commissionRate = 10; // 10% for Keno
+                            const commissionRate = 10;
                             const commissionAmount = winnings * commissionRate / 100;
                             const transactionKey = `KENO_${activeGame.roundNumber}_${playerId}`;
 
@@ -2550,29 +2521,23 @@ module.exports = {
                                     commissionAmount: commissionAmount,
                                     status: 'completed'
                                 });
-
                                 await self.Agent.findByIdAndUpdate(
                                     user.agentId,
                                     { $inc: { totalEarnings: commissionAmount } }
                                 );
-
-                                console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${user.agentId} from player ${user.userName}`);
+                                console.log(`👑 Agent commission: ${commissionAmount} ETB`);
                             } catch (err) {
-                                if (err.code === 11000) {
-                                    console.log('Agent commission already recorded, skipping');
-                                } else {
-                                    console.error('Error recording agent commission:', err);
-                                }
+                                if (err.code !== 11000) console.error('Agent commission error:', err);
                             }
                         }
-                        
+
                         // Create win transaction
                         const transaction = new self.Transaction({
                             type: 'KENO_WIN',
                             userId: playerId,
                             userName: user.userName,
                             amount: winnings,
-                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB on ${selectionCount} numbers, matched ${matches})`,
+                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB, matched ${matches}/${selectionCount})`,
                             game: 'keno',
                             status: 'completed',
                             details: {
@@ -2585,8 +2550,7 @@ module.exports = {
                             }
                         });
                         await transaction.save();
-                        
-                        // Add to winners list
+
                         activeGame.winners.push({
                             playerId: playerId,
                             playerName: user.userName,
@@ -2597,9 +2561,8 @@ module.exports = {
                             winnings: winnings,
                             payoutMultiplier: winnings / bet.amount
                         });
-                        
                         activeGame.totalPayout += winnings;
-                        
+
                         // Update player state
                         const player = self.kenoPlayers.get(playerId);
                         if (player) {
@@ -2607,20 +2570,14 @@ module.exports = {
                             player.totalWins += winnings;
                             player.hasPlacedBet = false;
                             player.currentBet = null;
-                            // Keep selected numbers if player wants to use them again
-                            if (!player.isReadyForNextRound) {
-                                player.selectedNumbers = [];
-                            }
-                            // Clear pending selections
+                            if (!player.isReadyForNextRound) player.selectedNumbers = [];
                             player.pendingSelections = [];
                             player.pendingBet = null;
                             self.kenoPlayers.set(playerId, player);
                         }
-                        
-                        // Update player session data (unused but kept)
+
                         self.updatePlayerSessionData(playerId, true, winnings, bet.amount);
-                        
-                        // Send personal result
+
                         const playerSocket = self.getKenoSocketByUserId(playerId);
                         if (playerSocket) {
                             playerSocket.emit('keno:round_result', {
@@ -2635,8 +2592,8 @@ module.exports = {
                                 message: `You won ${winnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
                             });
                         }
-                        
-                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (matched ${matches}/${selectionCount} numbers, ${winnings/bet.amount}x)`);
+
+                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (capped at ${MAX_WIN})`);
                     }
                 } else {
                     // Send loss result
@@ -2654,23 +2611,17 @@ module.exports = {
                             message: `Matched ${matches} of ${selectionCount} numbers. Better luck next round!`
                         });
                     }
-                    
-                    // Update player state
+
                     const player = self.kenoPlayers.get(playerId);
                     if (player) {
                         player.hasPlacedBet = false;
                         player.currentBet = null;
-                        // Keep selected numbers if player wants to use them again
-                        if (!player.isReadyForNextRound) {
-                            player.selectedNumbers = [];
-                        }
-                        // Clear pending selections
+                        if (!player.isReadyForNextRound) player.selectedNumbers = [];
                         player.pendingSelections = [];
                         player.pendingBet = null;
                         self.kenoPlayers.set(playerId, player);
                     }
-                    
-                    // Update player session data (unused)
+
                     self.updatePlayerSessionData(playerId, false, 0, bet.amount);
                 }
             } catch (error) {
@@ -3231,7 +3182,7 @@ module.exports = {
     toggleProfitControl: function(enabled) {
         this.PROFIT_CONTROL.ENABLED = enabled;
         
-        console.log(`🎯 Unbeatable Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
+        console.log(`🎯 Profit Control System ${enabled ? 'ENABLED' : 'DISABLED'}`);
         
         return { 
             success: true, 
