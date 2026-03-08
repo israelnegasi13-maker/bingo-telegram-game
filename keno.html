@@ -771,20 +771,11 @@
             }, 3000);
         }
 
-        // ---------- VOICE ANNOUNCEMENT FUNCTION ----------
+        // ---------- AUDIO ANNOUNCEMENT FUNCTION (UPDATED) ----------
         function speakNumber(num) {
             if (!soundEnabled) return;
-            if (!window.speechSynthesis) {
-                console.warn('Speech synthesis not supported');
-                return;
-            }
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(num.toString());
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            utterance.pitch = 1;
-            utterance.volume = 1;
-            window.speechSynthesis.speak(utterance);
+            const audio = new Audio(`/audio/keno/${num}.mp3`);
+            audio.play().catch(e => console.warn('Audio play failed:', e));
         }
 
         // ---------- Helper functions ----------
