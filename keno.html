@@ -509,10 +509,10 @@
         .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 70px; overflow-y: auto; }
         .history-item { display: flex; justify-content: space-between; font-size: 11px; }
 
-        /* win/loss toast – now positioned at TOP */
+        /* win/loss toast – now at top with high z-index */
         .result-toast {
             position: fixed;
-            top: 80px;
+            top: 100px;                 /* moved down a bit to clear header/system */
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
@@ -524,7 +524,7 @@
             font-size: 18px;
             color: white;
             box-shadow: 0 10px 30px black;
-            z-index: 2000;
+            z-index: 9999;              /* always on top */
             display: none;
             align-items: center;
             gap: 12px;
