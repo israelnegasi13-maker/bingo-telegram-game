@@ -313,7 +313,7 @@
                 inset 0 20px 40px rgba(200, 220, 255, 0.6),
                 inset 0 0 30px rgba(255, 255, 255, 0.4);
             position: relative;
-            overflow: hidden;
+            overflow: hidden;  /* will be toggled to 'visible' during exit animation */
             border: 1px solid rgba(255, 255, 200, 0.7);
             transition: box-shadow 0.2s;
         }
@@ -394,10 +394,19 @@
             text-shadow: 0 0 5px black;
             z-index: 3;
         }
-        .mini-ball.popout {
-            transform: translate(-50%, -50%) scale(2);
-            opacity: 0;
-            filter: brightness(1.5);
+
+        /* ✨ NEW DRAMATIC EXIT ANIMATION – ball flies out of sphere downwards */
+        .mini-ball.exit {
+            animation: exitBall 0.4s ease-out forwards;
+            pointer-events: none;
+            z-index: 100;
+        }
+        @keyframes exitBall {
+            0% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+            20% { transform: translate(-50%, -40%) scale(1.3) rotate(10deg); }
+            50% { transform: translate(-50%, 20px) scale(1.6) rotate(25deg); opacity: 0.9; }
+            80% { transform: translate(-50%, 80px) scale(1.9) rotate(35deg); opacity: 0.4; }
+            100% { transform: translate(-50%, 120px) scale(2.2) rotate(45deg); opacity: 0; }
         }
 
         /* ===== RODS – attached to sphere surface ===== */
@@ -947,6 +956,8 @@
             currentBallSpan.innerText = '0';
             totalBallsSpan.innerText = '20';
             sphereGlass.classList.remove('spinning');
+            sphereGlass.style.overflow = ''; // revert to hidden
+            exitingBallCounter = 0; // reset counter for exit animations
         }
 
         // Turbulent animation using requestAnimationFrame
@@ -971,13 +982,8 @@
             turbulenceInterval = requestAnimationFrame(animate);
         }
 
-        function removeNumberBall(number) {
-            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
-            if (ball) {
-                ballTurbulence.delete(ball);
-                ball.remove();
-            }
-        }
+        // Counter for balls currently exiting (to manage sphere overflow)
+        let exitingBallCounter = 0;
 
         // Enhanced flash and remove: animate pop-out then remove, and add drawn ball with same color
         function flashAndRemoveBall(number) {
@@ -987,18 +993,29 @@
             // Get the ball's color from dataset
             const color = ball.dataset.color || getBallColor(number);
             
-            // Add popout class to trigger CSS animation
-            ball.classList.add('popout');
+            // Remove from turbulence so it stops moving
+            ballTurbulence.delete(ball);
             
-            // After animation ends, remove the ball and add drawn ball
+            // Temporarily allow sphere to show overflow so the falling ball is visible
+            exitingBallCounter++;
+            sphereGlass.style.overflow = 'visible';
+            
+            // Clear any inline transform from turbulence and add exit class
+            ball.style.transform = '';
+            ball.classList.add('exit');
+            
+            // After animation ends, remove the ball and manage overflow
             setTimeout(() => {
                 if (ball.parentNode) {
-                    ballTurbulence.delete(ball);
                     ball.remove();
                 }
-            }, 250); // matches popout transition duration
+                exitingBallCounter--;
+                if (exitingBallCounter === 0) {
+                    sphereGlass.style.overflow = ''; // revert to hidden (default)
+                }
+            }, 400); // matches exit animation duration (0.4s)
             
-            // Add drawn ball with the same pool‑ball color
+            // Add drawn ball with the same glossy white color
             addDrawnBall(number, color);
         }
 
@@ -1024,6 +1041,15 @@
             });
             drawnNumbersSoFar = [...numbers];
             currentBallSpan.innerText = numbers.length;
+        }
+
+        // Simplified removal (used when restoring state, no animation)
+        function removeNumberBall(number) {
+            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (ball) {
+                ballTurbulence.delete(ball);
+                ball.remove();
+            }
         }
 
         // ---------- SOCKET HANDLERS ----------
