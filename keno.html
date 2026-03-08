@@ -468,7 +468,7 @@
             box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* background will be set by JS, same blue‑black pool‑ball pattern */
+            /* background will be set by JS, same glossy white style */
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -818,12 +818,10 @@
             }, 5000);
         }
 
-        // ---------- BLUE‑BLACK BILLIARD BALL STYLING (enhanced) ----------
+        // ---------- PROFESSIONAL BALL COLOR (glossy white with subtle gradient) ----------
         function getBallColor(number) {
-            // More realistic billiard ball with glossy highlight and deep shading
-            return "radial-gradient(circle at 30% 30%, #ffffff 0%, #ffffff 35%, transparent 40%), " +
-                   "radial-gradient(circle at 70% 70%, rgba(255,255,255,0.6) 0%, transparent 30%), " +
-                   "radial-gradient(circle at 20% 20%, #5a6db0, #0b1a3a 60%, #03060f 100%)";
+            // Clean, glossy white ball with radial highlight – professional look
+            return "radial-gradient(circle at 30% 30%, #ffffff, #f0f0f0 60%, #d0d0d0 100%)";
         }
 
         // Create number grid (1-80)
@@ -1008,7 +1006,7 @@
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
-            ballDiv.style.background = color; // use the same blue‑black gradient
+            ballDiv.style.background = color; // use the same glossy white gradient
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
