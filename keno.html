@@ -8,6 +8,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* (styles unchanged – keep original) */
         * {
             margin: 0;
             padding: 0;
@@ -771,11 +772,22 @@
             }, 3000);
         }
 
-        // ---------- AUDIO ANNOUNCEMENT FUNCTION (UPDATED) ----------
+        // ---------- AUDIO ANNOUNCEMENT FUNCTION (replaces speech synthesis) ----------
         function speakNumber(num) {
             if (!soundEnabled) return;
             const audio = new Audio(`/audio/keno/${num}.mp3`);
-            audio.play().catch(e => console.warn('Audio play failed:', e));
+            audio.play().catch(err => {
+                console.warn(`Failed to play audio for ${num}:`, err);
+                // Fallback to speech synthesis if audio fails
+                if (window.speechSynthesis) {
+                    const utterance = new SpeechSynthesisUtterance(num.toString());
+                    utterance.lang = 'en-US';
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1;
+                    utterance.volume = 1;
+                    window.speechSynthesis.speak(utterance);
+                }
+            });
         }
 
         // ---------- Helper functions ----------
@@ -1122,7 +1134,7 @@
         });
 
         socket.on('keno:number_drawn', (d) => {
-            speakNumber(d.number);
+            speakNumber(d.number);  // Now plays audio file
             // Use smooth flight if ball exists, otherwise just add directly
             if (document.querySelector(`.mini-ball[data-number="${d.number}"]`)) {
                 flyBallToRow(d.number);
