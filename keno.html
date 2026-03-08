@@ -340,8 +340,8 @@
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            /* Blue‑black billiard ball with glossy highlight and white number circle */
-            background: radial-gradient(circle at 50% 50%, white 0%, white 40%, transparent 41%),
+            /* Improved billiard ball with glossy reflection */
+            background: radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.8) 0%, transparent 25%),
                         radial-gradient(circle at 30% 30%, #3a4e9b, #0b1a3a 70%, #000 100%);
             box-shadow: 
                 0 8px 12px rgba(0,0,0,0.7),
@@ -354,17 +354,35 @@
             justify-content: center;
             font-size: 12px;
             font-weight: 800;
-            color: black;                /* black number on white circle */
+            color: black;
             text-shadow: 0 1px 1px rgba(255,255,255,0.3);
             pointer-events: none;
             will-change: transform, opacity, filter;
             transition: transform 0.25s ease-out, opacity 0.2s, filter 0.2s;
             transform: translate(-50%, -50%);
+            /* extra glossy shine */
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
         .mini-ball.popout {
             transform: translate(-50%, -50%) scale(2);
             opacity: 0;
             filter: brightness(1.5);
+        }
+        /* Player's selected numbers get a golden glow */
+        .mini-ball.player-selected {
+            box-shadow: 
+                0 0 0 3px gold,
+                0 8px 12px rgba(0,0,0,0.7),
+                0 0 0 2px rgba(255,255,200,0.5) inset,
+                0 -4px 6px rgba(0,0,0,0.8) inset,
+                4px 4px 12px rgba(255,255,255,0.6) inset,
+                -2px -2px 8px rgba(0,0,0,0.4) inset;
+            animation: selectedPulse 1.5s infinite;
+        }
+        @keyframes selectedPulse {
+            0% { box-shadow: 0 0 0 3px gold, 0 8px 12px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,200,0.5) inset, 0 -4px 6px rgba(0,0,0,0.8) inset, 4px 4px 12px rgba(255,255,255,0.6) inset, -2px -2px 8px rgba(0,0,0,0.4) inset; }
+            50% { box-shadow: 0 0 0 6px gold, 0 8px 12px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,200,0.5) inset, 0 -4px 6px rgba(0,0,0,0.8) inset, 4px 4px 12px rgba(255,255,255,0.6) inset, -2px -2px 8px rgba(0,0,0,0.4) inset; }
+            100% { box-shadow: 0 0 0 3px gold, 0 8px 12px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,200,0.5) inset, 0 -4px 6px rgba(0,0,0,0.8) inset, 4px 4px 12px rgba(255,255,255,0.6) inset, -2px -2px 8px rgba(0,0,0,0.4) inset; }
         }
 
         /* ===== RODS – attached to sphere surface ===== */
@@ -435,7 +453,8 @@
             box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* background will be set by JS, same blue‑black pool‑ball pattern */
+            /* background will be set by JS, same improved pool‑ball pattern */
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -787,8 +806,8 @@
 
         // ---------- BLUE‑BLACK BILLIARD BALL STYLING ----------
         function getBallColor(number) {
-            // Realistic blue‑black billiard ball with glossy highlight and white number area
-            return "radial-gradient(circle at 50% 50%, white 0%, white 40%, transparent 41%), " +
+            // Enhanced glossy blue‑black billiard ball with white number area
+            return "radial-gradient(circle at 70% 30%, rgba(255,255,255,0.8) 0%, transparent 25%), " +
                    "radial-gradient(circle at 30% 30%, #3a4e9b, #0b1a3a 70%, #000 100%)";
         }
 
@@ -892,10 +911,14 @@
                 // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // assign blue‑black billiard ball color
+                // assign enhanced blue‑black billiard ball color
                 const color = getBallColor(i);
                 ball.style.background = color;
                 ball.dataset.color = color; // store for later use
+                // Highlight if this number is selected by the player
+                if (selectedNumbers.includes(i)) {
+                    ball.classList.add('player-selected');
+                }
                 // turbulence parameters
                 ballTurbulence.set(ball, {
                     phaseX: Math.random() * 2 * Math.PI,
