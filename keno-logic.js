@@ -1,5 +1,5 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP (70 ETB)
-// ========== MODIFIED TO ENFORCE MAX WIN PER PLAYER = 70 ETB ==========
+// keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP 100 ETB + RANDOM JACKPOT
+// ========== MODIFIED: max win = 100, if raw win >=100 → random amount 1‑100 ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -44,8 +44,8 @@ module.exports = {
         MAX_HOUSE_KEEP_PERCENTAGE: 95,
         VARIANCE_PERCENTAGE: 5,                  // Acceptable variance
         RANDOMNESS_CHANCE: 0.05,                  // 5% random draws for plausibility
-        // NEW: Maximum win per player per round (capped at 70 ETB)
-        MAX_WIN_PER_PLAYER: 70,
+        // NEW: Maximum win per player per round (capped at 100 ETB)
+        MAX_WIN_PER_PLAYER: 100,
         // Player‑unfriendly pattern settings (disabled)
         PATTERN_AVOIDANCE: {
             ENABLED: false,
@@ -115,14 +115,15 @@ module.exports = {
         this.recentNumbersFrequency = new Map();
         this.lastSelectedNumbers = [];
         
-        console.log('✅ Keno game logic initialized - MAX WIN CAP 70 ETB');
+        console.log('✅ Keno game logic initialized - MAX WIN CAP 100 ETB + RANDOM JACKPOT');
         console.log('🎰 UPDATED payout table loaded:');
         console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 20x, 2 hits = 1x');
         console.log('   4 Numbers: 4 hits = 60x, 3 hits = 2x, 2 hits = 1x');
         console.log('   3 Numbers: 3 hits = 20x, 2 hits = 2x');
         console.log('   2 Numbers: 2 hits = 10x');
         console.log('   1 Number:  1 hit = 3x');
-        console.log('💰 House target: 70% profit, max win per player: 70 ETB');
+        console.log('💰 House target: 70% profit, max win per player: 100 ETB');
+        console.log('🎰 If raw win ≥100 ETB → random amount 1‑100 ETB awarded');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
         console.log('👑 Agent commission: 10% on Keno wins');
         
@@ -2171,14 +2172,14 @@ module.exports = {
     simulateAndSelectDraw: function(bets, totalBetAmount) {
         const self = this;
         const pc = self.PROFIT_CONTROL;
-        const MAX_WIN = pc.MAX_WIN_PER_PLAYER; // 70 ETB
+        const MAX_WIN = pc.MAX_WIN_PER_PLAYER; // 100 ETB
 
         // If no bets or profit control disabled, return random draw
         if (!pc.ENABLED || Object.keys(bets).length === 0) {
             return self.generateRandomDraw();
         }
 
-        console.log('🎯 Profit Control + Max Win Cap: Simulating draws to keep wins ≤ 70 ETB...');
+        console.log('🎯 Profit Control + Max Win Cap 100: Simulating draws to keep wins ≤ 100 ETB...');
 
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
@@ -2320,7 +2321,7 @@ module.exports = {
         
         if (!activeGame || activeGame.status !== 'betting') return;
         
-        console.log('🎰 Drawing Keno numbers with MAX WIN CAP (70 ETB)...');
+        console.log('🎰 Drawing Keno numbers with MAX WIN CAP (100 ETB)...');
         
         // Clear all intervals and timeouts first
         if (self.kenoCountdownInterval) {
@@ -2457,9 +2458,9 @@ module.exports = {
     // ==================== MODIFIED RESULTS PROCESSING ====================
     processKenoResults: async function(activeGame) {
         const self = this;
-        const MAX_WIN = self.PROFIT_CONTROL.MAX_WIN_PER_PLAYER; // 70 ETB
+        const MAX_WIN = self.PROFIT_CONTROL.MAX_WIN_PER_PLAYER; // 100 ETB
 
-        console.log('🎰 Processing Keno results with max win cap...');
+        console.log('🎰 Processing Keno results with max win cap 100 and random jackpot...');
 
         // Clear any existing timeout
         if (self.roundTransitionTimeout) {
@@ -2476,36 +2477,43 @@ module.exports = {
                     activeGame.drawnNumbers.includes(num)
                 ).length;
 
-                let winnings = 0;
+                let rawWinnings = 0;
                 const selectionCount = bet.selectionCount || bet.numbers.length;
 
                 if (self.CONFIG.PAYOUT_TABLE[selectionCount]) {
                     const payout = self.CONFIG.PAYOUT_TABLE[selectionCount][matches];
                     if (payout !== undefined && payout > 0) {
-                        winnings = bet.amount * payout;
-                        // ✦ APPLY MAX WIN CAP ✦
-                        if (winnings > MAX_WIN) {
-                            console.log(`⚠️ Capping win for ${bet.userName} from ${winnings} to ${MAX_WIN} ETB`);
-                            winnings = MAX_WIN;
-                        }
+                        rawWinnings = bet.amount * payout;
                     }
                 }
 
-                if (winnings > 0) {
+                let finalWinnings = 0;
+                if (rawWinnings > 0) {
+                    if (rawWinnings < MAX_WIN) {
+                        finalWinnings = rawWinnings;
+                        console.log(`💰 ${bet.userName} wins ${finalWinnings} ETB (raw ${rawWinnings})`);
+                    } else {
+                        // Raw win >= 100 → random amount between 1 and 100
+                        finalWinnings = Math.floor(Math.random() * MAX_WIN) + 1; // 1‑100
+                        console.log(`🎲 ${bet.userName} hits jackpot threshold! Raw ${rawWinnings} → random ${finalWinnings} ETB`);
+                    }
+                }
+
+                if (finalWinnings > 0) {
                     totalWinners++;
 
                     // Update user balance
                     const user = await self.User.findOne({ userId: playerId });
                     if (user) {
-                        user.balance += winnings;
-                        user.totalWins += winnings;
+                        user.balance += finalWinnings;
+                        user.totalWins += finalWinnings;
                         user.kenoWins = (user.kenoWins || 0) + 1;
                         await user.save();
 
                         // Agent commission (10%)
                         if (user.agentId) {
                             const commissionRate = 10;
-                            const commissionAmount = winnings * commissionRate / 100;
+                            const commissionAmount = finalWinnings * commissionRate / 100;
                             const transactionKey = `KENO_${activeGame.roundNumber}_${playerId}`;
 
                             try {
@@ -2516,7 +2524,7 @@ module.exports = {
                                     userName: user.userName,
                                     gameType: 'KENO',
                                     stake: bet.amount,
-                                    winningAmount: winnings,
+                                    winningAmount: finalWinnings,
                                     commissionRate: commissionRate,
                                     commissionAmount: commissionAmount,
                                     status: 'completed'
@@ -2536,8 +2544,8 @@ module.exports = {
                             type: 'KENO_WIN',
                             userId: playerId,
                             userName: user.userName,
-                            amount: winnings,
-                            description: `Keno win: ${winnings} ETB (bet ${bet.amount} ETB, matched ${matches}/${selectionCount})`,
+                            amount: finalWinnings,
+                            description: `Keno win: ${finalWinnings} ETB (bet ${bet.amount} ETB, matched ${matches}/${selectionCount})`,
                             game: 'keno',
                             status: 'completed',
                             details: {
@@ -2546,7 +2554,8 @@ module.exports = {
                                 matches: matches,
                                 selectionCount: selectionCount,
                                 round: activeGame.roundNumber,
-                                payoutMultiplier: winnings / bet.amount
+                                payoutMultiplier: finalWinnings / bet.amount,
+                                rawWinnings: rawWinnings
                             }
                         });
                         await transaction.save();
@@ -2558,16 +2567,16 @@ module.exports = {
                             numbers: bet.numbers,
                             selectionCount: selectionCount,
                             matches: matches,
-                            winnings: winnings,
-                            payoutMultiplier: winnings / bet.amount
+                            winnings: finalWinnings,
+                            payoutMultiplier: finalWinnings / bet.amount
                         });
-                        activeGame.totalPayout += winnings;
+                        activeGame.totalPayout += finalWinnings;
 
                         // Update player state
                         const player = self.kenoPlayers.get(playerId);
                         if (player) {
                             player.balance = user.balance;
-                            player.totalWins += winnings;
+                            player.totalWins += finalWinnings;
                             player.hasPlacedBet = false;
                             player.currentBet = null;
                             if (!player.isReadyForNextRound) player.selectedNumbers = [];
@@ -2576,7 +2585,7 @@ module.exports = {
                             self.kenoPlayers.set(playerId, player);
                         }
 
-                        self.updatePlayerSessionData(playerId, true, winnings, bet.amount);
+                        self.updatePlayerSessionData(playerId, true, finalWinnings, bet.amount);
 
                         const playerSocket = self.getKenoSocketByUserId(playerId);
                         if (playerSocket) {
@@ -2586,14 +2595,16 @@ module.exports = {
                                 yourNumbers: bet.numbers,
                                 selectionCount: selectionCount,
                                 matches: matches,
-                                winnings: winnings,
+                                winnings: finalWinnings,
                                 newBalance: user.balance,
                                 bet: bet.amount,
-                                message: `You won ${winnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
+                                message: rawWinnings >= MAX_WIN
+                                    ? `🎲 Lucky you! You won ${finalWinnings} ETB (jackpot chance!)`
+                                    : `You won ${finalWinnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
                             });
                         }
 
-                        console.log(`🎰 Winner: ${user.userName} won ${winnings} ETB (capped at ${MAX_WIN})`);
+                        console.log(`🎰 Winner: ${user.userName} won ${finalWinnings} ETB (raw ${rawWinnings})`);
                     }
                 } else {
                     // Send loss result
