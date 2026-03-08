@@ -296,7 +296,6 @@
             width: 100%;
             height: 100%;
             border-radius: 50%;
-            /* Deep 3D glass gradient with extra highlights */
             background: radial-gradient(
                 circle at 25% 25%,
                 rgba(255, 255, 255, 0.95) 0%,
@@ -313,12 +312,11 @@
                 inset 0 20px 40px rgba(200, 220, 255, 0.6),
                 inset 0 0 30px rgba(255, 255, 255, 0.4);
             position: relative;
-            overflow: hidden;  /* will be toggled to 'visible' during exit animation */
+            overflow: hidden;
             border: 1px solid rgba(255, 255, 200, 0.7);
             transition: box-shadow 0.2s;
         }
 
-        /* spinning animation for inner balls */
         .sphere-glass.spinning .inner-balls {
             animation: rotateBalls 20s linear infinite;
         }
@@ -352,13 +350,12 @@
             justify-content: center;
             font-size: 12px;
             font-weight: 800;
-            color: black;                /* black number on white circle */
+            color: black;
             text-shadow: 0 1px 1px rgba(255,255,255,0.3);
             pointer-events: none;
-            will-change: transform, opacity, filter;
-            transition: transform 0.25s ease-out, opacity 0.2s, filter 0.2s;
+            will-change: transform, opacity;
+            transition: opacity 0.2s;
             transform: translate(-50%, -50%);
-            /* Add a glossy reflection */
             overflow: hidden;
         }
         .mini-ball::before {
@@ -395,66 +392,34 @@
             z-index: 3;
         }
 
-        /* ✨ NEW DRAMATIC EXIT ANIMATION – ball flies out of sphere downwards */
-        .mini-ball.exit {
-            animation: exitBall 0.4s ease-out forwards;
-            pointer-events: none;
-            z-index: 100;
-        }
-        @keyframes exitBall {
-            0% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
-            20% { transform: translate(-50%, -40%) scale(1.3) rotate(10deg); }
-            50% { transform: translate(-50%, 20px) scale(1.6) rotate(25deg); opacity: 0.9; }
-            80% { transform: translate(-50%, 80px) scale(1.9) rotate(35deg); opacity: 0.4; }
-            100% { transform: translate(-50%, 120px) scale(2.2) rotate(45deg); opacity: 0; }
-        }
-
-        /* ===== RODS – attached to sphere surface ===== */
-        .rod {
-            position: absolute;
-            width: 14px;
+        /* flying clone – will be positioned absolutely on body */
+        .flying-ball {
+            position: fixed;
+            width: 28px;
             height: 28px;
-            background: linear-gradient(145deg, #d0d0d0, #8a8a8a);
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.7), inset 0 1px 4px #fffa, 0 0 0 1px #666 inset;
-            z-index: 10;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 12px;
+            color: black;
+            text-shadow: 0 1px 1px rgba(255,255,255,0.3);
+            box-shadow: 
+                0 8px 12px rgba(0,0,0,0.7),
+                0 0 0 2px rgba(255,255,200,0.5) inset,
+                0 -4px 6px rgba(0,0,0,0.8) inset,
+                4px 4px 12px rgba(255,255,255,0.6) inset,
+                -2px -2px 8px rgba(0,0,0,0.4) inset;
+            background: var(--ball-color);
+            z-index: 10000;
             pointer-events: none;
-        }
-        .rod-top-left {
-            top: -2px;
-            left: 20%;
-            transform: translate(-50%, 0);
-        }
-        .rod-top-right {
-            top: -2px;
-            left: 80%;
-            transform: translate(-50%, 0);
-        }
-        .rod-bottom-left {
-            bottom: -2px;
-            left: 20%;
-            transform: translate(-50%, 0);
-        }
-        .rod-bottom-right {
-            bottom: -2px;
-            left: 80%;
-            transform: translate(-50%, 0);
-        }
-        .rod::after {
-            content: '';
-            position: absolute;
-            width: 18px;
-            height: 6px;
-            background: radial-gradient(circle, #fff8, #aaa0);
-            border-radius: 4px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            filter: blur(1px);
-            opacity: 0.6;
+            will-change: transform, opacity;
+            transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.1), opacity 0.3s;
+            opacity: 1;
         }
 
-        /* drawn balls row – now using same pool‑ball style */
+        /* drawn balls row */
         .drawn-balls-row {
             display: flex;
             flex-wrap: wrap;
@@ -477,7 +442,6 @@
             box-shadow: 0 4px 0 #3f2e0e, 0 0 0 2px #ffeeaa inset, 0 5px 8px black;
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            /* background will be set by JS, same glossy white style */
         }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -497,7 +461,7 @@
             margin-top: 8px;
         }
 
-        /* game history, footer small */
+        /* game history */
         .game-history {
             margin-top: 20px;
             background: #0d1225b0;
@@ -764,11 +728,10 @@
                 console.warn('Speech synthesis not supported');
                 return;
             }
-            // Cancel any ongoing speech to avoid overlapping
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(num.toString());
             utterance.lang = 'en-US';
-            utterance.rate = 0.9;      // slightly slower for clarity
+            utterance.rate = 0.9;
             utterance.pitch = 1;
             utterance.volume = 1;
             window.speechSynthesis.speak(utterance);
@@ -827,9 +790,8 @@
             }, 5000);
         }
 
-        // ---------- PROFESSIONAL BALL COLOR (glossy white with subtle gradient) ----------
+        // ---------- PROFESSIONAL BALL COLOR (glossy white) ----------
         function getBallColor(number) {
-            // Clean, glossy white ball with radial highlight – professional look
             return "radial-gradient(circle at 30% 30%, #ffffff, #f0f0f0 60%, #d0d0d0 100%)";
         }
 
@@ -914,7 +876,7 @@
             }
         });
 
-        // ---------- SPHERE WITH TURBULENT MOVEMENT & 3D ----------
+        // ---------- SPHERE WITH TURBULENT MOVEMENT ----------
         function resetSphere() {
             innerBalls.innerHTML = '';
             ballTurbulence.clear();
@@ -923,21 +885,17 @@
                 ball.className = 'mini-ball';
                 ball.dataset.number = i;
                 ball.textContent = i;
-                // random position inside circle
                 const angle = Math.random() * 2 * Math.PI;
                 const radius = (Math.random() * 45 + 30) / 100;
                 const left = 50 + 45 * radius * Math.cos(angle);
                 const top = 50 + 45 * radius * Math.sin(angle);
                 ball.style.left = left + '%';
                 ball.style.top = top + '%';
-                // store base position for turbulence
                 ball.dataset.baseLeft = left;
                 ball.dataset.baseTop = top;
-                // assign enhanced billiard ball color
                 const color = getBallColor(i);
                 ball.style.background = color;
                 ball.dataset.color = color;
-                // turbulence parameters
                 ballTurbulence.set(ball, {
                     phaseX: Math.random() * 2 * Math.PI,
                     phaseY: Math.random() * 2 * Math.PI,
@@ -945,7 +903,6 @@
                     freqY: 0.5 + Math.random() * 1.5,
                     ampScale: 0.8 + Math.random() * 0.7
                 });
-                // ✨ HIGHLIGHT SELECTED NUMBERS
                 if (selectedNumbers.includes(i)) {
                     ball.classList.add('selected-ball');
                 }
@@ -956,23 +913,19 @@
             currentBallSpan.innerText = '0';
             totalBallsSpan.innerText = '20';
             sphereGlass.classList.remove('spinning');
-            sphereGlass.style.overflow = ''; // revert to hidden
-            exitingBallCounter = 0; // reset counter for exit animations
         }
 
-        // Turbulent animation using requestAnimationFrame
         function startTurbulence() {
             if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
             let startTime = performance.now();
             function animate() {
                 const now = performance.now();
-                const t = (now - startTime) / 1000; // seconds
+                const t = (now - startTime) / 1000;
                 const balls = document.querySelectorAll('.mini-ball');
                 balls.forEach(ball => {
                     if (!ball.parentNode) return;
                     const data = ballTurbulence.get(ball);
                     if (!data) return;
-                    // compute offsets using sine waves with different frequencies
                     const offsetX = 8 * Math.sin(t * data.freqX * 2 + data.phaseX) * data.ampScale;
                     const offsetY = 8 * Math.sin(t * data.freqY * 2.3 + data.phaseY) * data.ampScale;
                     ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
@@ -982,53 +935,75 @@
             turbulenceInterval = requestAnimationFrame(animate);
         }
 
-        // Counter for balls currently exiting (to manage sphere overflow)
-        let exitingBallCounter = 0;
+        // ---------- SMOOTH FLIGHT FROM SPHERE TO DRAWN ROW ----------
+        function flyBallToRow(number) {
+            const originalBall = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (!originalBall) return;
 
-        // Enhanced flash and remove: animate pop-out then remove, and add drawn ball with same color
-        function flashAndRemoveBall(number) {
-            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
-            if (!ball) return;
-            
-            // Get the ball's color from dataset
-            const color = ball.dataset.color || getBallColor(number);
-            
             // Remove from turbulence so it stops moving
-            ballTurbulence.delete(ball);
-            
-            // Temporarily allow sphere to show overflow so the falling ball is visible
-            exitingBallCounter++;
-            sphereGlass.style.overflow = 'visible';
-            
-            // Clear any inline transform from turbulence and add exit class
-            ball.style.transform = '';
-            ball.classList.add('exit');
-            
-            // After animation ends, remove the ball and manage overflow
+            ballTurbulence.delete(originalBall);
+
+            // Get start position (center of ball relative to viewport)
+            const startRect = originalBall.getBoundingClientRect();
+            const startX = startRect.left + startRect.width / 2;
+            const startY = startRect.top + startRect.height / 2;
+
+            // Get target position: we want the ball to land near the drawn row.
+            // We'll target the center of the drawnBallsRow container.
+            const targetRect = drawnBallsRow.getBoundingClientRect();
+            const targetX = targetRect.left + targetRect.width / 2;
+            const targetY = targetRect.top + targetRect.height / 2;
+
+            // Create a flying clone
+            const clone = document.createElement('div');
+            clone.className = 'flying-ball';
+            clone.textContent = number;
+            clone.style.background = originalBall.dataset.color || getBallColor(number);
+            clone.style.left = (startX - 14) + 'px';  // offset to center (28px width)
+            clone.style.top = (startY - 14) + 'px';
+            document.body.appendChild(clone);
+
+            // Slightly fade out original ball, will be removed after flight
+            originalBall.style.opacity = '0.3';
+            originalBall.style.transition = 'opacity 0.3s';
+
+            // Trigger flight after a tiny delay to ensure initial position set
             setTimeout(() => {
-                if (ball.parentNode) {
-                    ball.remove();
-                }
-                exitingBallCounter--;
-                if (exitingBallCounter === 0) {
-                    sphereGlass.style.overflow = ''; // revert to hidden (default)
-                }
-            }, 400); // matches exit animation duration (0.4s)
-            
-            // Add drawn ball with the same glossy white color
-            addDrawnBall(number, color);
+                clone.style.transform = `translate(${targetX - startX}px, ${targetY - startY}px) scale(0.9)`;
+                clone.style.opacity = '0.8';
+            }, 10);
+
+            // After flight, remove clone and original, and add drawn ball
+            setTimeout(() => {
+                if (clone.parentNode) clone.remove();
+                if (originalBall.parentNode) originalBall.remove();
+
+                // Add the drawn ball to the row
+                const newBall = document.createElement('div');
+                newBall.className = 'drawn-ball';
+                newBall.innerText = number;
+                newBall.style.background = originalBall.dataset.color || getBallColor(number);
+                drawnBallsRow.appendChild(newBall);
+                drawnNumbersSoFar.push(number);
+                currentBallSpan.innerText = drawnNumbersSoFar.length;
+
+                // Restore any removed balls' styles (just in case)
+            }, 500); // match flight duration (0.45s + buffer)
         }
 
-        function addDrawnBall(number, color) {
+        // Fallback for when ball not found (just add drawn ball)
+        function addDrawnBallDirect(number) {
+            const color = getBallColor(number);
             const ballDiv = document.createElement('div');
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
-            ballDiv.style.background = color; // use the same glossy white gradient
+            ballDiv.style.background = color;
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
         }
 
+        // Display all drawn numbers at once (used when restoring state)
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
@@ -1043,7 +1018,7 @@
             currentBallSpan.innerText = numbers.length;
         }
 
-        // Simplified removal (used when restoring state, no animation)
+        // Remove ball without animation (for state restore)
         function removeNumberBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
             if (ball) {
@@ -1106,8 +1081,13 @@
         });
 
         socket.on('keno:number_drawn', (d) => {
-            speakNumber(d.number);      // voice announcement
-            flashAndRemoveBall(d.number);
+            speakNumber(d.number);
+            // Use smooth flight if ball exists, otherwise just add directly
+            if (document.querySelector(`.mini-ball[data-number="${d.number}"]`)) {
+                flyBallToRow(d.number);
+            } else {
+                addDrawnBallDirect(d.number);
+            }
         });
 
         socket.on('keno:round_results', (d) => {
