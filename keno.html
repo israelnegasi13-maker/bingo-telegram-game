@@ -37,6 +37,7 @@
             border-radius: 36px;
             padding: 20px 16px;
             box-shadow: 0 30px 50px rgba(0, 0, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.06);
+            position: relative;
         }
 
         /* header */
@@ -128,6 +129,42 @@
             animation: pulse 1.8s infinite;
         }
         @keyframes pulse { 50% { opacity: 0.4; } }
+
+        /* ===== SYSTEM MESSAGE BANNER (at top) ===== */
+        .system-message {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 460px;
+            background: rgba(20, 30, 50, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid #ff4d4d80;
+            border-radius: 40px;
+            padding: 12px 20px;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            text-align: center;
+            z-index: 3000;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.7), 0 0 0 1px #ff4d4d40 inset;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .system-message.error {
+            border-color: #ff6b6b;
+            background: rgba(80, 20, 30, 0.95);
+        }
+        .system-message.info {
+            border-color: #4d9eff;
+            background: rgba(20, 40, 70, 0.95);
+        }
+        .system-message.show {
+            display: flex;
+        }
 
         /* betting phase */
         .phase-betting {
@@ -472,10 +509,10 @@
         .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 70px; overflow-y: auto; }
         .history-item { display: flex; justify-content: space-between; font-size: 11px; }
 
-        /* win/loss toast */
+        /* win/loss toast – now positioned at TOP */
         .result-toast {
             position: fixed;
-            bottom: 30px;
+            top: 80px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
@@ -528,6 +565,9 @@
         <span class="dot"></span>
         <span id="status-text">CONNECTING</span>
     </div>
+
+    <!-- system message banner (for round inactive, insufficient balance, etc.) -->
+    <div id="systemMessage" class="system-message"></div>
 
     <!-- ========== BETTING PHASE ========== -->
     <div id="bettingPhase" class="phase-betting">
@@ -589,7 +629,7 @@
         <div class="history-list" id="historyList"></div>
     </div>
 
-    <!-- win/loss toast -->
+    <!-- win/loss toast (now at top) -->
     <div id="resultToast" class="result-toast"></div>
 
     <!-- confirmation modal -->
@@ -677,6 +717,7 @@
         const resultToast = document.getElementById('resultToast');
         const soundToggle = document.getElementById('soundToggle');
         const soundIcon = soundToggle.querySelector('i');
+        const systemMsg = document.getElementById('systemMessage');
 
         // Sound state (default: on)
         let soundEnabled = localStorage.getItem('kenoSound') !== 'off';
@@ -720,6 +761,15 @@
             4: {4: 60, 3: 2, 2: 1},
             5: {5: 200, 4: 50, 3: 20, 2: 1}
         };
+
+        // ---------- SYSTEM MESSAGE FUNCTION ----------
+        function showSystemMessage(text, type = 'error') {
+            systemMsg.textContent = text;
+            systemMsg.className = 'system-message ' + type + ' show';
+            setTimeout(() => {
+                systemMsg.classList.remove('show');
+            }, 3000);
+        }
 
         // ---------- VOICE ANNOUNCEMENT FUNCTION ----------
         function speakNumber(num) {
@@ -1124,11 +1174,14 @@
 
         socket.on('keno:balance', (d) => updateBalance(d.balance));
 
+        // Replace alerts with system message
         socket.on('keno:error', (msg) => {
-            alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+            const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
+            showSystemMessage(text, 'error');
         });
         socket.on('keno:warning', (msg) => {
-            alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+            const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
+            showSystemMessage(text, 'info');
         });
 
         socket.on('keno:draw_state', (d) => {
