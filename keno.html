@@ -8,7 +8,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* (all previous styles remain exactly the same) */
         * {
             margin: 0;
             padding: 0;
@@ -513,7 +512,7 @@
         /* win/loss toast – now at top with high z-index */
         .result-toast {
             position: fixed;
-            top: 100px;
+            top: 100px;                 /* moved down a bit to clear header/system */
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
@@ -525,7 +524,7 @@
             font-size: 18px;
             color: white;
             box-shadow: 0 10px 30px black;
-            z-index: 9999;
+            z-index: 9999;              /* always on top */
             display: none;
             align-items: center;
             gap: 12px;
@@ -543,61 +542,50 @@
         .confirmation-content h3 { color: gold; margin-bottom: 12px; }
         .payout-breakdown { font-size: 12px; color: #aac3ff; margin-top: 8px; }
 
-        /* ----- SOUND PROMPT MODAL ----- */
-        .sound-prompt {
+        /* ===== SOUND PREFERENCE MODAL ===== */
+        .sound-preference-modal {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            backdrop-filter: blur(10px);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.96);
+            backdrop-filter: blur(8px);
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 20000;
+            z-index: 5000;
         }
-        .sound-prompt.show { display: flex; }
-        .prompt-box {
+        .sound-preference-modal.active {
+            display: flex;
+        }
+        .sound-preference-content {
             background: #141c34;
-            padding: 30px;
-            border-radius: 40px;
+            padding: 28px 24px;
+            border-radius: 48px;
             max-width: 320px;
+            width: 90%;
             border: 2px solid gold;
-            text-align: center;
             color: white;
+            text-align: center;
+            box-shadow: 0 20px 40px black;
         }
-        .prompt-box h2 { color: gold; margin-bottom: 20px; font-size: 24px; }
-        .prompt-box p { margin-bottom: 30px; opacity: 0.9; }
-        .prompt-buttons { display: flex; gap: 15px; justify-content: center; }
-        .prompt-btn {
-            flex: 1;
-            padding: 15px 20px;
-            border: none;
-            border-radius: 60px;
-            font-weight: 800;
-            font-size: 18px;
-            cursor: pointer;
-            transition: 0.1s;
+        .sound-preference-content h3 {
+            color: gold;
+            font-size: 24px;
+            margin-bottom: 12px;
         }
-        .prompt-btn.yes { background: #2e4bff; color: white; box-shadow: 0 6px 0 #1a2b9e; }
-        .prompt-btn.no { background: #4a3f3f; color: white; box-shadow: 0 6px 0 #2b2323; }
-        .prompt-btn:active { transform: translateY(4px); box-shadow: none; }
+        .sound-preference-content p {
+            color: #b7c9ff;
+            margin-bottom: 20px;
+        }
+        .sound-preference-content .btn {
+            min-width: 100px;
+            margin: 0 8px;
+        }
     </style>
 </head>
 <body>
-<!-- background music element (hidden) -->
-<audio id="bgMusic" src="/audio/background.mp3" loop preload="auto" style="display: none;"></audio>
-
-<!-- SOUND PREFERENCE PROMPT (shown only on first visit) -->
-<div id="soundPrompt" class="sound-prompt">
-    <div class="prompt-box">
-        <h2>🔊 ENABLE SOUND?</h2>
-        <p>Background music & number announcements</p>
-        <div class="prompt-buttons">
-            <button id="soundPromptYes" class="prompt-btn yes">YES</button>
-            <button id="soundPromptNo" class="prompt-btn no">NO</button>
-        </div>
-    </div>
-</div>
-
 <div class="game-container">
     <!-- header -->
     <div class="header">
@@ -698,637 +686,601 @@
             </div>
         </div>
     </div>
+
+    <!-- ===== SOUND PREFERENCE MODAL (shown on first visit) ===== -->
+    <div class="sound-preference-modal" id="soundPreferenceModal">
+        <div class="sound-preference-content">
+            <h3>🔊 ENABLE SOUND?</h3>
+            <p>Do you want sound effects during the game?</p>
+            <div style="display:flex; gap:20px; justify-content:center; margin-top:20px;">
+                <button class="btn" id="soundYes">YES</button>
+                <button class="btn" id="soundNo">NO</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     (function() {
-        // ---------- SOUND PREFERENCE PROMPT ----------
-        let soundEnabled; // will be set based on user choice or stored value
-
-        const savedSound = localStorage.getItem('kenoSound');
-        if (savedSound !== null) {
-            soundEnabled = savedSound === 'on';
-            // Preference already set – start the game immediately
-            initApp();
+        // ---------- ROBUST USER ID LOGIC ----------
+        let userId, userName;
+        const appUserId = sessionStorage.getItem('appUserId');
+        const appUserName = sessionStorage.getItem('appUserName');
+        if (appUserId) {
+            userId = appUserId;
+            userName = appUserName || 'App User';
         } else {
-            // First visit: show the prompt
-            const promptModal = document.getElementById('soundPrompt');
-            promptModal.classList.add('show');
-
-            document.getElementById('soundPromptYes').addEventListener('click', function() {
-                soundEnabled = true;
-                localStorage.setItem('kenoSound', 'on');
-                promptModal.classList.remove('show');
-                initApp();
-            });
-
-            document.getElementById('soundPromptNo').addEventListener('click', function() {
-                soundEnabled = false;
-                localStorage.setItem('kenoSound', 'off');
-                promptModal.classList.remove('show');
-                initApp();
-            });
+            const tg = window.Telegram?.WebApp;
+            const user = tg?.initDataUnsafe?.user;
+            if (user) {
+                userId = `tg_${user.id}`;
+                userName = user.first_name || 'Player';
+                localStorage.setItem('telegramUser', JSON.stringify({
+                    id: user.id,
+                    firstName: user.first_name,
+                    username: user.username
+                }));
+            } else {
+                const savedUser = localStorage.getItem('telegramUser');
+                if (savedUser) {
+                    const userData = JSON.parse(savedUser);
+                    userId = `tg_${userData.id}`;
+                    userName = userData.firstName || 'Player';
+                } else {
+                    let storedId = localStorage.getItem('kenoUserId');
+                    if (storedId) {
+                        userId = storedId;
+                        userName = localStorage.getItem('kenoUserName') || 'Player';
+                    } else {
+                        userId = 'test_' + Math.random().toString(36).substr(2, 9);
+                        userName = 'Test Player';
+                        localStorage.setItem('kenoUserId', userId);
+                        localStorage.setItem('kenoUserName', userName);
+                    }
+                }
+            }
         }
 
-        // ---------- MAIN APPLICATION (starts after sound choice) ----------
-        function initApp() {
-            // ---------- BACKGROUND MUSIC (only if enabled) ----------
-            const bgMusic = document.getElementById('bgMusic');
-            if (bgMusic) {
-                // === LOWERED VOLUME FROM 0.4 TO 0.2 (20%) ===
-                bgMusic.volume = 0.2; // 20% volume – less intrusive
-                
-                // If sound is enabled, attempt to play (may be blocked – we'll handle via user interaction)
-                if (soundEnabled) {
-                    // Try to play – if blocked, it will start on first click/tap
-                    const playPromise = bgMusic.play();
-                    if (playPromise !== undefined) {
-                        playPromise.catch(() => {
-                            console.log('Background music autoplay blocked, waiting for interaction');
-                            // Will be triggered on first user click/tap
-                        });
-                    }
-                } else {
-                    bgMusic.pause(); // ensure it's not playing
-                }
+        // ---------- Socket connection ----------
+        const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
+
+        // DOM elements
+        const bettingPhase = document.getElementById('bettingPhase');
+        const spherePhase = document.getElementById('spherePhase');
+        const sphereGlass = document.getElementById('sphereGlass');
+        const innerBalls = document.getElementById('innerBallsContainer');
+        const drawnBallsRow = document.getElementById('drawnBallsRow');
+        const currentBallSpan = document.getElementById('currentBallCount');
+        const totalBallsSpan = document.getElementById('totalBallsCount');
+        const countdownEl = document.getElementById('countdown');
+        const roundSpan = document.getElementById('roundNumber');
+        const selectedCountSpan = document.getElementById('selectedCount');
+        const balanceSpan = document.getElementById('balance');
+        const kenoGrid = document.getElementById('kenoGrid');
+        const playBtn = document.getElementById('playBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const quickPick = document.getElementById('quickPick');
+        const chips = document.querySelectorAll('.chip');
+        const waitingMsg = document.getElementById('waitingMessage');
+        const historyList = document.getElementById('historyList');
+        const confirmModal = document.getElementById('confirmationModal');
+        const confirmDetails = document.getElementById('confirmDetails');
+        const payoutBreakdown = document.getElementById('payoutBreakdown');
+        const confirmCancel = document.getElementById('confirmCancel');
+        const confirmOk = document.getElementById('confirmOk');
+        const resultToast = document.getElementById('resultToast');
+        const soundToggle = document.getElementById('soundToggle');
+        const soundIcon = soundToggle.querySelector('i');
+        const systemMsg = document.getElementById('systemMessage');
+        // Sound preference modal elements
+        const soundPreferenceModal = document.getElementById('soundPreferenceModal');
+        const soundYes = document.getElementById('soundYes');
+        const soundNo = document.getElementById('soundNo');
+
+        // ---------- SOUND PREFERENCE LOGIC (ask on first visit) ----------
+        function askSoundPreference() {
+            // Only ask if no preference is stored
+            if (localStorage.getItem('kenoSound') === null) {
+                soundPreferenceModal.classList.add('active');
             }
+        }
 
-            // ---------- USER ID LOGIC (unchanged) ----------
-            let userId, userName;
-            const appUserId = sessionStorage.getItem('appUserId');
-            const appUserName = sessionStorage.getItem('appUserName');
-            if (appUserId) {
-                userId = appUserId;
-                userName = appUserName || 'App User';
-            } else {
-                const tg = window.Telegram?.WebApp;
-                const user = tg?.initDataUnsafe?.user;
-                if (user) {
-                    userId = `tg_${user.id}`;
-                    userName = user.first_name || 'Player';
-                    localStorage.setItem('telegramUser', JSON.stringify({
-                        id: user.id,
-                        firstName: user.first_name,
-                        username: user.username
-                    }));
-                } else {
-                    const savedUser = localStorage.getItem('telegramUser');
-                    if (savedUser) {
-                        const userData = JSON.parse(savedUser);
-                        userId = `tg_${userData.id}`;
-                        userName = userData.firstName || 'Player';
-                    } else {
-                        let storedId = localStorage.getItem('kenoUserId');
-                        if (storedId) {
-                            userId = storedId;
-                            userName = localStorage.getItem('kenoUserName') || 'Player';
-                        } else {
-                            userId = 'test_' + Math.random().toString(36).substr(2, 9);
-                            userName = 'Test Player';
-                            localStorage.setItem('kenoUserId', userId);
-                            localStorage.setItem('kenoUserName', userName);
-                        }
-                    }
-                }
-            }
-
-            // ---------- Socket connection ----------
-            const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
-
-            // DOM elements
-            const bettingPhase = document.getElementById('bettingPhase');
-            const spherePhase = document.getElementById('spherePhase');
-            const sphereGlass = document.getElementById('sphereGlass');
-            const innerBalls = document.getElementById('innerBallsContainer');
-            const drawnBallsRow = document.getElementById('drawnBallsRow');
-            const currentBallSpan = document.getElementById('currentBallCount');
-            const totalBallsSpan = document.getElementById('totalBallsCount');
-            const countdownEl = document.getElementById('countdown');
-            const roundSpan = document.getElementById('roundNumber');
-            const selectedCountSpan = document.getElementById('selectedCount');
-            const balanceSpan = document.getElementById('balance');
-            const kenoGrid = document.getElementById('kenoGrid');
-            const playBtn = document.getElementById('playBtn');
-            const clearBtn = document.getElementById('clearBtn');
-            const quickPick = document.getElementById('quickPick');
-            const chips = document.querySelectorAll('.chip');
-            const waitingMsg = document.getElementById('waitingMessage');
-            const historyList = document.getElementById('historyList');
-            const confirmModal = document.getElementById('confirmationModal');
-            const confirmDetails = document.getElementById('confirmDetails');
-            const payoutBreakdown = document.getElementById('payoutBreakdown');
-            const confirmCancel = document.getElementById('confirmCancel');
-            const confirmOk = document.getElementById('confirmOk');
-            const resultToast = document.getElementById('resultToast');
-            const soundToggle = document.getElementById('soundToggle');
-            const soundIcon = soundToggle.querySelector('i');
-            const systemMsg = document.getElementById('systemMessage');
-
-            // Sound toggle UI and functionality (respects the chosen soundEnabled)
-            function updateSoundIcon() {
-                if (soundEnabled) {
-                    soundIcon.className = 'fa-solid fa-volume-high';
-                    soundToggle.classList.remove('muted');
-                } else {
-                    soundIcon.className = 'fa-solid fa-volume-xmark';
-                    soundToggle.classList.add('muted');
-                }
-            }
+        // Handle sound preference answers
+        soundYes.addEventListener('click', () => {
+            localStorage.setItem('kenoSound', 'on');
+            soundEnabled = true;
             updateSoundIcon();
+            soundPreferenceModal.classList.remove('active');
+        });
 
-            // Apply background music state based on soundEnabled
-            function applyBgMusicState() {
-                if (!bgMusic) return;
-                if (soundEnabled) {
-                    // Try to play if not already playing
-                    if (bgMusic.paused) {
-                        bgMusic.play().catch(() => {});
-                    }
-                } else {
-                    bgMusic.pause();
-                }
+        soundNo.addEventListener('click', () => {
+            localStorage.setItem('kenoSound', 'off');
+            soundEnabled = false;
+            updateSoundIcon();
+            soundPreferenceModal.classList.remove('active');
+        });
+
+        // Sound state (default: on, but will be overridden by localStorage)
+        let soundEnabled = localStorage.getItem('kenoSound') !== 'off'; // if null, true (default on)
+        updateSoundIcon();
+
+        soundToggle.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('kenoSound', soundEnabled ? 'on' : 'off');
+            updateSoundIcon();
+        });
+
+        function updateSoundIcon() {
+            if (soundEnabled) {
+                soundIcon.className = 'fa-solid fa-volume-high';
+                soundToggle.classList.remove('muted');
+            } else {
+                soundIcon.className = 'fa-solid fa-volume-xmark';
+                soundToggle.classList.add('muted');
             }
-            applyBgMusicState();
+        }
 
-            soundToggle.addEventListener('click', () => {
-                soundEnabled = !soundEnabled;
-                localStorage.setItem('kenoSound', soundEnabled ? 'on' : 'off');
-                updateSoundIcon();
-                applyBgMusicState();
-            });
+        // Game state
+        let selectedNumbers = [];
+        let currentBet = 5;
+        let balance = 0;
+        let currentRound = 1;
+        let roundActive = false;
+        let hasPlacedBet = false;
+        let drawnNumbersSoFar = [];
+        let turbulenceInterval = null;
+        let returnTimeout = null;
 
-            // Game state
-            let selectedNumbers = [];
-            let currentBet = 5;
-            let balance = 0;
-            let currentRound = 1;
-            let roundActive = false;
-            let hasPlacedBet = false;
-            let drawnNumbersSoFar = [];
-            let turbulenceInterval = null;
-            let returnTimeout = null;
+        // Turbulence data per ball
+        let ballTurbulence = new Map(); // key: ball element, value: { phaseX, phaseY, freqX, freqY, ampScale }
 
-            // Turbulence data per ball
-            let ballTurbulence = new Map(); // key: ball element, value: { phaseX, phaseY, freqX, freqY, ampScale }
+        // Original payout table
+        const PAYOUT_TABLE = {
+            1: {1: 3},
+            2: {2: 10},
+            3: {3: 20, 2: 2},
+            4: {4: 60, 3: 2, 2: 1},
+            5: {5: 200, 4: 50, 3: 20, 2: 1}
+        };
 
-            // Original payout table
-            const PAYOUT_TABLE = {
-                1: {1: 3},
-                2: {2: 10},
-                3: {3: 20, 2: 2},
-                4: {4: 60, 3: 2, 2: 1},
-                5: {5: 200, 4: 50, 3: 20, 2: 1}
-            };
+        // ---------- SYSTEM MESSAGE FUNCTION ----------
+        function showSystemMessage(text, type = 'error') {
+            systemMsg.textContent = text;
+            systemMsg.className = 'system-message ' + type + ' show';
+            setTimeout(() => {
+                systemMsg.classList.remove('show');
+            }, 3000);
+        }
 
-            // ---------- SYSTEM MESSAGE FUNCTION ----------
-            function showSystemMessage(text, type = 'error') {
-                systemMsg.textContent = text;
-                systemMsg.className = 'system-message ' + type + ' show';
-                setTimeout(() => {
-                    systemMsg.classList.remove('show');
-                }, 3000);
-            }
-
-            // ---------- VOICE ANNOUNCEMENT FUNCTION ----------
-            function speakNumber(num) {
-                if (!soundEnabled) return;
-                try {
-                    const audio = new Audio(`/audio/${num}.mp3`);
-                    audio.play().catch(e => {
-                        console.warn('Audio play failed:', e);
-                    });
-                } catch (e) {
-                    console.warn('Audio error:', e);
-                }
-            }
-
-            // ---------- Helper functions ----------
-            function updateBalance(val) { balance = val; balanceSpan.innerText = val.toLocaleString() + ' ETB'; }
-            function updateCountdown(sec) { 
-                const m = Math.floor(sec/60), s = sec%60;
-                countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-            }
-
-            function clearAllSelections() {
-                document.querySelectorAll('.keno-number').forEach(el => el.classList.remove('selected'));
-                selectedNumbers = [];
-                selectedCountSpan.innerText = '0/5';
-                playBtn.disabled = true;
-            }
-
-            function showResultAndReturnToBetting(won, amount, betAmount) {
-                resultToast.className = 'result-toast ' + (won ? 'win' : 'lose');
-                resultToast.innerHTML = won ? `🎉 YOU WON ${amount} ETB!` : `💔 YOU LOST ${betAmount} ETB`;
-                resultToast.classList.add('show');
-                setTimeout(() => {
-                    resultToast.classList.remove('show');
-                }, 3000);
-
-                if (returnTimeout) clearTimeout(returnTimeout);
-
-                setTimeout(() => {
-                    spherePhase.classList.remove('active');
-                    bettingPhase.classList.remove('hidden');
-                    clearAllSelections();
-                    if (turbulenceInterval) {
-                        cancelAnimationFrame(turbulenceInterval);
-                        turbulenceInterval = null;
-                    }
-                    ballTurbulence.clear();
-                    resetSphere();
-                }, 3000);
-            }
-
-            function scheduleReturnToBetting() {
-                if (returnTimeout) clearTimeout(returnTimeout);
-                returnTimeout = setTimeout(() => {
-                    console.log('⚠️ No personal result received, returning to betting phase');
-                    spherePhase.classList.remove('active');
-                    bettingPhase.classList.remove('hidden');
-                    clearAllSelections();
-                    if (turbulenceInterval) {
-                        cancelAnimationFrame(turbulenceInterval);
-                        turbulenceInterval = null;
-                    }
-                    ballTurbulence.clear();
-                    resetSphere();
-                }, 5000);
-            }
-
-            // ---------- PROFESSIONAL BALL COLOR (glossy white) ----------
-            function getBallColor(number) {
-                return "radial-gradient(circle at 30% 30%, #ffffff, #f0f0f0 60%, #d0d0d0 100%)";
-            }
-
-            // Create number grid (1-80)
-            for (let i=1; i<=80; i++) {
-                const btn = document.createElement('div');
-                btn.className = 'keno-number';
-                btn.dataset.num = i;
-                btn.innerText = i;
-                btn.addEventListener('click', (e) => {
-                    if (!roundActive || hasPlacedBet) return;
-                    const num = i;
-                    const idx = selectedNumbers.indexOf(num);
-                    if (idx === -1) {
-                        if (selectedNumbers.length >= 5) return;
-                        selectedNumbers.push(num);
-                        btn.classList.add('selected');
-                    } else {
-                        selectedNumbers.splice(idx,1);
-                        btn.classList.remove('selected');
-                    }
-                    selectedNumbers.sort((a,b)=>a-b);
-                    selectedCountSpan.innerText = selectedNumbers.length+'/5';
-                    playBtn.disabled = selectedNumbers.length === 0;
+        // ---------- VOICE ANNOUNCEMENT FUNCTION (replaced with audio files) ----------
+        function speakNumber(num) {
+            if (!soundEnabled) return;
+            try {
+                const audio = new Audio(`/audio/${num}.mp3`);
+                audio.play().catch(e => {
+                    console.warn('Audio play failed:', e);
                 });
-                kenoGrid.appendChild(btn);
+            } catch (e) {
+                console.warn('Audio error:', e);
             }
+        }
 
-            // Chips
-            chips.forEach(c => {
-                c.addEventListener('click', () => {
-                    if (!roundActive || hasPlacedBet) return;
-                    chips.forEach(ch => ch.classList.remove('selected'));
-                    c.classList.add('selected');
-                    currentBet = parseInt(c.dataset.value);
-                });
-            });
+        // ---------- Helper functions ----------
+        function updateBalance(val) { balance = val; balanceSpan.innerText = val.toLocaleString() + ' ETB'; }
+        function updateCountdown(sec) { 
+            const m = Math.floor(sec/60), s = sec%60;
+            countdownEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
 
-            // Quick pick
-            quickPick.addEventListener('click', () => {
-                if (!roundActive || hasPlacedBet) return;
-                clearAllSelections();
-                while(selectedNumbers.length < 5) {
-                    let r = Math.floor(Math.random()*80)+1;
-                    if(!selectedNumbers.includes(r)) selectedNumbers.push(r);
-                }
-                selectedNumbers.sort((a,b)=>a-b);
-                selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.add('selected'));
-                selectedCountSpan.innerText = '5/5';
-                playBtn.disabled = false;
-            });
+        function clearAllSelections() {
+            document.querySelectorAll('.keno-number').forEach(el => el.classList.remove('selected'));
+            selectedNumbers = [];
+            selectedCountSpan.innerText = '0/5';
+            playBtn.disabled = true;
+        }
 
-            // Clear
-            clearBtn.addEventListener('click', () => {
-                if (!roundActive || hasPlacedBet) return;
-                clearAllSelections();
-            });
+        function showResultAndReturnToBetting(won, amount, betAmount) {
+            resultToast.className = 'result-toast ' + (won ? 'win' : 'lose');
+            resultToast.innerHTML = won ? `🎉 YOU WON ${amount} ETB!` : `💔 YOU LOST ${betAmount} ETB`;
+            resultToast.classList.add('show');
+            setTimeout(() => {
+                resultToast.classList.remove('show');
+            }, 3000);
 
-            // Play button -> show confirmation
-            playBtn.addEventListener('click', () => {
-                if (!roundActive || selectedNumbers.length===0 || hasPlacedBet) return;
-                const count = selectedNumbers.length;
-                const table = PAYOUT_TABLE[count] || {};
-                let breakdownHtml = '';
-                for (let matches in table) {
-                    let multiplier = table[matches];
-                    breakdownHtml += `<div>${matches} match${matches>1?'es':''}: ${currentBet * multiplier} ETB (${multiplier}x)</div>`;
-                }
-                confirmDetails.innerHTML = `
-                    <p>Round: #${currentRound}</p>
-                    <p>Numbers: ${selectedNumbers.join(', ')}</p>
-                    <p>Bet: ${currentBet} ETB</p>
-                `;
-                payoutBreakdown.innerHTML = breakdownHtml;
-                confirmModal.classList.add('active');
-            });
-            confirmCancel.addEventListener('click', ()=> confirmModal.classList.remove('active'));
-            confirmOk.addEventListener('click', ()=> {
-                confirmModal.classList.remove('active');
-                if (socket.connected) {
-                    socket.emit('keno:placeBet', { numbers: selectedNumbers, betAmount: currentBet });
-                }
-            });
+            if (returnTimeout) clearTimeout(returnTimeout);
 
-            // ---------- SPHERE WITH TURBULENT MOVEMENT ----------
-            function resetSphere() {
-                innerBalls.innerHTML = '';
-                ballTurbulence.clear();
-                for (let i = 1; i <= 80; i++) {
-                    const ball = document.createElement('div');
-                    ball.className = 'mini-ball';
-                    ball.dataset.number = i;
-                    ball.textContent = i;
-                    const angle = Math.random() * 2 * Math.PI;
-                    const radius = (Math.random() * 45 + 30) / 100;
-                    const left = 50 + 45 * radius * Math.cos(angle);
-                    const top = 50 + 45 * radius * Math.sin(angle);
-                    ball.style.left = left + '%';
-                    ball.style.top = top + '%';
-                    ball.dataset.baseLeft = left;
-                    ball.dataset.baseTop = top;
-                    const color = getBallColor(i);
-                    ball.style.background = color;
-                    ball.dataset.color = color;
-                    ballTurbulence.set(ball, {
-                        phaseX: Math.random() * 2 * Math.PI,
-                        phaseY: Math.random() * 2 * Math.PI,
-                        freqX: 0.5 + Math.random() * 1.5,
-                        freqY: 0.5 + Math.random() * 1.5,
-                        ampScale: 0.8 + Math.random() * 0.7
-                    });
-                    if (selectedNumbers.includes(i)) {
-                        ball.classList.add('selected-ball');
-                    }
-                    innerBalls.appendChild(ball);
-                }
-                drawnBallsRow.innerHTML = '';
-                drawnNumbersSoFar = [];
-                currentBallSpan.innerText = '0';
-                totalBallsSpan.innerText = '20';
-                sphereGlass.classList.remove('spinning');
-            }
-
-            function startTurbulence() {
-                if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
-                let startTime = performance.now();
-                function animate() {
-                    const now = performance.now();
-                    const t = (now - startTime) / 1000;
-                    const balls = document.querySelectorAll('.mini-ball');
-                    balls.forEach(ball => {
-                        if (!ball.parentNode) return;
-                        const data = ballTurbulence.get(ball);
-                        if (!data) return;
-                        const offsetX = 8 * Math.sin(t * data.freqX * 2 + data.phaseX) * data.ampScale;
-                        const offsetY = 8 * Math.sin(t * data.freqY * 2.3 + data.phaseY) * data.ampScale;
-                        ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
-                    });
-                    turbulenceInterval = requestAnimationFrame(animate);
-                }
-                turbulenceInterval = requestAnimationFrame(animate);
-            }
-
-            // ---------- SMOOTH FLIGHT FROM SPHERE TO DRAWN ROW ----------
-            function flyBallToRow(number) {
-                const originalBall = document.querySelector(`.mini-ball[data-number="${number}"]`);
-                if (!originalBall) return;
-
-                // Remove from turbulence so it stops moving
-                ballTurbulence.delete(originalBall);
-
-                // Get start position (center of ball relative to viewport)
-                const startRect = originalBall.getBoundingClientRect();
-                const startX = startRect.left + startRect.width / 2;
-                const startY = startRect.top + startRect.height / 2;
-
-                // Get target position: we want the ball to land near the drawn row.
-                // We'll target the center of the drawnBallsRow container.
-                const targetRect = drawnBallsRow.getBoundingClientRect();
-                const targetX = targetRect.left + targetRect.width / 2;
-                const targetY = targetRect.top + targetRect.height / 2;
-
-                // Create a flying clone
-                const clone = document.createElement('div');
-                clone.className = 'flying-ball';
-                clone.textContent = number;
-                clone.style.background = originalBall.dataset.color || getBallColor(number);
-                clone.style.left = (startX - 14) + 'px';  // offset to center (28px width)
-                clone.style.top = (startY - 14) + 'px';
-                document.body.appendChild(clone);
-
-                // Slightly fade out original ball, will be removed after flight
-                originalBall.style.opacity = '0.3';
-                originalBall.style.transition = 'opacity 0.3s';
-
-                // Trigger flight after a tiny delay to ensure initial position set
-                setTimeout(() => {
-                    clone.style.transform = `translate(${targetX - startX}px, ${targetY - startY}px) scale(0.9)`;
-                    clone.style.opacity = '0.8';
-                }, 10);
-
-                // After flight, remove clone and original, and add drawn ball
-                setTimeout(() => {
-                    if (clone.parentNode) clone.remove();
-                    if (originalBall.parentNode) originalBall.remove();
-
-                    // Add the drawn ball to the row
-                    const newBall = document.createElement('div');
-                    newBall.className = 'drawn-ball';
-                    newBall.innerText = number;
-                    newBall.style.background = originalBall.dataset.color || getBallColor(number);
-                    drawnBallsRow.appendChild(newBall);
-                    drawnNumbersSoFar.push(number);
-                    currentBallSpan.innerText = drawnNumbersSoFar.length;
-
-                    // Restore any removed balls' styles (just in case)
-                }, 500); // match flight duration (0.45s + buffer)
-            }
-
-            // Fallback for when ball not found (just add drawn ball)
-            function addDrawnBallDirect(number) {
-                const color = getBallColor(number);
-                const ballDiv = document.createElement('div');
-                ballDiv.className = 'drawn-ball';
-                ballDiv.innerText = number;
-                ballDiv.style.background = color;
-                drawnBallsRow.appendChild(ballDiv);
-                drawnNumbersSoFar.push(number);
-                currentBallSpan.innerText = drawnNumbersSoFar.length;
-            }
-
-            // Display all drawn numbers at once (used when restoring state)
-            function displayAllDrawnNumbers(numbers) {
-                drawnBallsRow.innerHTML = '';
-                numbers.forEach(n => {
-                    removeNumberBall(n);
-                    const ballDiv = document.createElement('div');
-                    ballDiv.className = 'drawn-ball';
-                    ballDiv.innerText = n;
-                    ballDiv.style.background = getBallColor(n);
-                    drawnBallsRow.appendChild(ballDiv);
-                });
-                drawnNumbersSoFar = [...numbers];
-                currentBallSpan.innerText = numbers.length;
-            }
-
-            // Remove ball without animation (for state restore)
-            function removeNumberBall(number) {
-                const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
-                if (ball) {
-                    ballTurbulence.delete(ball);
-                    ball.remove();
-                }
-            }
-
-            // ---------- SOCKET HANDLERS (unchanged) ----------
-            socket.on('connect', () => {
-                document.getElementById('status-text').innerText = 'CONNECTED';
-                socket.emit('keno:auth', { userId, userName });
-            });
-
-            socket.on('keno:welcome', (data) => {
-                balance = data.balance || 1000;
-                updateBalance(balance);
-                currentRound = data.currentRound || 1;
-                roundSpan.innerText = currentRound;
-                roundActive = data.isRoundActive || false;
-                updateCountdown(data.countdown || 30);
-                if (data.currentDrawnNumbers?.length > 0) {
-                    bettingPhase.classList.add('hidden');
-                    spherePhase.classList.add('active');
-                    resetSphere();
-                    data.currentDrawnNumbers.forEach(n => removeNumberBall(n));
-                    displayAllDrawnNumbers(data.currentDrawnNumbers);
-                    if (!data.isDrawComplete) {
-                        sphereGlass.classList.add('spinning');
-                        startTurbulence();
-                    }
-                }
-            });
-
-            socket.on('keno:round_start', (d) => {
+            setTimeout(() => {
                 spherePhase.classList.remove('active');
                 bettingPhase.classList.remove('hidden');
-                roundActive = true;
-                hasPlacedBet = false;
-                currentRound = d.round;
-                roundSpan.innerText = currentRound;
-                updateCountdown(d.duration || 30);
                 clearAllSelections();
-                playBtn.innerText = 'PLACE BET';
-                waitingMsg.style.display = 'none';
                 if (turbulenceInterval) {
                     cancelAnimationFrame(turbulenceInterval);
                     turbulenceInterval = null;
                 }
-            });
-
-            socket.on('keno:countdown_update', (d) => updateCountdown(d.countdown));
-
-            socket.on('keno:draw_start', () => {
-                bettingPhase.classList.add('hidden');
-                spherePhase.classList.add('active');
+                ballTurbulence.clear();
                 resetSphere();
-                sphereGlass.classList.add('spinning');
-                startTurbulence();
-            });
+            }, 3000);
+        }
 
-            socket.on('keno:number_drawn', (d) => {
-                speakNumber(d.number);
-                // Use smooth flight if ball exists, otherwise just add directly
-                if (document.querySelector(`.mini-ball[data-number="${d.number}"]`)) {
-                    flyBallToRow(d.number);
+        function scheduleReturnToBetting() {
+            if (returnTimeout) clearTimeout(returnTimeout);
+            returnTimeout = setTimeout(() => {
+                console.log('⚠️ No personal result received, returning to betting phase');
+                spherePhase.classList.remove('active');
+                bettingPhase.classList.remove('hidden');
+                clearAllSelections();
+                if (turbulenceInterval) {
+                    cancelAnimationFrame(turbulenceInterval);
+                    turbulenceInterval = null;
+                }
+                ballTurbulence.clear();
+                resetSphere();
+            }, 5000);
+        }
+
+        // ---------- PROFESSIONAL BALL COLOR (glossy white) ----------
+        function getBallColor(number) {
+            return "radial-gradient(circle at 30% 30%, #ffffff, #f0f0f0 60%, #d0d0d0 100%)";
+        }
+
+        // Create number grid (1-80)
+        for (let i=1; i<=80; i++) {
+            const btn = document.createElement('div');
+            btn.className = 'keno-number';
+            btn.dataset.num = i;
+            btn.innerText = i;
+            btn.addEventListener('click', (e) => {
+                if (!roundActive || hasPlacedBet) return;
+                const num = i;
+                const idx = selectedNumbers.indexOf(num);
+                if (idx === -1) {
+                    if (selectedNumbers.length >= 5) return;
+                    selectedNumbers.push(num);
+                    btn.classList.add('selected');
                 } else {
-                    addDrawnBallDirect(d.number);
+                    selectedNumbers.splice(idx,1);
+                    btn.classList.remove('selected');
                 }
+                selectedNumbers.sort((a,b)=>a-b);
+                selectedCountSpan.innerText = selectedNumbers.length+'/5';
+                playBtn.disabled = selectedNumbers.length === 0;
             });
+            kenoGrid.appendChild(btn);
+        }
 
-            socket.on('keno:round_results', (d) => {
-                sphereGlass.classList.remove('spinning');
-                if (d.drawnNumbers && d.drawnNumbers.length !== drawnNumbersSoFar.length) {
-                    displayAllDrawnNumbers(d.drawnNumbers);
+        // Chips
+        chips.forEach(c => {
+            c.addEventListener('click', () => {
+                if (!roundActive || hasPlacedBet) return;
+                chips.forEach(ch => ch.classList.remove('selected'));
+                c.classList.add('selected');
+                currentBet = parseInt(c.dataset.value);
+            });
+        });
+
+        // Quick pick
+        quickPick.addEventListener('click', () => {
+            if (!roundActive || hasPlacedBet) return;
+            clearAllSelections();
+            while(selectedNumbers.length < 5) {
+                let r = Math.floor(Math.random()*80)+1;
+                if(!selectedNumbers.includes(r)) selectedNumbers.push(r);
+            }
+            selectedNumbers.sort((a,b)=>a-b);
+            selectedNumbers.forEach(n => document.querySelector(`.keno-number[data-num="${n}"]`).classList.add('selected'));
+            selectedCountSpan.innerText = '5/5';
+            playBtn.disabled = false;
+        });
+
+        // Clear
+        clearBtn.addEventListener('click', () => {
+            if (!roundActive || hasPlacedBet) return;
+            clearAllSelections();
+        });
+
+        // Play button -> show confirmation
+        playBtn.addEventListener('click', () => {
+            if (!roundActive || selectedNumbers.length===0 || hasPlacedBet) return;
+            const count = selectedNumbers.length;
+            const table = PAYOUT_TABLE[count] || {};
+            let breakdownHtml = '';
+            for (let matches in table) {
+                let multiplier = table[matches];
+                breakdownHtml += `<div>${matches} match${matches>1?'es':''}: ${currentBet * multiplier} ETB (${multiplier}x)</div>`;
+            }
+            confirmDetails.innerHTML = `
+                <p>Round: #${currentRound}</p>
+                <p>Numbers: ${selectedNumbers.join(', ')}</p>
+                <p>Bet: ${currentBet} ETB</p>
+            `;
+            payoutBreakdown.innerHTML = breakdownHtml;
+            confirmModal.classList.add('active');
+        });
+        confirmCancel.addEventListener('click', ()=> confirmModal.classList.remove('active'));
+        confirmOk.addEventListener('click', ()=> {
+            confirmModal.classList.remove('active');
+            if (socket.connected) {
+                socket.emit('keno:placeBet', { numbers: selectedNumbers, betAmount: currentBet });
+            }
+        });
+
+        // ---------- SPHERE WITH TURBULENT MOVEMENT ----------
+        function resetSphere() {
+            innerBalls.innerHTML = '';
+            ballTurbulence.clear();
+            for (let i = 1; i <= 80; i++) {
+                const ball = document.createElement('div');
+                ball.className = 'mini-ball';
+                ball.dataset.number = i;
+                ball.textContent = i;
+                const angle = Math.random() * 2 * Math.PI;
+                const radius = (Math.random() * 45 + 30) / 100;
+                const left = 50 + 45 * radius * Math.cos(angle);
+                const top = 50 + 45 * radius * Math.sin(angle);
+                ball.style.left = left + '%';
+                ball.style.top = top + '%';
+                ball.dataset.baseLeft = left;
+                ball.dataset.baseTop = top;
+                const color = getBallColor(i);
+                ball.style.background = color;
+                ball.dataset.color = color;
+                ballTurbulence.set(ball, {
+                    phaseX: Math.random() * 2 * Math.PI,
+                    phaseY: Math.random() * 2 * Math.PI,
+                    freqX: 0.5 + Math.random() * 1.5,
+                    freqY: 0.5 + Math.random() * 1.5,
+                    ampScale: 0.8 + Math.random() * 0.7
+                });
+                if (selectedNumbers.includes(i)) {
+                    ball.classList.add('selected-ball');
                 }
-                totalBallsSpan.innerText = d.totalDrawn || 20;
-                scheduleReturnToBetting();
+                innerBalls.appendChild(ball);
+            }
+            drawnBallsRow.innerHTML = '';
+            drawnNumbersSoFar = [];
+            currentBallSpan.innerText = '0';
+            totalBallsSpan.innerText = '20';
+            sphereGlass.classList.remove('spinning');
+        }
+
+        function startTurbulence() {
+            if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
+            let startTime = performance.now();
+            function animate() {
+                const now = performance.now();
+                const t = (now - startTime) / 1000;
+                const balls = document.querySelectorAll('.mini-ball');
+                balls.forEach(ball => {
+                    if (!ball.parentNode) return;
+                    const data = ballTurbulence.get(ball);
+                    if (!data) return;
+                    const offsetX = 8 * Math.sin(t * data.freqX * 2 + data.phaseX) * data.ampScale;
+                    const offsetY = 8 * Math.sin(t * data.freqY * 2.3 + data.phaseY) * data.ampScale;
+                    ball.style.transform = `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`;
+                });
+                turbulenceInterval = requestAnimationFrame(animate);
+            }
+            turbulenceInterval = requestAnimationFrame(animate);
+        }
+
+        // ---------- SMOOTH FLIGHT FROM SPHERE TO DRAWN ROW ----------
+        function flyBallToRow(number) {
+            const originalBall = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (!originalBall) return;
+
+            // Remove from turbulence so it stops moving
+            ballTurbulence.delete(originalBall);
+
+            // Get start position (center of ball relative to viewport)
+            const startRect = originalBall.getBoundingClientRect();
+            const startX = startRect.left + startRect.width / 2;
+            const startY = startRect.top + startRect.height / 2;
+
+            // Get target position: we want the ball to land near the drawn row.
+            // We'll target the center of the drawnBallsRow container.
+            const targetRect = drawnBallsRow.getBoundingClientRect();
+            const targetX = targetRect.left + targetRect.width / 2;
+            const targetY = targetRect.top + targetRect.height / 2;
+
+            // Create a flying clone
+            const clone = document.createElement('div');
+            clone.className = 'flying-ball';
+            clone.textContent = number;
+            clone.style.background = originalBall.dataset.color || getBallColor(number);
+            clone.style.left = (startX - 14) + 'px';  // offset to center (28px width)
+            clone.style.top = (startY - 14) + 'px';
+            document.body.appendChild(clone);
+
+            // Slightly fade out original ball, will be removed after flight
+            originalBall.style.opacity = '0.3';
+            originalBall.style.transition = 'opacity 0.3s';
+
+            // Trigger flight after a tiny delay to ensure initial position set
+            setTimeout(() => {
+                clone.style.transform = `translate(${targetX - startX}px, ${targetY - startY}px) scale(0.9)`;
+                clone.style.opacity = '0.8';
+            }, 10);
+
+            // After flight, remove clone and original, and add drawn ball
+            setTimeout(() => {
+                if (clone.parentNode) clone.remove();
+                if (originalBall.parentNode) originalBall.remove();
+
+                // Add the drawn ball to the row
+                const newBall = document.createElement('div');
+                newBall.className = 'drawn-ball';
+                newBall.innerText = number;
+                newBall.style.background = originalBall.dataset.color || getBallColor(number);
+                drawnBallsRow.appendChild(newBall);
+                drawnNumbersSoFar.push(number);
+                currentBallSpan.innerText = drawnNumbersSoFar.length;
+
+                // Restore any removed balls' styles (just in case)
+            }, 500); // match flight duration (0.45s + buffer)
+        }
+
+        // Fallback for when ball not found (just add drawn ball)
+        function addDrawnBallDirect(number) {
+            const color = getBallColor(number);
+            const ballDiv = document.createElement('div');
+            ballDiv.className = 'drawn-ball';
+            ballDiv.innerText = number;
+            ballDiv.style.background = color;
+            drawnBallsRow.appendChild(ballDiv);
+            drawnNumbersSoFar.push(number);
+            currentBallSpan.innerText = drawnNumbersSoFar.length;
+        }
+
+        // Display all drawn numbers at once (used when restoring state)
+        function displayAllDrawnNumbers(numbers) {
+            drawnBallsRow.innerHTML = '';
+            numbers.forEach(n => {
+                removeNumberBall(n);
+                const ballDiv = document.createElement('div');
+                ballDiv.className = 'drawn-ball';
+                ballDiv.innerText = n;
+                ballDiv.style.background = getBallColor(n);
+                drawnBallsRow.appendChild(ballDiv);
             });
+            drawnNumbersSoFar = [...numbers];
+            currentBallSpan.innerText = numbers.length;
+        }
 
-            socket.on('keno:round_result', (d) => {
-                if (returnTimeout) clearTimeout(returnTimeout);
-                const item = document.createElement('div');
-                item.className = 'history-item';
-                item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
-                historyList.prepend(item);
-                if (historyList.children.length > 5) historyList.lastChild.remove();
-                if (d.winnings > 0) updateBalance(d.newBalance);
+        // Remove ball without animation (for state restore)
+        function removeNumberBall(number) {
+            const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
+            if (ball) {
+                ballTurbulence.delete(ball);
+                ball.remove();
+            }
+        }
 
-                showResultAndReturnToBetting(d.winnings > 0, d.winnings, d.bet);
-            });
+        // ---------- SOCKET HANDLERS ----------
+        socket.on('connect', () => {
+            document.getElementById('status-text').innerText = 'CONNECTED';
+            socket.emit('keno:auth', { userId, userName });
+        });
 
-            socket.on('keno:betConfirmed', (d) => {
-                hasPlacedBet = true;
-                updateBalance(d.balance);
-                playBtn.disabled = true;
-                playBtn.innerText = '✔️ BET IN';
-            });
-
-            socket.on('keno:players_update', (d) => {
-                waitingMsg.style.display = d.count === 0 ? 'block' : 'none';
-            });
-
-            socket.on('keno:balance', (d) => updateBalance(d.balance));
-
-            // Replace alerts with system message
-            socket.on('keno:error', (msg) => {
-                const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
-                showSystemMessage(text, 'error');
-            });
-            socket.on('keno:warning', (msg) => {
-                const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
-                showSystemMessage(text, 'info');
-            });
-
-            socket.on('keno:draw_state', (d) => {
+        socket.on('keno:welcome', (data) => {
+            balance = data.balance || 1000;
+            updateBalance(balance);
+            currentRound = data.currentRound || 1;
+            roundSpan.innerText = currentRound;
+            roundActive = data.isRoundActive || false;
+            updateCountdown(data.countdown || 30);
+            if (data.currentDrawnNumbers?.length > 0) {
                 bettingPhase.classList.add('hidden');
                 spherePhase.classList.add('active');
                 resetSphere();
-                if (d.drawnNumbers) {
-                    d.drawnNumbers.forEach(n => removeNumberBall(n));
-                    displayAllDrawnNumbers(d.drawnNumbers);
-                }
-                if (!d.isDrawComplete) {
+                data.currentDrawnNumbers.forEach(n => removeNumberBall(n));
+                displayAllDrawnNumbers(data.currentDrawnNumbers);
+                if (!data.isDrawComplete) {
                     sphereGlass.classList.add('spinning');
                     startTurbulence();
                 }
-            });
-
-            // initial reset
-            resetSphere();
-
-            // If sound is enabled but autoplay was blocked, start background music on first user interaction
-            if (soundEnabled) {
-                function startBgOnInteraction() {
-                    if (bgMusic && bgMusic.paused) {
-                        bgMusic.play().catch(() => {});
-                    }
-                    document.removeEventListener('click', startBgOnInteraction);
-                    document.removeEventListener('touchstart', startBgOnInteraction);
-                }
-                document.addEventListener('click', startBgOnInteraction);
-                document.addEventListener('touchstart', startBgOnInteraction);
             }
-        } // end initApp
+
+            // ---------- ASK SOUND PREFERENCE ON FIRST WELCOME ----------
+            askSoundPreference();
+        });
+
+        socket.on('keno:round_start', (d) => {
+            spherePhase.classList.remove('active');
+            bettingPhase.classList.remove('hidden');
+            roundActive = true;
+            hasPlacedBet = false;
+            currentRound = d.round;
+            roundSpan.innerText = currentRound;
+            updateCountdown(d.duration || 30);
+            clearAllSelections();
+            playBtn.innerText = 'PLACE BET';
+            waitingMsg.style.display = 'none';
+            if (turbulenceInterval) {
+                cancelAnimationFrame(turbulenceInterval);
+                turbulenceInterval = null;
+            }
+        });
+
+        socket.on('keno:countdown_update', (d) => updateCountdown(d.countdown));
+
+        socket.on('keno:draw_start', () => {
+            bettingPhase.classList.add('hidden');
+            spherePhase.classList.add('active');
+            resetSphere();
+            sphereGlass.classList.add('spinning');
+            startTurbulence();
+        });
+
+        socket.on('keno:number_drawn', (d) => {
+            speakNumber(d.number);
+            // Use smooth flight if ball exists, otherwise just add directly
+            if (document.querySelector(`.mini-ball[data-number="${d.number}"]`)) {
+                flyBallToRow(d.number);
+            } else {
+                addDrawnBallDirect(d.number);
+            }
+        });
+
+        socket.on('keno:round_results', (d) => {
+            sphereGlass.classList.remove('spinning');
+            if (d.drawnNumbers && d.drawnNumbers.length !== drawnNumbersSoFar.length) {
+                displayAllDrawnNumbers(d.drawnNumbers);
+            }
+            totalBallsSpan.innerText = d.totalDrawn || 20;
+            scheduleReturnToBetting();
+        });
+
+        socket.on('keno:round_result', (d) => {
+            if (returnTimeout) clearTimeout(returnTimeout);
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `<span>R#${d.round}</span><span style="color:${d.winnings>0?'gold':'#888'}">${d.winnings>0?'+'+d.winnings:'-'+d.bet}</span>`;
+            historyList.prepend(item);
+            if (historyList.children.length > 5) historyList.lastChild.remove();
+            if (d.winnings > 0) updateBalance(d.newBalance);
+
+            showResultAndReturnToBetting(d.winnings > 0, d.winnings, d.bet);
+        });
+
+        socket.on('keno:betConfirmed', (d) => {
+            hasPlacedBet = true;
+            updateBalance(d.balance);
+            playBtn.disabled = true;
+            playBtn.innerText = '✔️ BET IN';
+        });
+
+        socket.on('keno:players_update', (d) => {
+            waitingMsg.style.display = d.count === 0 ? 'block' : 'none';
+        });
+
+        socket.on('keno:balance', (d) => updateBalance(d.balance));
+
+        // Replace alerts with system message
+        socket.on('keno:error', (msg) => {
+            const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
+            showSystemMessage(text, 'error');
+        });
+        socket.on('keno:warning', (msg) => {
+            const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
+            showSystemMessage(text, 'info');
+        });
+
+        socket.on('keno:draw_state', (d) => {
+            bettingPhase.classList.add('hidden');
+            spherePhase.classList.add('active');
+            resetSphere();
+            if (d.drawnNumbers) {
+                d.drawnNumbers.forEach(n => removeNumberBall(n));
+                displayAllDrawnNumbers(d.drawnNumbers);
+            }
+            if (!d.isDrawComplete) {
+                sphereGlass.classList.add('spinning');
+                startTurbulence();
+            }
+        });
+
+        // initial reset
+        resetSphere();
     })();
 </script>
 </body>
