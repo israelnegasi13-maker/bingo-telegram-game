@@ -1,5 +1,6 @@
 // keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP 100 ETB + RANDOM JACKPOT
 // ========== MODIFIED: max win = 100, if raw win >=100 → random amount 1‑100 ==========
+// ========== ADDED: fairness threshold – if total possible payout < 300 ETB, use purely random draw ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -35,7 +36,7 @@ module.exports = {
         RECONNECT_BACKOFF: 2000,
     },
 
-    // ==================== PROFIT CONTROL + MAX WIN CAP ====================
+    // ==================== PROFIT CONTROL + MAX WIN CAP + FAIRNESS THRESHOLD ====================
     PROFIT_CONTROL: {
         ENABLED: true,
         SIMULATION_COUNT: 1000,
@@ -46,6 +47,8 @@ module.exports = {
         RANDOMNESS_CHANCE: 0.05,                  // 5% random draws for plausibility
         // NEW: Maximum win per player per round (capped at 100 ETB)
         MAX_WIN_PER_PLAYER: 100,
+        // NEW: Fairness threshold – if total possible payout for round < this value, draw is purely random
+        FAIRNESS_THRESHOLD: 300,                   // ETB
         // Player‑unfriendly pattern settings (disabled)
         PATTERN_AVOIDANCE: {
             ENABLED: false,
@@ -125,6 +128,7 @@ module.exports = {
         console.log('💰 House target: 70% profit, max win per player: 100 ETB');
         console.log('🎰 If raw win ≥100 ETB → random amount 1‑100 ETB awarded');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
+        console.log(`🎲 FAIRNESS THRESHOLD: if total possible payout < ${this.PROFIT_CONTROL.FAIRNESS_THRESHOLD} ETB, draw is purely random`);
         console.log('👑 Agent commission: 10% on Keno wins');
         
         // Load existing stats
@@ -2180,15 +2184,34 @@ module.exports = {
     simulateAndSelectDraw: function(bets, totalBetAmount) {
         const self = this;
         const pc = self.PROFIT_CONTROL;
-        const MAX_WIN = pc.MAX_WIN_PER_PLAYER; // 100 ETB
+        const MAX_WIN = pc.MAX_WIN_PER_PLAYER;          // 100 ETB
+        const FAIRNESS_THRESHOLD = pc.FAIRNESS_THRESHOLD; // 300 ETB (configurable)
 
         // If no bets or profit control disabled, return random draw
         if (!pc.ENABLED || Object.keys(bets).length === 0) {
             return self.generateRandomDraw();
         }
 
-        console.log('🎯 Profit Control + Max Win Cap 100: Simulating draws to keep wins ≤ 100 ETB...');
+        // Calculate total maximum possible payout (if every player hit the best multiplier for their selection count)
+        let maxPossiblePayout = 0;
+        for (const bet of Object.values(bets)) {
+            const selectionCount = bet.selectionCount || bet.numbers.length;
+            const maxMatches = Math.min(selectionCount, self.CONFIG.KENO_DRAW_COUNT);
+            const maxMultiplier = self.CONFIG.PAYOUT_TABLE[selectionCount]?.[maxMatches] || 0;
+            maxPossiblePayout += bet.amount * maxMultiplier;
+        }
 
+        console.log(`💰 Total maximum possible payout: ${maxPossiblePayout.toFixed(2)} ETB`);
+
+        // If total possible payout is below threshold, use purely random draw (fair mode)
+        if (maxPossiblePayout < FAIRNESS_THRESHOLD) {
+            console.log(`🎲 Total possible payout < ${FAIRNESS_THRESHOLD} ETB – using purely random draw (fair mode)`);
+            return self.generateRandomDraw();
+        }
+
+        console.log(`🎯 Total possible payout >= ${FAIRNESS_THRESHOLD} ETB – engaging profit control to limit payouts`);
+
+        // ----- existing profit‑control simulation (unchanged) -----
         const betsArray = Object.values(bets).map(bet => ({
             numbers: bet.numbers,
             amount: bet.amount,
@@ -2199,7 +2222,7 @@ module.exports = {
         const totalPlayers = betsArray.length;
         const totalWagered = totalBetAmount;
 
-        // Adjust target house keep based on player count etc.
+        // Adjust target house keep dynamically
         let targetHouseKeep = pc.TARGET_HOUSE_KEEP_PERCENTAGE;
         if (pc.DYNAMIC_ADJUSTMENT.ENABLED) {
             if (totalPlayers < 3) {
@@ -2225,20 +2248,18 @@ module.exports = {
         for (let i = 0; i < pc.SIMULATION_COUNT; i++) {
             const candidateDraw = self.generateRandomDraw();
 
-            // Calculate total payout and track individual wins
             let totalPayout = 0;
             let playerPayouts = [];
             let maxIndividualWin = 0;
             let bigWinsCount = 0;
             let winnerCount = 0;
-            let anyExceedsCap = false; // flag if any win > MAX_WIN
+            let anyExceedsCap = false;
 
             for (const bet of betsArray) {
                 const matches = self.countMatches(bet.numbers, candidateDraw);
                 const payoutMultiplier = self.CONFIG.PAYOUT_TABLE[bet.selectionCount]?.[matches] || 0;
                 let winAmount = bet.amount * payoutMultiplier;
 
-                // Check if win exceeds cap
                 if (winAmount > MAX_WIN) {
                     anyExceedsCap = true;
                 }
@@ -2259,29 +2280,17 @@ module.exports = {
                 }
             }
 
-            // Calculate house profit percentage
             const houseKeep = totalWagered - totalPayout;
             const houseKeepPercentage = (houseKeep / totalWagered) * 100;
 
-            // Score this simulation – lower score is better for house
-            let score = totalPayout; // base score = total payout
-
-            // Heavily penalise if any win exceeds the cap
-            if (anyExceedsCap) {
-                score += totalPayout * 10000; // huge penalty
-            }
-
-            // Penalise too many winners
-            score += winnerCount * 1000;
-
-            // Penalise if total payout exceeds target by too much
+            let score = totalPayout;
+            if (anyExceedsCap) score += totalPayout * 10000;          // huge penalty for exceeding cap
+            score += winnerCount * 1000;                               // penalize too many winners
             if (totalPayout > targetPayout + variance) {
-                score += (totalPayout - targetPayout) * 500;
+                score += (totalPayout - targetPayout) * 500;          // penalty for exceeding target
             }
-
-            // Bonus for being within target range
             if (Math.abs(totalPayout - targetPayout) <= variance) {
-                score *= 0.9;
+                score *= 0.9;                                          // bonus for being within target
             }
 
             simulations.push({
@@ -2301,7 +2310,7 @@ module.exports = {
         const simulationTime = Date.now() - startTime;
         console.log(`🎯 Simulated ${simulations.length} draws in ${simulationTime}ms`);
 
-        // Random chance to pick a truly random draw
+        // Random chance for a truly random draw
         if (Math.random() < pc.RANDOMNESS_CHANCE) {
             console.log(`🎯 RANDOM MODE (${pc.RANDOMNESS_CHANCE*100}% chance): Picking truly random draw (may exceed cap)`);
             const randomIndex = Math.floor(Math.random() * simulations.length);
@@ -2310,15 +2319,12 @@ module.exports = {
             return selected.draw;
         }
 
-        // Sort by score (lower is better)
+        // Sort by score (lower is better) and pick from top 15
         simulations.sort((a, b) => a.score - b.score);
-
-        // Pick from top 15 to avoid deterministic patterns
         const topCandidates = simulations.slice(0, 15);
         const selected = topCandidates[Math.floor(Math.random() * topCandidates.length)];
 
         self.logProfitControlResults(selected, totalWagered, 'CAPPED');
-
         return selected.draw;
     },
     
