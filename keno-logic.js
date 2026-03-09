@@ -256,6 +256,14 @@ module.exports = {
                 console.log('🩺 Health Check: Detected stuck countdown, resetting...');
                 self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
             }
+
+            // NEW: Detect if countdown is stuck at 0 for more than 10 seconds while in betting state
+            if (self.kenoCountdown === 0 && self.isKenoRoundActive && !self.isDrawing) {
+                console.log('🩺 Health Check: Countdown stuck at 0, forcing draw...');
+                clearInterval(self.kenoCountdownInterval);
+                self.kenoCountdownInterval = null;
+                self.drawKenoNumbers();
+            }
         }, 30000);
     },
 
