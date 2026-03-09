@@ -480,6 +480,15 @@
             transform: scale(1);
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+        /* --- Matched ball highlight --- */
+        .drawn-ball.matched {
+            background: linear-gradient(145deg, #2ecc71, #27ae60) !important;
+            box-shadow: 0 0 15px #2ecc71, 0 4px 0 #1e8449, 0 0 0 2px #f1c40f inset;
+            color: white;
+            text-shadow: 0 1px 2px black;
+            transform: scale(1.1);
+            transition: all 0.2s;
+        }
         @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
             70% { transform: scale(1.2); }
@@ -509,30 +518,50 @@
         .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 70px; overflow-y: auto; }
         .history-item { display: flex; justify-content: space-between; font-size: 11px; }
 
-        /* win/loss toast – now at top with high z-index */
+        /* --- Enhanced result toast --- */
         .result-toast {
             position: fixed;
             top: 100px;
             left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(8px);
-            border: 1px solid gold;
+            transform: translateX(-50%) scale(0.9);
+            background: rgba(20, 30, 50, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 215, 0, 0.5);
             border-radius: 60px;
-            padding: 14px 28px;
+            padding: 16px 32px;
             font-weight: 800;
-            font-size: 18px;
+            font-size: 20px;
             color: white;
-            box-shadow: 0 10px 30px black;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,215,0,0.3) inset;
             z-index: 9999;
             display: none;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
             white-space: nowrap;
+            letter-spacing: 1px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
         }
-        .result-toast.show { display: flex; }
-        .result-toast.win { background: #1f4a2c; border-color: #ffd966; }
-        .result-toast.lose { background: #5a1e2b; border-color: #ff8a8a; }
+        .result-toast.show {
+            display: flex;
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+        .result-toast.win {
+            background: linear-gradient(145deg, #1e4a2c, #0f3a1f);
+            border-color: #f1c40f;
+            box-shadow: 0 0 30px #f1c40f80, 0 4px 0 #0f3a1f;
+        }
+        .result-toast.lose {
+            background: linear-gradient(145deg, #5a1e2b, #3a121b);
+            border-color: #e74c3c;
+            box-shadow: 0 0 30px #e74c3c80, 0 4px 0 #3a121b;
+        }
+        .result-toast i {
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px black);
+        }
 
         .confirmation-modal {
             position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); display: none; justify-content: center; align-items: center; z-index: 1000;
@@ -876,7 +905,10 @@
 
         function showResultAndReturnToBetting(won, amount, betAmount) {
             resultToast.className = 'result-toast ' + (won ? 'win' : 'lose');
-            resultToast.innerHTML = won ? `🎉 YOU WON ${amount} ETB!` : `💔 YOU LOST ${betAmount} ETB`;
+            const icon = won ? '<i class="fa-regular fa-circle-check"></i>' : '<i class="fa-regular fa-face-frown"></i>';
+            resultToast.innerHTML = won 
+                ? `${icon} 🎉 YOU WON ${amount} ETB!` 
+                : `${icon} 💔 YOU LOST ${betAmount} ETB`;
             resultToast.classList.add('show');
             setTimeout(() => {
                 resultToast.classList.remove('show');
@@ -1102,6 +1134,10 @@
                 newBall.className = 'drawn-ball';
                 newBall.innerText = number;
                 newBall.style.background = originalBall.dataset.color || getBallColor(number);
+                // --- Highlight matched numbers ---
+                if (selectedNumbers.includes(number)) {
+                    newBall.classList.add('matched');
+                }
                 drawnBallsRow.appendChild(newBall);
                 drawnNumbersSoFar.push(number);
                 currentBallSpan.innerText = drawnNumbersSoFar.length;
@@ -1114,6 +1150,10 @@
             ballDiv.className = 'drawn-ball';
             ballDiv.innerText = number;
             ballDiv.style.background = color;
+            // --- Highlight matched numbers ---
+            if (selectedNumbers.includes(number)) {
+                ballDiv.classList.add('matched');
+            }
             drawnBallsRow.appendChild(ballDiv);
             drawnNumbersSoFar.push(number);
             currentBallSpan.innerText = drawnNumbersSoFar.length;
@@ -1127,6 +1167,10 @@
                 ballDiv.className = 'drawn-ball';
                 ballDiv.innerText = n;
                 ballDiv.style.background = getBallColor(n);
+                // --- Highlight matched numbers ---
+                if (selectedNumbers.includes(n)) {
+                    ballDiv.classList.add('matched');
+                }
                 drawnBallsRow.appendChild(ballDiv);
             });
             drawnNumbersSoFar = [...numbers];
