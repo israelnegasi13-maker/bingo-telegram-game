@@ -735,7 +735,9 @@
             // ---------- BACKGROUND MUSIC (only if enabled) ----------
             const bgMusic = document.getElementById('bgMusic');
             if (bgMusic) {
-                bgMusic.volume = 0.4; // 40% volume
+                // === LOWERED VOLUME FROM 0.4 TO 0.2 (20%) ===
+                bgMusic.volume = 0.2; // 20% volume – less intrusive
+                
                 // If sound is enabled, attempt to play (may be blocked – we'll handle via user interaction)
                 if (soundEnabled) {
                     // Try to play – if blocked, it will start on first click/tap
