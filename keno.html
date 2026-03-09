@@ -130,7 +130,7 @@
         }
         @keyframes pulse { 50% { opacity: 0.4; } }
 
-        /* ===== SYSTEM MESSAGE BANNER (at top) ===== */
+        /* ===== SYSTEM MESSAGE BANNER ===== */
         .system-message {
             position: fixed;
             top: 70px;
@@ -512,7 +512,7 @@
         /* win/loss toast – now at top with high z-index */
         .result-toast {
             position: fixed;
-            top: 100px;                 /* moved down a bit to clear header/system */
+            top: 100px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.85);
@@ -524,7 +524,7 @@
             font-size: 18px;
             color: white;
             box-shadow: 0 10px 30px black;
-            z-index: 9999;              /* always on top */
+            z-index: 9999;
             display: none;
             align-items: center;
             gap: 12px;
@@ -777,15 +777,13 @@
         const soundYes = document.getElementById('soundYes');
         const soundNo = document.getElementById('soundNo');
 
-        // ---------- SOUND PREFERENCE LOGIC (ask on first visit) ----------
+        // ---------- SOUND PREFERENCE LOGIC ----------
         function askSoundPreference() {
-            // Only ask if no preference is stored
             if (localStorage.getItem('kenoSound') === null) {
                 soundPreferenceModal.classList.add('active');
             }
         }
 
-        // Handle sound preference answers
         soundYes.addEventListener('click', () => {
             localStorage.setItem('kenoSound', 'on');
             soundEnabled = true;
@@ -800,8 +798,7 @@
             soundPreferenceModal.classList.remove('active');
         });
 
-        // Sound state (default: on, but will be overridden by localStorage)
-        let soundEnabled = localStorage.getItem('kenoSound') !== 'off'; // if null, true (default on)
+        let soundEnabled = localStorage.getItem('kenoSound') !== 'off';
         updateSoundIcon();
 
         soundToggle.addEventListener('click', () => {
@@ -832,7 +829,7 @@
         let returnTimeout = null;
 
         // Turbulence data per ball
-        let ballTurbulence = new Map(); // key: ball element, value: { phaseX, phaseY, freqX, freqY, ampScale }
+        let ballTurbulence = new Map();
 
         // Original payout table
         const PAYOUT_TABLE = {
@@ -843,7 +840,7 @@
             5: {5: 200, 4: 50, 3: 20, 2: 1}
         };
 
-        // ---------- SYSTEM MESSAGE FUNCTION ----------
+        // ---------- SYSTEM MESSAGE ----------
         function showSystemMessage(text, type = 'error') {
             systemMsg.textContent = text;
             systemMsg.className = 'system-message ' + type + ' show';
@@ -852,14 +849,12 @@
             }, 3000);
         }
 
-        // ---------- VOICE ANNOUNCEMENT FUNCTION (replaced with audio files) ----------
+        // ---------- VOICE ANNOUNCEMENT ----------
         function speakNumber(num) {
             if (!soundEnabled) return;
             try {
                 const audio = new Audio(`/audio/${num}.mp3`);
-                audio.play().catch(e => {
-                    console.warn('Audio play failed:', e);
-                });
+                audio.play().catch(e => console.warn('Audio play failed:', e));
             } catch (e) {
                 console.warn('Audio error:', e);
             }
@@ -918,7 +913,7 @@
             }, 5000);
         }
 
-        // ---------- PROFESSIONAL BALL COLOR (glossy white) ----------
+        // ---------- PROFESSIONAL BALL COLOR ----------
         function getBallColor(number) {
             return "radial-gradient(circle at 30% 30%, #ffffff, #f0f0f0 60%, #d0d0d0 100%)";
         }
@@ -1031,6 +1026,7 @@
                     freqY: 0.5 + Math.random() * 1.5,
                     ampScale: 0.8 + Math.random() * 0.7
                 });
+                // Highlight selected numbers
                 if (selectedNumbers.includes(i)) {
                     ball.classList.add('selected-ball');
                 }
@@ -1063,50 +1059,45 @@
             turbulenceInterval = requestAnimationFrame(animate);
         }
 
-        // ---------- SMOOTH FLIGHT FROM SPHERE TO DRAWN ROW ----------
+        // ---------- SMOOTH FLIGHT (with fallback) ----------
         function flyBallToRow(number) {
             const originalBall = document.querySelector(`.mini-ball[data-number="${number}"]`);
-            if (!originalBall) return;
+            if (!originalBall) {
+                // Ball already removed – just add directly
+                addDrawnBallDirect(number);
+                return;
+            }
 
-            // Remove from turbulence so it stops moving
             ballTurbulence.delete(originalBall);
 
-            // Get start position (center of ball relative to viewport)
             const startRect = originalBall.getBoundingClientRect();
             const startX = startRect.left + startRect.width / 2;
             const startY = startRect.top + startRect.height / 2;
 
-            // Get target position: we want the ball to land near the drawn row.
-            // We'll target the center of the drawnBallsRow container.
             const targetRect = drawnBallsRow.getBoundingClientRect();
             const targetX = targetRect.left + targetRect.width / 2;
             const targetY = targetRect.top + targetRect.height / 2;
 
-            // Create a flying clone
             const clone = document.createElement('div');
             clone.className = 'flying-ball';
             clone.textContent = number;
             clone.style.background = originalBall.dataset.color || getBallColor(number);
-            clone.style.left = (startX - 14) + 'px';  // offset to center (28px width)
+            clone.style.left = (startX - 14) + 'px';
             clone.style.top = (startY - 14) + 'px';
             document.body.appendChild(clone);
 
-            // Slightly fade out original ball, will be removed after flight
             originalBall.style.opacity = '0.3';
             originalBall.style.transition = 'opacity 0.3s';
 
-            // Trigger flight after a tiny delay to ensure initial position set
             setTimeout(() => {
                 clone.style.transform = `translate(${targetX - startX}px, ${targetY - startY}px) scale(0.9)`;
                 clone.style.opacity = '0.8';
             }, 10);
 
-            // After flight, remove clone and original, and add drawn ball
             setTimeout(() => {
                 if (clone.parentNode) clone.remove();
                 if (originalBall.parentNode) originalBall.remove();
 
-                // Add the drawn ball to the row
                 const newBall = document.createElement('div');
                 newBall.className = 'drawn-ball';
                 newBall.innerText = number;
@@ -1114,12 +1105,9 @@
                 drawnBallsRow.appendChild(newBall);
                 drawnNumbersSoFar.push(number);
                 currentBallSpan.innerText = drawnNumbersSoFar.length;
-
-                // Restore any removed balls' styles (just in case)
-            }, 500); // match flight duration (0.45s + buffer)
+            }, 500);
         }
 
-        // Fallback for when ball not found (just add drawn ball)
         function addDrawnBallDirect(number) {
             const color = getBallColor(number);
             const ballDiv = document.createElement('div');
@@ -1131,7 +1119,6 @@
             currentBallSpan.innerText = drawnNumbersSoFar.length;
         }
 
-        // Display all drawn numbers at once (used when restoring state)
         function displayAllDrawnNumbers(numbers) {
             drawnBallsRow.innerHTML = '';
             numbers.forEach(n => {
@@ -1146,7 +1133,6 @@
             currentBallSpan.innerText = numbers.length;
         }
 
-        // Remove ball without animation (for state restore)
         function removeNumberBall(number) {
             const ball = document.querySelector(`.mini-ball[data-number="${number}"]`);
             if (ball) {
@@ -1167,11 +1153,28 @@
             currentRound = data.currentRound || 1;
             roundSpan.innerText = currentRound;
             roundActive = data.isRoundActive || false;
+            hasPlacedBet = data.hasBetInCurrentRound || false;
+            selectedNumbers = data.selectedNumbers || [];
+            currentBet = data.currentBet || 5;
+
+            // Update chip UI
+            document.querySelectorAll('.chip').forEach(ch => ch.classList.remove('selected'));
+            document.querySelector(`.chip[data-value="${currentBet}"]`)?.classList.add('selected');
+
+            // Update number grid
+            clearAllSelections(); // clears classes but we keep selectedNumbers array
+            selectedNumbers.forEach(n => {
+                document.querySelector(`.keno-number[data-num="${n}"]`)?.classList.add('selected');
+            });
+            selectedCountSpan.innerText = selectedNumbers.length + '/5';
+            playBtn.disabled = selectedNumbers.length === 0 || hasPlacedBet || !roundActive;
+
             updateCountdown(data.countdown || 30);
+
             if (data.currentDrawnNumbers?.length > 0) {
                 bettingPhase.classList.add('hidden');
                 spherePhase.classList.add('active');
-                resetSphere();
+                resetSphere(); // uses current selectedNumbers to highlight
                 data.currentDrawnNumbers.forEach(n => removeNumberBall(n));
                 displayAllDrawnNumbers(data.currentDrawnNumbers);
                 if (!data.isDrawComplete) {
@@ -1180,8 +1183,23 @@
                 }
             }
 
-            // ---------- ASK SOUND PREFERENCE ON FIRST WELCOME ----------
             askSoundPreference();
+        });
+
+        socket.on('keno:reconnected', (data) => {
+            showSystemMessage('Reconnected successfully!', 'info');
+            // Optionally refresh state
+            socket.emit('keno:getState');
+        });
+
+        socket.on('keno:game_reset', (data) => {
+            showSystemMessage('Game reset. Returning to betting...', 'info');
+            bettingPhase.classList.remove('hidden');
+            spherePhase.classList.remove('active');
+            clearAllSelections();
+            if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
+            ballTurbulence.clear();
+            resetSphere();
         });
 
         socket.on('keno:round_start', (d) => {
@@ -1213,12 +1231,7 @@
 
         socket.on('keno:number_drawn', (d) => {
             speakNumber(d.number);
-            // Use smooth flight if ball exists, otherwise just add directly
-            if (document.querySelector(`.mini-ball[data-number="${d.number}"]`)) {
-                flyBallToRow(d.number);
-            } else {
-                addDrawnBallDirect(d.number);
-            }
+            flyBallToRow(d.number);
         });
 
         socket.on('keno:round_results', (d) => {
@@ -1255,7 +1268,6 @@
 
         socket.on('keno:balance', (d) => updateBalance(d.balance));
 
-        // Replace alerts with system message
         socket.on('keno:error', (msg) => {
             const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
             showSystemMessage(text, 'error');
