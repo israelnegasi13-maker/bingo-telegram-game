@@ -350,10 +350,10 @@ module.exports = {
         
         console.log('✅ Keno game reset successfully');
         
-        // ========== FIX: Set isRoundScheduled while waiting to restart ==========
-        self.isRoundScheduled = true;
-        setTimeout(() => {
-            self.startGameIfReady();
+        // ========== FIX: Directly start round after reset ==========
+        self.roundTransitionTimeout = setTimeout(() => {
+            console.log('🎰 Starting new round after reset...');
+            self.startKenoRound();
         }, 3000);
     },
 
@@ -2761,7 +2761,7 @@ module.exports = {
         self.disconnectedPlayers.clear();
         self.playerReconnectAttempts.clear();
         
-        // ========== MODIFIED: Single timeout for next round with proper flag ==========
+        // ========== FIX: Schedule next round directly (bypass flag) ==========
         self.roundTransitionTimeout = setTimeout(() => {
             // Reset game state for next round
             activeGame.status = 'waiting';
@@ -2781,24 +2781,21 @@ module.exports = {
                 clearTimeout(activeGame.drawSafetyTimer);
                 activeGame.drawSafetyTimer = null;
             }
-            
-            console.log('🎰 Scheduling next round in 5 seconds...');
-            
+
+            console.log('🎰 Starting next round in 5 seconds...');
+
             // Clear any existing timeout
             if (self.roundTransitionTimeout) {
                 clearTimeout(self.roundTransitionTimeout);
                 self.roundTransitionTimeout = null;
             }
-            
-            // ========== FIX: Set isRoundScheduled to prevent collisions ==========
-            self.isRoundScheduled = true;
-            
+
+            // Schedule the next round directly
             self.roundTransitionTimeout = setTimeout(() => {
                 console.log('🎰 Starting next round now...');
-                self.startGameIfReady();
-                // isRoundScheduled will be cleared in startKenoRound
+                self.startKenoRound(); // Direct call – no flag check needed
             }, 5000);
-            
+
         }, 3000); // 3 seconds to show results, then 5 seconds to next round
     },
     
