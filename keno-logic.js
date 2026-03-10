@@ -2,6 +2,7 @@
 // ========== MODIFIED: max win = 300, if raw win >=300 → pay exactly 300 ==========
 // ========== ADDED: fairness threshold – if total possible payout < 300 ETB, use purely random draw ==========
 // ========== FIXES: round transition, draw safety timer, countdown stall detection, collision prevention, safe reset ==========
+// ========== ADDITIONAL FIX: set isRoundScheduled when scheduling next round to avoid duplicate starts ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -350,7 +351,8 @@ module.exports = {
         
         console.log('✅ Keno game reset successfully');
         
-        // ========== FIX: Directly start round after reset ==========
+        // ========== FIX: Directly start round after reset, but set flag to prevent duplicates ==========
+        self.isRoundScheduled = true;   // 🔧 prevent duplicate scheduling
         self.roundTransitionTimeout = setTimeout(() => {
             console.log('🎰 Starting new round after reset...');
             self.startKenoRound();
@@ -1874,116 +1876,122 @@ module.exports = {
     
     // Start Keno game round
     startKenoRound: function() {
-        const self = this;
-        
-        // Clear any scheduled flag
-        self.isRoundScheduled = false;
-        
-        // Clear any existing timeout and intervals FIRST
-        if (self.roundTransitionTimeout) {
-            clearTimeout(self.roundTransitionTimeout);
-            self.roundTransitionTimeout = null;
-        }
-        
-        // Clear countdown interval if exists
-        if (self.kenoCountdownInterval) {
-            clearInterval(self.kenoCountdownInterval);
-            self.kenoCountdownInterval = null;
-        }
-        
-        console.log('🎰 Starting new Keno round...');
-        
-        // Set states BEFORE creating any timers
-        self.isKenoRoundActive = true;
-        self.isDrawing = false;
-        self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
-        
-        // Create new active game
-        const gameId = Date.now();
-        const activeGame = {
-            id: gameId,
-            roundNumber: self.kenoRoundNumber,
-            startTime: new Date(),
-            endTime: null,
-            status: 'betting',
-            players: [],
-            bets: {},
-            drawnNumbers: [],
-            drawnNumbersOriginalOrder: [],
-            winners: [],
-            totalBets: 0,
-            totalBetAmount: 0,
-            totalPayout: 0,
-            commissionCollected: 0,
-            drawComplete: false,
-            processedResults: false,
-            // ========== ADDED: Draw safety timer reference ==========
-            drawSafetyTimer: null
-        };
-        
-        self.activeKenoGames.set('current', activeGame);
-        
-        // Broadcast round start with updated countdown
-        self.io.to('keno').emit('keno:round_start', {
-            round: activeGame.roundNumber,
-            duration: self.CONFIG.KENO_GAME_TIMER,
-            countdown: self.kenoCountdown,
-            message: `Round ${activeGame.roundNumber} started! Place your bets!`,
-            minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
-            maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
-            drawCount: self.CONFIG.KENO_DRAW_COUNT,
-            willBeRandomOrder: true
-        });
-        
-        // Reset all players' bet status (but keep pre-selected numbers)
-        for (const [userId, player] of self.kenoPlayers) {
-            // Only reset bet status for online players
-            if (player.isOnline) {
-                player.hasPlacedBet = false;
-                player.currentBet = null;
-                
-                // Clear any pending selections (new round starts fresh)
-                player.pendingSelections = [];
-                player.pendingBet = null;
-                
-                // Auto-apply pre-selected numbers if player is ready
-                if (player.isReadyForNextRound && 
-                    player.preSelectedNumbers.length >= self.CONFIG.KENO_MIN_SELECTIONS &&
-                    player.preSelectedNumbers.length <= self.CONFIG.KENO_MAX_SELECTIONS) {
-                    player.selectedNumbers = [...player.preSelectedNumbers];
-                    // Notify player that pre-selected numbers were applied
-                    const playerSocket = self.getKenoSocketByUserId(userId);
-                    if (playerSocket) {
-                        playerSocket.emit('keno:autoSelect', {
-                            numbers: player.selectedNumbers,
-                            selectionCount: player.selectedNumbers.length,
-                            message: 'Your pre-selected numbers have been applied!'
-                        });
-                    }
-                } else {
-                    // Don't clear selected numbers - let players keep their selection
-                    if (self.CONFIG.ALLOW_PRE_SELECTION) {
-                        // Keep existing selectedNumbers if they have 1-5 numbers
-                        if (player.selectedNumbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
-                            player.selectedNumbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
-                            player.selectedNumbers = [];
+        // 🔧 Wrap in try-catch to prevent crashing and reset if error
+        try {
+            const self = this;
+            
+            // Clear any scheduled flag
+            self.isRoundScheduled = false;
+            
+            // Clear any existing timeout and intervals FIRST
+            if (self.roundTransitionTimeout) {
+                clearTimeout(self.roundTransitionTimeout);
+                self.roundTransitionTimeout = null;
+            }
+            
+            // Clear countdown interval if exists
+            if (self.kenoCountdownInterval) {
+                clearInterval(self.kenoCountdownInterval);
+                self.kenoCountdownInterval = null;
+            }
+            
+            console.log('🎰 Starting new Keno round...');
+            
+            // Set states BEFORE creating any timers
+            self.isKenoRoundActive = true;
+            self.isDrawing = false;
+            self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
+            
+            // Create new active game
+            const gameId = Date.now();
+            const activeGame = {
+                id: gameId,
+                roundNumber: self.kenoRoundNumber,
+                startTime: new Date(),
+                endTime: null,
+                status: 'betting',
+                players: [],
+                bets: {},
+                drawnNumbers: [],
+                drawnNumbersOriginalOrder: [],
+                winners: [],
+                totalBets: 0,
+                totalBetAmount: 0,
+                totalPayout: 0,
+                commissionCollected: 0,
+                drawComplete: false,
+                processedResults: false,
+                // ========== ADDED: Draw safety timer reference ==========
+                drawSafetyTimer: null
+            };
+            
+            self.activeKenoGames.set('current', activeGame);
+            
+            // Broadcast round start with updated countdown
+            self.io.to('keno').emit('keno:round_start', {
+                round: activeGame.roundNumber,
+                duration: self.CONFIG.KENO_GAME_TIMER,
+                countdown: self.kenoCountdown,
+                message: `Round ${activeGame.roundNumber} started! Place your bets!`,
+                minSelections: self.CONFIG.KENO_MIN_SELECTIONS,
+                maxSelections: self.CONFIG.KENO_MAX_SELECTIONS,
+                drawCount: self.CONFIG.KENO_DRAW_COUNT,
+                willBeRandomOrder: true
+            });
+            
+            // Reset all players' bet status (but keep pre-selected numbers)
+            for (const [userId, player] of self.kenoPlayers) {
+                // Only reset bet status for online players
+                if (player.isOnline) {
+                    player.hasPlacedBet = false;
+                    player.currentBet = null;
+                    
+                    // Clear any pending selections (new round starts fresh)
+                    player.pendingSelections = [];
+                    player.pendingBet = null;
+                    
+                    // Auto-apply pre-selected numbers if player is ready
+                    if (player.isReadyForNextRound && 
+                        player.preSelectedNumbers.length >= self.CONFIG.KENO_MIN_SELECTIONS &&
+                        player.preSelectedNumbers.length <= self.CONFIG.KENO_MAX_SELECTIONS) {
+                        player.selectedNumbers = [...player.preSelectedNumbers];
+                        // Notify player that pre-selected numbers were applied
+                        const playerSocket = self.getKenoSocketByUserId(userId);
+                        if (playerSocket) {
+                            playerSocket.emit('keno:autoSelect', {
+                                numbers: player.selectedNumbers,
+                                selectionCount: player.selectedNumbers.length,
+                                message: 'Your pre-selected numbers have been applied!'
+                            });
                         }
                     } else {
-                        player.selectedNumbers = [];
+                        // Don't clear selected numbers - let players keep their selection
+                        if (self.CONFIG.ALLOW_PRE_SELECTION) {
+                            // Keep existing selectedNumbers if they have 1-5 numbers
+                            if (player.selectedNumbers.length < self.CONFIG.KENO_MIN_SELECTIONS || 
+                                player.selectedNumbers.length > self.CONFIG.KENO_MAX_SELECTIONS) {
+                                player.selectedNumbers = [];
+                            }
+                        } else {
+                            player.selectedNumbers = [];
+                        }
                     }
+                    
+                    // Reset new player flag for this round
+                    player.isNewInCurrentRound = false;
+                    
+                    self.kenoPlayers.set(userId, player);
                 }
-                
-                // Reset new player flag for this round
-                player.isNewInCurrentRound = false;
-                
-                self.kenoPlayers.set(userId, player);
             }
+            
+            // Start countdown with fresh interval after a small delay
+            setTimeout(() => {
+                self.startKenoCountdown();
+            }, 100);
+        } catch (error) {
+            console.error('❌ Error starting Keno round:', error);
+            this.resetStuckKenoGame();
         }
-        
-        // Start countdown with fresh interval after a small delay
-        setTimeout(() => {
-            self.startKenoCountdown();
-        }, 100);
     },
     
     // Start game if ready
@@ -2761,7 +2769,7 @@ module.exports = {
         self.disconnectedPlayers.clear();
         self.playerReconnectAttempts.clear();
         
-        // ========== FIX: Schedule next round directly (bypass flag) ==========
+        // ========== FIX: Schedule next round directly with isRoundScheduled flag ==========
         self.roundTransitionTimeout = setTimeout(() => {
             // Reset game state for next round
             activeGame.status = 'waiting';
@@ -2781,6 +2789,9 @@ module.exports = {
                 clearTimeout(activeGame.drawSafetyTimer);
                 activeGame.drawSafetyTimer = null;
             }
+
+            // 🔧 Set flag to prevent duplicate scheduling
+            self.isRoundScheduled = true;
 
             console.log('🎰 Starting next round in 5 seconds...');
 
