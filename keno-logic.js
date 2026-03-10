@@ -1,7 +1,7 @@
-// keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP 100 ETB + RANDOM JACKPOT
-// ========== MODIFIED: max win = 100, if raw win >=100 → random amount 1‑100 ==========
+// keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP 300 ETB (HARD CAP)
+// ========== MODIFIED: max win = 300, if raw win >=300 → pay exactly 300 ==========
 // ========== ADDED: fairness threshold – if total possible payout < 300 ETB, use purely random draw ==========
-// ========== FIXES: round transition, draw safety timer, countdown stall detection ==========
+// ========== FIXES: round transition, draw safety timer, countdown stall detection, collision prevention, safe reset ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -46,8 +46,8 @@ module.exports = {
         MAX_HOUSE_KEEP_PERCENTAGE: 95,
         VARIANCE_PERCENTAGE: 5,                  // Acceptable variance
         RANDOMNESS_CHANCE: 0.05,                  // 5% random draws for plausibility
-        // NEW: Maximum win per player per round (capped at 100 ETB)
-        MAX_WIN_PER_PLAYER: 100,
+        // NEW: Maximum win per player per round (capped at 300 ETB) – hard cap
+        MAX_WIN_PER_PLAYER: 300,
         // NEW: Fairness threshold – if total possible payout for round < this value, draw is purely random
         FAIRNESS_THRESHOLD: 300,                   // ETB
         // Player‑unfriendly pattern settings (disabled)
@@ -122,15 +122,15 @@ module.exports = {
         this.recentNumbersFrequency = new Map();
         this.lastSelectedNumbers = [];
         
-        console.log('✅ Keno game logic initialized - MAX WIN CAP 100 ETB + RANDOM JACKPOT');
+        console.log('✅ Keno game logic initialized - MAX WIN CAP 300 ETB (HARD CAP)');
         console.log('🎰 UPDATED payout table loaded:');
         console.log('   5 Numbers: 5 hits = 200x, 4 hits = 50x, 3 hits = 20x, 2 hits = 1x');
         console.log('   4 Numbers: 4 hits = 60x, 3 hits = 2x, 2 hits = 1x');
         console.log('   3 Numbers: 3 hits = 20x, 2 hits = 2x');
         console.log('   2 Numbers: 2 hits = 10x');
         console.log('   1 Number:  1 hit = 3x');
-        console.log('💰 House target: 70% profit, max win per player: 100 ETB');
-        console.log('🎰 If raw win ≥100 ETB → random amount 1‑100 ETB awarded');
+        console.log('💰 House target: 70% profit, max win per player: 300 ETB');
+        console.log('🎰 If raw win ≥300 ETB → payout capped at 300 ETB (no random amount)');
         console.log('🎯 RANDOMNESS: 5% truly random draws');
         console.log(`🎲 FAIRNESS THRESHOLD: if total possible payout < ${this.PROFIT_CONTROL.FAIRNESS_THRESHOLD} ETB, draw is purely random`);
         console.log('👑 Agent commission: 10% on Keno wins');
@@ -253,9 +253,9 @@ module.exports = {
             console.log('  Total Bets:', activeGame.totalBets);
             console.log('  Disconnected Players:', self.disconnectedPlayers.size);
             
-            // Detect stuck in drawing state with no activity
-            if (self.isDrawing && onlinePlayers === 0) {
-                console.log('🩺 Health Check: Detected stuck drawing state, resetting...');
+            // ========== FIX: Only reset drawing if no bets AND no players ==========
+            if (self.isDrawing && onlinePlayers === 0 && activeGame.totalBets === 0) {
+                console.log('🩺 Health Check: Detected stuck drawing state with no bets, resetting...');
                 self.resetStuckKenoGame();
                 return;
             }
@@ -303,7 +303,7 @@ module.exports = {
         // Reset game state
         self.isKenoRoundActive = false;
         self.isDrawing = false;
-        self.isRoundScheduled = false;
+        self.isRoundScheduled = false; // Clear any scheduled flag
         self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
         
         // Reset active game
@@ -350,7 +350,8 @@ module.exports = {
         
         console.log('✅ Keno game reset successfully');
         
-        // Try to restart (will run regardless of players)
+        // ========== FIX: Set isRoundScheduled while waiting to restart ==========
+        self.isRoundScheduled = true;
         setTimeout(() => {
             self.startGameIfReady();
         }, 3000);
@@ -2207,7 +2208,7 @@ module.exports = {
     simulateAndSelectDraw: function(bets, totalBetAmount) {
         const self = this;
         const pc = self.PROFIT_CONTROL;
-        const MAX_WIN = pc.MAX_WIN_PER_PLAYER;          // 100 ETB
+        const MAX_WIN = pc.MAX_WIN_PER_PLAYER;          // 300 ETB
         const FAIRNESS_THRESHOLD = pc.FAIRNESS_THRESHOLD; // 300 ETB (configurable)
 
         // If no bets or profit control disabled, return random draw
@@ -2358,7 +2359,7 @@ module.exports = {
         
         if (!activeGame || activeGame.status !== 'betting') return;
         
-        console.log('🎰 Drawing Keno numbers with MAX WIN CAP (100 ETB)...');
+        console.log('🎰 Drawing Keno numbers with MAX WIN CAP (300 ETB)...');
         
         // Clear all intervals and timeouts first
         if (self.kenoCountdownInterval) {
@@ -2529,12 +2530,12 @@ module.exports = {
         });
     },
     
-    // ==================== MODIFIED RESULTS PROCESSING ====================
+    // ==================== MODIFIED RESULTS PROCESSING (HARD CAP 300) ====================
     processKenoResults: async function(activeGame) {
         const self = this;
-        const MAX_WIN = self.PROFIT_CONTROL.MAX_WIN_PER_PLAYER; // 100 ETB
+        const MAX_WIN = self.PROFIT_CONTROL.MAX_WIN_PER_PLAYER; // 300 ETB
 
-        console.log('🎰 Processing Keno results with max win cap 100 and random jackpot...');
+        console.log('🎰 Processing Keno results with max win cap 300 (hard cap)...');
 
         // Clear any existing timeout
         if (self.roundTransitionTimeout) {
@@ -2567,9 +2568,9 @@ module.exports = {
                         finalWinnings = rawWinnings;
                         console.log(`💰 ${bet.userName} wins ${finalWinnings} ETB (raw ${rawWinnings})`);
                     } else {
-                        // Raw win >= 100 → random amount between 1 and 100
-                        finalWinnings = Math.floor(Math.random() * MAX_WIN) + 1; // 1‑100
-                        console.log(`🎲 ${bet.userName} hits jackpot threshold! Raw ${rawWinnings} → random ${finalWinnings} ETB`);
+                        // ========== HARD CAP: if raw win >= 300, pay exactly 300 ==========
+                        finalWinnings = MAX_WIN;
+                        console.log(`💰 ${bet.userName} hits max cap! Raw ${rawWinnings} → capped at ${finalWinnings} ETB`);
                     }
                 }
 
@@ -2673,7 +2674,7 @@ module.exports = {
                                 newBalance: user.balance,
                                 bet: bet.amount,
                                 message: rawWinnings >= MAX_WIN
-                                    ? `🎲 Lucky you! You won ${finalWinnings} ETB (jackpot chance!)`
+                                    ? `🎲 Max win! You won ${finalWinnings} ETB (capped)`
                                     : `You won ${finalWinnings} ETB! Matched ${matches} of ${selectionCount} numbers.`
                             });
                         }
@@ -2760,7 +2761,7 @@ module.exports = {
         self.disconnectedPlayers.clear();
         self.playerReconnectAttempts.clear();
         
-        // ========== MODIFIED: Single timeout for next round (5 seconds) ==========
+        // ========== MODIFIED: Single timeout for next round with proper flag ==========
         self.roundTransitionTimeout = setTimeout(() => {
             // Reset game state for next round
             activeGame.status = 'waiting';
@@ -2781,7 +2782,6 @@ module.exports = {
                 activeGame.drawSafetyTimer = null;
             }
             
-            // Start next round automatically after 5 seconds (even if no players)
             console.log('🎰 Scheduling next round in 5 seconds...');
             
             // Clear any existing timeout
@@ -2790,9 +2790,13 @@ module.exports = {
                 self.roundTransitionTimeout = null;
             }
             
+            // ========== FIX: Set isRoundScheduled to prevent collisions ==========
+            self.isRoundScheduled = true;
+            
             self.roundTransitionTimeout = setTimeout(() => {
                 console.log('🎰 Starting next round now...');
                 self.startGameIfReady();
+                // isRoundScheduled will be cleared in startKenoRound
             }, 5000);
             
         }, 3000); // 3 seconds to show results, then 5 seconds to next round
