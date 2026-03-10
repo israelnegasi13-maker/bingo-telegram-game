@@ -806,6 +806,9 @@
         const soundYes = document.getElementById('soundYes');
         const soundNo = document.getElementById('soundNo');
 
+        // ========== ADDED: game timer variable ==========
+        let gameTimer = 30; // default
+
         // ---------- SOUND PREFERENCE LOGIC ----------
         function askSoundPreference() {
             if (localStorage.getItem('kenoSound') === null) {
@@ -1201,6 +1204,11 @@
             selectedNumbers = data.selectedNumbers || [];
             currentBet = data.currentBet || 5;
 
+            // ========== ADDED: Save game timer from config ==========
+            if (data.config && data.config.gameTimer) {
+                gameTimer = data.config.gameTimer;
+            }
+
             // Update chip UI
             document.querySelectorAll('.chip').forEach(ch => ch.classList.remove('selected'));
             document.querySelector(`.chip[data-value="${currentBet}"]`)?.classList.add('selected');
@@ -1244,6 +1252,13 @@
             if (turbulenceInterval) cancelAnimationFrame(turbulenceInterval);
             ballTurbulence.clear();
             resetSphere();
+
+            // ========== ADDED: Reset countdown and request state ==========
+            updateCountdown(gameTimer);
+            // After a short delay, ask the server for the current round info
+            setTimeout(() => {
+                socket.emit('keno:getState');
+            }, 3000);
         });
 
         socket.on('keno:round_start', (d) => {
