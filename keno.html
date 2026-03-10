@@ -1273,7 +1273,11 @@
             startTurbulence();
         });
 
+        // ========== FIX: Ignore duplicate number_drawn events ==========
         socket.on('keno:number_drawn', (d) => {
+            // Prevent duplicate processing if we already have this number
+            if (drawnNumbersSoFar.includes(d.number)) return;
+
             speakNumber(d.number);
             flyBallToRow(d.number);
         });
