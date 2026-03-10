@@ -1,6 +1,7 @@
 // keno-logic.js - KENO GAME LOGIC MODULE WITH MAX WIN CAP 100 ETB + RANDOM JACKPOT
 // ========== MODIFIED: max win = 100, if raw win >=100 → random amount 1‑100 ==========
 // ========== ADDED: fairness threshold – if total possible payout < 300 ETB, use purely random draw ==========
+// ========== FIXES: round transition, draw safety timer, countdown stall detection ==========
 
 module.exports = {
     // Game configuration - same as original
@@ -102,6 +103,9 @@ module.exports = {
         this.disconnectedPlayers = new Map();
         this.playerReconnectTokens = new Map();
         this.playerReconnectAttempts = new Map();
+        
+        // ========== ADDED: Countdown stall detection ==========
+        this.lastCountdownUpdate = Date.now();
         
         // Player tracking for dynamic adjustments (kept but unused)
         this.playerSessionData = new Map(); // Stores player-specific data
@@ -253,15 +257,23 @@ module.exports = {
             if (self.isDrawing && onlinePlayers === 0) {
                 console.log('🩺 Health Check: Detected stuck drawing state, resetting...');
                 self.resetStuckKenoGame();
+                return;
             }
             
-            // Detect stuck countdown
-            if (self.kenoCountdown <= 0 && !self.isDrawing && !self.isKenoRoundActive) {
-                console.log('🩺 Health Check: Detected stuck countdown, resetting...');
-                self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
+            // Detect stuck countdown (no update for 15 seconds)
+            if (self.isKenoRoundActive && !self.isDrawing) {
+                const now = Date.now();
+                if (now - self.lastCountdownUpdate > 15000) { // 15 seconds without update
+                    console.log('🩺 Health Check: Countdown stalled – restarting countdown');
+                    if (self.kenoCountdownInterval) {
+                        clearInterval(self.kenoCountdownInterval);
+                        self.kenoCountdownInterval = null;
+                    }
+                    self.startKenoCountdown(); // restart from current value
+                }
             }
-
-            // NEW: Detect if countdown is stuck at 0 for more than 10 seconds while in betting state
+            
+            // Detect if countdown is stuck at 0 for more than 10 seconds while in betting state
             if (self.kenoCountdown === 0 && self.isKenoRoundActive && !self.isDrawing) {
                 console.log('🩺 Health Check: Countdown stuck at 0, forcing draw...');
                 clearInterval(self.kenoCountdownInterval);
@@ -308,6 +320,11 @@ module.exports = {
         activeGame.commissionCollected = 0;
         activeGame.drawComplete = false;
         activeGame.processedResults = false;
+        // Clear any draw safety timer
+        if (activeGame.drawSafetyTimer) {
+            clearTimeout(activeGame.drawSafetyTimer);
+            activeGame.drawSafetyTimer = null;
+        }
         
         // Clear all pending selections for offline players
         for (const [userId, player] of self.kenoPlayers) {
@@ -1898,7 +1915,9 @@ module.exports = {
             totalPayout: 0,
             commissionCollected: 0,
             drawComplete: false,
-            processedResults: false
+            processedResults: false,
+            // ========== ADDED: Draw safety timer reference ==========
+            drawSafetyTimer: null
         };
         
         self.activeKenoGames.set('current', activeGame);
@@ -2028,6 +2047,8 @@ module.exports = {
         }
         
         self.kenoCountdown = self.CONFIG.KENO_GAME_TIMER;
+        // ========== ADDED: Record update time ==========
+        self.lastCountdownUpdate = Date.now();
         
         // Broadcast initial countdown
         self.io.to('keno').emit('keno:countdown_update', {
@@ -2044,6 +2065,8 @@ module.exports = {
             }
             
             self.kenoCountdown--;
+            // ========== ADDED: Update timestamp ==========
+            self.lastCountdownUpdate = Date.now();
             
             // Broadcast countdown update
             self.io.to('keno').emit('keno:countdown_update', {
@@ -2381,6 +2404,37 @@ module.exports = {
             
             console.log(`🎰 Numbers to draw (random order): ${fullDraw.join(', ')}`);
             
+            // ========== ADDED: Draw safety timeout ==========
+            const totalDrawTime = (fullDraw.length * self.CONFIG.NUMBER_POP_INTERVAL) + 3000; // 3s extra
+            const safetyTimer = setTimeout(() => {
+                if (!activeGame.drawComplete && self.isDrawing) {
+                    console.log('⚠️ Draw safety timeout – forcing completion');
+                    // Force final results
+                    const sortedForDisplay = [...fullDraw].sort((a, b) => a - b);
+                    activeGame.drawnNumbers = sortedForDisplay;
+                    activeGame.drawComplete = true;
+                    activeGame.status = 'completed';
+                    self.isDrawing = false;
+                    
+                    self.io.to('keno').emit('keno:round_results', {
+                        round: activeGame.roundNumber,
+                        drawnNumbers: sortedForDisplay,
+                        originalOrder: fullDraw,
+                        playersCount: activeGame.players.length,
+                        totalBets: activeGame.totalBets,
+                        message: `Round ${activeGame.roundNumber} results!`,
+                        totalDrawn: sortedForDisplay.length,
+                        isDrawComplete: true,
+                        wasRandomOrder: true
+                    });
+                    
+                    // Process results
+                    self.processKenoResults(activeGame);
+                }
+            }, totalDrawTime + 5000); // 5 seconds after expected end
+            
+            activeGame.drawSafetyTimer = safetyTimer;
+            
             // Draw numbers one by one in RANDOM ORDER
             for (let i = 0; i < fullDraw.length; i++) {
                 setTimeout(() => {
@@ -2402,6 +2456,12 @@ module.exports = {
             // After all numbers are drawn, send complete results IN SORTED ORDER for display
             setTimeout(() => {
                 const sortedForDisplay = [...fullDraw].sort((a, b) => a - b);
+                
+                // Clear safety timer if it's still pending
+                if (activeGame.drawSafetyTimer) {
+                    clearTimeout(activeGame.drawSafetyTimer);
+                    activeGame.drawSafetyTimer = null;
+                }
                 
                 // Replace drawnNumbers with the final sorted list
                 activeGame.drawnNumbers = sortedForDisplay;
@@ -2700,9 +2760,9 @@ module.exports = {
         self.disconnectedPlayers.clear();
         self.playerReconnectAttempts.clear();
         
-        // Reset the current game to waiting state after a delay
+        // ========== MODIFIED: Single timeout for next round (5 seconds) ==========
         self.roundTransitionTimeout = setTimeout(() => {
-            // Set game back to waiting state for next round
+            // Reset game state for next round
             activeGame.status = 'waiting';
             activeGame.bets = {};
             activeGame.players = [];
@@ -2715,6 +2775,11 @@ module.exports = {
             activeGame.commissionCollected = 0;
             activeGame.drawComplete = false;
             activeGame.processedResults = false;
+            // Clear any draw safety timer
+            if (activeGame.drawSafetyTimer) {
+                clearTimeout(activeGame.drawSafetyTimer);
+                activeGame.drawSafetyTimer = null;
+            }
             
             // Start next round automatically after 5 seconds (even if no players)
             console.log('🎰 Scheduling next round in 5 seconds...');
@@ -2730,7 +2795,7 @@ module.exports = {
                 self.startGameIfReady();
             }, 5000);
             
-        }, 3000);
+        }, 3000); // 3 seconds to show results, then 5 seconds to next round
     },
     
     // Update Keno stats in database
@@ -2785,7 +2850,8 @@ module.exports = {
                 totalPayout: 0,
                 commissionCollected: 0,
                 drawComplete: false,
-                processedResults: false
+                processedResults: false,
+                drawSafetyTimer: null
             };
             this.activeKenoGames.set('current', game);
         }
