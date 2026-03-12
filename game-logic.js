@@ -6,6 +6,7 @@
 // NEW: Bot management panel support – active flag, add funds, rename, create new bots
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
+// FIX: Win transaction now stores agentId for fallback processing
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -2014,33 +2015,40 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
           if (err.code === 11000) {
             console.log('Agent commission already recorded, skipping');
           } else {
-            console.error('Error recording agent commission:', err);
+            console.error('❌ Error recording agent commission:', err);
           }
         }
       }
 
-      // 9. CREATE TRANSACTIONS (BATCH)
-      const transactions = [
-        {
-          type: isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN',
-          userId: userId,
-          userName: userName,
-          amount: totalPrize,
-          room: roomStake,
-          description: `Bingo win in ${roomStake} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`,
-          winningPattern: bingoCheck.pattern,
-          winningPatternName: bingoCheck.patternName,
-          winningPatternType: bingoCheck.patternType
-        },
-        {
-          type: 'HOUSE_EARNINGS',
-          userId: 'HOUSE',
-          userName: 'House',
-          amount: houseEarnings,
-          room: roomStake,
-          description: `Commission from ${totalPlayers} players in ${roomStake} ETB room`
-        }
-      ];
+      // 9. CREATE TRANSACTIONS (BATCH) – NOW INCLUDING AGENT ID IN WIN TRANSACTION
+      const transactions = [];
+
+      // Win transaction
+      const winTransaction = {
+        type: isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN',
+        userId: userId,
+        userName: userName,
+        amount: totalPrize,
+        room: roomStake,
+        description: `Bingo win in ${roomStake} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`,
+        winningPattern: bingoCheck.pattern,
+        winningPatternName: bingoCheck.patternName,
+        winningPatternType: bingoCheck.patternType
+      };
+      if (updatedUser.agentId) {
+        winTransaction.agentId = updatedUser.agentId; // 👈 store agent at win time
+      }
+      transactions.push(winTransaction);
+
+      // House earnings transaction
+      transactions.push({
+        type: 'HOUSE_EARNINGS',
+        userId: 'HOUSE',
+        userName: 'House',
+        amount: houseEarnings,
+        room: roomStake,
+        description: `Commission from ${totalPlayers} players in ${roomStake} ETB room`
+      });
 
       await models.Transaction.insertMany(transactions);
 
