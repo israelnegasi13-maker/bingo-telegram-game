@@ -5,6 +5,7 @@
 // NEW: Random bot participation – at least 10, random additional bots
 // NEW: Bot management panel support – active flag, add funds, rename, create new bots
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
+// UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -1983,10 +1984,10 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (40%) ==========
+      // ========== AGENT COMMISSION RECORDING (40% of house earnings) ==========
       if (updatedUser.agentId) {
-        const commissionRate = 40; // 40% for Bingo
-        const commissionAmount = totalPrize * commissionRate / 100;
+        const commissionRate = 40; // 40% for Bingo (applied to house earnings)
+        const commissionAmount = houseEarnings * commissionRate / 100;
         const transactionKey = `BINGO_${roomData._id}_${userId}`;
 
         try {
@@ -1997,7 +1998,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
             userName: userName,
             gameType: 'BINGO',
             stake: roomStake,
-            winningAmount: totalPrize,
+            winningAmount: totalPrize, // store the player's win for reference
             commissionRate: commissionRate,
             commissionAmount: commissionAmount,
             status: 'completed'
@@ -2008,7 +2009,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
             { $inc: { totalEarnings: commissionAmount } }
           );
 
-          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName}`);
+          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName} (based on house earnings ${houseEarnings})`);
         } catch (err) {
           if (err.code === 11000) {
             console.log('Agent commission already recorded, skipping');
