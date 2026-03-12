@@ -2007,10 +2007,11 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (40%) ==========
+      // ========== AGENT COMMISSION RECORDING (40% of house profit) ==========
       if (updatedUser.agentId) {
         const commissionRate = 40; // 40% for Bingo
-        const commissionAmount = totalPrize * commissionRate / 100;
+        // commission is based on house profit per player, not total prize
+        const commissionAmount = (commissionPerPlayer * commissionRate) / 100;
         const transactionKey = `BINGO_${roomData._id}_${userId}`;
 
         try {
@@ -2032,7 +2033,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
             { $inc: { totalEarnings: commissionAmount } }
           );
 
-          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName}`);
+          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName} (based on house profit ${commissionPerPlayer} ETB)`);
         } catch (err) {
           if (err.code === 11000) {
             console.log('Agent commission already recorded, skipping');
