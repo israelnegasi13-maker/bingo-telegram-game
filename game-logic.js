@@ -4,6 +4,7 @@
 // FIX: Block joins during 'ended' state, bots wait for room reset
 // NEW: Random bot participation – at least 10, random additional bots
 // NEW: Bot management panel support – active flag, add funds, rename, create new bots
+// NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -56,6 +57,9 @@ let lastAdminUpdate = 0;
 let playerRateLimit = new Map();
 const RATE_LIMIT_WINDOW = 1000; // 1 second
 const MAX_EVENTS_PER_WINDOW = 10;
+
+// ========== NEW: PER‑ROOM SOCKET SET FOR RELIABLE EVENT DELIVERY ==========
+let roomSockets = new Map(); // stake → Set of socket objects
 
 // ========== ETHIOPIAN BOT NAMES ==========
 // First 10 full names (first + last)
@@ -713,20 +717,12 @@ function broadcastTakenBoxes(roomStake, takenBoxes, newBox = null, playerName = 
     updateData.message = `${playerName} selected box ${newBox}!`;
   }
 
-  // OPTIMIZATION: Get cached room data
-  const cacheKey = `room_${roomStake}`;
-  const roomData = roomsCache.get(cacheKey);
-
-  if (roomData) {
-    // Send only to players in this room
-    roomData.data.players.forEach(userId => {
-      for (const [socketId, uId] of socketToUser.entries()) {
-        if (uId === userId) {
-          const socket = getEndpoint(socketId);
-          if (socket && socket.connected !== false) {
-            socket.emit('boxesTakenUpdate', updateData);
-          }
-        }
+  // NEW: Send to roomSockets set (live players)
+  const socketsSet = roomSockets.get(roomStake);
+  if (socketsSet) {
+    socketsSet.forEach(socket => {
+      if (socket && socket.connected !== false) {
+        socket.emit('boxesTakenUpdate', updateData);
       }
     });
   }
@@ -1254,6 +1250,9 @@ async function cleanupLongRunningGames() {
       // Update cache
       updateRoomCache(room.stake, room);
 
+      // Remove room from roomSockets
+      roomSockets.delete(room.stake);
+
       // Broadcast empty boxes
       broadcastTakenBoxes(room.stake, []);
 
@@ -1336,30 +1335,18 @@ async function startGameTimer(room) {
         ballsDrawn: currentRoom.ballsDrawn
       };
 
-      // --- DYNAMIC SOCKET LOOKUP (FIX) ---
-      // Get the list of players currently in the room
-      const playersInRoom = currentRoom.players;
-
-      // For each player, find all their currently connected sockets
-      playersInRoom.forEach(playerId => {
-        // Find all socket IDs for this player
-        const socketIds = [];
-        socketToUser.forEach((uid, sid) => {
-          if (uid === playerId) socketIds.push(sid);
-        });
-
-        // Send ball draw to each active socket
-        socketIds.forEach(sid => {
-          const socket = getEndpoint(sid);
+      // --- NEW: Use roomSockets for direct delivery ---
+      const socketsSet = roomSockets.get(currentRoom.stake);
+      if (socketsSet) {
+        socketsSet.forEach(socket => {
           if (socket && socket.connected !== false) {
             socket.emit('ballDrawn', ballData);
-            // Enable bingo button every 3 balls
             if (currentRoom.ballsDrawn % 3 === 0) {
               socket.emit('enableBingo');
             }
           }
         });
-      });
+      }
 
       // Also notify admin panels (unchanged)
       adminSockets.forEach(socketId => {
@@ -1521,6 +1508,9 @@ async function endGameWithNoWinner(room) {
     // Update cache
     updateRoomCache(room.stake, room);
 
+    // Remove room from roomSockets
+    roomSockets.delete(room.stake);
+
     // Broadcast empty boxes
     broadcastTakenBoxes(room.stake, []);
     io.emit('boxesCleared', { room: room.stake, reason: 'game_ended_no_winner' });
@@ -1578,16 +1568,11 @@ async function startCountdownForRoom(room) {
         // Pre-cache sockets to notify
         const socketsToSend = new Set();
 
-        // Add sockets of players in the room
-        currentRoom.players.forEach(userId => {
-          for (const [socketId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              if (getEndpoint(socketId)?.connected !== false) {
-                socketsToSend.add(socketId);
-              }
-            }
-          }
-        });
+        // Add sockets from roomSockets
+        const roomSocketSet = roomSockets.get(room.stake);
+        if (roomSocketSet) {
+          roomSocketSet.forEach(socket => socketsToSend.add(socket.id));
+        }
 
         // Add subscribed sockets (for discovery overlay)
         const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
@@ -1662,16 +1647,11 @@ async function startCountdownForRoom(room) {
             // Pre-cache sockets to notify
             const finalSocketsToSend = new Set();
 
-            // Add sockets of players in the room
-            finalRoom.players.forEach(userId => {
-              for (const [socketId, uId] of socketToUser.entries()) {
-                if (uId === userId) {
-                  if (getEndpoint(socketId)?.connected !== false) {
-                    finalSocketsToSend.add(socketId);
-                  }
-                }
-              }
-            });
+            // Add sockets from roomSockets
+            const finalRoomSocketSet = roomSockets.get(room.stake);
+            if (finalRoomSocketSet) {
+              finalRoomSocketSet.forEach(socket => finalSocketsToSend.add(socket.id));
+            }
 
             // Add subscribed sockets
             const finalSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
@@ -1720,16 +1700,11 @@ async function startCountdownForRoom(room) {
             // Pre-cache sockets to notify
             const resetSocketsToSend = new Set();
 
-            // Add sockets of players in the room
-            finalRoom.players.forEach(userId => {
-              for (const [socketId, uId] of socketToUser.entries()) {
-                if (uId === userId) {
-                  if (getEndpoint(socketId)?.connected !== false) {
-                    resetSocketsToSend.add(socketId);
-                  }
-                }
-              }
-            });
+            // Add sockets from roomSockets
+            const resetRoomSocketSet = roomSockets.get(room.stake);
+            if (resetRoomSocketSet) {
+              resetRoomSocketSet.forEach(socket => resetSocketsToSend.add(socket.id));
+            }
 
             // Add subscribed sockets
             const resetSubscribedSockets = roomSubscriptions.get(room.stake) || new Set();
@@ -1787,23 +1762,21 @@ function notifyPlayer(userId, data) {
 }
 
 function broadcastGameOver(roomStake, playerIds, gameOverData) {
-  playerIds.forEach(playerId => {
-    socketToUser.forEach((uId, socketId) => {
-      if (uId === playerId) {
-        const socket = getEndpoint(socketId);
-        if (socket && socket.connected !== false) {
-          socket.emit('gameOver', gameOverData);
-
-          // Update balance for winner
-          if (uId === gameOverData.winnerId) {
-            socket.emit('balanceUpdate', gameOverData.prize);
-          }
+  // Use roomSockets for all players in the room
+  const socketsSet = roomSockets.get(roomStake);
+  if (socketsSet) {
+    socketsSet.forEach(socket => {
+      if (socket && socket.connected !== false) {
+        socket.emit('gameOver', gameOverData);
+        // Update balance for winner
+        if (socket.userId === gameOverData.winnerId) {
+          socket.emit('balanceUpdate', gameOverData.prize);
         }
       }
     });
-  });
+  }
 
-  // Broadcast to admin panels
+  // Also broadcast to admin panels
   adminSockets.forEach(socketId => {
     const socket = getEndpoint(socketId);
     if (socket && socket.connected !== false) {
@@ -1838,6 +1811,9 @@ async function resetRoomForNextGame(roomStake) {
       // Update cache
       updateRoomCache(roomStake, room);
       onlinePlayersCache.delete(`online_${roomStake}`);
+
+      // Remove room from roomSockets
+      roomSockets.delete(roomStake);
 
       // Broadcast empty boxes
       broadcastTakenBoxes(roomStake, []);
@@ -2007,11 +1983,10 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (40% of house profit) ==========
+      // ========== AGENT COMMISSION RECORDING (40%) ==========
       if (updatedUser.agentId) {
         const commissionRate = 40; // 40% for Bingo
-        // commission is based on house profit per player, not total prize
-        const commissionAmount = (commissionPerPlayer * commissionRate) / 100;
+        const commissionAmount = totalPrize * commissionRate / 100;
         const transactionKey = `BINGO_${roomData._id}_${userId}`;
 
         try {
@@ -2033,7 +2008,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
             { $inc: { totalEarnings: commissionAmount } }
           );
 
-          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName} (based on house profit ${commissionPerPlayer} ETB)`);
+          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName}`);
         } catch (err) {
           if (err.code === 11000) {
             console.log('Agent commission already recorded, skipping');
@@ -2114,7 +2089,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
 
       await Promise.all(resetPromises);
 
-      // Send game over to ALL players
+      // Send game over to ALL players using roomSockets
       broadcastGameOver(roomStake, playersInRoom, gameOverData);
 
       // 14. RESET ROOM FOR NEXT GAME
@@ -2183,16 +2158,11 @@ async function cleanupStuckCountdowns() {
           // Pre-cache sockets to notify
           const socketsToSend = new Set();
 
-          // Add sockets of players in the room
-          room.players.forEach(userId => {
-            for (const [socketId, uId] of socketToUser.entries()) {
-              if (uId === userId) {
-                if (getEndpoint(socketId)?.connected !== false) {
-                  socketsToSend.add(socketId);
-                }
-              }
-            }
-          });
+          // Add sockets from roomSockets
+          const roomSocketSet = roomSockets.get(room.stake);
+          if (roomSocketSet) {
+            roomSocketSet.forEach(socket => socketsToSend.add(socket.id));
+          }
 
           // Add subscribed sockets
           const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
@@ -2253,6 +2223,9 @@ async function cleanupStaleRooms() {
         updateRoomCache(room.stake, room);
         onlinePlayersCache.delete(`online_${room.stake}`);
 
+        // Remove room from roomSockets
+        roomSockets.delete(room.stake);
+
         // Broadcast that boxes are cleared
         broadcastTakenBoxes(room.stake, []);
         io.emit('boxesCleared', { room: room.stake, reason: 'stale_room_cleanup' });
@@ -2290,6 +2263,9 @@ async function cleanupStaleRooms() {
       // Update cache
       updateRoomCache(room.stake, room);
       onlinePlayersCache.delete(`online_${room.stake}`);
+
+      // Remove room from roomSockets
+      roomSockets.delete(room.stake);
 
       // Broadcast cleared boxes
       broadcastTakenBoxes(room.stake, []);
@@ -2961,16 +2937,13 @@ function setupSocketHandlers() {
           letter: letter
         };
 
-        room.players.forEach(userId => {
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              const s = getEndpoint(sId);
-              if (s && s.connected !== false) {
-                s.emit('ballDrawn', ballData);
-              }
-            }
-          }
-        });
+        // Send to roomSockets
+        const socketsSet = roomSockets.get(room.stake);
+        if (socketsSet) {
+          socketsSet.forEach(s => {
+            if (s && s.connected) s.emit('ballDrawn', ballData);
+          });
+        }
 
         socket.emit('admin:success', `Ball ${letter}-${ball} drawn in ${roomStake} ETB room`);
         broadcastRoomStatus();
@@ -3027,16 +3000,11 @@ function setupSocketHandlers() {
         // Pre-cache sockets to notify
         const socketsToSend = new Set();
 
-        // Add sockets of players in the room
-        room.players.forEach(userId => {
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              if (getEndpoint(sId)?.connected !== false) {
-                socketsToSend.add(sId);
-              }
-            }
-          }
-        });
+        // Add sockets from roomSockets
+        const roomSocketSet = roomSockets.get(room.stake);
+        if (roomSocketSet) {
+          roomSocketSet.forEach(socket => socketsToSend.add(socket.id));
+        }
 
         // Add subscribed sockets
         const subscribedSockets = roomSubscriptions.get(room.stake) || new Set();
@@ -3098,10 +3066,10 @@ function setupSocketHandlers() {
             await transaction.save();
 
             // Notify player
-            for (const [sId, uId] of socketToUser.entries()) {
-              if (uId === userId) {
-                const s = getEndpoint(sId);
-                if (s && s.connected !== false) {
+            const socketsSet = roomSockets.get(roomStake);
+            if (socketsSet) {
+              socketsSet.forEach(s => {
+                if (s && s.connected) {
                   s.emit('gameOver', {
                     room: roomStake,
                     winnerId: 'ADMIN',
@@ -3117,7 +3085,7 @@ function setupSocketHandlers() {
                   });
                   s.emit('balanceUpdate', user.balance);
                 }
-              }
+              });
             }
           }
         }
@@ -3132,6 +3100,9 @@ function setupSocketHandlers() {
 
         // Update cache
         updateRoomCache(roomStake, room);
+
+        // Remove room from roomSockets
+        roomSockets.delete(roomStake);
 
         // Broadcast empty boxes
         broadcastTakenBoxes(roomStake, []);
@@ -3178,15 +3149,15 @@ function setupSocketHandlers() {
           await transaction.save();
 
           // Notify player
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === userId) {
-              const s = getEndpoint(sId);
-              if (s && s.connected !== false) {
+          const socketsSet = roomSockets.get(roomStake);
+          if (socketsSet) {
+            socketsSet.forEach(s => {
+              if (s && s.connected) {
                 s.emit('boxesCleared', { room: roomStake, adminCleared: true, reason: 'admin_cleared' });
                 s.emit('balanceUpdate', user.balance);
                 s.emit('lobbyUpdate', { room: roomStake, count: 0 });
               }
-            }
+            });
           }
         }
       }
@@ -3200,6 +3171,9 @@ function setupSocketHandlers() {
 
       // Update cache
       updateRoomCache(roomStake, room);
+
+      // Remove room from roomSockets
+      roomSockets.delete(roomStake);
 
       // Broadcast cleared boxes
       broadcastTakenBoxes(roomStake, []);
@@ -3338,6 +3312,13 @@ function setupSocketHandlers() {
                 user.currentRoom = null;
                 user.box = null;
                 await user.save();
+              } else {
+                // User is in a valid room – add socket to roomSockets
+                if (!roomSockets.has(user.currentRoom)) {
+                  roomSockets.set(user.currentRoom, new Set());
+                }
+                roomSockets.get(user.currentRoom).add(socket);
+                socket.currentRoom = user.currentRoom;
               }
             } catch (error) {
               console.error('Error validating room on init:', error);
@@ -3691,6 +3672,13 @@ function setupSocketHandlers() {
         updateRoomCache(room, roomData);
         onlinePlayersCache.delete(`online_${room}`);
 
+        // NEW: Add socket to roomSockets
+        if (!roomSockets.has(room)) {
+          roomSockets.set(room, new Set());
+        }
+        roomSockets.get(room).add(this);
+        this.currentRoom = room;
+
         // 🚨 CRITICAL: BROADCAST REAL-TIME BOX UPDATE
         broadcastTakenBoxes(room, roomData.takenBoxes, box, user.userName);
 
@@ -3698,21 +3686,18 @@ function setupSocketHandlers() {
         this.emit('joinedRoom');
         this.emit('balanceUpdate', user.balance);
 
-        // Send lobby update to ALL players in the room
-        const playersInRoom = roomData.players;
-        playersInRoom.forEach(playerUserId => {
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === playerUserId) {
-              const s = getEndpoint(sId);
-              if (s && s.connected !== false) {
-                s.emit('lobbyUpdate', {
-                  room: room,
-                  count: onlinePlayers.length
-                });
-              }
+        // Send lobby update to ALL players in the room using roomSockets
+        const roomSocketSet = roomSockets.get(room);
+        if (roomSocketSet) {
+          roomSocketSet.forEach(s => {
+            if (s && s.connected !== false) {
+              s.emit('lobbyUpdate', {
+                room: room,
+                count: onlinePlayers.length
+              });
             }
-          }
-        });
+          });
+        }
 
         // Send immediate countdown update if room is starting
         if (roomData.status === 'starting' && roomData.countdownStartTime) {
@@ -3876,6 +3861,15 @@ function setupSocketHandlers() {
           user.currentRoom = null;
           user.box = null;
           await user.save();
+
+          // Remove from roomSockets
+          const socketsSet = roomSockets.get(roomStake);
+          if (socketsSet) {
+            socketsSet.delete(this);
+            if (socketsSet.size === 0) roomSockets.delete(roomStake);
+          }
+          delete this.currentRoom;
+
           this.emit('leftRoom', { message: 'Left room (room not found)' });
           return;
         }
@@ -3914,6 +3908,14 @@ function setupSocketHandlers() {
         // Reset user
         user.currentRoom = null;
         user.box = null;
+
+        // Remove socket from roomSockets
+        const socketsSet = roomSockets.get(roomStake);
+        if (socketsSet) {
+          socketsSet.delete(this);
+          if (socketsSet.size === 0) roomSockets.delete(roomStake);
+        }
+        delete this.currentRoom;
 
         // 🚨🚨🚨 CRITICAL FIX: ONLY REFUND if room is in 'waiting' status (BEFORE countdown starts)
         // If room status is 'starting' (countdown phase), NO REFUND!
@@ -3963,20 +3965,18 @@ function setupSocketHandlers() {
           refunded: room.status === 'waiting'
         });
 
-        // Update lobby for remaining players
-        onlinePlayers.forEach(playerUserId => {
-          for (const [sId, uId] of socketToUser.entries()) {
-            if (uId === playerUserId) {
-              const s = getEndpoint(sId);
-              if (s && s.connected !== false) {
-                s.emit('lobbyUpdate', {
-                  room: roomStake,
-                  count: onlinePlayers.length
-                });
-              }
+        // Update lobby for remaining players using roomSockets
+        const remainingSocketSet = roomSockets.get(roomStake);
+        if (remainingSocketSet) {
+          remainingSocketSet.forEach(s => {
+            if (s && s.connected !== false) {
+              s.emit('lobbyUpdate', {
+                room: roomStake,
+                count: onlinePlayers.length
+              });
             }
-          }
-        });
+          });
+        }
 
         console.log(`✅ User ${user.userName} left room ${roomStake} during ${room.status} phase, ${room.takenBoxes.length} boxes remain, ${onlinePlayers.length} online players`);
 
@@ -4063,6 +4063,16 @@ function setupSocketHandlers() {
       const userId = socketToUser.get(socket.id) || socket.userId;
       if (userId) {
         console.log(`👤 User ${userId} disconnected`);
+
+        // NEW: Remove socket from roomSockets if it was in a room
+        if (socket.currentRoom) {
+          const socketsSet = roomSockets.get(socket.currentRoom);
+          if (socketsSet) {
+            socketsSet.delete(socket);
+            if (socketsSet.size === 0) roomSockets.delete(socket.currentRoom);
+          }
+          delete socket.currentRoom;
+        }
 
         try {
           // Find user
@@ -4243,6 +4253,7 @@ module.exports = {
   getRoomSubscriptions: () => roomSubscriptions,
   getRoomTimers: () => roomTimers,
   getRoomWinners: () => roomWinners,
+  getRoomSockets: () => roomSockets, // NEW: expose for external use if needed
 
   // Game logic functions
   getBingoLetter,
