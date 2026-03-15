@@ -8,6 +8,8 @@
 // - Better error handling when updating transaction.
 // - Normalize phone numbers before save and search.
 // - Added full support for Crash and Slots commissions.
+// - **NEW**: recordCommission accepts optional `baseAmount` parameter – for Bingo, base amount is the house commission from that specific player, not the winning amount.
+// - **NEW**: processBingoWin now passes the correct base amount.
 
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -1415,12 +1417,13 @@ class ManualAgentSystem {
      * @param {string} userId - Player's userId
      * @param {string} gameType - 'BINGO', 'KENO', 'CRASH', or 'SLOTS'
      * @param {number} stake - Amount wagered
-     * @param {number} winningAmount - Amount won by player
+     * @param {number} winningAmount - Amount won by player (for reference)
      * @param {string} transactionId - Optional: the transaction ID that caused this win (used for duplicate prevention and to fetch stored agentId)
+     * @param {number} baseAmount - Optional: the amount on which commission is calculated (if different from winningAmount, e.g., house commission for Bingo)
      */
-    async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null) {
+    async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null, baseAmount = null) {
         try {
-            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}, tx: ${transactionId}`);
+            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}, tx: ${transactionId}, baseAmount: ${baseAmount || winningAmount}`);
 
             // --- 1. Duplicate check using in-memory store ---
             if (transactionId && this.processedTransactions.has(transactionId)) {
@@ -1458,18 +1461,20 @@ class ManualAgentSystem {
 
             // --- 5. Calculate commission based on game type ---
             let commissionRate, commissionAmount;
+            const effectiveBase = baseAmount !== null ? baseAmount : winningAmount;
+
             if (gameType === 'BINGO') {
                 commissionRate = agent.commissionRateBingo;
-                commissionAmount = (winningAmount * commissionRate) / 100;
+                commissionAmount = (effectiveBase * commissionRate) / 100;
             } else if (gameType === 'KENO') {
                 commissionRate = agent.commissionRateKeno;
-                commissionAmount = (winningAmount * commissionRate) / 100;
+                commissionAmount = (effectiveBase * commissionRate) / 100;
             } else if (gameType === 'CRASH') {
                 commissionRate = agent.commissionRateCrash || 10; // default 10%
-                commissionAmount = (winningAmount * commissionRate) / 100;
+                commissionAmount = (effectiveBase * commissionRate) / 100;
             } else if (gameType === 'SLOTS') {
                 commissionRate = agent.commissionRateSlots || 10; // default 10%
-                commissionAmount = (winningAmount * commissionRate) / 100;
+                commissionAmount = (effectiveBase * commissionRate) / 100;
             } else {
                 return 0;
             }
@@ -1561,7 +1566,7 @@ class ManualAgentSystem {
                 setTimeout(() => this.handleRefreshDashboard(agentSocket), 500);
             }
 
-            console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (win: ${winningAmount})`);
+            console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (base: ${effectiveBase}, win: ${winningAmount})`);
             return commissionAmount;
         } catch (error) {
             if (error.code === 11000) {
@@ -1575,8 +1580,13 @@ class ManualAgentSystem {
 
     /**
      * Process a Bingo win. The game logic should have stored the agentId in the Transaction.
+     * @param {string} userId - Player's userId
+     * @param {object} room - Room data (contains stake)
+     * @param {number} winningAmount - Total prize won by player
+     * @param {string|null} gameTransactionId - Transaction ID of the win
+     * @param {number} baseAmount - The amount on which commission is calculated (house commission from this player)
      */
-    async processBingoWin(userId, room, winningAmount, gameTransactionId = null) {
+    async processBingoWin(userId, room, winningAmount, gameTransactionId = null, baseAmount = null) {
         try {
             // If we don't have a transaction ID, we cannot reliably get the agent at win time.
             // In that case, we fall back to current agent (but we should always have transaction ID)
@@ -1592,13 +1602,15 @@ class ManualAgentSystem {
             if (!agentId) return 0;
 
             const stake = room?.stake || 10;
+            // Pass baseAmount explicitly
             return await this.recordCommission(
                 agentId,
                 userId,
                 'BINGO',
                 stake,
                 winningAmount,
-                gameTransactionId
+                gameTransactionId,
+                baseAmount
             );
         } catch (error) {
             console.error('❌ Process Bingo win error:', error);
@@ -1643,7 +1655,10 @@ class ManualAgentSystem {
         try {
             const { userId, type, amount, room, stake, _id } = transaction;
             if (type === 'BINGO_WIN') {
-                return await this.processBingoWin(userId, { room, stake }, amount, _id);
+                // For Bingo, we need the base amount (house commission from this player)
+                // This should be passed separately; we'll assume it's stored in transaction.baseAmount
+                const baseAmount = transaction.baseAmount || null;
+                return await this.processBingoWin(userId, { room, stake }, amount, _id, baseAmount);
             } else if (type === 'KENO_WIN') {
                 return await this.processKenoWin(userId, stake || 5, amount, _id);
             } else if (type === 'CRASH_WIN') {
@@ -1773,13 +1788,20 @@ class ManualAgentSystem {
                         continue;
                     }
 
+                    // For Bingo, we need the base amount if available
+                    let baseAmount = null;
+                    if (gameType === 'BINGO' && tx.baseAmount) {
+                        baseAmount = tx.baseAmount;
+                    }
+
                     const commissionAmount = await this.recordCommission(
                         agentId,
                         tx.userId,
                         gameType,
                         stake,
                         tx.amount,
-                        tx._id.toString()
+                        tx._id.toString(),
+                        baseAmount
                     );
                     
                     if (commissionAmount > 0) {
