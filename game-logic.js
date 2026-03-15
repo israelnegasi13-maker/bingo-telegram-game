@@ -5,8 +5,7 @@
 // NEW: Random bot participation – at least 10, random additional bots
 // NEW: Bot management panel support – active flag, add funds, rename, create new bots
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
-// UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
-// FIX: Win transaction now stores agentId for fallback processing
+// UPDATE: Agent commission now calculated per referred player (40% of the player's own house commission) and uses agent's commissionRateBingo
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -1985,37 +1984,42 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (40% of house earnings) ==========
+      // ========== AGENT COMMISSION RECORDING (PER PLAYER) ==========
       if (updatedUser.agentId) {
-        const commissionRate = 40; // 40% for Bingo (applied to house earnings)
-        const commissionAmount = houseEarnings * commissionRate / 100;
-        const transactionKey = `BINGO_${roomData._id}_${userId}`;
+        // Fetch the agent to get the actual commission rate (not hardcoded)
+        const agent = await models.Agent.findById(updatedUser.agentId).lean();
+        if (agent && agent.isActive) {
+          const commissionRate = agent.commissionRateBingo; // from agent's settings
+          const commissionFromThisPlayer = commissionPerPlayer; // house commission from this player only
+          const commissionAmount = commissionFromThisPlayer * commissionRate / 100;
+          const transactionKey = `BINGO_${roomData._id}_${userId}`;
 
-        try {
-          await models.AgentCommission.create({
-            agentId: updatedUser.agentId,
-            userId: userId,
-            transactionKey: transactionKey,
-            userName: userName,
-            gameType: 'BINGO',
-            stake: roomStake,
-            winningAmount: totalPrize, // store the player's win for reference
-            commissionRate: commissionRate,
-            commissionAmount: commissionAmount,
-            status: 'completed'
-          });
+          try {
+            await models.AgentCommission.create({
+              agentId: updatedUser.agentId,
+              userId: userId,
+              transactionKey: transactionKey,
+              userName: userName,
+              gameType: 'BINGO',
+              stake: roomStake,
+              winningAmount: totalPrize,
+              commissionRate: commissionRate,
+              commissionAmount: commissionAmount,
+              status: 'completed'
+            });
 
-          await models.Agent.findByIdAndUpdate(
-            updatedUser.agentId,
-            { $inc: { totalEarnings: commissionAmount } }
-          );
+            await models.Agent.findByIdAndUpdate(
+              updatedUser.agentId,
+              { $inc: { totalEarnings: commissionAmount } }
+            );
 
-          console.log(`👑 Agent commission recorded: ${commissionAmount} ETB for agent ${updatedUser.agentId} from player ${userName} (based on house earnings ${houseEarnings})`);
-        } catch (err) {
-          if (err.code === 11000) {
-            console.log('Agent commission already recorded, skipping');
-          } else {
-            console.error('❌ Error recording agent commission:', err);
+            console.log(`👑 Agent commission recorded: ${commissionAmount.toFixed(2)} ETB for agent ${updatedUser.agentId} from player ${userName} (based on player's house commission ${commissionFromThisPlayer})`);
+          } catch (err) {
+            if (err.code === 11000) {
+              console.log('Agent commission already recorded, skipping');
+            } else {
+              console.error('❌ Error recording agent commission:', err);
+            }
           }
         }
       }
