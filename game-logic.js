@@ -6,23 +6,6 @@
 // NEW: Bot management panel support – active flag, add funds, rename, create new bots
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated per referred player (40% of the player's own house commission) and uses agent's commissionRateBingo
-// ========== ADDED: Integration with agentSystem for commission recording ==========
-
-// ========== GLOBAL STATE ==========
-let io;
-let models;
-let socketToUser = new Map();
-let adminSockets = new Set();
-let activityLog = [];
-let roomTimers = new Map();
-let connectedSockets = new Set();
-let roomSubscriptions = new Map();
-let processingClaims = new Map(); // For preventing double prize bug
-let roomWinners = new Map(); // Track room winners
-let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
-
-// ========== AGENT SYSTEM REFERENCE ==========
-let agentSystem = null; // will be set via setAgentSystem()
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -50,6 +33,19 @@ const CONFIG = {
   MAX_WITHDRAWAL: 10000,
   BOT_WAIT_TIMEOUT: 60000 // 60 seconds before leaving a room that never starts
 };
+
+// ========== GLOBAL STATE ==========
+let io;
+let models;
+let socketToUser = new Map();
+let adminSockets = new Set();
+let activityLog = [];
+let roomTimers = new Map();
+let connectedSockets = new Set();
+let roomSubscriptions = new Map();
+let processingClaims = new Map(); // For preventing double prize bug
+let roomWinners = new Map(); // Track room winners
+let telebirrNumber = CONFIG.TELEBIRR_NUMBER;
 
 // ========== PERFORMANCE CACHES ==========
 let roomsCache = new Map();
@@ -1988,6 +1984,46 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
+      // ========== AGENT COMMISSION RECORDING (PER PLAYER) ==========
+      if (updatedUser.agentId) {
+        // Fetch the agent to get the actual commission rate (not hardcoded)
+        const agent = await models.Agent.findById(updatedUser.agentId).lean();
+        if (agent && agent.isActive) {
+          const commissionRate = agent.commissionRateBingo; // from agent's settings
+          const commissionFromThisPlayer = commissionPerPlayer; // house commission from this player only
+          const commissionAmount = commissionFromThisPlayer * commissionRate / 100;
+          const transactionKey = `BINGO_${roomData._id}_${userId}`;
+
+          try {
+            await models.AgentCommission.create({
+              agentId: updatedUser.agentId,
+              userId: userId,
+              transactionKey: transactionKey,
+              userName: userName,
+              gameType: 'BINGO',
+              stake: roomStake,
+              winningAmount: totalPrize,
+              commissionRate: commissionRate,
+              commissionAmount: commissionAmount,
+              status: 'completed'
+            });
+
+            await models.Agent.findByIdAndUpdate(
+              updatedUser.agentId,
+              { $inc: { totalEarnings: commissionAmount } }
+            );
+
+            console.log(`👑 Agent commission recorded: ${commissionAmount.toFixed(2)} ETB for agent ${updatedUser.agentId} from player ${userName} (based on player's house commission ${commissionFromThisPlayer})`);
+          } catch (err) {
+            if (err.code === 11000) {
+              console.log('Agent commission already recorded, skipping');
+            } else {
+              console.error('❌ Error recording agent commission:', err);
+            }
+          }
+        }
+      }
+
       // 9. CREATE TRANSACTIONS (BATCH) – NOW INCLUDING AGENT ID IN WIN TRANSACTION
       const transactions = [];
 
@@ -2018,27 +2054,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         description: `Commission from ${totalPlayers} players in ${roomStake} ETB room`
       });
 
-      // 👇 INSERT TRANSACTIONS – we need the win transaction _id for commission recording
-      const insertedTransactions = await models.Transaction.insertMany(transactions);
-      const winTx = insertedTransactions.find(tx => tx.type === 'WIN' || tx.type === 'WIN_FOUR_CORNERS');
-
-      // ========== AGENT COMMISSION RECORDING VIA AGENT SYSTEM ==========
-      if (updatedUser.agentId && agentSystem && winTx) {
-        try {
-          await agentSystem.recordCommission(
-            updatedUser.agentId,
-            userId,
-            'BINGO',
-            roomStake,
-            totalPrize,
-            winTx._id,                     // transaction ID stored at win time
-            commissionPerPlayer             // base amount = house commission from this player
-          );
-          console.log(`👑 Agent commission recorded via agentSystem for ${userName}`);
-        } catch (err) {
-          console.error('❌ Error recording agent commission via agentSystem:', err);
-        }
-      }
+      await models.Transaction.insertMany(transactions);
 
       // 10. UPDATE IN-MEMORY CACHE
       roomWinners.set(roomStake, Date.now());
@@ -4213,12 +4229,6 @@ function startPeriodicTasks() {
   console.log('✅ Optimized periodic tasks started');
 }
 
-// ========== SET AGENT SYSTEM REFERENCE ==========
-function setAgentSystem(as) {
-  agentSystem = as;
-  console.log('✅ Agent system connected to game logic');
-}
-
 // ========== EXPORT FUNCTIONS AND STATE ==========
 module.exports = {
   // Configuration
@@ -4279,8 +4289,5 @@ module.exports = {
   renameBot,
   setBotActive,
   addNewBot,
-  bots: () => bots,
-
-  // ========== NEW: Agent System Integration ==========
-  setAgentSystem
+  bots: () => bots
 };
