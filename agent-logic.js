@@ -10,6 +10,8 @@
 // - Added full support for Crash and Slots commissions.
 // - **NEW**: recordCommission accepts optional `baseAmount` parameter – for Bingo, base amount is the house commission from that specific player, not the winning amount.
 // - **NEW**: processBingoWin now passes the correct base amount.
+// - **FIXED**: calculatePendingCommissions now looks for WIN, WIN_FOUR_CORNERS, KENO_WIN, CRASH_WIN, SLOTS_WIN.
+// - **FIXED**: Added debug logs to track referral assignment and commission recording.
 
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -674,8 +676,8 @@ class ManualAgentSystem {
                 }
             });
 
-            setTimeout(() => this.handleRefreshDashboard(socket), 500);
             console.log(`✅ Manual referral: ${updatedUser.userId} -> Agent ${agent.username}`);
+            setTimeout(() => this.handleRefreshDashboard(socket), 500);
         } catch (error) {
             console.error('Manual referral error:', error);
             socket.emit('agent:error', 'Failed to add referral: ' + error.message);
@@ -864,6 +866,8 @@ class ManualAgentSystem {
                 console.log(`⚠️ User ${userId} already assigned or not found`);
                 return false;
             }
+
+            console.log(`✅ Referral: user ${userId} assigned to agent ${agent._id}`); // <-- ADDED LOG
 
             await this.models.Referral.findOneAndUpdate(
                 { userId },
@@ -1742,8 +1746,9 @@ class ManualAgentSystem {
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+            // Look for WIN, WIN_FOUR_CORNERS, KENO_WIN, CRASH_WIN, SLOTS_WIN
             const winTransactions = await this.models.Transaction.find({
-                type: { $in: ['BINGO_WIN', 'KENO_WIN', 'CRASH_WIN', 'SLOTS_WIN'] },
+                type: { $in: ['WIN', 'WIN_FOUR_CORNERS', 'KENO_WIN', 'CRASH_WIN', 'SLOTS_WIN'] },
                 commissionProcessed: { $ne: true },
                 createdAt: { $gte: sevenDaysAgo } // avoid infinite backlog
             }).limit(200);
@@ -1763,7 +1768,7 @@ class ManualAgentSystem {
                     }
 
                     let gameType;
-                    if (tx.type === 'BINGO_WIN') gameType = 'BINGO';
+                    if (tx.type === 'WIN' || tx.type === 'WIN_FOUR_CORNERS') gameType = 'BINGO';
                     else if (tx.type === 'KENO_WIN') gameType = 'KENO';
                     else if (tx.type === 'CRASH_WIN') gameType = 'CRASH';
                     else if (tx.type === 'SLOTS_WIN') gameType = 'SLOTS';
