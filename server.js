@@ -659,6 +659,11 @@ if (agentSystem && agentSystem.setKenoLogic) {
   agentSystem.setKenoLogic(kenoLogic);
 }
 
+// ========== NEW: Set agent system reference in game logic ==========
+if (gameLogic && gameLogic.setAgentSystem) {
+  gameLogic.setAgentSystem(agentSystem);
+}
+
 // Load initial Telebirr number into game logic
 (async () => {
   const telebirrNumber = await getTelebirrNumber();
