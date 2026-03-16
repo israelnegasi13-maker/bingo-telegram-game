@@ -79,6 +79,17 @@ let bots = [];
 let botSockets = new Map(); // botId -> virtual socket object
 const BOT_COUNT = 20;
 
+// 👇 NEW: Reference to Agent System for commission recording
+let agentSystemInstance = null;
+
+/**
+ * Sets the agent system instance for commission recording.
+ * @param {object} agentSystem - The ManualAgentSystem instance
+ */
+function setAgentSystem(agentSystem) {
+  agentSystemInstance = agentSystem;
+}
+
 // Helper to get a socket (real or bot) by its ID
 function getEndpoint(socketId) {
   // First try real socket
@@ -1984,68 +1995,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (FOR ALL PLAYERS IN THE ROOM) ==========
-      const playersInRoom = roomData.players; // array of userIds
-      const usersWithAgents = await models.User.find({
-        userId: { $in: playersInRoom },
-        agentId: { $ne: null }
-      }).select('userId userName agentId');
-
-      if (usersWithAgents.length > 0) {
-        // Fetch all agents’ commission rates in one query
-        const agentIds = [...new Set(usersWithAgents.map(u => u.agentId.toString()))];
-        const agents = await models.Agent.find({ _id: { $in: agentIds } })
-          .select('_id commissionRateBingo');
-        const agentRateMap = new Map(agents.map(a => [a._id.toString(), a.commissionRateBingo]));
-
-        const commissionRecords = [];
-
-        for (const user of usersWithAgents) {
-          const agentId = user.agentId;
-          const commissionRate = agentRateMap.get(agentId.toString());
-          if (!commissionRate) continue; // agent not found or inactive
-
-          const commissionAmount = (commissionPerPlayer * commissionRate) / 100;
-          if (commissionAmount <= 0) continue;
-
-          const transactionKey = `BINGO_${roomData._id}_${user.userId}`;
-
-          commissionRecords.push({
-            agentId,
-            userId: user.userId,
-            transactionKey,
-            userName: user.userName,
-            gameType: 'BINGO',
-            stake: roomStake,
-            winningAmount: 0,           // commission based on house commission, not win amount
-            commissionRate,
-            commissionAmount,
-            status: 'completed',
-            createdAt: new Date()
-          });
-
-          // Update agent’s total earnings
-          await models.Agent.findByIdAndUpdate(agentId, {
-            $inc: { totalEarnings: commissionAmount }
-          });
-        }
-
-        if (commissionRecords.length > 0) {
-          await models.AgentCommission.insertMany(commissionRecords, { ordered: false })
-            .catch(err => {
-              if (err.code === 11000) {
-                console.log('Duplicate commission(s) skipped');
-              } else {
-                console.error('Error inserting commissions:', err);
-              }
-            });
-        }
-      }
-
-      // 9. CREATE TRANSACTIONS (BATCH) – NOW INCLUDING AGENT ID IN WIN TRANSACTION
-      const transactions = [];
-
-      // Win transaction
+      // 9. CREATE TRANSACTIONS (BATCH) – NOW INCLUDING AGENT ID AND BASE AMOUNT
       const winTransaction = {
         type: isFourCornersWin ? 'WIN_FOUR_CORNERS' : 'WIN',
         userId: userId,
@@ -2055,24 +2005,44 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         description: `Bingo win in ${roomStake} ETB room${isFourCornersWin ? ' (Four Corners Bonus)' : ''}`,
         winningPattern: bingoCheck.pattern,
         winningPatternName: bingoCheck.patternName,
-        winningPatternType: bingoCheck.patternType
+        winningPatternType: bingoCheck.patternType,
+        // 👇 NEW: store agent and base amount for fallback job
+        agentId: updatedUser.agentId || null,
+        baseAmount: commissionPerPlayer,
+        commissionProcessed: false
       };
-      if (updatedUser.agentId) {
-        winTransaction.agentId = updatedUser.agentId; // 👈 store agent at win time
-      }
-      transactions.push(winTransaction);
 
       // House earnings transaction
-      transactions.push({
+      const houseTransaction = {
         type: 'HOUSE_EARNINGS',
         userId: 'HOUSE',
         userName: 'House',
         amount: houseEarnings,
         room: roomStake,
         description: `Commission from ${totalPlayers} players in ${roomStake} ETB room`
-      });
+      };
 
-      await models.Transaction.insertMany(transactions);
+      // Insert both transactions and capture the win document
+      const [winTransactionDoc] = await models.Transaction.insertMany([winTransaction, houseTransaction]);
+
+      // ========== RECORD AGENT COMMISSION (if user has an agent) ==========
+      if (updatedUser.agentId && agentSystemInstance) {
+        try {
+          await agentSystemInstance.recordCommission(
+            updatedUser.agentId,          // agentId
+            userId,                       // userId
+            'BINGO',                      // gameType
+            roomStake,                    // stake
+            totalPrize,                   // winningAmount
+            winTransactionDoc._id,        // transactionId (for duplicate prevention)
+            commissionPerPlayer           // baseAmount (house commission from this player)
+          );
+          console.log(`👑 Agent commission recorded via agentSystem for player ${userName}`);
+        } catch (err) {
+          console.error('❌ Error recording agent commission via agentSystem:', err);
+          // The fallback job will retry using the transaction data
+        }
+      }
 
       // 10. UPDATE IN-MEMORY CACHE
       roomWinners.set(roomStake, Date.now());
@@ -2106,10 +2076,10 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       };
 
       // 13. NOTIFY ALL PLAYERS (BROADCAST)
-      const playersInRoomList = [...roomData.players];
+      const playersInRoom = [...roomData.players];
 
       // Reset other players' room status
-      const resetPromises = playersInRoomList
+      const resetPromises = playersInRoom
         .filter(playerId => playerId !== userId)
         .map(playerId =>
           models.User.findOneAndUpdate(
@@ -2121,7 +2091,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       await Promise.all(resetPromises);
 
       // Send game over to ALL players using roomSockets
-      broadcastGameOver(roomStake, playersInRoomList, gameOverData);
+      broadcastGameOver(roomStake, playersInRoom, gameOverData);
 
       // 14. RESET ROOM FOR NEXT GAME
       setTimeout(() => {
@@ -4307,5 +4277,8 @@ module.exports = {
   renameBot,
   setBotActive,
   addNewBot,
-  bots: () => bots
+  bots: () => bots,
+
+  // 👇 NEW: Expose setter for agent system
+  setAgentSystem
 };
