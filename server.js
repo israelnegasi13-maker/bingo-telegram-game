@@ -559,14 +559,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// ========== NEW: Serve sponsor images from root ==========
-app.get('/sponser1.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser1.png'));
-});
-app.get('/sponser2.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser2.png'));
-});
-
 // ========== NEW: Serve bots panel from root folder ==========
 app.get('/bots-panel.html', (req, res) => {
   const filePath = path.join(__dirname, 'bots-panel.html');
@@ -579,6 +571,18 @@ app.get('/bots-panel.html', (req, res) => {
 
 // ========== NEW: Serve assets folder for images and sounds ==========
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+// ========== NEW: Serve sponsor images ==========
+app.get('/sponser1.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser1.png'), (err) => {
+    if (err) res.status(404).send('Sponsor image 1 not found');
+  });
+});
+app.get('/sponser2.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser2.png'), (err) => {
+    if (err) res.status(404).send('Sponsor image 2 not found');
+  });
+});
 
 // Security headers for Telegram
 app.use((req, res, next) => {
@@ -2627,7 +2631,7 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH SPONSOR BOARD (TOP) & WALLET EMOJI (ABOVE SPONSOR) ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH SPONSOR BOARD, WALLET EMOJI, SMALLER GAMES GRID ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -2656,7 +2660,7 @@ app.get('/telegram', async (req, res) => {
       const slotsBuffer = fs.readFileSync(slotsPath);
       slotsIconBase64 = slotsBuffer.toString('base64');
     } catch (e) {}
-    
+
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -2666,7 +2670,6 @@ app.get('/telegram', async (req, res) => {
         <title>ETHIO GAMES · Telegram Mini App</title>
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <style>
-          /* Clean, minimal dark theme */
           * {
             margin: 0;
             padding: 0;
@@ -2684,17 +2687,18 @@ app.get('/telegram', async (req, res) => {
           .container {
             max-width: 400px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 12px;
           }
 
+          /* Header with logo, greeting and wallet emoji */
           .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding-bottom: 8px;
+            padding-bottom: 4px;
             border-bottom: 1px solid #20262e;
           }
 
@@ -2708,121 +2712,132 @@ app.get('/telegram', async (req, res) => {
             color: #8b5cf6;
           }
 
+          .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+
           .user-greeting {
             font-size: 14px;
             color: #8e9aaf;
           }
 
-          /* Wallet emoji + menu (placed above sponsor) */
-          .wallet-container {
-            position: relative;
+          .wallet-emoji {
+            font-size: 24px;
+            cursor: pointer;
+            background: #20262e;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            transition: background 0.2s;
+          }
+          .wallet-emoji:active {
+            background: #2d343e;
+          }
+
+          /* Wallet popup (hidden by default) */
+          .wallet-popup {
+            position: absolute;
+            top: 70px;
+            right: 12px;
             background: #13171c;
             border: 1px solid #262d36;
-            border-radius: 40px;
-            padding: 10px 16px;
-            margin-bottom: 8px;
+            border-radius: 20px;
+            padding: 16px;
+            width: 200px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            z-index: 100;
+            display: none;
           }
-          .wallet-emoji {
-            font-size: 28px;
-            cursor: pointer;
-            user-select: none;
+          .wallet-popup.show {
+            display: block;
           }
-          .balance-display {
+          .popup-balance {
             font-size: 20px;
-            font-weight: 600;
+            font-weight: 700;
+            margin-bottom: 16px;
+            text-align: center;
           }
-          .balance-display small {
-            font-size: 14px;
+          .popup-balance small {
+            font-size: 12px;
             color: #8e9aaf;
             margin-left: 4px;
           }
-
-          /* Wallet popup menu */
-          .wallet-menu {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            background: #1e252e;
-            border: 1px solid #3b82f6;
-            border-radius: 24px;
-            padding: 12px;
-            width: 180px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-            display: none;
-            z-index: 100;
+          .popup-actions {
+            display: flex;
+            gap: 8px;
           }
-          .wallet-menu.active {
-            display: block;
-          }
-          .wallet-menu button {
-            width: 100%;
-            padding: 12px;
-            margin: 4px 0;
-            border: none;
+          .popup-btn {
+            flex: 1;
+            padding: 10px;
             border-radius: 40px;
+            border: none;
             font-weight: 600;
-            font-size: 16px;
+            font-size: 13px;
             background: #20262e;
             color: white;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
           }
-          .wallet-menu button.deposit {
+          .popup-btn.primary {
             background: #3b82f6;
           }
-          .wallet-menu button.withdraw {
-            background: #10b981;
+          .popup-btn:active {
+            background: #2d343e;
           }
-          .wallet-menu button:active {
-            filter: brightness(1.2);
+          .popup-btn.primary:active {
+            background: #2563eb;
           }
 
-          /* Sponsor board (bigger) */
+          /* Sponsor board */
           .sponsor-board {
             width: 100%;
-            height: 180px;
-            background: #13171c;
-            border-radius: 20px;
+            height: 100px;
+            border-radius: 16px;
             overflow: hidden;
+            background: #13171c;
             border: 1px solid #262d36;
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 8px 0;
           }
-          .sponsor-board img {
+          .sponsor-image {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
+          }
+          .sponsor-fallback {
+            color: #8e9aaf;
+            font-size: 14px;
+            text-align: center;
           }
 
           .section-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             color: #f0f4fa;
           }
 
+          /* Smaller games grid */
           .games-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
           }
 
           .game-card {
             background: #13171c;
             border: 1px solid #262d36;
-            border-radius: 24px;
-            padding: 16px 12px;
+            border-radius: 18px;
+            padding: 12px 8px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2834,10 +2849,10 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            margin-bottom: 10px;
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            margin-bottom: 8px;
             object-fit: cover;
             border: 1px solid #3b82f6;
           }
@@ -2857,13 +2872,12 @@ app.get('/telegram', async (req, res) => {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: #1e293b;
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #3b82f6;
             box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
-            margin-bottom: 10px;
           }
           .bingo-numbers-row {
             display: flex;
@@ -2873,8 +2887,8 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2893,15 +2907,14 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #8b5cf6;
-            margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2911,56 +2924,56 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #f97316;
-            margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
+            letter-spacing: 2px;
           }
           .slots-icon-fallback {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #eab308;
-            margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
+            letter-spacing: 2px;
           }
 
           .game-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
           }
 
           .game-desc {
-            font-size: 11px;
+            font-size: 10px;
             color: #8e9aaf;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
           }
 
           .play-btn {
             background: transparent;
             border: 1px solid #3b82f6;
             color: #3b82f6;
-            padding: 6px 16px;
+            padding: 6px 12px;
             border-radius: 40px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             width: 100%;
             transition: all 0.2s;
@@ -2983,13 +2996,13 @@ app.get('/telegram', async (req, res) => {
           }
 
           .footer {
-            margin-top: 24px;
-            padding-top: 16px;
+            margin-top: 16px;
+            padding-top: 12px;
             border-top: 1px solid #20262e;
             display: flex;
             justify-content: center;
             gap: 24px;
-            font-size: 12px;
+            font-size: 11px;
             color: #5a6573;
           }
           .footer a {
@@ -2998,6 +3011,7 @@ app.get('/telegram', async (req, res) => {
           }
           .footer a:active { color: white; }
 
+          /* Modals (unchanged) */
           .modal {
             display: none;
             position: fixed;
@@ -3010,7 +3024,6 @@ app.get('/telegram', async (req, res) => {
             align-items: center;
             justify-content: center;
             padding: 16px;
-            z-index: 200;
           }
           .modal-content {
             background: #13171c;
@@ -3108,8 +3121,20 @@ app.get('/telegram', async (req, res) => {
           <!-- Header -->
           <div class="header">
             <div class="logo-text">ETHIO<span>GAMES</span></div>
-            <div class="user-greeting" id="userGreeting" style="display: none;">
-              👋 <span id="userName">User</span>
+            <div class="header-right">
+              <div class="user-greeting" id="userGreeting" style="display: none;">
+                👋 <span id="userName">User</span>
+              </div>
+              <div class="wallet-emoji" onclick="toggleWalletPopup()">💰</div>
+            </div>
+          </div>
+
+          <!-- Wallet Popup -->
+          <div class="wallet-popup" id="walletPopup">
+            <div class="popup-balance"><span id="walletBalance">0.00</span><small>ETB</small></div>
+            <div class="popup-actions">
+              <button class="popup-btn primary" onclick="openDepositModal()">Deposit</button>
+              <button class="popup-btn" onclick="openWithdrawModal()">Withdraw</button>
             </div>
           </div>
 
@@ -3118,22 +3143,15 @@ app.get('/telegram', async (req, res) => {
             ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
           </div>
 
-          <!-- Wallet Emoji + Balance + Menu (now on top) -->
-          <div class="wallet-container">
-            <span class="wallet-emoji" id="walletEmoji" onclick="toggleWalletMenu()">💰</span>
-            <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
-            <div class="wallet-menu" id="walletMenu">
-              <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
-              <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
+          <!-- Sponsor Board -->
+          <div class="sponsor-board">
+            <img id="sponsorImage" class="sponsor-image" src="/sponser1.png" alt="Sponsor" onerror="this.style.display='none'; document.getElementById('sponsorFallback').style.display='flex';">
+            <div id="sponsorFallback" class="sponsor-fallback" style="display: none;">
+              Sponsor Board<br>(ads appear here)
             </div>
           </div>
 
-          <!-- Sponsor Board (bigger, below wallet) -->
-          <div class="sponsor-board">
-            <img id="sponsorImage" src="/sponser1.png" alt="Sponsor">
-          </div>
-
-          <!-- Active Games -->
+          <!-- Games Grid -->
           <div>
             <div class="section-title"><span>🎮 PLAY NOW</span></div>
             <div class="games-grid">
@@ -3260,32 +3278,26 @@ app.get('/telegram', async (req, res) => {
           let currentBalance = 0;
           let fallbackTimer = null;
 
-          // Sponsor board cycling
+          // Sponsor image rotation
           const sponsorImages = ['/sponser1.png', '/sponser2.png'];
-          let sponsorIndex = 0;
-          const sponsorEl = document.getElementById('sponsorImage');
-          setInterval(() => {
-            sponsorIndex = (sponsorIndex + 1) % sponsorImages.length;
-            sponsorEl.src = sponsorImages[sponsorIndex];
-          }, 2000);
+          let currentSponsorIndex = 0;
+          const sponsorImg = document.getElementById('sponsorImage');
+          const sponsorFallback = document.getElementById('sponsorFallback');
 
-          // Wallet menu functions
-          function toggleWalletMenu() {
-            const menu = document.getElementById('walletMenu');
-            menu.classList.toggle('active');
+          function rotateSponsor() {
+            if (!sponsorImg) return;
+            currentSponsorIndex = (currentSponsorIndex + 1) % sponsorImages.length;
+            sponsorImg.src = sponsorImages[currentSponsorIndex];
           }
-          function closeWalletMenu() {
-            document.getElementById('walletMenu').classList.remove('active');
-          }
+          setInterval(rotateSponsor, 2000);
 
-          // Close menu when clicking outside
-          document.addEventListener('click', (e) => {
-            const container = document.querySelector('.wallet-container');
-            const menu = document.getElementById('walletMenu');
-            if (!container.contains(e.target) && menu.classList.contains('active')) {
-              menu.classList.remove('active');
-            }
-          });
+          // Handle image load error
+          if (sponsorImg) {
+            sponsorImg.onerror = function() {
+              sponsorImg.style.display = 'none';
+              sponsorFallback.style.display = 'flex';
+            };
+          }
 
           // Try to get user from URL first (app login)
           const urlParams = new URLSearchParams(window.location.search);
@@ -3293,7 +3305,6 @@ app.get('/telegram', async (req, res) => {
           const appUserName = urlParams.get('name');
 
           if (appUserId && appUserName) {
-            // Mobile app user – skip Telegram
             currentUserId = appUserId;
             document.getElementById('userGreeting').style.display = 'flex';
             document.getElementById('userName').textContent = appUserName;
@@ -3301,9 +3312,8 @@ app.get('/telegram', async (req, res) => {
             sessionStorage.setItem('appUserName', appUserName);
             startApp();
           } else {
-            // Try Telegram user
             if (tg) {
-              tg.ready(); // Tell Telegram we are ready
+              tg.ready();
               const user = tg.initDataUnsafe?.user;
               if (user) {
                 currentUserId = 'tg_' + user.id;
@@ -3312,13 +3322,11 @@ app.get('/telegram', async (req, res) => {
                 localStorage.setItem('telegramUser', JSON.stringify(user));
                 startApp();
               } else {
-                // No user data yet – wait a bit, then show fallback
                 fallbackTimer = setTimeout(() => {
                   document.getElementById('fallbackMessage').style.display = 'block';
                 }, 2000);
               }
             } else {
-              // No Telegram object at all – show fallback immediately
               document.getElementById('fallbackMessage').style.display = 'block';
             }
           }
@@ -3349,7 +3357,21 @@ app.get('/telegram', async (req, res) => {
             document.getElementById('walletBalance').textContent = bal.toFixed(2);
           });
 
-          // ========== MODIFIED: launchGame includes userId and name in URL ==========
+          // Toggle wallet popup
+          function toggleWalletPopup() {
+            const popup = document.getElementById('walletPopup');
+            popup.classList.toggle('show');
+          }
+
+          // Close popup when clicking outside (optional)
+          document.addEventListener('click', function(event) {
+            const popup = document.getElementById('walletPopup');
+            const walletEmoji = document.querySelector('.wallet-emoji');
+            if (!popup.contains(event.target) && !walletEmoji.contains(event.target)) {
+              popup.classList.remove('show');
+            }
+          });
+
           function launchGame(game) {
             tg?.HapticFeedback?.impactOccurred('light');
             const userId = encodeURIComponent(currentUserId);
@@ -3363,6 +3385,7 @@ app.get('/telegram', async (req, res) => {
           // --- Modals ---
           function openDepositModal() {
             document.getElementById('depositModal').style.display = 'flex';
+            document.getElementById('walletPopup').classList.remove('show');
           }
           function closeDepositModal() {
             document.getElementById('depositModal').style.display = 'none';
@@ -3373,6 +3396,7 @@ app.get('/telegram', async (req, res) => {
               return;
             }
             document.getElementById('withdrawModal').style.display = 'flex';
+            document.getElementById('walletPopup').classList.remove('show');
           }
           function closeWithdrawModal() {
             document.getElementById('withdrawModal').style.display = 'none';
@@ -3490,12 +3514,10 @@ app.get('/slots', (req, res) => {
   if (fs.existsSync(slotsPath)) {
     res.sendFile(slotsPath);
   } else {
-    // Fallback if slots.html is in public folder (or missing)
     const publicSlotsPath = path.join(__dirname, 'public', 'slots.html');
     if (fs.existsSync(publicSlotsPath)) {
       res.sendFile(publicSlotsPath);
     } else {
-      // Final fallback
       res.send(`
         <!DOCTYPE html>
         <html>
