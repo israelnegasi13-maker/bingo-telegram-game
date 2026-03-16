@@ -2390,7 +2390,7 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== FINAL TELEGRAM ENTRY PAGE - COMPACT WALLET BUTTON ==========
+// ========== FINAL TELEGRAM ENTRY PAGE - WALLET IN TOP RIGHT CORNER ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -2472,31 +2472,33 @@ app.get('/telegram', async (req, res) => {
           .user-greeting {
             font-size: 14px;
             color: #8e9aaf;
+            margin-left: auto;
+            margin-right: 12px;
           }
 
-          /* Compact wallet button */
+          /* Compact wallet button in top right */
           .wallet-container {
             position: relative;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             background: #13171c;
             border: 1px solid #3b82f6;
-            border-radius: 40px;
-            padding: 8px 16px;
-            margin: 0 auto 8px auto;
+            border-radius: 30px;
+            padding: 4px 12px;
             cursor: pointer;
             user-select: none;
+            margin-left: auto;
           }
           .wallet-emoji {
-            font-size: 24px;
+            font-size: 20px;
           }
           .balance-display {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
           }
           .balance-display small {
-            font-size: 12px;
+            font-size: 11px;
             color: #8e9aaf;
             margin-left: 2px;
           }
@@ -2507,9 +2509,9 @@ app.get('/telegram', async (req, res) => {
             right: 0;
             background: #1e252e;
             border: 1px solid #3b82f6;
-            border-radius: 24px;
-            padding: 12px;
-            width: 180px;
+            border-radius: 20px;
+            padding: 10px;
+            width: 160px;
             box-shadow: 0 8px 20px rgba(0,0,0,0.6);
             display: none;
             z-index: 100;
@@ -2519,19 +2521,19 @@ app.get('/telegram', async (req, res) => {
           }
           .wallet-menu button {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             margin: 4px 0;
             border: none;
-            border-radius: 40px;
+            border-radius: 30px;
             font-weight: 600;
-            font-size: 16px;
+            font-size: 14px;
             background: #20262e;
             color: white;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
           }
           .wallet-menu button.deposit {
             background: #3b82f6;
@@ -2863,25 +2865,25 @@ app.get('/telegram', async (req, res) => {
       </head>
       <body>
         <div class="container">
+          <!-- Header with logo and wallet button -->
           <div class="header">
             <div class="logo-text">ETHIO<span>GAMES</span></div>
             <div class="user-greeting" id="userGreeting" style="display: none;">
               👋 <span id="userName">User</span>
             </div>
+            <div class="wallet-container" id="walletContainer">
+              <span class="wallet-emoji">💰</span>
+              <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
+              <div class="wallet-menu" id="walletMenu">
+                <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
+                <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
+              </div>
+            </div>
           </div>
 
+          <!-- Fallback message (hidden by default) -->
           <div id="fallbackMessage" class="fallback-banner" style="display: none;">
             ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
-          </div>
-
-          <!-- Compact Wallet Button -->
-          <div class="wallet-container" id="walletContainer">
-            <span class="wallet-emoji">💰</span>
-            <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
-            <div class="wallet-menu" id="walletMenu">
-              <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
-              <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
-            </div>
           </div>
 
           <!-- Sponsor Board -->
@@ -2889,6 +2891,7 @@ app.get('/telegram', async (req, res) => {
             <img id="sponsorImage" src="/sponser1.png" alt="Sponsor">
           </div>
 
+          <!-- Active Games -->
           <div>
             <div class="section-title"><span>🎮 PLAY NOW</span></div>
             <div class="games-grid">
@@ -2949,6 +2952,7 @@ app.get('/telegram', async (req, res) => {
             </div>
           </div>
 
+          <!-- Footer Links -->
           <div class="footer">
             <a href="#" onclick="showHelp()">Help</a>
             <a href="#" onclick="showAgentInfo()">Agent</a>
@@ -2956,6 +2960,7 @@ app.get('/telegram', async (req, res) => {
           </div>
         </div>
 
+        <!-- Deposit Modal -->
         <div class="modal" id="depositModal">
           <div class="modal-content">
             <div class="modal-header">
@@ -2980,6 +2985,7 @@ app.get('/telegram', async (req, res) => {
           </div>
         </div>
 
+        <!-- Withdraw Modal -->
         <div class="modal" id="withdrawModal">
           <div class="modal-content">
             <div class="modal-header">
