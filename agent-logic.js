@@ -1427,7 +1427,7 @@ class ManualAgentSystem {
      */
     async recordCommission(agentId, userId, gameType, stake, winningAmount, transactionId = null, baseAmount = null) {
         try {
-            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}, tx: ${transactionId}, baseAmount: ${baseAmount || winningAmount}`);
+            console.log(`💰 [COMMISSION START] agent: ${agentId}, user: ${userId}, game: ${gameType}, win: ${winningAmount}, tx: ${transactionId}, baseAmount: ${baseAmount}`);
 
             // --- 1. Duplicate check using in-memory store ---
             if (transactionId && this.processedTransactions.has(transactionId)) {
@@ -1438,7 +1438,6 @@ class ManualAgentSystem {
             // --- 2. Determine the correct agentId ---
             let finalAgentId = agentId;
             if (transactionId) {
-                // Always prefer the agentId stored in the Transaction document at win time
                 const transaction = await this.models.Transaction.findById(transactionId).select('agentId').lean();
                 if (transaction && transaction.agentId) {
                     finalAgentId = transaction.agentId;
@@ -1450,22 +1449,29 @@ class ManualAgentSystem {
 
             // --- 3. Verify agent exists and is active ---
             const agent = await this.models.Agent.findById(finalAgentId);
-            if (!agent || !agent.isActive) {
-                console.log(`⚠️ Agent not found or inactive: ${finalAgentId}`);
+            if (!agent) {
+                console.log(`❌ Agent not found: ${finalAgentId}`);
                 return 0;
             }
+            if (!agent.isActive) {
+                console.log(`❌ Agent inactive: ${finalAgentId} (${agent.username})`);
+                return 0;
+            }
+            console.log(`✅ Agent found: ${agent.username} (rates: BINGO=${agent.commissionRateBingo}%)`);
 
             // --- 4. Verify user is still assigned to this agent (optional, for stats) ---
             const user = await this.models.User.findOne({ userId });
             if (!user || !user.agentId || user.agentId.toString() !== finalAgentId.toString()) {
                 console.log(`⚠️ User ${userId} is no longer assigned to agent ${finalAgentId}. Commission still recorded because it was earned at win time.`);
-                // Do not reject – the commission was earned at the moment of win.
-                // We still record it, but we log the discrepancy.
             }
 
             // --- 5. Calculate commission based on game type ---
             let commissionRate, commissionAmount;
             const effectiveBase = baseAmount !== null ? baseAmount : winningAmount;
+            if (effectiveBase <= 0) {
+                console.log(`⚠️ Effective base amount is ${effectiveBase}, commission will be zero.`);
+                return 0;
+            }
 
             if (gameType === 'BINGO') {
                 commissionRate = agent.commissionRateBingo;
@@ -1474,21 +1480,21 @@ class ManualAgentSystem {
                 commissionRate = agent.commissionRateKeno;
                 commissionAmount = (effectiveBase * commissionRate) / 100;
             } else if (gameType === 'CRASH') {
-                commissionRate = agent.commissionRateCrash || 10; // default 10%
+                commissionRate = agent.commissionRateCrash || 10;
                 commissionAmount = (effectiveBase * commissionRate) / 100;
             } else if (gameType === 'SLOTS') {
-                commissionRate = agent.commissionRateSlots || 10; // default 10%
+                commissionRate = agent.commissionRateSlots || 10;
                 commissionAmount = (effectiveBase * commissionRate) / 100;
             } else {
+                console.log(`⚠️ Unknown game type: ${gameType}`);
                 return 0;
             }
 
-            // Enforce minimum commission of 0.01 ETB
             if (commissionAmount < 0.01) commissionAmount = 0.01;
+            console.log(`📊 Calculated commission: rate=${commissionRate}%, base=${effectiveBase}, amount=${commissionAmount.toFixed(2)}`);
 
             // --- 6. Create commission record ---
             const transactionKey = transactionId || `${userId}_${gameType}_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-
             const commission = new this.models.AgentCommission({
                 agentId: agent._id,
                 userId,
@@ -1505,16 +1511,15 @@ class ManualAgentSystem {
             });
 
             await commission.save();
+            console.log(`💾 Commission saved with ID: ${commission._id}`);
 
             // --- 7. Store transaction ID in memory to prevent duplicates ---
             if (transactionId) {
                 this.processedTransactions.set(transactionId, Date.now());
-                // Also store auto-generated key if we created one
                 if (transactionKey !== transactionId) {
                     this.processedTransactions.set(transactionKey, Date.now());
                 }
             } else {
-                // For calls without transactionId, store the generated key
                 this.processedTransactions.set(transactionKey, Date.now());
             }
 
@@ -1530,6 +1535,7 @@ class ManualAgentSystem {
                 $inc: { totalEarnings: commissionAmount },
                 $set: { lastCommissionDate: new Date(), updatedAt: new Date() }
             });
+            console.log(`💰 Agent ${agent.username} totalEarnings increased by ${commissionAmount.toFixed(2)}`);
 
             // --- 10. Record transaction in agent's ledger ---
             await this.models.AgentTransaction.create({
@@ -1549,6 +1555,8 @@ class ManualAgentSystem {
                         agentCommission: commissionAmount,
                         commissionProcessed: true
                     }
+                }).then(() => {
+                    console.log(`✅ Transaction ${transactionId} marked as commissionProcessed`);
                 }).catch(err => console.log('⚠️ Could not update transaction (non-critical):', err.message));
             }
 
@@ -1570,14 +1578,16 @@ class ManualAgentSystem {
                 setTimeout(() => this.handleRefreshDashboard(agentSocket), 500);
             }
 
-            console.log(`✅ Commission recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (base: ${effectiveBase}, win: ${winningAmount})`);
+            console.log(`✅ Commission fully recorded: ${agent.username} earned ${commissionAmount.toFixed(2)} ETB from ${gameType} (base: ${effectiveBase}, win: ${winningAmount})`);
             return commissionAmount;
+
         } catch (error) {
             if (error.code === 11000) {
                 console.log(`⚠️ Duplicate commission detected for key ${error.keyValue?.transactionKey} – skipping`);
                 return 0;
             }
-            console.error('❌ Record commission error:', error);
+            console.error(`❌ [recordCommission] Critical error:`, error);
+            console.error(error.stack);
             return 0;
         }
     }
@@ -1767,6 +1777,8 @@ class ManualAgentSystem {
                         continue;
                     }
 
+                    console.log(`🔄 Processing transaction ${tx._id}, type=${tx.type}, userId=${tx.userId}, agentId=${tx.agentId}, retry=${retryCount}`);
+
                     let gameType;
                     if (tx.type === 'WIN' || tx.type === 'WIN_FOUR_CORNERS') gameType = 'BINGO';
                     else if (tx.type === 'KENO_WIN') gameType = 'KENO';
@@ -1810,6 +1822,7 @@ class ManualAgentSystem {
                     );
                     
                     if (commissionAmount > 0) {
+                        console.log(`✅ Fallback: commission ${commissionAmount} recorded for tx ${tx._id}`);
                         tx.commissionProcessed = true;
                         tx.commissionRetryCount = 0; // reset on success
                         await tx.save();
@@ -1817,7 +1830,7 @@ class ManualAgentSystem {
                         // Increment retry count
                         tx.commissionRetryCount = (tx.commissionRetryCount || 0) + 1;
                         await tx.save();
-                        console.log(`⚠️ Commission not recorded for transaction ${tx._id}, retry count: ${tx.commissionRetryCount}`);
+                        console.log(`⚠️ Fallback: commission NOT recorded for tx ${tx._id}, retry count: ${tx.commissionRetryCount}`);
                     }
                 } catch (txError) {
                     console.error(`Error processing transaction ${tx._id}:`, txError);
