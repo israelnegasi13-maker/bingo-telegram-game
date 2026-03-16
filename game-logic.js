@@ -1984,43 +1984,61 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
         return { success: false, reason: 'user_update_failed' };
       }
 
-      // ========== AGENT COMMISSION RECORDING (PER PLAYER) ==========
-      if (updatedUser.agentId) {
-        // Fetch the agent to get the actual commission rate (not hardcoded)
-        const agent = await models.Agent.findById(updatedUser.agentId).lean();
-        if (agent && agent.isActive) {
-          const commissionRate = agent.commissionRateBingo; // from agent's settings
-          const commissionFromThisPlayer = commissionPerPlayer; // house commission from this player only
-          const commissionAmount = commissionFromThisPlayer * commissionRate / 100;
-          const transactionKey = `BINGO_${roomData._id}_${userId}`;
+      // ========== AGENT COMMISSION RECORDING (FOR ALL PLAYERS IN THE ROOM) ==========
+      const playersInRoom = roomData.players; // array of userIds
+      const usersWithAgents = await models.User.find({
+        userId: { $in: playersInRoom },
+        agentId: { $ne: null }
+      }).select('userId userName agentId');
 
-          try {
-            await models.AgentCommission.create({
-              agentId: updatedUser.agentId,
-              userId: userId,
-              transactionKey: transactionKey,
-              userName: userName,
-              gameType: 'BINGO',
-              stake: roomStake,
-              winningAmount: totalPrize,
-              commissionRate: commissionRate,
-              commissionAmount: commissionAmount,
-              status: 'completed'
+      if (usersWithAgents.length > 0) {
+        // Fetch all agents’ commission rates in one query
+        const agentIds = [...new Set(usersWithAgents.map(u => u.agentId.toString()))];
+        const agents = await models.Agent.find({ _id: { $in: agentIds } })
+          .select('_id commissionRateBingo');
+        const agentRateMap = new Map(agents.map(a => [a._id.toString(), a.commissionRateBingo]));
+
+        const commissionRecords = [];
+
+        for (const user of usersWithAgents) {
+          const agentId = user.agentId;
+          const commissionRate = agentRateMap.get(agentId.toString());
+          if (!commissionRate) continue; // agent not found or inactive
+
+          const commissionAmount = (commissionPerPlayer * commissionRate) / 100;
+          if (commissionAmount <= 0) continue;
+
+          const transactionKey = `BINGO_${roomData._id}_${user.userId}`;
+
+          commissionRecords.push({
+            agentId,
+            userId: user.userId,
+            transactionKey,
+            userName: user.userName,
+            gameType: 'BINGO',
+            stake: roomStake,
+            winningAmount: 0,           // commission based on house commission, not win amount
+            commissionRate,
+            commissionAmount,
+            status: 'completed',
+            createdAt: new Date()
+          });
+
+          // Update agent’s total earnings
+          await models.Agent.findByIdAndUpdate(agentId, {
+            $inc: { totalEarnings: commissionAmount }
+          });
+        }
+
+        if (commissionRecords.length > 0) {
+          await models.AgentCommission.insertMany(commissionRecords, { ordered: false })
+            .catch(err => {
+              if (err.code === 11000) {
+                console.log('Duplicate commission(s) skipped');
+              } else {
+                console.error('Error inserting commissions:', err);
+              }
             });
-
-            await models.Agent.findByIdAndUpdate(
-              updatedUser.agentId,
-              { $inc: { totalEarnings: commissionAmount } }
-            );
-
-            console.log(`👑 Agent commission recorded: ${commissionAmount.toFixed(2)} ETB for agent ${updatedUser.agentId} from player ${userName} (based on player's house commission ${commissionFromThisPlayer})`);
-          } catch (err) {
-            if (err.code === 11000) {
-              console.log('Agent commission already recorded, skipping');
-            } else {
-              console.error('❌ Error recording agent commission:', err);
-            }
-          }
         }
       }
 
@@ -2088,10 +2106,10 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       };
 
       // 13. NOTIFY ALL PLAYERS (BROADCAST)
-      const playersInRoom = [...roomData.players];
+      const playersInRoomList = [...roomData.players];
 
       // Reset other players' room status
-      const resetPromises = playersInRoom
+      const resetPromises = playersInRoomList
         .filter(playerId => playerId !== userId)
         .map(playerId =>
           models.User.findOneAndUpdate(
@@ -2103,7 +2121,7 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       await Promise.all(resetPromises);
 
       // Send game over to ALL players using roomSockets
-      broadcastGameOver(roomStake, playersInRoom, gameOverData);
+      broadcastGameOver(roomStake, playersInRoomList, gameOverData);
 
       // 14. RESET ROOM FOR NEXT GAME
       setTimeout(() => {
