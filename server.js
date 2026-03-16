@@ -2828,6 +2828,14 @@ app.get('/telegram', async (req, res) => {
             font-weight: 700;
             color: #60a5fa;
           }
+          .copy-btn {
+            background: none;
+            border: none;
+            color: #60a5fa;
+            cursor: pointer;
+            font-size: 20px;
+            margin-left: 8px;
+          }
           .submit-btn {
             width: 100%;
             padding: 14px;
@@ -2969,7 +2977,10 @@ app.get('/telegram', async (req, res) => {
             </div>
             <div class="telebirr-info">
               <div style="color:#8e9aaf; margin-bottom:8px;">Send money to</div>
-              <div class="telebirr-number">${telebirrNumber}</div>
+              <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div class="telebirr-number">${telebirrNumber}</div>
+                <button class="copy-btn" onclick="copyTelebirrNumber()">📋</button>
+              </div>
               <div style="color:#8e9aaf; margin-top:8px;">Min: ${minDeposit} ETB</div>
             </div>
             <div class="form-group">
@@ -3121,6 +3132,18 @@ app.get('/telegram', async (req, res) => {
           }
           function closeWithdrawModal() {
             document.getElementById('withdrawModal').style.display = 'none';
+          }
+
+          function copyTelebirrNumber() {
+            const number = "${telebirrNumber}";
+            navigator.clipboard.writeText(number).then(() => {
+              showMessage('depositMessage', '✅ Copied!', 'success');
+              setTimeout(() => {
+                document.getElementById('depositMessage').style.display = 'none';
+              }, 2000);
+            }).catch(() => {
+              showMessage('depositMessage', '❌ Copy failed', 'error');
+            });
           }
 
           function submitDeposit() {
