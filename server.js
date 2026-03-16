@@ -287,7 +287,10 @@ const transactionSchema = new mongoose.Schema({
   // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentCommission: { type: Number, default: 0 },
-  commissionProcessed: { type: Boolean, default: false }
+  commissionProcessed: { type: Boolean, default: false },
+  // For fallback retry logic
+  commissionRetryCount: { type: Number, default: 0 },
+  commissionSkippedReason: { type: String }
 });
 
 // Stats Schema
@@ -662,6 +665,7 @@ if (agentSystem && agentSystem.setKenoLogic) {
 // 👇 NEW: Make agentSystem available to game-logic
 if (gameLogic && gameLogic.setAgentSystem) {
   gameLogic.setAgentSystem(agentSystem);
+  console.log('✅ agentSystem set in game-logic'); // ADDED for verification
 }
 
 // Load initial Telebirr number into game logic
