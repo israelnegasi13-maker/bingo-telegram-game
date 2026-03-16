@@ -2583,7 +2583,7 @@ app.get('/telegram', async (req, res) => {
             background: #13171c;
             border: 1px solid #262d36;
             border-radius: 24px;
-            padding: 16px 12px;
+            padding: 20px 16px;  /* Increased padding for larger icons */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2595,8 +2595,8 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 60px;
-            height: 60px;
+            width: 80px;         /* was 60px */
+            height: 80px;        /* was 60px */
             border-radius: 16px;
             margin-bottom: 10px;
             object-fit: cover;
@@ -2617,8 +2617,8 @@ app.get('/telegram', async (req, res) => {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 80px;          /* was 60px */
+            height: 80px;         /* was 60px */
             background: #1e293b;
             border-radius: 16px;
             border: 1px solid #3b82f6;
@@ -2633,17 +2633,17 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 18px;
-            height: 18px;
+            width: 22px;          /* was 18px */
+            height: 22px;         /* was 18px */
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            font-size: 10px;
+            font-size: 12px;      /* was 10px */
             font-weight: 600;
           }
           .bingo-word {
-            font-size: 12px;
+            font-size: 14px;      /* was 12px */
             font-weight: 800;
             letter-spacing: 1px;
             color: #fbbf24;
@@ -2653,15 +2653,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 80px;          /* was 60px */
+            height: 80px;         /* was 60px */
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #8b5cf6;
             margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 18px;
+            font-size: 24px;      /* was 18px */
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2671,15 +2671,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 80px;          /* was 60px */
+            height: 80px;         /* was 60px */
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
             border-radius: 16px;
             border: 1px solid #f97316;
             margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 22px;
+            font-size: 28px;      /* was 22px */
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
@@ -2688,15 +2688,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 80px;          /* was 60px */
+            height: 80px;         /* was 60px */
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #eab308;
             margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 22px;
+            font-size: 28px;      /* was 22px */
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
