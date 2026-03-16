@@ -2028,19 +2028,29 @@ async function processBingoClaim(claimId, userId, userName, roomStake, grid, mar
       // ========== RECORD AGENT COMMISSION (if user has an agent) ==========
       if (updatedUser.agentId && agentSystemInstance) {
         try {
-          await agentSystemInstance.recordCommission(
+          const commissionAmount = await agentSystemInstance.recordCommission(
             updatedUser.agentId,          // agentId
             userId,                       // userId
             'BINGO',                      // gameType
             roomStake,                    // stake
             totalPrize,                   // winningAmount
             winTransactionDoc._id,        // transactionId (for duplicate prevention)
-            commissionPerPlayer           // baseAmount (house commission from this player)
+            commissionPerPlayer            // baseAmount (house commission from this player)
           );
-          console.log(`👑 Agent commission recorded via agentSystem for player ${userName}`);
+          if (commissionAmount > 0) {
+            console.log(`✅ [BINGO WIN] Agent commission recorded: ${commissionAmount.toFixed(2)} ETB for player ${userName}`);
+          } else {
+            console.log(`⚠️ [BINGO WIN] Agent commission returned 0 for player ${userName} (agentId: ${updatedUser.agentId})`);
+          }
         } catch (err) {
-          console.error('❌ Error recording agent commission via agentSystem:', err);
-          // The fallback job will retry using the transaction data
+          console.error(`❌ [BINGO WIN] Error recording agent commission for ${userName}:`, err);
+        }
+      } else {
+        if (!updatedUser.agentId) {
+          console.log(`ℹ️ [BINGO WIN] No agent assigned to player ${userName}, commission skipped.`);
+        }
+        if (!agentSystemInstance) {
+          console.log(`ℹ️ [BINGO WIN] agentSystemInstance not available in game-logic.`);
         }
       }
 
