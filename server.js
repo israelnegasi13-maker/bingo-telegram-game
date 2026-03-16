@@ -11,13 +11,12 @@ const fetch = require('node-fetch');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
-const crypto = require('crypto');  // added for generating app user IDs
+const crypto = require('crypto');
 
 // Import game logic modules
 const gameLogic = require('./game-logic');
 const kenoLogic = require('./keno-logic');
 const crashLogic = require('./crash-logic');
-// ========== NEW: Import Slots Galaxy ==========
 const slotsLogic = require('./slots-logic');
 
 // Import Agent System
@@ -25,14 +24,14 @@ const AgentSystem = require('./agent-logic');
 
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.'
 });
 
 // ========== MONGODB CONNECTION WITH RETRY LOGIC ==========
 const MAX_RETRIES = 5;
-const RETRY_DELAY = 5000; // 5 seconds
+const RETRY_DELAY = 5000;
 
 async function connectWithRetry(retries = MAX_RETRIES) {
   try {
@@ -43,27 +42,24 @@ async function connectWithRetry(retries = MAX_RETRIES) {
       socketTimeoutMS: 45000,
       maxPoolSize: 50,
       minPoolSize: 10,
-      family: 4 // Use IPv4, skip trying IPv6
+      family: 4
     });
     console.log('✅ MongoDB Connected');
     await initializeTelebirrNumber();
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
-    
     if (retries > 0) {
       console.log(`🔄 Retrying connection in ${RETRY_DELAY/1000} seconds... (${retries} retries left)`);
       setTimeout(() => connectWithRetry(retries - 1), RETRY_DELAY);
     } else {
       console.error('❌ Failed to connect to MongoDB after multiple attempts');
-      // Don't exit in production, let the server run in degraded mode
     }
   }
 }
-
 connectWithRetry();
 
 // ========== CREATE REQUIRED DIRECTORIES AND FILES ==========
-const requiredDirs = ['public', 'assets/images', 'assets/sounds']; // added assets subfolders
+const requiredDirs = ['public', 'assets/images', 'assets/sounds'];
 const requiredFiles = {
   'public/index.html': `<!DOCTYPE html>
 <html>
@@ -111,7 +107,6 @@ const requiredFiles = {
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
-    // Read userId and name from URL (passed from /telegram or /app)
     const urlParams = new URLSearchParams(window.location.search);
     const userId = urlParams.get('userId');
     const name = urlParams.get('name') || 'Player';
@@ -194,7 +189,6 @@ const requiredFiles = {
 </html>`
 };
 
-// Create directories and files if they don't exist
 requiredDirs.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -210,11 +204,10 @@ Object.entries(requiredFiles).forEach(([filePath, content]) => {
 });
 
 // ========== MONGODB MODELS ==========
-// User Schema
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   userName: { type: String, required: true },
-  password: { type: String, select: false }, // Added for app login (hashed)
+  password: { type: String, select: false },
   balance: { type: Number, default: 0.00 },
   referralCode: { type: String, unique: true },
   currentRoom: { type: Number, default: null },
@@ -230,17 +223,14 @@ const userSchema = new mongoose.Schema({
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' },
   phoneNumber: { type: String },
-  // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
-  referredBy: { type: String, default: null }, // 'telegram_link', 'manual', 'bulk_manual', 'admin_assigned'
+  referredBy: { type: String, default: null },
   agentCommissionEarned: { type: Number, default: 0 },
-  // ========== NEW: Bot management fields ==========
   isBot: { type: Boolean, default: false },
   botActive: { type: Boolean, default: true }
 });
 
-// Room Schema
 const roomSchema = new mongoose.Schema({
   stake: { type: Number, required: true },
   players: [String],
@@ -262,14 +252,13 @@ const roomSchema = new mongoose.Schema({
     isFourCorners: Boolean,
     commissionCollected: Number,
     basePrize: Number,
-    agentCommission: { type: Number, default: 0 } // Agent commission from this game
+    agentCommission: { type: Number, default: 0 }
   }],
   lastBoxUpdate: { type: Date, default: Date.now },
   countdownStartTime: { type: Date, default: null },
   countdownStartedWith: { type: Number, default: 0 }
 });
 
-// Transaction Schema
 const transactionSchema = new mongoose.Schema({
   type: { type: String, required: true },
   userId: { type: String, required: true },
@@ -284,13 +273,11 @@ const transactionSchema = new mongoose.Schema({
   approvedBy: { type: String },
   approvedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
-  // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentCommission: { type: Number, default: 0 },
   commissionProcessed: { type: Boolean, default: false }
 });
 
-// Stats Schema
 const statsSchema = new mongoose.Schema({
   date: { type: String, required: true, unique: true },
   totalWagered: { type: Number, default: 0 },
@@ -304,41 +291,34 @@ const statsSchema = new mongoose.Schema({
   totalKenoEarnings: { type: Number, default: 0 },
   totalKenoGames: { type: Number, default: 0 },
   totalKenoWins: { type: Number, default: 0 },
-  // Crash Game stats
   totalCrashWagered: { type: Number, default: 0 },
   totalCrashPayouts: { type: Number, default: 0 },
   totalCrashGames: { type: Number, default: 0 },
   totalCrashPlayers: { type: Number, default: 0 },
-  // ========== NEW: Slots Galaxy stats ==========
   totalSlotsWagered: { type: Number, default: 0 },
   totalSlotsPayouts: { type: Number, default: 0 },
   totalSlotsGames: { type: Number, default: 0 },
   totalSlotsPlayers: { type: Number, default: 0 },
-  // Agent System stats
   agentCommissions: { type: Number, default: 0 },
   agentReferrals: { type: Number, default: 0 },
   activeAgents: { type: Number, default: 0 }
 });
 
-// Setting model for storing Telebirr number and other settings
 const settingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: mongoose.Schema.Types.Mixed, required: true },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// ========== AGENT SYSTEM MODELS ==========
-// Agent Schema
 const agentSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
   name: { type: String, required: true },
   phoneNumber: { type: String },
-  commissionRateBingo: { type: Number, default: 40 }, // 40% commission
-  commissionRateKeno: { type: Number, default: 10 }, // 10% commission
-  commissionRateCrash: { type: Number, default: 10 }, // 10% commission for Crash
-  // ========== NEW: Slots commission rate (10%) ==========
-  commissionRateSlots: { type: Number, default: 10 }, // 10% commission for Slots
+  commissionRateBingo: { type: Number, default: 40 },
+  commissionRateKeno: { type: Number, default: 10 },
+  commissionRateCrash: { type: Number, default: 10 },
+  commissionRateSlots: { type: Number, default: 10 },
   totalEarnings: { type: Number, default: 0 },
   totalReferrals: { type: Number, default: 0 },
   activeReferrals: { type: Number, default: 0 },
@@ -351,15 +331,12 @@ const agentSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Agent Commission Schema
 const agentCommissionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   userId: { type: String, required: true },
-  // 🛠️ FIXED: Added transactionKey with unique sparse index to prevent duplicate commissions
   transactionKey: { type: String, sparse: true, unique: true },
   userName: { type: String },
   telegramUsername: { type: String },
-  // ========== UPDATED: Added 'SLOTS' to gameType enum ==========
   gameType: { type: String, enum: ['BINGO', 'KENO', 'CRASH', 'SLOTS'], required: true },
   stake: { type: Number, required: true },
   winningAmount: { type: Number, required: true },
@@ -368,11 +345,8 @@ const agentCommissionSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' },
   createdAt: { type: Date, default: Date.now }
 });
-
-// 🛠️ FIXED: Ensure unique index on transactionKey (already defined with unique:true, but explicit index is safer)
 agentCommissionSchema.index({ transactionKey: 1 }, { unique: true, sparse: true });
 
-// Agent Transaction Schema
 const agentTransactionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   type: { type: String, enum: ['COMMISSION', 'WITHDRAWAL', 'BONUS'], required: true },
@@ -380,12 +354,10 @@ const agentTransactionSchema = new mongoose.Schema({
   description: { type: String },
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
   createdAt: { type: Date, default: Date.now },
-  // 🛠️ FIXED: Added fields for withdrawal audit trail
   processedAt: { type: Date },
   processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent' }
 });
 
-// Referral Schema (for tracking referral methods)
 const referralSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   userId: { type: String, required: true },
@@ -400,13 +372,10 @@ const referralSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
-
-// Create indexes for faster queries
 referralSchema.index({ agentId: 1, createdAt: -1 });
 referralSchema.index({ userId: 1 }, { unique: true });
 referralSchema.index({ referralCode: 1 });
 
-// Create all models
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
@@ -422,7 +391,6 @@ async function getTelebirrNumber() {
   try {
     const setting = await Setting.findOne({ key: 'telebirrNumber' });
     if (!setting) {
-      // Initialize if not exists
       await initializeTelebirrNumber();
       const newSetting = await Setting.findOne({ key: 'telebirrNumber' });
       return newSetting ? newSetting.value : '0962577855';
@@ -436,31 +404,18 @@ async function getTelebirrNumber() {
 
 async function updateTelebirrNumber(newNumber) {
   try {
-    // Validate Ethiopian phone number format
     if (!/^09[0-9]{8}$/.test(newNumber)) {
       throw new Error('Invalid phone number format. Must be 09xxxxxxxx (10 digits)');
     }
-    
     const result = await Setting.findOneAndUpdate(
       { key: 'telebirrNumber' },
-      { 
-        value: newNumber, 
-        updatedAt: new Date() 
-      },
-      { 
-        upsert: true, 
-        new: true,
-        setDefaultsOnInsert: true 
-      }
+      { value: newNumber, updatedAt: new Date() },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    
     console.log(`✅ Telebirr number updated to: ${newNumber}`);
-    
-    // Update game logic
     if (gameLogic && gameLogic.setTelebirrNumber) {
       gameLogic.setTelebirrNumber(newNumber);
     }
-    
     return result;
   } catch (err) {
     console.error('❌ Error updating Telebirr number:', err);
@@ -478,15 +433,11 @@ async function initializeTelebirrNumber() {
         updatedAt: new Date()
       });
       console.log('✅ Default Telebirr number initialized: 0962577855');
-      
-      // Update game logic with initial value
       if (gameLogic && gameLogic.setTelebirrNumber) {
         gameLogic.setTelebirrNumber('0962577855');
       }
     } else {
       console.log(`✅ Telebirr number loaded from DB: ${exists.value}`);
-      
-      // Update game logic with loaded value
       if (gameLogic && gameLogic.setTelebirrNumber) {
         gameLogic.setTelebirrNumber(exists.value);
       }
@@ -516,7 +467,6 @@ const io = socketIo(server, {
   maxHttpBufferSize: 1e7
 });
 
-// Handle Socket.IO connection errors
 io.engine.on("connection_error", (err) => {
   console.log('Socket.IO connection error:', err.req, err.code, err.message, err.context);
 });
@@ -549,7 +499,6 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files with proper caching
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
   setHeaders: (res, path) => {
@@ -559,7 +508,14 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// ========== NEW: Serve bots panel from root folder ==========
+// ========== Serve sponsor images from root ==========
+app.get('/sponser1.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser1.png'));
+});
+app.get('/sponser2.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser2.png'));
+});
+
 app.get('/bots-panel.html', (req, res) => {
   const filePath = path.join(__dirname, 'bots-panel.html');
   if (fs.existsSync(filePath)) {
@@ -569,22 +525,8 @@ app.get('/bots-panel.html', (req, res) => {
   }
 });
 
-// ========== NEW: Serve assets folder for images and sounds ==========
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-// ========== NEW: Serve sponsor images ==========
-app.get('/sponser1.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser1.png'), (err) => {
-    if (err) res.status(404).send('Sponsor image 1 not found');
-  });
-});
-app.get('/sponser2.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser2.png'), (err) => {
-    if (err) res.status(404).send('Sponsor image 2 not found');
-  });
-});
-
-// Security headers for Telegram
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -595,7 +537,6 @@ app.use((req, res, next) => {
   res.header('X-Content-Type-Options', 'nosniff');
   res.header('X-XSS-Protection', '1; mode=block');
   
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -603,11 +544,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply rate limiting to API routes
 app.use('/api/', apiLimiter);
 
 // ========== INITIALIZE GAME LOGIC ==========
-// Prepare models object for game logic
 const models = {
   User,
   Room,
@@ -620,21 +559,18 @@ const models = {
   Referral
 };
 
-// Ensure MIN_DEPOSIT is set in game logic
 if (gameLogic && gameLogic.CONFIG) {
   gameLogic.CONFIG.MIN_DEPOSIT = gameLogic.CONFIG.MIN_DEPOSIT || 10;
 }
 
-// Pass database models and Telebirr number functions to game logic
 if (gameLogic && gameLogic.initialize) {
   gameLogic.initialize(io, { 
     ...models,
-    getTelebirrNumber, // Pass the function
-    updateTelebirrNumber // Pass the function
+    getTelebirrNumber,
+    updateTelebirrNumber
   });
 }
 
-// Initialize Keno logic
 if (kenoLogic && kenoLogic.initialize) {
   kenoLogic.initialize(io, {
     User,
@@ -646,23 +582,19 @@ if (kenoLogic && kenoLogic.initialize) {
   });
 }
 
-// ========== Initialize Crash Game ==========
 if (crashLogic && crashLogic.initialize) {
   crashLogic.initialize(io, models);
 }
 
-// ========== NEW: Initialize Slots Galaxy ==========
 if (slotsLogic && slotsLogic.initialize) {
   slotsLogic.initialize(io, models);
 }
 
-// Initialize Agent System
 const agentSystem = new AgentSystem(io, models);
 if (agentSystem && agentSystem.initialize) {
   agentSystem.initialize();
 }
 
-// Set game logic references in agent system
 if (agentSystem && agentSystem.setGameLogic) {
   agentSystem.setGameLogic(gameLogic);
 }
@@ -671,7 +603,6 @@ if (agentSystem && agentSystem.setKenoLogic) {
   agentSystem.setKenoLogic(kenoLogic);
 }
 
-// Load initial Telebirr number into game logic
 (async () => {
   const telebirrNumber = await getTelebirrNumber();
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
@@ -681,28 +612,17 @@ if (agentSystem && agentSystem.setKenoLogic) {
 io.on('connection', (socket) => {
   console.log(`🔌 New connection: ${socket.id}`);
   
-  // Set timeout for authentication
   const authTimeout = setTimeout(() => {
     if (!socket.admin && !socket.agentId && !socket.userId) {
       console.log(`⏰ Authentication timeout for socket ${socket.id}`);
       socket.disconnect();
     }
-  }, 30000); // 30 seconds timeout
+  }, 30000);
   
-  // Clear timeout on successful auth
-  socket.once('admin:authSuccess', () => {
-    clearTimeout(authTimeout);
-  });
+  socket.once('admin:authSuccess', () => clearTimeout(authTimeout));
+  socket.once('agent:loginSuccess', () => clearTimeout(authTimeout));
+  socket.once('authenticated', () => clearTimeout(authTimeout));
   
-  socket.once('agent:loginSuccess', () => {
-    clearTimeout(authTimeout);
-  });
-  
-  socket.once('authenticated', () => {
-    clearTimeout(authTimeout);
-  });
-  
-  // ========== INIT EVENT FOR APP/TELEGRAM USERS ==========
   socket.on('init', async (data) => {
     const { userId, userName } = data;
     if (!userId) {
@@ -712,10 +632,8 @@ io.on('connection', (socket) => {
     }
 
     try {
-      // Find or create user
       let user = await User.findOne({ userId });
       if (!user) {
-        // Create new user (should normally exist from registration, but just in case)
         user = new User({
           userId,
           userName: userName || 'AppUser',
@@ -727,21 +645,17 @@ io.on('connection', (socket) => {
         await user.save();
         console.log(`✅ New app user created: ${userName} (${userId})`);
       } else {
-        // Update existing user
         user.lastSeen = new Date();
         user.isOnline = true;
-        if (userName) user.userName = userName; // update display name if changed
+        if (userName) user.userName = userName;
         await user.save();
       }
 
-      // Associate socket with user
       socket.userId = userId;
-      // Optionally add to game logic's user tracking
       if (gameLogic && gameLogic.addUserSocket) {
         gameLogic.addUserSocket(socket, userId);
       }
 
-      // Send current balance and data back
       socket.emit('initSuccess', {
         userId: user.userId,
         userName: user.userName,
@@ -749,7 +663,6 @@ io.on('connection', (socket) => {
         message: 'User initialized'
       });
 
-      // Also broadcast to admin that user came online
       io.emit('userOnline', { userId, userName: user.userName });
     } catch (error) {
       console.error('Error in init:', error);
@@ -757,40 +670,32 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ADMIN AUTHENTICATION ==========
   socket.on('admin:auth', async (password) => {
-    // Accept both the real admin password and 'passwordless' (for bots panel)
     const validPassword = gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123';
     if (password === validPassword || password === 'passwordless') {
       socket.admin = true;
-      socket.join('admins'); // 👈 ADDED: join admin room for broadcasts
-      // 👇 FIX #1: Give admin super‑admin privileges in agent system
+      socket.join('admins');
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
       socket.emit('admin:authSuccess');
       
-      // Send current Telebirr number on successful auth
       const telebirrNumber = await getTelebirrNumber();
       socket.emit('admin:telebirrNumber', telebirrNumber);
       
-      // Send Keno stats
       if (kenoLogic && kenoLogic.getKenoGameStats) {
         const kenoStats = kenoLogic.getKenoGameStats();
         socket.emit('admin:kenoStats', kenoStats);
       }
       
-      // Send Crash stats
       if (crashLogic && crashLogic.getCrashGameStats) {
         const crashStats = crashLogic.getCrashGameStats();
         socket.emit('admin:crashStats', crashStats);
       }
       
-      // ========== NEW: Send Slots stats ==========
       if (slotsLogic && slotsLogic.getSlotsGameStats) {
         const slotsStats = slotsLogic.getSlotsGameStats();
         socket.emit('admin:slotsStats', slotsStats);
       }
       
-      // Send Agent stats
       if (agentSystem && agentSystem.getAgentStatistics) {
         const agentStats = await agentSystem.getAgentStatistics();
         socket.emit('admin:agentStats', agentStats);
@@ -802,13 +707,10 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== WALLET EVENT HANDLERS FOR TELEGRAM ENTRY PAGE ==========
-  // Handle wallet events from Telegram entry page
   socket.on('wallet:depositRequest', async (data) => {
     try {
       console.log(`💰 Deposit request from ${data.userName} (${data.userId}): ${data.amount} ETB, Receipt: ${data.receiptNumber}`);
       
-      // ========== NEW: Check for duplicate pending deposit with same receipt ==========
       const existingDeposit = await models.Transaction.findOne({
         type: 'DEPOSIT_REQUEST',
         receiptNumber: data.receiptNumber,
@@ -820,7 +722,6 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Create a transaction record
       const transaction = new models.Transaction({
         type: 'DEPOSIT_REQUEST',
         userId: data.userId,
@@ -832,16 +733,13 @@ io.on('connection', (socket) => {
       });
       await transaction.save();
       
-      // Get Telebirr number for response
       const telebirrNumber = await getTelebirrNumber();
       
-      // Notify the user
       socket.emit('wallet:depositRequestSuccess', {
         message: 'Deposit request submitted successfully. Admin will process it soon.',
         telebirrNumber: telebirrNumber
       });
       
-      // Notify admin
       io.emit('admin:newDepositRequest', {
         userId: data.userId,
         userName: data.userName,
@@ -863,7 +761,6 @@ io.on('connection', (socket) => {
     try {
       console.log(`💰 Withdrawal request from ${data.userName} (${data.userId}): ${data.amount} ETB to ${data.phoneNumber}`);
       
-      // Check if user has sufficient balance
       const user = await models.User.findOne({ userId: data.userId });
       if (!user) {
         socket.emit('wallet:error', 'User not found');
@@ -878,24 +775,21 @@ io.on('connection', (socket) => {
       const MIN_WITHDRAWAL = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
       const MAX_WITHDRAWAL = gameLogic.CONFIG ? gameLogic.CONFIG.MAX_WITHDRAWAL : 10000;
       
-      // Check minimum withdrawal amount
       if (data.amount < MIN_WITHDRAWAL) {
         socket.emit('wallet:error', `Minimum withdrawal amount is ${MIN_WITHDRAWAL} ETB`);
         return;
       }
       
-      // Check maximum withdrawal amount
       if (data.amount > MAX_WITHDRAWAL) {
         socket.emit('wallet:error', `Maximum withdrawal amount is ${MAX_WITHDRAWAL} ETB`);
         return;
       }
       
-      // ========== NEW: Check for duplicate pending withdrawal (same user, amount, phone) within last 5 minutes ==========
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const existingWithdrawal = await models.Transaction.findOne({
         type: 'WITHDRAW_REQUEST',
         userId: data.userId,
-        amount: -parseFloat(data.amount), // withdrawal is negative amount
+        amount: -parseFloat(data.amount),
         phoneNumber: data.phoneNumber,
         status: 'pending',
         createdAt: { $gte: fiveMinutesAgo }
@@ -906,30 +800,26 @@ io.on('connection', (socket) => {
         return;
       }
       
-      // Create a transaction record
       const transaction = new models.Transaction({
         type: 'WITHDRAW_REQUEST',
         userId: data.userId,
         userName: data.userName,
-        amount: -parseFloat(data.amount), // Negative for withdrawal
+        amount: -parseFloat(data.amount),
         phoneNumber: data.phoneNumber,
         description: `Withdrawal request to phone: ${data.phoneNumber}, Amount: ${data.amount} ETB`,
         status: 'pending'
       });
       await transaction.save();
       
-      // Update user phone number if not set
       if (!user.phoneNumber) {
         user.phoneNumber = data.phoneNumber;
         await user.save();
       }
       
-      // Notify the user
       socket.emit('wallet:withdrawRequestSuccess', {
         message: 'Withdrawal request submitted successfully. Admin will process it soon.'
       });
       
-      // Notify admin
       io.emit('admin:newWithdrawRequest', {
         userId: data.userId,
         userName: data.userName,
@@ -947,113 +837,97 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS ==========
-  // Agent login
+  // ========== AGENT SYSTEM SOCKET EVENTS (full list from previous version) ==========
   socket.on('agent:login', (data) => {
     if (agentSystem && agentSystem.handleAgentLogin) {
       agentSystem.handleAgentLogin(socket, data);
     }
   });
   
-  // Agent verify token for auto login
   socket.on('agent:verifyToken', (data) => {
     if (agentSystem && agentSystem.handleVerifyAgentToken) {
       agentSystem.handleVerifyAgentToken(socket, data);
     }
   });
   
-  // Agent dashboard data
   socket.on('agent:dashboard', () => {
     if (agentSystem && agentSystem.handleAgentDashboard) {
       agentSystem.handleAgentDashboard(socket);
     }
   });
 
-  // Agent get dashboard data
   socket.on('agent:getDashboard', () => {
     if (agentSystem && agentSystem.handleAgentDashboard) {
       agentSystem.handleAgentDashboard(socket);
     }
   });
   
-  // Generate referral link
   socket.on('agent:generateReferralLink', () => {
     if (agentSystem && agentSystem.handleGenerateReferralLink) {
       agentSystem.handleGenerateReferralLink(socket);
     }
   });
   
-  // Manual referral assignment by agent
   socket.on('agent:manualReferralAssignment', (data) => {
     if (agentSystem && agentSystem.handleManualReferralAssignmentByAgent) {
       agentSystem.handleManualReferralAssignmentByAgent(socket, data);
     }
   });
   
-  // Bulk manual referral assignment
   socket.on('agent:bulkManualReferral', (data) => {
     if (agentSystem && agentSystem.handleBulkManualReferral) {
       agentSystem.handleBulkManualReferral(socket, data);
     }
   });
   
-  // Search users for assignment
   socket.on('agent:searchUsers', (data) => {
     if (agentSystem && agentSystem.handleSearchUsers) {
       agentSystem.handleSearchUsers(socket, data);
     }
   });
   
-  // Get user suggestions
   socket.on('agent:getUserSuggestions', () => {
     if (agentSystem && agentSystem.handleGetUserSuggestions) {
       agentSystem.handleGetUserSuggestions(socket);
     }
   });
   
-  // Get agent report
   socket.on('agent:report', (data) => {
     if (agentSystem && agentSystem.handleAgentReport) {
       agentSystem.handleAgentReport(socket, data);
     }
   });
 
-  // Get agent report (alternative name)
   socket.on('agent:getReport', (data) => {
     if (agentSystem && agentSystem.handleAgentReport) {
       agentSystem.handleAgentReport(socket, data);
     }
   });
   
-  // Agent withdrawal request
   socket.on('agent:withdrawRequest', (data) => {
     if (agentSystem && agentSystem.handleAgentWithdrawRequest) {
       agentSystem.handleAgentWithdrawRequest(socket, data);
     }
   });
   
-  // Get agent withdrawal history
   socket.on('agent:withdrawalHistory', () => {
     if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
       agentSystem.handleGetWithdrawalHistory(socket);
     }
   });
 
-  // Get agent withdrawal history (alternative name)
   socket.on('agent:getWithdrawalHistory', () => {
     if (agentSystem && agentSystem.handleGetWithdrawalHistory) {
       agentSystem.handleGetWithdrawalHistory(socket);
     }
   });
   
-  // Test user database
   socket.on('agent:testUserDatabase', () => {
     if (agentSystem && agentSystem.testUserDatabase) {
       agentSystem.testUserDatabase(socket);
     }
   });
   
-  // Get agent referral tree
   socket.on('agent:getReferralTree', (data) => {
     if (agentSystem && agentSystem.getAgentReferralTree) {
       const agentId = data.agentId || socket.agentId;
@@ -1063,7 +937,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Get agent leaderboard
   socket.on('agent:getLeaderboard', (data) => {
     if (agentSystem && agentSystem.getAgentLeaderboard) {
       const limit = data.limit || 10;
@@ -1074,7 +947,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Get agent performance metrics
   socket.on('agent:getPerformanceMetrics', (data) => {
     if (agentSystem && agentSystem.getAgentPerformanceMetrics) {
       const agentId = data.agentId || socket.agentId;
@@ -1084,7 +956,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Get agent statistics
   socket.on('agent:getAgentStatistics', () => {
     if (agentSystem && agentSystem.getAgentStatistics) {
       agentSystem.getAgentStatistics()
@@ -1093,7 +964,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Get agent system status
   socket.on('agent:getSystemStatus', () => {
     if (agentSystem && agentSystem.getSystemStatus) {
       const status = agentSystem.getSystemStatus();
@@ -1101,15 +971,13 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== SUPER ADMIN AGENT EVENTS ==========
-  // Get all agents (super admin only)
+  // Super admin agent events
   socket.on('admin:getAllAgents', () => {
     if (socket.admin && agentSystem && agentSystem.handleGetAllAgents) {
       agentSystem.handleGetAllAgents(socket);
     }
   });
 
-  // Get all agents (for agent admin panel) - FIXED: Admin bypass added
   socket.on('agent:getAllAgents', async () => {
     if (socket.admin) {
       try {
@@ -1126,42 +994,36 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Create new agent (super admin only)
   socket.on('admin:createAgent', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
       agentSystem.handleCreateAgent(socket, data);
     }
   });
 
-  // Create new agent (for agent admin panel)
   socket.on('agent:createAgent', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleCreateAgent) {
       agentSystem.handleCreateAgent(socket, data);
     }
   });
   
-  // Update agent (super admin only)
   socket.on('admin:updateAgent', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleUpdateAgent) {
       agentSystem.handleUpdateAgent(socket, data);
     }
   });
   
-  // Delete agent (super admin only)
   socket.on('admin:deleteAgent', (agentId) => {
     if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
       agentSystem.handleDeleteAgent(socket, agentId);
     }
   });
 
-  // Delete agent (for agent admin panel)
   socket.on('agent:deleteAgent', (agentId) => {
     if (socket.admin && agentSystem && agentSystem.handleDeleteAgent) {
       agentSystem.handleDeleteAgent(socket, agentId);
     }
   });
   
-  // Get agent system status (admin)
   socket.on('admin:getAgentSystemStatus', () => {
     if (socket.admin && agentSystem && agentSystem.getSystemStatus) {
       const status = agentSystem.getSystemStatus();
@@ -1169,14 +1031,12 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Manual referral assignment by admin
   socket.on('admin:manualReferralAssignment', (data) => {
     if (socket.admin && agentSystem && agentSystem.handleManualReferralAssignment) {
       agentSystem.handleManualReferralAssignment(socket, data);
     }
   });
   
-  // Get agent leaderboard (super admin only)
   socket.on('admin:getAgentLeaderboard', async (data) => {
     if (socket.admin && agentSystem && agentSystem.getAgentLeaderboard) {
       try {
@@ -1191,8 +1051,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 🛠️ FIXED: Added admin events for agent withdrawal approval
-  // ========== AGENT WITHDRAWAL APPROVAL (ADMIN) ==========
+  // Agent withdrawal approval (admin)
   socket.on('admin:getPendingAgentWithdrawals', async () => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1207,7 +1066,6 @@ io.on('connection', (socket) => {
         socket.emit('admin:error', 'Failed to get pending withdrawals');
       }
     } else {
-      // Fallback if method not yet implemented in agent-logic.js
       socket.emit('admin:error', 'Agent withdrawal system not fully implemented');
     }
   });
@@ -1221,7 +1079,6 @@ io.on('connection', (socket) => {
       try {
         const result = await agentSystem.approveAgentWithdrawal(transactionId, socket.agentData?._id);
         socket.emit('admin:agentWithdrawalApproved', result);
-        // Optionally refresh agent dashboard for the affected agent
         if (result.agentId) {
           agentSystem.forceRefreshAgentDashboard(result.agentId).catch(console.error);
         }
@@ -1252,51 +1109,43 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== ADDITIONAL AGENT SYSTEM EVENTS (FIXED) ==========
-  // 🛠️ FIXED: Added missing agent event handlers for full connectivity
-  // Agent logout
+  // Additional agent events
   socket.on('agent:logout', () => {
     if (agentSystem && agentSystem.handleAgentLogout) {
       agentSystem.handleAgentLogout(socket);
     }
   });
 
-  // Refresh dashboard
   socket.on('agent:refreshDashboard', () => {
     if (agentSystem && agentSystem.handleRefreshDashboard) {
       agentSystem.handleRefreshDashboard(socket);
     }
   });
 
-  // Check referral status
   socket.on('agent:checkReferralStatus', (data) => {
     if (agentSystem && agentSystem.handleCheckReferralStatus) {
       agentSystem.handleCheckReferralStatus(socket, data);
     }
   });
 
-  // Test commission (debug)
   socket.on('agent:testCommission', (data) => {
     if (agentSystem && agentSystem.handleTestCommission) {
       agentSystem.handleTestCommission(socket, data);
     }
   });
 
-  // Check commission status (debug)
   socket.on('agent:checkCommissionStatus', (data) => {
     if (agentSystem && agentSystem.checkCommissionStatus) {
       agentSystem.checkCommissionStatus(socket, data);
     }
   });
 
-  // Emergency sync
   socket.on('agent:emergencySync', () => {
     if (agentSystem && agentSystem.handleEmergencySync) {
       agentSystem.handleEmergencySync(socket);
     }
   });
 
-  // Heartbeat acknowledgement
   socket.on('agent:heartbeat_ack', (data) => {
     if (agentSystem && agentSystem.handleHeartbeatAck) {
       agentSystem.handleHeartbeatAck(socket, data);
@@ -1304,7 +1153,6 @@ io.on('connection', (socket) => {
   });
   
   // ========== TELEBIRR NUMBER EVENTS ==========
-  // Get Telebirr number (admin only)
   socket.on('admin:getTelebirrNumber', async () => {
     if (socket.admin) {
       const number = await getTelebirrNumber();
@@ -1312,29 +1160,15 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Update Telebirr number (admin only)
   socket.on('admin:updateTelebirrNumber', async (newNumber) => {
     if (socket.admin) {
       try {
         const result = await updateTelebirrNumber(newNumber);
         const updatedNumber = result.value;
-        
-        // Broadcast to all admin sockets
-        io.emit('admin:telebirrNumberUpdated', { 
-          telebirrNumber: updatedNumber,
-          updatedAt: result.updatedAt
-        });
-        
-        // Broadcast to all players
-        io.emit('telebirrNumberUpdate', {
-          telebirrNumber: updatedNumber,
-          timestamp: new Date().toISOString()
-        });
-        
+        io.emit('admin:telebirrNumberUpdated', { telebirrNumber: updatedNumber, updatedAt: result.updatedAt });
+        io.emit('telebirrNumberUpdate', { telebirrNumber: updatedNumber, timestamp: new Date().toISOString() });
         socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
         console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
-        
-        // Log the transaction
         const adminTransaction = new Transaction({
           type: 'TELEBIRR_UPDATE',
           userId: 'admin',
@@ -1344,7 +1178,6 @@ io.on('connection', (socket) => {
           description: `Telebirr number updated to ${updatedNumber}`
         });
         await adminTransaction.save();
-        
       } catch (error) {
         console.error('❌ Error updating Telebirr number:', error);
         socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
@@ -1353,7 +1186,6 @@ io.on('connection', (socket) => {
   });
   
   // ========== KENO EVENTS ==========
-  // Admin: Get Keno stats
   socket.on('admin:getKenoStats', () => {
     if (socket.admin && kenoLogic && kenoLogic.getKenoGameStats) {
       const stats = kenoLogic.getKenoGameStats();
@@ -1361,7 +1193,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Admin: Get detailed Keno stats
   socket.on('admin:getKenoDetailedStats', () => {
     if (socket.admin && kenoLogic && kenoLogic.getKenoDetailedStats) {
       const stats = kenoLogic.getKenoDetailedStats();
@@ -1369,7 +1200,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Admin: Get Keno player list
   socket.on('admin:getKenoPlayers', () => {
     if (socket.admin && kenoLogic && kenoLogic.getKenoPlayerList) {
       const players = kenoLogic.getKenoPlayerList();
@@ -1377,7 +1207,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Admin: Reset Keno earnings
   socket.on('admin:resetKenoEarnings', async () => {
     if (socket.admin && kenoLogic && kenoLogic.resetKenoEarnings) {
       try {
@@ -1389,7 +1218,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Admin: Force start Keno round
   socket.on('admin:forceStartKenoRound', () => {
     if (socket.admin && kenoLogic && kenoLogic.forceStartKenoRound) {
       const success = kenoLogic.forceStartKenoRound();
@@ -1398,12 +1226,10 @@ io.on('connection', (socket) => {
   });
   
   // ========== CRASH GAME SOCKET EVENTS ==========
-  // Handle Crash socket connection
   if (crashLogic && crashLogic.handleCrashConnection) {
     crashLogic.handleCrashConnection(socket);
   }
   
-  // Admin: Get Crash stats
   socket.on('admin:getCrashStats', () => {
     if (socket.admin && crashLogic && crashLogic.getCrashGameStats) {
       const stats = crashLogic.getCrashGameStats();
@@ -1411,7 +1237,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin: Force crash round
   socket.on('admin:forceCrashRound', () => {
     if (socket.admin && crashLogic && crashLogic.forceCrashRound) {
       const success = crashLogic.forceCrashRound();
@@ -1419,7 +1244,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin: Reset crash earnings
   socket.on('admin:resetCrashEarnings', async () => {
     if (socket.admin && crashLogic && crashLogic.resetCrashEarnings) {
       const stats = await crashLogic.resetCrashEarnings();
@@ -1427,7 +1251,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin: Get crash player list
   socket.on('admin:getCrashPlayers', () => {
     if (socket.admin && crashLogic && crashLogic.getCrashPlayerList) {
       const players = crashLogic.getCrashPlayerList();
@@ -1436,12 +1259,10 @@ io.on('connection', (socket) => {
   });
   
   // ========== NEW: SLOTS GALAXY SOCKET EVENTS ==========
-  // Handle Slots socket connection
   if (slotsLogic && slotsLogic.handleSlotsConnection) {
     slotsLogic.handleSlotsConnection(socket);
   }
 
-  // Admin: Get Slots stats
   socket.on('admin:getSlotsStats', () => {
     if (socket.admin && slotsLogic && slotsLogic.getSlotsGameStats) {
       const stats = slotsLogic.getSlotsGameStats();
@@ -1449,7 +1270,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin: Reset Slots earnings
   socket.on('admin:resetSlotsEarnings', async () => {
     if (socket.admin && slotsLogic && slotsLogic.resetSlotsEarnings) {
       const stats = await slotsLogic.resetSlotsEarnings();
@@ -1458,42 +1278,30 @@ io.on('connection', (socket) => {
   });
   
   // ========== HOUSE EARNINGS ==========
-  // 👇 FIX #2: Completely rewritten reset handler
   socket.on('admin:resetHouseEarnings', async () => {
     if (!socket.admin) return;
 
     try {
-      // 1. Calculate current total house earnings
       const houseEarningsTransactions = await Transaction.find({ type: 'HOUSE_EARNINGS' });
       const currentTotal = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
 
       if (currentTotal === 0) {
-        socket.emit('admin:houseEarningsReset', {
-          previousAmount: 0,
-          message: 'House earnings are already zero.'
-        });
+        socket.emit('admin:houseEarningsReset', { previousAmount: 0, message: 'House earnings are already zero.' });
         return;
       }
 
-      // 2. Create a negative HOUSE_EARNINGS transaction to zero out
       const resetTransaction = new Transaction({
-        type: 'HOUSE_EARNINGS',               // 👈 Keep the same type
+        type: 'HOUSE_EARNINGS',
         userId: 'system',
         userName: 'System',
-        amount: -currentTotal,                 // 👈 Negative amount
+        amount: -currentTotal,
         admin: true,
         description: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
       });
       await resetTransaction.save();
 
-      // 3. Notify the requesting admin
-      socket.emit('admin:houseEarningsReset', {
-        previousAmount: currentTotal,
-        resetAmount: 0,
-        message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
-      });
+      socket.emit('admin:houseEarningsReset', { previousAmount: currentTotal, resetAmount: 0, message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB` });
 
-      // 4. Immediately refresh stats for all admin sockets
       if (gameLogic && gameLogic.handleAdminGetData) {
         io.sockets.sockets.forEach(s => {
           if (s.admin) gameLogic.handleAdminGetData(s);
@@ -1507,7 +1315,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== EXISTING ADMIN EVENTS (DELEGATED TO GAME LOGIC) ==========
+  // ========== EXISTING ADMIN EVENTS ==========
   socket.on('admin:getData', () => {
     if (socket.admin && gameLogic && gameLogic.handleAdminGetData) {
       gameLogic.handleAdminGetData(socket);
@@ -1581,7 +1389,6 @@ io.on('connection', (socket) => {
   });
   
   // ========== KENO GAME SOCKET EVENTS ==========
-  // Handle Keno socket connection
   if (kenoLogic && kenoLogic.handleKenoConnection) {
     kenoLogic.handleKenoConnection(socket);
   }
@@ -1595,35 +1402,29 @@ io.on('connection', (socket) => {
       console.log(`🔑 Admin disconnected: ${socket.id}`);
     }
     
-    // Handle player disconnect in game logic
     if (gameLogic && gameLogic.handleDisconnect) {
       gameLogic.handleDisconnect(socket);
     }
     
-    // Handle Keno disconnection
     if (kenoLogic && kenoLogic.handleKenoDisconnect) {
       kenoLogic.handleKenoDisconnect(socket);
     }
     
-    // Handle Crash disconnection
     if (crashLogic && crashLogic.handleCrashDisconnect) {
       crashLogic.handleCrashDisconnect(socket);
     }
     
-    // ========== NEW: Handle Slots disconnection ==========
     if (slotsLogic && slotsLogic.handleSlotsDisconnect) {
       slotsLogic.handleSlotsDisconnect(socket);
     }
     
-    // Handle Agent disconnection
     if (agentSystem && agentSystem.handleAgentDisconnect) {
       agentSystem.handleAgentDisconnect(socket);
     }
   });
   
-  // ========== GAME EVENTS (FORWARDED TO GAME LOGIC) ==========
+  // ========== GAME EVENTS ==========
   socket.on('join', (data) => {
-    // 🛠️ FIXED: Added .catch() to handle promise rejection
     if (data.referralCode && agentSystem && agentSystem.processReferral) {
       agentSystem.processReferral(data.userId, data.referralCode).catch(err => {
         console.error('❌ Error processing referral:', err);
@@ -1654,12 +1455,10 @@ io.on('connection', (socket) => {
   });
   
   socket.on('depositRequest', (data) => {
-    // Forward to wallet handler
     socket.emit('wallet:depositRequest', data);
   });
   
   socket.on('withdrawRequest', (data) => {
-    // Forward to wallet handler
     socket.emit('wallet:withdrawRequest', data);
   });
   
@@ -1669,7 +1468,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== TELEBIRR NUMBER REQUEST ==========
   socket.on('getTelebirrNumber', async (callback) => {
     try {
       const telebirrNumber = await getTelebirrNumber();
@@ -1686,10 +1484,8 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT PORTAL REQUEST ==========
   socket.on('getAgentPortal', async () => {
     try {
-      // Send agent portal HTML
       socket.emit('agent:portal', `
         <html>
           <head>
@@ -1742,13 +1538,11 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Handle socket errors
   socket.on('error', (error) => {
     console.error(`Socket error for ${socket.id}:`, error);
   });
 
-  // ========== BOT MANAGEMENT EVENTS (ADMIN ONLY) ==========
-  // 👇 NEW: Get list of all bots
+  // ========== BOT MANAGEMENT EVENTS ==========
   socket.on('admin:getBotsList', async () => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1763,7 +1557,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👇 NEW: Add funds to a bot
   socket.on('admin:addBotFunds', async ({ botId, amount }) => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1772,7 +1565,6 @@ io.on('connection', (socket) => {
     try {
       const result = await gameLogic.addBotFunds(botId, parseFloat(amount));
       socket.emit('admin:botFundsAdded', result);
-      // Refresh list for all admin sockets
       const updatedList = await gameLogic.getBotsList();
       io.to('admins').emit('admin:botsList', updatedList);
     } catch (err) {
@@ -1780,7 +1572,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👇 NEW: Rename a bot
   socket.on('admin:renameBot', async ({ botId, newName }) => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1796,7 +1587,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👇 NEW: Activate/deactivate a bot
   socket.on('admin:setBotActive', async ({ botId, active }) => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1812,7 +1602,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 👇 NEW: Add a new bot
   socket.on('admin:addNewBot', async ({ name }) => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1839,13 +1628,11 @@ app.get('/', async (req, res) => {
     const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
     const kenoPlayers = kenoLogic && kenoLogic.getKenoPlayersCount ? kenoLogic.getKenoPlayersCount() : 0;
     const kenoOnline = kenoLogic && kenoLogic.getOnlinePlayersCount ? kenoLogic.getOnlinePlayersCount() : 0;
-    // ========== Crash stats ==========
     const crashStats = crashLogic && crashLogic.getCrashGameStats ? crashLogic.getCrashGameStats() : { 
       currentRound: { totalPlayers: 0, totalBets: 0 },
       totalGames: 0,
       totalWagered: 0
     };
-    // ========== Slots stats ==========
     const slotsStats = slotsLogic && slotsLogic.getSlotsGameStats ? slotsLogic.getSlotsGameStats() : {
       totalGames: 0,
       totalWagered: 0,
@@ -1853,7 +1640,6 @@ app.get('/', async (req, res) => {
     };
     const telebirrNumber = await getTelebirrNumber();
     
-    // Get agent statistics
     const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
       totalAgents: 0, 
       activeAgents: 0, 
@@ -1863,12 +1649,10 @@ app.get('/', async (req, res) => {
       pendingWithdrawals: 0 
     };
     
-    // Get referral statistics
     const totalUsers = await User.countDocuments();
     const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
     const usersWithoutAgents = totalUsers - usersWithAgents;
     
-    // Get referral methods breakdown
     const telegramReferrals = await Referral.countDocuments({ referralMethod: 'telegram_link' });
     const manualReferrals = await Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
     const adminReferrals = await Referral.countDocuments({ referralMethod: 'admin_assigned' });
@@ -2333,7 +2117,6 @@ app.get('/app', (req, res) => {
       </div>
 
       <script>
-        // --- Auto‑redirect if already logged in ---
         (function() {
           const storedUserId = localStorage.getItem('appUserId');
           const storedUserName = localStorage.getItem('appUserName');
@@ -2384,7 +2167,6 @@ app.get('/app', (req, res) => {
               btn.disabled = false;
               btn.textContent = 'Login';
             } else {
-              // Store credentials for auto‑login
               localStorage.setItem('appUserId', data.userId);
               localStorage.setItem('appUserName', data.userName);
               window.location.href = '/telegram?userId=' + encodeURIComponent(data.userId) + '&name=' + encodeURIComponent(data.userName);
@@ -2407,11 +2189,9 @@ app.get('/app', (req, res) => {
           const successDiv = document.getElementById('regSuccess');
           const btn = document.querySelector('#registerForm .btn');
 
-          // Clear previous messages
           errorDiv.style.display = 'none';
           successDiv.style.display = 'none';
 
-          // Validation
           if (!username || !password) {
             errorDiv.textContent = 'Username and password required';
             errorDiv.style.display = 'block';
@@ -2448,7 +2228,6 @@ app.get('/app', (req, res) => {
               successDiv.textContent = 'Registration successful! Redirecting...';
               successDiv.style.display = 'block';
 
-              // Store credentials for auto‑login
               localStorage.setItem('appUserId', data.userId);
               localStorage.setItem('appUserName', data.userName);
 
@@ -2482,34 +2261,18 @@ app.get('/health', async (req, res) => {
       nodeVersion: process.version,
       platform: process.platform
     };
-    
     res.json(health);
   } catch (error) {
-    res.status(500).json({ 
-      status: 'error',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    res.status(500).json({ status: 'error', error: error.message, timestamp: new Date().toISOString() });
   }
 });
 
 app.get('/ready', async (req, res) => {
   try {
-    // Check MongoDB connection
     await mongoose.connection.db.admin().ping();
-    
-    res.json({
-      status: 'ready',
-      database: 'connected',
-      timestamp: new Date().toISOString()
-    });
+    res.json({ status: 'ready', database: 'connected', timestamp: new Date().toISOString() });
   } catch (error) {
-    res.status(503).json({
-      status: 'not_ready',
-      database: 'disconnected',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    res.status(503).json({ status: 'not_ready', database: 'disconnected', error: error.message, timestamp: new Date().toISOString() });
   }
 });
 
@@ -2544,11 +2307,9 @@ app.get('/status', (req, res) => {
 
 // ========== AGENT PORTAL PAGE ==========
 app.get('/agent', (req, res) => {
-  // Serve the agent-dashboard.html file
   res.sendFile(path.join(__dirname, 'agent-dashboard.html'), (err) => {
     if (err) {
       console.error('Error serving agent dashboard:', err);
-      // Fallback to a simple HTML page
       res.send(`
         <!DOCTYPE html>
         <html>
@@ -2609,7 +2370,6 @@ app.get('/agent', (req, res) => {
             }
             
             socket.on('agent:loginSuccess', (data) => {
-              // Redirect to full agent dashboard
               window.location.href = '/agent-dashboard.html';
             });
             
@@ -2626,19 +2386,17 @@ app.get('/agent', (req, res) => {
   });
 });
 
-// Serve Agent Portal HTML (fallback if file doesn't exist)
 app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH SPONSOR BOARD, WALLET EMOJI, SMALLER GAMES GRID ==========
+// ========== FINAL TELEGRAM ENTRY PAGE - COMPACT WALLET BUTTON ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
-    // Load custom icons from root folder
     let bingoIconBase64 = '', kenoIconBase64 = '', crashIconBase64 = '', slotsIconBase64 = '';
     try {
       const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
@@ -2660,7 +2418,7 @@ app.get('/telegram', async (req, res) => {
       const slotsBuffer = fs.readFileSync(slotsPath);
       slotsIconBase64 = slotsBuffer.toString('base64');
     } catch (e) {}
-
+    
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -2687,18 +2445,17 @@ app.get('/telegram', async (req, res) => {
           .container {
             max-width: 400px;
             margin: 0 auto;
-            padding: 12px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 24px;
           }
 
-          /* Header with logo, greeting and wallet emoji */
           .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding-bottom: 4px;
+            padding-bottom: 8px;
             border-bottom: 1px solid #20262e;
           }
 
@@ -2712,132 +2469,119 @@ app.get('/telegram', async (req, res) => {
             color: #8b5cf6;
           }
 
-          .header-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-          }
-
           .user-greeting {
             font-size: 14px;
             color: #8e9aaf;
           }
 
+          /* Compact wallet button */
+          .wallet-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #13171c;
+            border: 1px solid #3b82f6;
+            border-radius: 40px;
+            padding: 8px 16px;
+            margin: 0 auto 8px auto;
+            cursor: pointer;
+            user-select: none;
+          }
           .wallet-emoji {
             font-size: 24px;
-            cursor: pointer;
-            background: #20262e;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
           }
-          .wallet-emoji:active {
-            background: #2d343e;
+          .balance-display {
+            font-size: 18px;
+            font-weight: 600;
           }
-
-          /* Wallet popup (hidden by default) */
-          .wallet-popup {
-            position: absolute;
-            top: 70px;
-            right: 12px;
-            background: #13171c;
-            border: 1px solid #262d36;
-            border-radius: 20px;
-            padding: 16px;
-            width: 200px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            z-index: 100;
-            display: none;
-          }
-          .wallet-popup.show {
-            display: block;
-          }
-          .popup-balance {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            text-align: center;
-          }
-          .popup-balance small {
+          .balance-display small {
             font-size: 12px;
             color: #8e9aaf;
-            margin-left: 4px;
+            margin-left: 2px;
           }
-          .popup-actions {
-            display: flex;
-            gap: 8px;
+
+          .wallet-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #1e252e;
+            border: 1px solid #3b82f6;
+            border-radius: 24px;
+            padding: 12px;
+            width: 180px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+            display: none;
+            z-index: 100;
           }
-          .popup-btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 40px;
+          .wallet-menu.active {
+            display: block;
+          }
+          .wallet-menu button {
+            width: 100%;
+            padding: 12px;
+            margin: 4px 0;
             border: none;
+            border-radius: 40px;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 16px;
             background: #20262e;
             color: white;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
           }
-          .popup-btn.primary {
+          .wallet-menu button.deposit {
             background: #3b82f6;
           }
-          .popup-btn:active {
-            background: #2d343e;
+          .wallet-menu button.withdraw {
+            background: #10b981;
           }
-          .popup-btn.primary:active {
-            background: #2563eb;
+          .wallet-menu button:active {
+            filter: brightness(1.2);
           }
 
-          /* Sponsor board */
           .sponsor-board {
             width: 100%;
-            height: 100px;
-            border-radius: 16px;
-            overflow: hidden;
+            height: 180px;
             background: #13171c;
+            border-radius: 20px;
+            overflow: hidden;
             border: 1px solid #262d36;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 8px 0;
           }
-          .sponsor-image {
+          .sponsor-board img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-          }
-          .sponsor-fallback {
-            color: #8e9aaf;
-            font-size: 14px;
-            text-align: center;
+            display: block;
           }
 
           .section-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 16px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             color: #f0f4fa;
           }
 
-          /* Smaller games grid */
           .games-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            gap: 16px;
           }
 
           .game-card {
             background: #13171c;
             border: 1px solid #262d36;
-            border-radius: 18px;
-            padding: 12px 8px;
+            border-radius: 24px;
+            padding: 16px 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2849,10 +2593,10 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 14px;
-            margin-bottom: 8px;
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            margin-bottom: 10px;
             object-fit: cover;
             border: 1px solid #3b82f6;
           }
@@ -2866,18 +2610,18 @@ app.get('/telegram', async (req, res) => {
             border-color: #eab308;
           }
 
-          /* Fallback CSS icons (if image missing) */
           .bingo-icon-fallback {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 64px;
-            height: 64px;
+            width: 60px;
+            height: 60px;
             background: #1e293b;
-            border-radius: 14px;
+            border-radius: 16px;
             border: 1px solid #3b82f6;
             box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
+            margin-bottom: 10px;
           }
           .bingo-numbers-row {
             display: flex;
@@ -2887,8 +2631,8 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2907,14 +2651,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 64px;
-            height: 64px;
+            width: 60px;
+            height: 60px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 14px;
+            border-radius: 16px;
             border: 1px solid #8b5cf6;
+            margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2924,56 +2669,56 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 64px;
-            height: 64px;
+            width: 60px;
+            height: 60px;
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
-            border-radius: 14px;
+            border-radius: 16px;
             border: 1px solid #f97316;
+            margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
-            letter-spacing: 2px;
           }
           .slots-icon-fallback {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 64px;
-            height: 64px;
+            width: 60px;
+            height: 60px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 14px;
+            border-radius: 16px;
             border: 1px solid #eab308;
+            margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
-            letter-spacing: 2px;
           }
 
           .game-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
           }
 
           .game-desc {
-            font-size: 10px;
+            font-size: 11px;
             color: #8e9aaf;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
           }
 
           .play-btn {
             background: transparent;
             border: 1px solid #3b82f6;
             color: #3b82f6;
-            padding: 6px 12px;
+            padding: 6px 16px;
             border-radius: 40px;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
             width: 100%;
             transition: all 0.2s;
@@ -2996,13 +2741,13 @@ app.get('/telegram', async (req, res) => {
           }
 
           .footer {
-            margin-top: 16px;
-            padding-top: 12px;
+            margin-top: 24px;
+            padding-top: 16px;
             border-top: 1px solid #20262e;
             display: flex;
             justify-content: center;
             gap: 24px;
-            font-size: 11px;
+            font-size: 12px;
             color: #5a6573;
           }
           .footer a {
@@ -3011,7 +2756,6 @@ app.get('/telegram', async (req, res) => {
           }
           .footer a:active { color: white; }
 
-          /* Modals (unchanged) */
           .modal {
             display: none;
             position: fixed;
@@ -3024,6 +2768,7 @@ app.get('/telegram', async (req, res) => {
             align-items: center;
             justify-content: center;
             padding: 16px;
+            z-index: 200;
           }
           .modal-content {
             background: #13171c;
@@ -3118,44 +2863,35 @@ app.get('/telegram', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <!-- Header -->
           <div class="header">
             <div class="logo-text">ETHIO<span>GAMES</span></div>
-            <div class="header-right">
-              <div class="user-greeting" id="userGreeting" style="display: none;">
-                👋 <span id="userName">User</span>
-              </div>
-              <div class="wallet-emoji" onclick="toggleWalletPopup()">💰</div>
+            <div class="user-greeting" id="userGreeting" style="display: none;">
+              👋 <span id="userName">User</span>
             </div>
           </div>
 
-          <!-- Wallet Popup -->
-          <div class="wallet-popup" id="walletPopup">
-            <div class="popup-balance"><span id="walletBalance">0.00</span><small>ETB</small></div>
-            <div class="popup-actions">
-              <button class="popup-btn primary" onclick="openDepositModal()">Deposit</button>
-              <button class="popup-btn" onclick="openWithdrawModal()">Withdraw</button>
-            </div>
-          </div>
-
-          <!-- Fallback message (hidden by default) -->
           <div id="fallbackMessage" class="fallback-banner" style="display: none;">
             ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
           </div>
 
-          <!-- Sponsor Board -->
-          <div class="sponsor-board">
-            <img id="sponsorImage" class="sponsor-image" src="/sponser1.png" alt="Sponsor" onerror="this.style.display='none'; document.getElementById('sponsorFallback').style.display='flex';">
-            <div id="sponsorFallback" class="sponsor-fallback" style="display: none;">
-              Sponsor Board<br>(ads appear here)
+          <!-- Compact Wallet Button -->
+          <div class="wallet-container" id="walletContainer">
+            <span class="wallet-emoji">💰</span>
+            <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
+            <div class="wallet-menu" id="walletMenu">
+              <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
+              <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
             </div>
           </div>
 
-          <!-- Games Grid -->
+          <!-- Sponsor Board -->
+          <div class="sponsor-board">
+            <img id="sponsorImage" src="/sponser1.png" alt="Sponsor">
+          </div>
+
           <div>
             <div class="section-title"><span>🎮 PLAY NOW</span></div>
             <div class="games-grid">
-              <!-- BINGO card -->
               <div class="game-card" onclick="launchGame('bingo')">
                 ${bingoIconBase64 
                   ? `<img src="data:image/png;base64,${bingoIconBase64}" class="game-icon" alt="Bingo">`
@@ -3175,7 +2911,6 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn">Play</button>
               </div>
 
-              <!-- KENO card -->
               <div class="game-card" onclick="launchGame('keno')">
                 ${kenoIconBase64 
                   ? `<img src="data:image/png;base64,${kenoIconBase64}" class="game-icon keno-icon" alt="Keno">`
@@ -3188,7 +2923,6 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn keno">Play</button>
               </div>
 
-              <!-- CRASH card -->
               <div class="game-card" onclick="launchGame('crash')">
                 ${crashIconBase64 
                   ? `<img src="data:image/png;base64,${crashIconBase64}" class="game-icon crash-icon" alt="Crash">`
@@ -3201,7 +2935,6 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn crash">Play</button>
               </div>
 
-              <!-- SLOTS card -->
               <div class="game-card" onclick="launchGame('slots')">
                 ${slotsIconBase64 
                   ? `<img src="data:image/png;base64,${slotsIconBase64}" class="game-icon slots-icon" alt="Slots">`
@@ -3216,7 +2949,6 @@ app.get('/telegram', async (req, res) => {
             </div>
           </div>
 
-          <!-- Footer Links -->
           <div class="footer">
             <a href="#" onclick="showHelp()">Help</a>
             <a href="#" onclick="showAgentInfo()">Agent</a>
@@ -3224,7 +2956,6 @@ app.get('/telegram', async (req, res) => {
           </div>
         </div>
 
-        <!-- Deposit Modal -->
         <div class="modal" id="depositModal">
           <div class="modal-content">
             <div class="modal-header">
@@ -3249,7 +2980,6 @@ app.get('/telegram', async (req, res) => {
           </div>
         </div>
 
-        <!-- Withdraw Modal -->
         <div class="modal" id="withdrawModal">
           <div class="modal-content">
             <div class="modal-header">
@@ -3271,35 +3001,39 @@ app.get('/telegram', async (req, res) => {
 
         <script src="/socket.io/socket.io.js"></script>
         <script>
-          // --- Telegram WebApp init ---
           const tg = window.Telegram?.WebApp;
           const socket = io();
           let currentUserId = null;
           let currentBalance = 0;
           let fallbackTimer = null;
 
-          // Sponsor image rotation
           const sponsorImages = ['/sponser1.png', '/sponser2.png'];
-          let currentSponsorIndex = 0;
-          const sponsorImg = document.getElementById('sponsorImage');
-          const sponsorFallback = document.getElementById('sponsorFallback');
+          let sponsorIndex = 0;
+          const sponsorEl = document.getElementById('sponsorImage');
+          setInterval(() => {
+            sponsorIndex = (sponsorIndex + 1) % sponsorImages.length;
+            sponsorEl.src = sponsorImages[sponsorIndex];
+          }, 2000);
 
-          function rotateSponsor() {
-            if (!sponsorImg) return;
-            currentSponsorIndex = (currentSponsorIndex + 1) % sponsorImages.length;
-            sponsorImg.src = sponsorImages[currentSponsorIndex];
+          const walletContainer = document.getElementById('walletContainer');
+          const walletMenu = document.getElementById('walletMenu');
+
+          function toggleWalletMenu(e) {
+            if (e.target.closest('button')) return;
+            walletMenu.classList.toggle('active');
           }
-          setInterval(rotateSponsor, 2000);
-
-          // Handle image load error
-          if (sponsorImg) {
-            sponsorImg.onerror = function() {
-              sponsorImg.style.display = 'none';
-              sponsorFallback.style.display = 'flex';
-            };
+          function closeWalletMenu() {
+            walletMenu.classList.remove('active');
           }
 
-          // Try to get user from URL first (app login)
+          walletContainer.addEventListener('click', toggleWalletMenu);
+
+          document.addEventListener('click', (e) => {
+            if (!walletContainer.contains(e.target) && walletMenu.classList.contains('active')) {
+              walletMenu.classList.remove('active');
+            }
+          });
+
           const urlParams = new URLSearchParams(window.location.search);
           const appUserId = urlParams.get('userId');
           const appUserName = urlParams.get('name');
@@ -3339,14 +3073,13 @@ app.get('/telegram', async (req, res) => {
             }
           }
 
-          // --- Balance ---
           async function loadBalance() {
             if (!currentUserId) return;
             try {
               const res = await fetch('/api/user/' + currentUserId + '/balance');
               const data = await res.json();
               currentBalance = data.balance || 0;
-              document.getElementById('walletBalance').textContent = currentBalance.toFixed(2);
+              document.getElementById('walletBalance').innerHTML = currentBalance.toFixed(2) + ' <small>ETB</small>';
             } catch (e) {
               socket.emit('refreshBalance');
             }
@@ -3354,22 +3087,7 @@ app.get('/telegram', async (req, res) => {
 
           socket.on('balanceUpdate', (bal) => {
             currentBalance = bal;
-            document.getElementById('walletBalance').textContent = bal.toFixed(2);
-          });
-
-          // Toggle wallet popup
-          function toggleWalletPopup() {
-            const popup = document.getElementById('walletPopup');
-            popup.classList.toggle('show');
-          }
-
-          // Close popup when clicking outside (optional)
-          document.addEventListener('click', function(event) {
-            const popup = document.getElementById('walletPopup');
-            const walletEmoji = document.querySelector('.wallet-emoji');
-            if (!popup.contains(event.target) && !walletEmoji.contains(event.target)) {
-              popup.classList.remove('show');
-            }
+            document.getElementById('walletBalance').innerHTML = bal.toFixed(2) + ' <small>ETB</small>';
           });
 
           function launchGame(game) {
@@ -3382,10 +3100,8 @@ app.get('/telegram', async (req, res) => {
             if (game === 'slots') window.location.href = '/slots?userId=' + userId + '&name=' + name;
           }
 
-          // --- Modals ---
           function openDepositModal() {
             document.getElementById('depositModal').style.display = 'flex';
-            document.getElementById('walletPopup').classList.remove('show');
           }
           function closeDepositModal() {
             document.getElementById('depositModal').style.display = 'none';
@@ -3396,13 +3112,11 @@ app.get('/telegram', async (req, res) => {
               return;
             }
             document.getElementById('withdrawModal').style.display = 'flex';
-            document.getElementById('walletPopup').classList.remove('show');
           }
           function closeWithdrawModal() {
             document.getElementById('withdrawModal').style.display = 'none';
           }
 
-          // --- Deposit submission ---
           function submitDeposit() {
             const receipt = document.getElementById('depositReceipt').value.trim();
             const amount = parseFloat(document.getElementById('depositAmount').value);
@@ -3431,7 +3145,6 @@ app.get('/telegram', async (req, res) => {
             });
           }
 
-          // --- Withdrawal submission ---
           function submitWithdraw() {
             const amount = parseFloat(document.getElementById('withdrawAmount').value);
             const phone = document.getElementById('withdrawPhone').value.trim();
@@ -3467,7 +3180,6 @@ app.get('/telegram', async (req, res) => {
             el.style.color = type === 'success' ? '#10b981' : '#ef4444';
           }
 
-          // --- Helper popups ---
           function showHelp() {
             tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nCRASH: place bet, cash out before plane crashes.\\nSLOTS: choose bet, spin and win!\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
           }
@@ -3478,13 +3190,11 @@ app.get('/telegram', async (req, res) => {
             tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
           }
 
-          // --- Close modal on outside click ---
           window.onclick = (e) => {
             if (e.target === document.getElementById('depositModal')) closeDepositModal();
             if (e.target === document.getElementById('withdrawModal')) closeWithdrawModal();
           };
 
-          // --- Auto refresh balance ---
           setInterval(loadBalance, 30000);
         </script>
       </body>
@@ -3508,7 +3218,7 @@ app.get('/telegram', async (req, res) => {
   }
 });
 
-// ========== NEW: Serve Slots HTML page ==========
+// ========== OTHER GAME ROUTES ==========
 app.get('/slots', (req, res) => {
   const slotsPath = path.join(__dirname, 'slots.html');
   if (fs.existsSync(slotsPath)) {
@@ -3547,7 +3257,6 @@ app.get('/slots', (req, res) => {
   }
 });
 
-// Serve Crash HTML page
 app.get('/crash', (req, res) => {
   const crashPath = path.join(__dirname, 'crash.html');
   if (fs.existsSync(crashPath)) {
@@ -3586,7 +3295,6 @@ app.get('/crash', (req, res) => {
   }
 });
 
-// Serve Keno HTML page
 app.get('/keno', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'keno.html'))) {
     res.sendFile(path.join(__dirname, 'keno.html'));
@@ -3597,7 +3305,6 @@ app.get('/keno', (req, res) => {
   }
 });
 
-// Serve Bingo HTML page
 app.get('/game', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'game.html'))) {
     res.sendFile(path.join(__dirname, 'game.html'));
@@ -3608,7 +3315,6 @@ app.get('/game', (req, res) => {
   }
 });
 
-// Serve Admin HTML page
 app.get('/admin', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'admin.html'))) {
     res.sendFile(path.join(__dirname, 'admin.html'));
@@ -3620,13 +3326,10 @@ app.get('/admin', (req, res) => {
 });
 
 // ========== API ENDPOINTS ==========
-// API endpoint to get user balance
 app.get('/api/user/:userId', async (req, res) => {
   try {
     const user = await User.findOne({ userId: req.params.userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({
       userId: user.userId,
       userName: user.userName,
@@ -3645,23 +3348,16 @@ app.get('/api/user/:userId', async (req, res) => {
   }
 });
 
-// API endpoint to get user balance (simple version for Telegram entry page)
 app.get('/api/user/:userId/balance', async (req, res) => {
   try {
     const user = await User.findOne({ userId: req.params.userId });
-    if (!user) {
-      return res.json({ balance: 0 });
-    }
-    res.json({ 
-      balance: user.balance,
-      userName: user.userName 
-    });
+    if (!user) return res.json({ balance: 0 });
+    res.json({ balance: user.balance, userName: user.userName });
   } catch (error) {
     res.json({ balance: 0, error: error.message });
   }
 });
 
-// API endpoint to get Telebirr number
 app.get('/api/telebirr-number', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -3672,23 +3368,16 @@ app.get('/api/telebirr-number', async (req, res) => {
   }
 });
 
-// API endpoint to add funds (for admin)
 app.post('/api/add-funds', async (req, res) => {
   try {
     const { userId, amount, adminPassword } = req.body;
-    
     if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
     const user = await User.findOne({ userId: userId });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
+    if (!user) return res.status(404).json({ error: 'User not found' });
     user.balance += parseFloat(amount);
     await user.save();
-    
     const transaction = new Transaction({
       type: 'ADMIN_ADD',
       userId: userId,
@@ -3698,29 +3387,17 @@ app.post('/api/add-funds', async (req, res) => {
       description: `Admin added ${amount} ETB via API`
     });
     await transaction.save();
-    
-    res.json({
-      success: true,
-      message: `Added ${amount} ETB to ${user.userName}`,
-      newBalance: user.balance
-    });
+    res.json({ success: true, message: `Added ${amount} ETB to ${user.userName}`, newBalance: user.balance });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// API endpoint to get agent by referral code
 app.get('/api/agent/:referralCode', async (req, res) => {
   try {
-    const agent = await Agent.findOne({ 
-      referralCode: req.params.referralCode,
-      isActive: true 
-    }).select('name username referralCode commissionRateBingo commissionRateKeno commissionRateCrash commissionRateSlots');
-    
-    if (!agent) {
-      return res.status(404).json({ error: 'Agent not found or inactive' });
-    }
-    
+    const agent = await Agent.findOne({ referralCode: req.params.referralCode, isActive: true })
+      .select('name username referralCode commissionRateBingo commissionRateKeno commissionRateCrash commissionRateSlots');
+    if (!agent) return res.status(404).json({ error: 'Agent not found or inactive' });
     res.json({
       success: true,
       agent: {
@@ -3739,18 +3416,14 @@ app.get('/api/agent/:referralCode', async (req, res) => {
   }
 });
 
-// API endpoint to get referral statistics
 app.get('/api/referral-stats', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
     const usersWithoutAgents = totalUsers - usersWithAgents;
-    
-    // Get referral methods breakdown
     const telegramReferrals = await Referral.countDocuments({ referralMethod: 'telegram_link' });
     const manualReferrals = await Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
     const adminReferrals = await Referral.countDocuments({ referralMethod: 'admin_assigned' });
-    
     res.json({
       success: true,
       stats: {
@@ -3771,45 +3444,26 @@ app.get('/api/referral-stats', async (req, res) => {
 
 // ========== MOBILE APP REGISTRATION & LOGIN API ==========
 function generateAppUserId(username) {
-  const randomPart = crypto.randomBytes(4).toString('hex'); // 8 random hex chars
+  const randomPart = crypto.randomBytes(4).toString('hex');
   return `app_${username}_${randomPart}`;
 }
 
-// ========== WELCOME BONUS AMOUNT FOR NEW REGISTRATIONS (set to 0 to disable) ==========
-const REGISTRATION_BONUS = 0; // Welcome bonus disabled
+const REGISTRATION_BONUS = 0;
 
-// Registration endpoint (improved)
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, referralCode } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    if (username.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-    // Basic validation
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password required' });
-    }
-    if (username.length < 3) {
-      return res.status(400).json({ error: 'Username must be at least 3 characters' });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
-    }
-
-    // Check if username already exists (case‑insensitive)
     const existingUser = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } });
-    if (existingUser) {
-      return res.status(409).json({ error: 'Username already taken' });
-    }
+    if (existingUser) return res.status(409).json({ error: 'Username already taken' });
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create a unique userId for this app user
     const userId = generateAppUserId(username);
-
-    // Generate a truly unique referral code for the new user (optional, but used for referral tracking)
     const userReferralCode = 'APP' + crypto.randomBytes(4).toString('hex').toUpperCase();
 
-    // Create the user document with welcome bonus (0 if disabled)
     const newUser = new User({
       userId,
       userName: username,
@@ -3819,11 +3473,9 @@ app.post('/api/register', async (req, res) => {
       joinedAt: new Date(),
       lastSeen: new Date()
     });
-
     await newUser.save();
     console.log(`✅ New app user registered: ${username} (${userId})`);
 
-    // Only create bonus transaction if bonus > 0
     if (REGISTRATION_BONUS > 0) {
       const bonusTransaction = new Transaction({
         type: 'BONUS',
@@ -3835,62 +3487,35 @@ app.post('/api/register', async (req, res) => {
       await bonusTransaction.save();
     }
 
-    // If a referral code was provided, process it (optional) – run in background
     if (referralCode && agentSystem && typeof agentSystem.processReferral === 'function') {
       agentSystem.processReferral(userId, referralCode).catch(err => {
         console.error('❌ Error processing referral during registration:', err);
       });
     }
 
-    res.json({
-      success: true,
-      message: 'Registration successful',
-      userId,
-      userName: username
-    });
+    res.json({ success: true, message: 'Registration successful', userId, userName: username });
   } catch (error) {
     console.error('Registration error details:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Login endpoint
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password required' });
-    }
-
-    // Find user (case‑insensitive)
     const user = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } }).select('+password');
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid username or password' });
-    }
+    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
+    if (!user.password) return res.status(401).json({ error: 'Account not set up for app login' });
 
-    // If the user doesn't have a password field (old users), you may need to handle that
-    if (!user.password) {
-      return res.status(401).json({ error: 'Account not set up for app login' });
-    }
-
-    // Compare password
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return res.status(401).json({ error: 'Invalid username or password' });
-    }
+    if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
 
-    // Update last seen
     user.lastSeen = new Date();
     await user.save();
 
-    res.json({
-      success: true,
-      message: 'Login successful',
-      userId: user.userId,
-      userName: user.userName,
-      balance: user.balance
-    });
+    res.json({ success: true, message: 'Login successful', userId: user.userId, userName: user.userName, balance: user.balance });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -3898,13 +3523,11 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE'; // Set your new bot token here
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 
-// Simple Telegram webhook
 app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     const { message } = req.body;
-    
     if (message) {
       const chatId = message.chat.id;
       const text = message.text || '';
@@ -3916,13 +3539,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
       const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
       
-      // Check for referral parameter in start command
       const referralMatch = text.match(/\/start ref_(\w+)/);
       const referralCode = referralMatch ? referralMatch[1] : null;
       
       if (text.startsWith('/start') || text === '/play') {
         let user = await User.findOne({ telegramId: userId });
-        
         if (!user) {
           user = new User({
             userId: `tg_${userId}`,
@@ -3933,10 +3554,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             referralCode: `TG${userId}`
           });
           await user.save();
-          
           console.log(`👤 New Telegram user: ${userName} (@${username})`);
-          
-          // Only create bonus transaction if bonus > 0
           if (REGISTRATION_BONUS > 0) {
             const bonusTransaction = new Transaction({
               type: 'BONUS',
@@ -3947,13 +3565,10 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             });
             await bonusTransaction.save();
           }
-          
-          // Process referral if present
           if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
             await agentSystem.handleTelegramReferral(user.userId, referralCode);
           }
         }
-        
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3993,7 +3608,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       else if (text === '/balance' || text === 'check_balance') {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
-        
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -4100,7 +3714,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         });
       }
     }
-    
     res.sendStatus(200);
   } catch (error) {
     console.error('Telegram webhook error:', error);
@@ -4108,17 +3721,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
   }
 });
 
-// Setup endpoint for Telegram bot
 app.get('/setup-telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
-      totalAgents: 0, 
-      activeAgents: 0, 
-      totalCommissions: 0 
-    };
+    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
     
     const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
       method: 'POST',
@@ -4128,7 +3736,6 @@ app.get('/setup-telegram', async (req, res) => {
         drop_pending_updates: true
       })
     });
-    
     const webhookResult = await webhookResponse.json();
     
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
@@ -4301,13 +3908,12 @@ app.get('/debug-connections', (req, res) => {
     const adminSockets = gameLogic && gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
     const processingClaims = gameLogic && gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
     const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
-    
     res.json({
-      connectedSockets: connectedSockets,
-      socketToUser: socketToUser,
-      adminSockets: adminSockets,
-      processingClaims: processingClaims,
-      roomWinners: roomWinners,
+      connectedSockets,
+      socketToUser,
+      adminSockets,
+      processingClaims,
+      roomWinners,
       serverTime: new Date().toISOString(),
       agentSockets: agentSystem && agentSystem.agentSockets ? agentSystem.agentSockets.size : 0
     });
@@ -4320,7 +3926,6 @@ app.get('/debug-users', async (req, res) => {
   try {
     const users = await User.find().sort({ lastSeen: -1 }).limit(50);
     const onlineUsers = users.filter(u => u.isOnline);
-    
     res.json({
       totalUsers: users.length,
       onlineUsers: onlineUsers.length,
@@ -4344,12 +3949,10 @@ app.get('/debug-users', async (req, res) => {
   }
 });
 
-// Debug Agents endpoint
 app.get('/debug-agents', async (req, res) => {
   try {
     const agents = await Agent.find().sort({ createdAt: -1 }).limit(50);
     const activeAgents = agents.filter(a => a.isActive);
-    
     res.json({
       totalAgents: agents.length,
       activeAgents: activeAgents.length,
@@ -4376,30 +3979,20 @@ app.get('/debug-agents', async (req, res) => {
   }
 });
 
-// Debug Telebirr number endpoint
 app.get('/debug/telebirr', async (req, res) => {
   try {
     const setting = await Setting.findOne({ key: 'telebirrNumber' });
     const telebirrNumber = await getTelebirrNumber();
-    
-    res.json({
-      databaseSetting: setting,
-      currentNumber: telebirrNumber,
-      timestamp: new Date().toISOString()
-    });
+    res.json({ databaseSetting: setting, currentNumber: telebirrNumber, timestamp: new Date().toISOString() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Debug Referrals endpoint
 app.get('/debug/referrals', async (req, res) => {
   try {
     const referrals = await Referral.find().sort({ createdAt: -1 }).limit(50);
-    const usersWithAgents = await User.find({ 
-      agentId: { $exists: true, $ne: null } 
-    }).sort({ agentReferredAt: -1 }).limit(50);
-    
+    const usersWithAgents = await User.find({ agentId: { $exists: true, $ne: null } }).sort({ agentReferredAt: -1 }).limit(50);
     res.json({
       totalReferrals: await Referral.countDocuments(),
       totalUsersWithAgents: await User.countDocuments({ agentId: { $exists: true, $ne: null } }),
@@ -4475,9 +4068,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ========== START SERVER WITH GRACEFUL SHUTDOWN ==========
+// ========== START SERVER ==========
 const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0'; // Important for Render
+const HOST = '0.0.0.0';
 
 const httpServer = server.listen(PORT, HOST, async () => {
   const telebirrNumber = await getTelebirrNumber();
@@ -4523,12 +4116,10 @@ process.on('SIGINT', () => {
   });
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  // Don't exit in production, try to recover
   if (process.env.NODE_ENV === 'production') {
-    // Log the error and continue
+    // Log and continue
   } else {
     process.exit(1);
   }
