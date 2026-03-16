@@ -559,14 +559,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// ========== NEW: Serve sponsor images from root ==========
-app.get('/sponser1.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser1.png'));
-});
-app.get('/sponser2.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser2.png'));
-});
-
 // ========== NEW: Serve bots panel from root folder ==========
 app.get('/bots-panel.html', (req, res) => {
   const filePath = path.join(__dirname, 'bots-panel.html');
@@ -579,6 +571,21 @@ app.get('/bots-panel.html', (req, res) => {
 
 // ========== NEW: Serve assets folder for images and sounds ==========
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+// ========== NEW: Serve sponsor images safely ==========
+app.get('/sponsor/:filename', (req, res) => {
+  const filename = req.params.filename;
+  if (filename === 'sponsor1.png' || filename === 'sponsor2.png') {
+    const filePath = path.join(__dirname, filename);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send('Sponsor image not found');
+    }
+  } else {
+    res.status(404).send('Not found');
+  }
+});
 
 // Security headers for Telegram
 app.use((req, res, next) => {
@@ -2627,7 +2634,7 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH SPONSOR BOARD & WALLET EMOJI ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH SPONSOR BOARD, WALLET EMOJI, AND SMALLER ICONS ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -2651,6 +2658,7 @@ app.get('/telegram', async (req, res) => {
       const crashBuffer = fs.readFileSync(crashPath);
       crashIconBase64 = crashBuffer.toString('base64');
     } catch (e) {}
+    // ========== NEW: Load slots icon ==========
     try {
       const slotsPath = path.join(__dirname, 'slots-icon.png');
       const slotsBuffer = fs.readFileSync(slotsPath);
@@ -2658,812 +2666,625 @@ app.get('/telegram', async (req, res) => {
     } catch (e) {}
     
     res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-        <title>ETHIO GAMES · Telegram Mini App</title>
-        <script src="https://telegram.org/js/telegram-web-app.js"></script>
-        <style>
-          /* Clean, minimal dark theme */
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-          }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ETHIO GAMES · Telegram Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: #0a0c10;
+      color: #f0f4fa;
+      line-height: 1.4;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #20262e;
+    }
+    .logo-text {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
+    .logo-text span {
+      color: #8b5cf6;
+    }
+    .wallet-button {
+      background: #1e293b;
+      padding: 8px 14px;
+      border-radius: 40px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 1px solid #334155;
+    }
+    .wallet-button:active {
+      background: #2d3748;
+    }
+    .wallet-emoji {
+      font-size: 20px;
+    }
+    .wallet-balance {
+      font-weight: 600;
+      font-size: 16px;
+      color: #fbbf24;
+    }
+    .wallet-currency {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .sponsor-board {
+      background: #13171c;
+      border-radius: 16px;
+      padding: 8px;
+      border: 1px solid #262d36;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 70px;
+    }
+    .sponsor-board img {
+      max-width: 100%;
+      max-height: 70px;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f0f4fa;
+    }
+    .games-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .game-card {
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 20px;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: transform 0.1s;
+    }
+    .game-card:active {
+      background: #1a1f26;
+    }
+    .game-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      margin-bottom: 10px;
+      object-fit: cover;
+      border: 1px solid #3b82f6;
+    }
+    .keno-icon {
+      border-color: #8b5cf6;
+    }
+    .crash-icon {
+      border-color: #f97316;
+    }
+    .slots-icon {
+      border-color: #eab308;
+    }
+    /* fallback icon styles */
+    .bingo-icon-fallback, .keno-icon-fallback, .crash-icon-fallback, .slots-icon-fallback {
+      width: 60px;
+      height: 60px;
+      border-radius: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1e293b;
+      border: 1px solid currentColor;
+    }
+    .game-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .game-desc {
+      font-size: 11px;
+      color: #8e9aaf;
+      margin-bottom: 12px;
+    }
+    .play-btn {
+      background: transparent;
+      border: 1px solid #3b82f6;
+      color: #3b82f6;
+      padding: 6px 16px;
+      border-radius: 40px;
+      font-size: 12px;
+      font-weight: 600;
+      width: 100%;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .play-btn.keno {
+      border-color: #8b5cf6;
+      color: #c4b5fd;
+    }
+    .play-btn.crash {
+      border-color: #f97316;
+      color: #fdba74;
+    }
+    .play-btn.slots {
+      border-color: #eab308;
+      color: #fde047;
+    }
+    .footer {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #20262e;
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      font-size: 12px;
+      color: #5a6573;
+    }
+    .footer a {
+      color: #8e9aaf;
+      text-decoration: none;
+    }
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: #13171c;
+      border: 1px solid #262d36;
+      border-radius: 32px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      color: #8e9aaf;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .wallet-action-balance {
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 20px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .wallet-action-balance .label {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .wallet-action-balance .amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fbbf24;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    .action-btn {
+      flex: 1;
+      padding: 14px;
+      border-radius: 40px;
+      border: none;
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .action-btn.deposit {
+      background: #3b82f6;
+      color: white;
+    }
+    .action-btn.withdraw {
+      background: #10b981;
+      color: white;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; color: #8e9aaf; margin-bottom: 6px; }
+    .form-input { width: 100%; padding: 14px; background: #0a0c10; border: 1px solid #262d36; border-radius: 16px; color: white; font-size: 16px; }
+    .telebirr-info { background: #0f172a; padding: 16px; border-radius: 16px; margin-bottom: 20px; text-align: center; border: 1px solid #3b82f6; }
+    .telebirr-number { font-size: 20px; font-weight: 700; color: #60a5fa; }
+    .submit-btn { width: 100%; padding: 14px; background: #3b82f6; border: none; border-radius: 40px; color: white; font-weight: 600; font-size: 16px; margin-top: 8px; cursor: pointer; }
+    .message { margin-top: 12px; text-align: center; font-size: 13px; display: none; }
+    .fallback-banner { background: #1e293b; border: 1px solid #f59e0b; border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: center; font-size: 14px; }
+    .fallback-banner a { color: #f59e0b; font-weight: bold; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header with wallet emoji -->
+    <div class="header">
+      <div class="logo-text">ETHIO<span>GAMES</span></div>
+      <div class="wallet-button" onclick="openWalletActionModal()">
+        <span class="wallet-emoji">💰</span>
+        <span class="wallet-balance" id="headerBalance">0.00</span>
+        <span class="wallet-currency">ETB</span>
+      </div>
+    </div>
 
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
-            background: #0a0c10;
-            color: #f0f4fa;
-            line-height: 1.4;
-          }
+    <!-- Sponsor board (rotating) -->
+    <div class="sponsor-board">
+      <img id="sponsorImg" src="/sponsor/sponsor1.png" alt="Sponsor" onerror="this.style.display='none'">
+    </div>
 
-          .container {
-            max-width: 400px;
-            margin: 0 auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
+    <!-- Games Grid (smaller icons) -->
+    <div>
+      <div class="section-title"><span>🎮 PLAY NOW</span></div>
+      <div class="games-grid">
+        <!-- BINGO card -->
+        <div class="game-card" onclick="launchGame('bingo')">
+          ${bingoIconBase64 
+            ? `<img src="data:image/png;base64,${bingoIconBase64}" class="game-icon" alt="Bingo">`
+            : `<div class="bingo-icon-fallback"><div class="bingo-numbers-row"><span class="bingo-number">12</span><span class="bingo-number">28</span><span class="bingo-number">45</span><span class="bingo-number">60</span><span class="bingo-number">77</span></div><div class="bingo-word">BINGO</div></div>`
           }
-
-          .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #20262e;
-          }
-
-          .logo-text {
-            font-size: 20px;
-            font-weight: 600;
-            letter-spacing: -0.5px;
-            color: #ffffff;
-          }
-          .logo-text span {
-            color: #8b5cf6;
-          }
-
-          .user-greeting {
-            font-size: 14px;
-            color: #8e9aaf;
-          }
-
-          /* Sponsor board */
-          .sponsor-board {
-            width: 100%;
-            height: 100px;
-            background: #13171c;
-            border-radius: 20px;
-            overflow: hidden;
-            border: 1px solid #262d36;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .sponsor-board img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-          }
-
-          /* Wallet emoji + menu */
-          .wallet-container {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: #13171c;
-            border: 1px solid #262d36;
-            border-radius: 40px;
-            padding: 10px 16px;
-          }
-          .wallet-emoji {
-            font-size: 28px;
-            cursor: pointer;
-            user-select: none;
-          }
-          .balance-display {
-            font-size: 20px;
-            font-weight: 600;
-          }
-          .balance-display small {
-            font-size: 14px;
-            color: #8e9aaf;
-            margin-left: 4px;
-          }
-
-          /* Wallet popup menu */
-          .wallet-menu {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            background: #1e252e;
-            border: 1px solid #3b82f6;
-            border-radius: 24px;
-            padding: 12px;
-            width: 180px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-            display: none;
-            z-index: 100;
-          }
-          .wallet-menu.active {
-            display: block;
-          }
-          .wallet-menu button {
-            width: 100%;
-            padding: 12px;
-            margin: 4px 0;
-            border: none;
-            border-radius: 40px;
-            font-weight: 600;
-            font-size: 16px;
-            background: #20262e;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-          }
-          .wallet-menu button.deposit {
-            background: #3b82f6;
-          }
-          .wallet-menu button.withdraw {
-            background: #10b981;
-          }
-          .wallet-menu button:active {
-            filter: brightness(1.2);
-          }
-
-          .section-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #f0f4fa;
-          }
-
-          .games-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-          }
-
-          .game-card {
-            background: #13171c;
-            border: 1px solid #262d36;
-            border-radius: 24px;
-            padding: 16px 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            transition: transform 0.1s;
-          }
-          .game-card:active {
-            background: #1a1f26;
-          }
-
-          .game-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            margin-bottom: 10px;
-            object-fit: cover;
-            border: 1px solid #3b82f6;
-          }
-          .keno-icon {
-            border-color: #8b5cf6;
-          }
-          .crash-icon {
-            border-color: #f97316;
-          }
-          .slots-icon {
-            border-color: #eab308;
-          }
-
-          /* Fallback CSS icons (if image missing) */
-          .bingo-icon-fallback {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            background: #1e293b;
-            border-radius: 16px;
-            border: 1px solid #3b82f6;
-            box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
-            margin-bottom: 10px;
-          }
-          .bingo-numbers-row {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 4px;
-          }
-          .bingo-number {
-            background: #0f172a;
-            color: #60a5fa;
-            width: 18px;
-            height: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-          }
-          .bingo-word {
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 1px;
-            color: #fbbf24;
-            margin-top: 2px;
-          }
-          .keno-icon-fallback {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
-            border: 1px solid #8b5cf6;
-            margin-bottom: 10px;
-          }
-          .keno-word {
-            font-size: 18px;
-            font-weight: 800;
-            color: white;
-            text-shadow: 0 2px 0 #5b21b6;
-            letter-spacing: 2px;
-          }
-          .crash-icon-fallback {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(145deg, #3b2a1a, #251a0f);
-            border-radius: 16px;
-            border: 1px solid #f97316;
-            margin-bottom: 10px;
-          }
-          .crash-word {
-            font-size: 22px;
-            font-weight: 800;
-            color: #fdba74;
-            text-shadow: 0 2px 0 #b45309;
-          }
-          .slots-icon-fallback {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
-            border: 1px solid #eab308;
-            margin-bottom: 10px;
-          }
-          .slots-word {
-            font-size: 22px;
-            font-weight: 800;
-            color: #fbbf24;
-            text-shadow: 0 2px 0 #b45309;
-          }
-
-          .game-title {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 4px;
-          }
-
-          .game-desc {
-            font-size: 11px;
-            color: #8e9aaf;
-            margin-bottom: 12px;
-          }
-
-          .play-btn {
-            background: transparent;
-            border: 1px solid #3b82f6;
-            color: #3b82f6;
-            padding: 6px 16px;
-            border-radius: 40px;
-            font-size: 12px;
-            font-weight: 600;
-            width: 100%;
-            transition: all 0.2s;
-            cursor: pointer;
-          }
-          .play-btn.keno {
-            border-color: #8b5cf6;
-            color: #c4b5fd;
-          }
-          .play-btn.crash {
-            border-color: #f97316;
-            color: #fdba74;
-          }
-          .play-btn.slots {
-            border-color: #eab308;
-            color: #fde047;
-          }
-          .play-btn:active {
-            background: rgba(59,130,246,0.1);
-          }
-
-          .footer {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #20262e;
-            display: flex;
-            justify-content: center;
-            gap: 24px;
-            font-size: 12px;
-            color: #5a6573;
-          }
-          .footer a {
-            color: #8e9aaf;
-            text-decoration: none;
-          }
-          .footer a:active { color: white; }
-
-          .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(4px);
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            z-index: 200;
-          }
-          .modal-content {
-            background: #13171c;
-            border: 1px solid #262d36;
-            border-radius: 32px;
-            padding: 24px;
-            width: 100%;
-            max-width: 360px;
-          }
-          .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-          }
-          .modal-title {
-            font-size: 20px;
-            font-weight: 700;
-          }
-          .close-btn {
-            background: none;
-            border: none;
-            color: #8e9aaf;
-            font-size: 24px;
-            cursor: pointer;
-          }
-          .form-group {
-            margin-bottom: 16px;
-          }
-          .form-label {
-            display: block;
-            font-size: 13px;
-            color: #8e9aaf;
-            margin-bottom: 6px;
-          }
-          .form-input {
-            width: 100%;
-            padding: 14px;
-            background: #0a0c10;
-            border: 1px solid #262d36;
-            border-radius: 16px;
-            color: white;
-            font-size: 16px;
-          }
-          .telebirr-info {
-            background: #0f172a;
-            padding: 16px;
-            border-radius: 16px;
-            margin-bottom: 20px;
-            text-align: center;
-            border: 1px solid #3b82f6;
-          }
-          .telebirr-number {
-            font-size: 20px;
-            font-weight: 700;
-            color: #60a5fa;
-          }
-          .submit-btn {
-            width: 100%;
-            padding: 14px;
-            background: #3b82f6;
-            border: none;
-            border-radius: 40px;
-            color: white;
-            font-weight: 600;
-            font-size: 16px;
-            margin-top: 8px;
-            cursor: pointer;
-          }
-          .message {
-            margin-top: 12px;
-            text-align: center;
-            font-size: 13px;
-            display: none;
-          }
-
-          .fallback-banner {
-            background: #1e293b;
-            border: 1px solid #f59e0b;
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 16px;
-            text-align: center;
-            font-size: 14px;
-          }
-          .fallback-banner a {
-            color: #f59e0b;
-            font-weight: bold;
-            text-decoration: none;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <!-- Header -->
-          <div class="header">
-            <div class="logo-text">ETHIO<span>GAMES</span></div>
-            <div class="user-greeting" id="userGreeting" style="display: none;">
-              👋 <span id="userName">User</span>
-            </div>
-          </div>
-
-          <!-- Fallback message (hidden by default) -->
-          <div id="fallbackMessage" class="fallback-banner" style="display: none;">
-            ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
-          </div>
-
-          <!-- Sponsor Board -->
-          <div class="sponsor-board">
-            <img id="sponsorImage" src="/sponser1.png" alt="Sponsor">
-          </div>
-
-          <!-- Wallet Emoji + Balance + Menu -->
-          <div class="wallet-container">
-            <span class="wallet-emoji" id="walletEmoji" onclick="toggleWalletMenu()">💰</span>
-            <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
-            <div class="wallet-menu" id="walletMenu">
-              <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
-              <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
-            </div>
-          </div>
-
-          <!-- Active Games -->
-          <div>
-            <div class="section-title"><span>🎮 PLAY NOW</span></div>
-            <div class="games-grid">
-              <!-- BINGO card -->
-              <div class="game-card" onclick="launchGame('bingo')">
-                ${bingoIconBase64 
-                  ? `<img src="data:image/png;base64,${bingoIconBase64}" class="game-icon" alt="Bingo">`
-                  : `<div class="bingo-icon-fallback">
-                       <div class="bingo-numbers-row">
-                         <span class="bingo-number">12</span>
-                         <span class="bingo-number">28</span>
-                         <span class="bingo-number">45</span>
-                         <span class="bingo-number">60</span>
-                         <span class="bingo-number">77</span>
-                       </div>
-                       <div class="bingo-word">BINGO</div>
-                     </div>`
-                }
-                <div class="game-title">Bingo Elite</div>
-                <div class="game-desc">Real‑time multiplayer</div>
-                <button class="play-btn">Play</button>
-              </div>
-
-              <!-- KENO card -->
-              <div class="game-card" onclick="launchGame('keno')">
-                ${kenoIconBase64 
-                  ? `<img src="data:image/png;base64,${kenoIconBase64}" class="game-icon keno-icon" alt="Keno">`
-                  : `<div class="keno-icon-fallback">
-                       <div class="keno-word">KENO</div>
-                     </div>`
-                }
-                <div class="game-title">Keno Ultra</div>
-                <div class="game-desc">Fast number draws</div>
-                <button class="play-btn keno">Play</button>
-              </div>
-
-              <!-- CRASH card -->
-              <div class="game-card" onclick="launchGame('crash')">
-                ${crashIconBase64 
-                  ? `<img src="data:image/png;base64,${crashIconBase64}" class="game-icon crash-icon" alt="Crash">`
-                  : `<div class="crash-icon-fallback">
-                       <div class="crash-word">✈️</div>
-                     </div>`
-                }
-                <div class="game-title">Crash</div>
-                <div class="game-desc">Cash out before it crashes</div>
-                <button class="play-btn crash">Play</button>
-              </div>
-
-              <!-- SLOTS card -->
-              <div class="game-card" onclick="launchGame('slots')">
-                ${slotsIconBase64 
-                  ? `<img src="data:image/png;base64,${slotsIconBase64}" class="game-icon slots-icon" alt="Slots">`
-                  : `<div class="slots-icon-fallback">
-                       <div class="slots-word">🎰</div>
-                     </div>`
-                }
-                <div class="game-title">Slots Galaxy</div>
-                <div class="game-desc">Spin to win big!</div>
-                <button class="play-btn slots">Play</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Footer Links -->
-          <div class="footer">
-            <a href="#" onclick="showHelp()">Help</a>
-            <a href="#" onclick="showAgentInfo()">Agent</a>
-            <a href="#" onclick="showTerms()">Terms</a>
-          </div>
+          <div class="game-title">Bingo Elite</div>
+          <div class="game-desc">Real‑time multiplayer</div>
+          <button class="play-btn">Play</button>
         </div>
-
-        <!-- Deposit Modal -->
-        <div class="modal" id="depositModal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <div class="modal-title">💳 Deposit</div>
-              <button class="close-btn" onclick="closeDepositModal()">×</button>
-            </div>
-            <div class="telebirr-info">
-              <div style="color:#8e9aaf; margin-bottom:8px;">Send money to</div>
-              <div class="telebirr-number">${telebirrNumber}</div>
-              <div style="color:#8e9aaf; margin-top:8px;">Min: ${minDeposit} ETB</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Receipt number</label>
-              <input type="text" class="form-input" id="depositReceipt" placeholder="e.g. RT123456789">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Amount (ETB)</label>
-              <input type="number" class="form-input" id="depositAmount" placeholder="0.00" min="${minDeposit}" max="10000">
-            </div>
-            <div class="message" id="depositMessage"></div>
-            <button class="submit-btn" onclick="submitDeposit()">Submit deposit</button>
-          </div>
+        <!-- KENO card -->
+        <div class="game-card" onclick="launchGame('keno')">
+          ${kenoIconBase64 
+            ? `<img src="data:image/png;base64,${kenoIconBase64}" class="game-icon keno-icon" alt="Keno">`
+            : `<div class="keno-icon-fallback"><div class="keno-word">KENO</div></div>`
+          }
+          <div class="game-title">Keno Ultra</div>
+          <div class="game-desc">Fast number draws</div>
+          <button class="play-btn keno">Play</button>
         </div>
-
-        <!-- Withdraw Modal -->
-        <div class="modal" id="withdrawModal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <div class="modal-title">💸 Withdraw</div>
-              <button class="close-btn" onclick="closeWithdrawModal()">×</button>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Amount (ETB)</label>
-              <input type="number" class="form-input" id="withdrawAmount" placeholder="0.00" min="${minWithdrawal}" max="5000">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Telebirr number</label>
-              <input type="tel" class="form-input" id="withdrawPhone" placeholder="09XXXXXXXX">
-            </div>
-            <div class="message" id="withdrawMessage"></div>
-            <button class="submit-btn" onclick="submitWithdraw()">Request withdrawal</button>
-          </div>
+        <!-- CRASH card -->
+        <div class="game-card" onclick="launchGame('crash')">
+          ${crashIconBase64 
+            ? `<img src="data:image/png;base64,${crashIconBase64}" class="game-icon crash-icon" alt="Crash">`
+            : `<div class="crash-icon-fallback"><div class="crash-word">✈️</div></div>`
+          }
+          <div class="game-title">Crash</div>
+          <div class="game-desc">Cash out before it crashes</div>
+          <button class="play-btn crash">Play</button>
         </div>
+        <!-- SLOTS card -->
+        <div class="game-card" onclick="launchGame('slots')">
+          ${slotsIconBase64 
+            ? `<img src="data:image/png;base64,${slotsIconBase64}" class="game-icon slots-icon" alt="Slots">`
+            : `<div class="slots-icon-fallback"><div class="slots-word">🎰</div></div>`
+          }
+          <div class="game-title">Slots Galaxy</div>
+          <div class="game-desc">Spin to win big!</div>
+          <button class="play-btn slots">Play</button>
+        </div>
+      </div>
+    </div>
 
-        <script src="/socket.io/socket.io.js"></script>
-        <script>
-          // --- Telegram WebApp init ---
-          const tg = window.Telegram?.WebApp;
-          const socket = io();
-          let currentUserId = null;
-          let currentBalance = 0;
-          let fallbackTimer = null;
+    <!-- Footer -->
+    <div class="footer">
+      <a href="#" onclick="showHelp()">Help</a>
+      <a href="#" onclick="showAgentInfo()">Agent</a>
+      <a href="#" onclick="showTerms()">Terms</a>
+    </div>
+  </div>
 
-          // Sponsor board cycling
-          const sponsorImages = ['/sponser1.png', '/sponser2.png'];
-          let sponsorIndex = 0;
-          const sponsorEl = document.getElementById('sponsorImage');
-          setInterval(() => {
-            sponsorIndex = (sponsorIndex + 1) % sponsorImages.length;
-            sponsorEl.src = sponsorImages[sponsorIndex];
+  <!-- Wallet Action Modal (appears when wallet emoji clicked) -->
+  <div class="modal" id="walletActionModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">💰 Wallet</div>
+        <button class="close-btn" onclick="closeWalletActionModal()">×</button>
+      </div>
+      <div class="wallet-action-balance">
+        <div class="label">Your balance</div>
+        <div class="amount" id="walletActionBalance">0.00 ETB</div>
+      </div>
+      <div class="action-buttons">
+        <button class="action-btn deposit" onclick="openDepositModal()">💳 Deposit</button>
+        <button class="action-btn withdraw" onclick="openWithdrawModal()">💸 Withdraw</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deposit Modal (unchanged) -->
+  <div class="modal" id="depositModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">💳 Deposit</div>
+        <button class="close-btn" onclick="closeDepositModal()">×</button>
+      </div>
+      <div class="telebirr-info">
+        <div style="color:#8e9aaf; margin-bottom:8px;">Send money to</div>
+        <div class="telebirr-number">${telebirrNumber}</div>
+        <div style="color:#8e9aaf; margin-top:8px;">Min: ${minDeposit} ETB</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Receipt number</label>
+        <input type="text" class="form-input" id="depositReceipt" placeholder="e.g. RT123456789">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (ETB)</label>
+        <input type="number" class="form-input" id="depositAmount" placeholder="0.00" min="${minDeposit}" max="10000">
+      </div>
+      <div class="message" id="depositMessage"></div>
+      <button class="submit-btn" onclick="submitDeposit()">Submit deposit</button>
+    </div>
+  </div>
+
+  <!-- Withdraw Modal (unchanged) -->
+  <div class="modal" id="withdrawModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">💸 Withdraw</div>
+        <button class="close-btn" onclick="closeWithdrawModal()">×</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (ETB)</label>
+        <input type="number" class="form-input" id="withdrawAmount" placeholder="0.00" min="${minWithdrawal}" max="5000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telebirr number</label>
+        <input type="tel" class="form-input" id="withdrawPhone" placeholder="09XXXXXXXX">
+      </div>
+      <div class="message" id="withdrawMessage"></div>
+      <button class="submit-btn" onclick="submitWithdraw()">Request withdrawal</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // --- Telegram WebApp init & user detection (unchanged) ---
+    const tg = window.Telegram?.WebApp;
+    const socket = io();
+    let currentUserId = null;
+    let currentBalance = 0;
+    let fallbackTimer = null;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const appUserId = urlParams.get('userId');
+    const appUserName = urlParams.get('name');
+
+    if (appUserId && appUserName) {
+      currentUserId = appUserId;
+      document.getElementById('userGreeting')?.style.display = 'flex';
+      document.getElementById('userName')?.textContent = appUserName;
+      sessionStorage.setItem('appUserId', appUserId);
+      sessionStorage.setItem('appUserName', appUserName);
+      startApp();
+    } else {
+      if (tg) {
+        tg.ready();
+        const user = tg.initDataUnsafe?.user;
+        if (user) {
+          currentUserId = 'tg_' + user.id;
+          document.getElementById('userGreeting')?.style.display = 'flex';
+          document.getElementById('userName')?.textContent = user.first_name || 'User';
+          localStorage.setItem('telegramUser', JSON.stringify(user));
+          startApp();
+        } else {
+          fallbackTimer = setTimeout(() => {
+            document.getElementById('fallbackMessage').style.display = 'block';
           }, 2000);
+        }
+      } else {
+        document.getElementById('fallbackMessage').style.display = 'block';
+      }
+    }
 
-          // Wallet menu functions
-          function toggleWalletMenu() {
-            const menu = document.getElementById('walletMenu');
-            menu.classList.toggle('active');
-          }
-          function closeWalletMenu() {
-            document.getElementById('walletMenu').classList.remove('active');
-          }
+    function startApp() {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (currentUserId) {
+        socket.emit('init', { userId: currentUserId, userName: appUserName || (tg?.initDataUnsafe?.user?.first_name) || 'User' });
+        loadBalance();
+      }
+    }
 
-          // Close menu when clicking outside
-          document.addEventListener('click', (e) => {
-            const container = document.querySelector('.wallet-container');
-            const menu = document.getElementById('walletMenu');
-            if (!container.contains(e.target) && menu.classList.contains('active')) {
-              menu.classList.remove('active');
-            }
-          });
+    // --- Balance ---
+    async function loadBalance() {
+      if (!currentUserId) return;
+      try {
+        const res = await fetch('/api/user/' + currentUserId + '/balance');
+        const data = await res.json();
+        currentBalance = data.balance || 0;
+        document.getElementById('headerBalance').textContent = currentBalance.toFixed(2);
+        document.getElementById('walletActionBalance').textContent = currentBalance.toFixed(2) + ' ETB';
+      } catch (e) {
+        socket.emit('refreshBalance');
+      }
+    }
 
-          // Try to get user from URL first (app login)
-          const urlParams = new URLSearchParams(window.location.search);
-          const appUserId = urlParams.get('userId');
-          const appUserName = urlParams.get('name');
+    socket.on('balanceUpdate', (bal) => {
+      currentBalance = bal;
+      document.getElementById('headerBalance').textContent = bal.toFixed(2);
+      document.getElementById('walletActionBalance').textContent = bal.toFixed(2) + ' ETB';
+    });
 
-          if (appUserId && appUserName) {
-            // Mobile app user – skip Telegram
-            currentUserId = appUserId;
-            document.getElementById('userGreeting').style.display = 'flex';
-            document.getElementById('userName').textContent = appUserName;
-            sessionStorage.setItem('appUserId', appUserId);
-            sessionStorage.setItem('appUserName', appUserName);
-            startApp();
-          } else {
-            // Try Telegram user
-            if (tg) {
-              tg.ready(); // Tell Telegram we are ready
-              const user = tg.initDataUnsafe?.user;
-              if (user) {
-                currentUserId = 'tg_' + user.id;
-                document.getElementById('userGreeting').style.display = 'flex';
-                document.getElementById('userName').textContent = user.first_name || 'User';
-                localStorage.setItem('telegramUser', JSON.stringify(user));
-                startApp();
-              } else {
-                // No user data yet – wait a bit, then show fallback
-                fallbackTimer = setTimeout(() => {
-                  document.getElementById('fallbackMessage').style.display = 'block';
-                }, 2000);
-              }
-            } else {
-              // No Telegram object at all – show fallback immediately
-              document.getElementById('fallbackMessage').style.display = 'block';
-            }
-          }
+    // --- Sponsor rotation ---
+    let sponsorIndex = 0;
+    const sponsors = ['sponsor1.png', 'sponsor2.png'];
+    setInterval(() => {
+      sponsorIndex = (sponsorIndex + 1) % sponsors.length;
+      const img = document.getElementById('sponsorImg');
+      if (img) img.src = '/sponsor/' + sponsors[sponsorIndex];
+    }, 2000);
 
-          function startApp() {
-            if (fallbackTimer) clearTimeout(fallbackTimer);
-            if (currentUserId) {
-              socket.emit('init', { userId: currentUserId, userName: appUserName || (tg?.initDataUnsafe?.user?.first_name) || 'User' });
-              loadBalance();
-            }
-          }
+    // --- Wallet action modal ---
+    function openWalletActionModal() {
+      document.getElementById('walletActionModal').style.display = 'flex';
+      // update balance inside modal
+      document.getElementById('walletActionBalance').textContent = currentBalance.toFixed(2) + ' ETB';
+    }
+    function closeWalletActionModal() {
+      document.getElementById('walletActionModal').style.display = 'none';
+    }
 
-          // --- Balance ---
-          async function loadBalance() {
-            if (!currentUserId) return;
-            try {
-              const res = await fetch('/api/user/' + currentUserId + '/balance');
-              const data = await res.json();
-              currentBalance = data.balance || 0;
-              document.getElementById('walletBalance').textContent = currentBalance.toFixed(2);
-            } catch (e) {
-              socket.emit('refreshBalance');
-            }
-          }
+    // --- Deposit / Withdraw modals (same as before) ---
+    function openDepositModal() {
+      closeWalletActionModal();
+      document.getElementById('depositModal').style.display = 'flex';
+    }
+    function closeDepositModal() {
+      document.getElementById('depositModal').style.display = 'none';
+    }
+    function openWithdrawModal() {
+      if (currentBalance < ${minWithdrawal}) {
+        alert('Minimum withdrawal: ' + ${minWithdrawal} + ' ETB');
+        return;
+      }
+      closeWalletActionModal();
+      document.getElementById('withdrawModal').style.display = 'flex';
+    }
+    function closeWithdrawModal() {
+      document.getElementById('withdrawModal').style.display = 'none';
+    }
 
-          socket.on('balanceUpdate', (bal) => {
-            currentBalance = bal;
-            document.getElementById('walletBalance').textContent = bal.toFixed(2);
-          });
+    // --- Deposit submission (unchanged) ---
+    function submitDeposit() {
+      const receipt = document.getElementById('depositReceipt').value.trim();
+      const amount = parseFloat(document.getElementById('depositAmount').value);
+      if (!receipt) return showMessage('depositMessage', 'Enter receipt number');
+      if (amount < ${minDeposit} || amount > 10000) return showMessage('depositMessage', 'Amount must be between ${minDeposit} and 10000 ETB');
+      const btn = document.querySelector('#depositModal .submit-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      socket.emit('wallet:depositRequest', {
+        receiptNumber: receipt,
+        amount: amount,
+        userId: currentUserId,
+        userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
+      });
+      socket.once('wallet:depositRequestSuccess', (resp) => {
+        showMessage('depositMessage', resp.message || 'Submitted! Admin will approve soon.', 'success');
+        setTimeout(closeDepositModal, 2000);
+        btn.disabled = false; btn.textContent = 'Submit deposit';
+        loadBalance();
+      });
+      socket.once('wallet:error', (err) => {
+        showMessage('depositMessage', err || 'Request failed', 'error');
+        btn.disabled = false; btn.textContent = 'Submit deposit';
+      });
+    }
 
-          // ========== MODIFIED: launchGame includes userId and name in URL ==========
-          function launchGame(game) {
-            tg?.HapticFeedback?.impactOccurred('light');
-            const userId = encodeURIComponent(currentUserId);
-            const name = encodeURIComponent(appUserName || tg?.initDataUnsafe?.user?.first_name || 'User');
-            if (game === 'bingo') window.location.href = '/game?userId=' + userId + '&name=' + name;
-            if (game === 'keno') window.location.href = '/keno?userId=' + userId + '&name=' + name;
-            if (game === 'crash') window.location.href = '/crash?userId=' + userId + '&name=' + name;
-            if (game === 'slots') window.location.href = '/slots?userId=' + userId + '&name=' + name;
-          }
+    // --- Withdraw submission (unchanged) ---
+    function submitWithdraw() {
+      const amount = parseFloat(document.getElementById('withdrawAmount').value);
+      const phone = document.getElementById('withdrawPhone').value.trim();
+      if (!amount || amount < ${minWithdrawal} || amount > 5000) return showMessage('withdrawMessage', 'Invalid amount');
+      if (!/^09[0-9]{8}$/.test(phone)) return showMessage('withdrawMessage', 'Enter valid 09XXXXXXXX');
+      const btn = document.querySelector('#withdrawModal .submit-btn');
+      btn.disabled = true; btn.textContent = 'Processing...';
+      socket.emit('wallet:withdrawRequest', {
+        amount: amount,
+        phoneNumber: phone,
+        userId: currentUserId,
+        userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
+      });
+      socket.once('wallet:withdrawRequestSuccess', (resp) => {
+        showMessage('withdrawMessage', resp.message || 'Withdrawal requested!', 'success');
+        setTimeout(closeWithdrawModal, 2000);
+        btn.disabled = false; btn.textContent = 'Request withdrawal';
+        loadBalance();
+      });
+      socket.once('wallet:error', (err) => {
+        showMessage('withdrawMessage', err || 'Request failed', 'error');
+        btn.disabled = false; btn.textContent = 'Request withdrawal';
+      });
+    }
 
-          // --- Modals ---
-          function openDepositModal() {
-            document.getElementById('depositModal').style.display = 'flex';
-          }
-          function closeDepositModal() {
-            document.getElementById('depositModal').style.display = 'none';
-          }
-          function openWithdrawModal() {
-            if (currentBalance < ${minWithdrawal}) {
-              alert('Minimum withdrawal: ' + ${minWithdrawal} + ' ETB');
-              return;
-            }
-            document.getElementById('withdrawModal').style.display = 'flex';
-          }
-          function closeWithdrawModal() {
-            document.getElementById('withdrawModal').style.display = 'none';
-          }
+    function showMessage(elId, text, type = 'error') {
+      const el = document.getElementById(elId);
+      el.textContent = text;
+      el.style.display = 'block';
+      el.style.color = type === 'success' ? '#10b981' : '#ef4444';
+    }
 
-          // --- Deposit submission ---
-          function submitDeposit() {
-            const receipt = document.getElementById('depositReceipt').value.trim();
-            const amount = parseFloat(document.getElementById('depositAmount').value);
-            if (!receipt) return showMessage('depositMessage', 'Enter receipt number');
-            if (amount < ${minDeposit} || amount > 10000) return showMessage('depositMessage', 'Amount must be between ${minDeposit} and 10000 ETB');
+    // --- Game launcher (unchanged) ---
+    function launchGame(game) {
+      tg?.HapticFeedback?.impactOccurred('light');
+      const userId = encodeURIComponent(currentUserId);
+      const name = encodeURIComponent(appUserName || tg?.initDataUnsafe?.user?.first_name || 'User');
+      if (game === 'bingo') window.location.href = '/game?userId=' + userId + '&name=' + name;
+      if (game === 'keno') window.location.href = '/keno?userId=' + userId + '&name=' + name;
+      if (game === 'crash') window.location.href = '/crash?userId=' + userId + '&name=' + name;
+      if (game === 'slots') window.location.href = '/slots?userId=' + userId + '&name=' + name;
+    }
 
-            const btn = document.querySelector('#depositModal .submit-btn');
-            btn.disabled = true; btn.textContent = 'Sending...';
+    // --- Helper popups (unchanged) ---
+    function showHelp() {
+      tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nCRASH: place bet, cash out before plane crashes.\\nSLOTS: choose bet, spin and win!\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
+    }
+    function showAgentInfo() {
+      tg?.showPopup({ title: 'Agent System', message: '👑 Earn 40% Bingo, 10% Keno, 10% Crash, 10% Slots commissions.\\nOpen /agent portal or contact @Ethio_elite_games_bot' });
+    }
+    function showTerms() {
+      tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
+    }
 
-            socket.emit('wallet:depositRequest', {
-              receiptNumber: receipt,
-              amount: amount,
-              userId: currentUserId,
-              userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
-            });
+    // --- Close modals on outside click ---
+    window.onclick = (e) => {
+      if (e.target === document.getElementById('walletActionModal')) closeWalletActionModal();
+      if (e.target === document.getElementById('depositModal')) closeDepositModal();
+      if (e.target === document.getElementById('withdrawModal')) closeWithdrawModal();
+    };
 
-            socket.once('wallet:depositRequestSuccess', (resp) => {
-              showMessage('depositMessage', resp.message || 'Submitted! Admin will approve soon.', 'success');
-              setTimeout(closeDepositModal, 2000);
-              btn.disabled = false; btn.textContent = 'Submit deposit';
-              loadBalance();
-            });
-            socket.once('wallet:error', (err) => {
-              showMessage('depositMessage', err || 'Request failed', 'error');
-              btn.disabled = false; btn.textContent = 'Submit deposit';
-            });
-          }
-
-          // --- Withdrawal submission ---
-          function submitWithdraw() {
-            const amount = parseFloat(document.getElementById('withdrawAmount').value);
-            const phone = document.getElementById('withdrawPhone').value.trim();
-            if (!amount || amount < ${minWithdrawal} || amount > 5000) return showMessage('withdrawMessage', 'Invalid amount');
-            if (!/^09[0-9]{8}$/.test(phone)) return showMessage('withdrawMessage', 'Enter valid 09XXXXXXXX');
-
-            const btn = document.querySelector('#withdrawModal .submit-btn');
-            btn.disabled = true; btn.textContent = 'Processing...';
-
-            socket.emit('wallet:withdrawRequest', {
-              amount: amount,
-              phoneNumber: phone,
-              userId: currentUserId,
-              userName: appUserName || tg?.initDataUnsafe?.user?.first_name || 'User'
-            });
-
-            socket.once('wallet:withdrawRequestSuccess', (resp) => {
-              showMessage('withdrawMessage', resp.message || 'Withdrawal requested!', 'success');
-              setTimeout(closeWithdrawModal, 2000);
-              btn.disabled = false; btn.textContent = 'Request withdrawal';
-              loadBalance();
-            });
-            socket.once('wallet:error', (err) => {
-              showMessage('withdrawMessage', err || 'Request failed', 'error');
-              btn.disabled = false; btn.textContent = 'Request withdrawal';
-            });
-          }
-
-          function showMessage(elId, text, type = 'error') {
-            const el = document.getElementById(elId);
-            el.textContent = text;
-            el.style.display = 'block';
-            el.style.color = type === 'success' ? '#10b981' : '#ef4444';
-          }
-
-          // --- Helper popups ---
-          function showHelp() {
-            tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nCRASH: place bet, cash out before plane crashes.\\nSLOTS: choose bet, spin and win!\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
-          }
-          function showAgentInfo() {
-            tg?.showPopup({ title: 'Agent System', message: '👑 Earn 40% Bingo, 10% Keno, 10% Crash, 10% Slots commissions.\\nOpen /agent portal or contact @Ethio_elite_games_bot' });
-          }
-          function showTerms() {
-            tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
-          }
-
-          // --- Close modal on outside click ---
-          window.onclick = (e) => {
-            if (e.target === document.getElementById('depositModal')) closeDepositModal();
-            if (e.target === document.getElementById('withdrawModal')) closeWithdrawModal();
-          };
-
-          // --- Auto refresh balance ---
-          setInterval(loadBalance, 30000);
-        </script>
-      </body>
-      </html>
+    // --- Auto refresh balance ---
+    setInterval(loadBalance, 30000);
+  </script>
+</body>
+</html>
     `);
   } catch (error) {
     console.error('Error serving Telegram page:', error);
