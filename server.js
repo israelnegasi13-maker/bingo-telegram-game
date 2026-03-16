@@ -48,6 +48,7 @@ async function connectWithRetry(retries = MAX_RETRIES) {
     await initializeTelebirrNumber();
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
+    
     if (retries > 0) {
       console.log(`🔄 Retrying connection in ${RETRY_DELAY/1000} seconds... (${retries} retries left)`);
       setTimeout(() => connectWithRetry(retries - 1), RETRY_DELAY);
@@ -56,6 +57,7 @@ async function connectWithRetry(retries = MAX_RETRIES) {
     }
   }
 }
+
 connectWithRetry();
 
 // ========== CREATE REQUIRED DIRECTORIES AND FILES ==========
@@ -189,6 +191,7 @@ const requiredFiles = {
 </html>`
 };
 
+// Create directories and files if they don't exist
 requiredDirs.forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -204,6 +207,7 @@ Object.entries(requiredFiles).forEach(([filePath, content]) => {
 });
 
 // ========== MONGODB MODELS ==========
+// User Schema
 const userSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
   userName: { type: String, required: true },
@@ -223,6 +227,7 @@ const userSchema = new mongoose.Schema({
   telegramUsername: { type: String },
   languageCode: { type: String, default: 'en' },
   phoneNumber: { type: String },
+  // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentReferredAt: { type: Date, default: null },
   referredBy: { type: String, default: null },
@@ -231,6 +236,7 @@ const userSchema = new mongoose.Schema({
   botActive: { type: Boolean, default: true }
 });
 
+// Room Schema
 const roomSchema = new mongoose.Schema({
   stake: { type: Number, required: true },
   players: [String],
@@ -259,6 +265,7 @@ const roomSchema = new mongoose.Schema({
   countdownStartedWith: { type: Number, default: 0 }
 });
 
+// Transaction Schema
 const transactionSchema = new mongoose.Schema({
   type: { type: String, required: true },
   userId: { type: String, required: true },
@@ -273,11 +280,13 @@ const transactionSchema = new mongoose.Schema({
   approvedBy: { type: String },
   approvedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
+  // Agent System fields
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: null },
   agentCommission: { type: Number, default: 0 },
   commissionProcessed: { type: Boolean, default: false }
 });
 
+// Stats Schema
 const statsSchema = new mongoose.Schema({
   date: { type: String, required: true, unique: true },
   totalWagered: { type: Number, default: 0 },
@@ -291,25 +300,31 @@ const statsSchema = new mongoose.Schema({
   totalKenoEarnings: { type: Number, default: 0 },
   totalKenoGames: { type: Number, default: 0 },
   totalKenoWins: { type: Number, default: 0 },
+  // Crash Game stats
   totalCrashWagered: { type: Number, default: 0 },
   totalCrashPayouts: { type: Number, default: 0 },
   totalCrashGames: { type: Number, default: 0 },
   totalCrashPlayers: { type: Number, default: 0 },
+  // Slots Galaxy stats
   totalSlotsWagered: { type: Number, default: 0 },
   totalSlotsPayouts: { type: Number, default: 0 },
   totalSlotsGames: { type: Number, default: 0 },
   totalSlotsPlayers: { type: Number, default: 0 },
+  // Agent System stats
   agentCommissions: { type: Number, default: 0 },
   agentReferrals: { type: Number, default: 0 },
   activeAgents: { type: Number, default: 0 }
 });
 
+// Setting model for storing Telebirr number and other settings
 const settingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: mongoose.Schema.Types.Mixed, required: true },
   updatedAt: { type: Date, default: Date.now }
 });
 
+// ========== AGENT SYSTEM MODELS ==========
+// Agent Schema
 const agentSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
@@ -331,6 +346,7 @@ const agentSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+// Agent Commission Schema
 const agentCommissionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   userId: { type: String, required: true },
@@ -345,8 +361,10 @@ const agentCommissionSchema = new mongoose.Schema({
   status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' },
   createdAt: { type: Date, default: Date.now }
 });
+
 agentCommissionSchema.index({ transactionKey: 1 }, { unique: true, sparse: true });
 
+// Agent Transaction Schema
 const agentTransactionSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   type: { type: String, enum: ['COMMISSION', 'WITHDRAWAL', 'BONUS'], required: true },
@@ -358,6 +376,7 @@ const agentTransactionSchema = new mongoose.Schema({
   processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent' }
 });
 
+// Referral Schema
 const referralSchema = new mongoose.Schema({
   agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: true },
   userId: { type: String, required: true },
@@ -372,10 +391,12 @@ const referralSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
 referralSchema.index({ agentId: 1, createdAt: -1 });
 referralSchema.index({ userId: 1 }, { unique: true });
 referralSchema.index({ referralCode: 1 });
 
+// Create all models
 const User = mongoose.model('User', userSchema);
 const Room = mongoose.model('Room', roomSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
@@ -407,15 +428,19 @@ async function updateTelebirrNumber(newNumber) {
     if (!/^09[0-9]{8}$/.test(newNumber)) {
       throw new Error('Invalid phone number format. Must be 09xxxxxxxx (10 digits)');
     }
+    
     const result = await Setting.findOneAndUpdate(
       { key: 'telebirrNumber' },
       { value: newNumber, updatedAt: new Date() },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    
     console.log(`✅ Telebirr number updated to: ${newNumber}`);
+    
     if (gameLogic && gameLogic.setTelebirrNumber) {
       gameLogic.setTelebirrNumber(newNumber);
     }
+    
     return result;
   } catch (err) {
     console.error('❌ Error updating Telebirr number:', err);
@@ -433,11 +458,13 @@ async function initializeTelebirrNumber() {
         updatedAt: new Date()
       });
       console.log('✅ Default Telebirr number initialized: 0962577855');
+      
       if (gameLogic && gameLogic.setTelebirrNumber) {
         gameLogic.setTelebirrNumber('0962577855');
       }
     } else {
       console.log(`✅ Telebirr number loaded from DB: ${exists.value}`);
+      
       if (gameLogic && gameLogic.setTelebirrNumber) {
         gameLogic.setTelebirrNumber(exists.value);
       }
@@ -499,6 +526,7 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Static files with proper caching
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0,
   setHeaders: (res, path) => {
@@ -508,14 +536,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// ========== Serve sponsor images from root ==========
-app.get('/sponser1.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser1.png'));
-});
-app.get('/sponser2.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'sponser2.png'));
-});
-
+// Serve bots panel from root folder
 app.get('/bots-panel.html', (req, res) => {
   const filePath = path.join(__dirname, 'bots-panel.html');
   if (fs.existsSync(filePath)) {
@@ -525,8 +546,22 @@ app.get('/bots-panel.html', (req, res) => {
   }
 });
 
+// Serve assets folder for images and sounds
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
+// ========== Serve sponsor images ==========
+app.get('/sponser1.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser1.png'), (err) => {
+    if (err) res.status(404).send('Sponsor image 1 not found');
+  });
+});
+app.get('/sponser2.png', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sponser2.png'), (err) => {
+    if (err) res.status(404).send('Sponsor image 2 not found');
+  });
+});
+
+// Security headers for Telegram
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -544,6 +579,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Apply rate limiting to API routes
 app.use('/api/', apiLimiter);
 
 // ========== INITIALIZE GAME LOGIC ==========
@@ -619,9 +655,17 @@ io.on('connection', (socket) => {
     }
   }, 30000);
   
-  socket.once('admin:authSuccess', () => clearTimeout(authTimeout));
-  socket.once('agent:loginSuccess', () => clearTimeout(authTimeout));
-  socket.once('authenticated', () => clearTimeout(authTimeout));
+  socket.once('admin:authSuccess', () => {
+    clearTimeout(authTimeout);
+  });
+  
+  socket.once('agent:loginSuccess', () => {
+    clearTimeout(authTimeout);
+  });
+  
+  socket.once('authenticated', () => {
+    clearTimeout(authTimeout);
+  });
   
   socket.on('init', async (data) => {
     const { userId, userName } = data;
@@ -837,7 +881,8 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS (full list from previous version) ==========
+  // ========== AGENT SYSTEM SOCKET EVENTS ==========
+  // (All existing agent events remain unchanged)
   socket.on('agent:login', (data) => {
     if (agentSystem && agentSystem.handleAgentLogin) {
       agentSystem.handleAgentLogin(socket, data);
@@ -971,7 +1016,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Super admin agent events
   socket.on('admin:getAllAgents', () => {
     if (socket.admin && agentSystem && agentSystem.handleGetAllAgents) {
       agentSystem.handleGetAllAgents(socket);
@@ -1051,7 +1095,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Agent withdrawal approval (admin)
   socket.on('admin:getPendingAgentWithdrawals', async () => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -1109,7 +1152,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Additional agent events
   socket.on('agent:logout', () => {
     if (agentSystem && agentSystem.handleAgentLogout) {
       agentSystem.handleAgentLogout(socket);
@@ -1152,7 +1194,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== TELEBIRR NUMBER EVENTS ==========
   socket.on('admin:getTelebirrNumber', async () => {
     if (socket.admin) {
       const number = await getTelebirrNumber();
@@ -1165,10 +1206,20 @@ io.on('connection', (socket) => {
       try {
         const result = await updateTelebirrNumber(newNumber);
         const updatedNumber = result.value;
-        io.emit('admin:telebirrNumberUpdated', { telebirrNumber: updatedNumber, updatedAt: result.updatedAt });
-        io.emit('telebirrNumberUpdate', { telebirrNumber: updatedNumber, timestamp: new Date().toISOString() });
+        
+        io.emit('admin:telebirrNumberUpdated', { 
+          telebirrNumber: updatedNumber,
+          updatedAt: result.updatedAt
+        });
+        
+        io.emit('telebirrNumberUpdate', {
+          telebirrNumber: updatedNumber,
+          timestamp: new Date().toISOString()
+        });
+        
         socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
         console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
+        
         const adminTransaction = new Transaction({
           type: 'TELEBIRR_UPDATE',
           userId: 'admin',
@@ -1178,6 +1229,7 @@ io.on('connection', (socket) => {
           description: `Telebirr number updated to ${updatedNumber}`
         });
         await adminTransaction.save();
+        
       } catch (error) {
         console.error('❌ Error updating Telebirr number:', error);
         socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
@@ -1185,7 +1237,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== KENO EVENTS ==========
   socket.on('admin:getKenoStats', () => {
     if (socket.admin && kenoLogic && kenoLogic.getKenoGameStats) {
       const stats = kenoLogic.getKenoGameStats();
@@ -1225,7 +1276,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== CRASH GAME SOCKET EVENTS ==========
   if (crashLogic && crashLogic.handleCrashConnection) {
     crashLogic.handleCrashConnection(socket);
   }
@@ -1258,7 +1308,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== NEW: SLOTS GALAXY SOCKET EVENTS ==========
   if (slotsLogic && slotsLogic.handleSlotsConnection) {
     slotsLogic.handleSlotsConnection(socket);
   }
@@ -1277,7 +1326,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== HOUSE EARNINGS ==========
   socket.on('admin:resetHouseEarnings', async () => {
     if (!socket.admin) return;
 
@@ -1286,7 +1334,10 @@ io.on('connection', (socket) => {
       const currentTotal = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
 
       if (currentTotal === 0) {
-        socket.emit('admin:houseEarningsReset', { previousAmount: 0, message: 'House earnings are already zero.' });
+        socket.emit('admin:houseEarningsReset', {
+          previousAmount: 0,
+          message: 'House earnings are already zero.'
+        });
         return;
       }
 
@@ -1300,7 +1351,11 @@ io.on('connection', (socket) => {
       });
       await resetTransaction.save();
 
-      socket.emit('admin:houseEarningsReset', { previousAmount: currentTotal, resetAmount: 0, message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB` });
+      socket.emit('admin:houseEarningsReset', {
+        previousAmount: currentTotal,
+        resetAmount: 0,
+        message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
+      });
 
       if (gameLogic && gameLogic.handleAdminGetData) {
         io.sockets.sockets.forEach(s => {
@@ -1315,7 +1370,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== EXISTING ADMIN EVENTS ==========
   socket.on('admin:getData', () => {
     if (socket.admin && gameLogic && gameLogic.handleAdminGetData) {
       gameLogic.handleAdminGetData(socket);
@@ -1388,12 +1442,10 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== KENO GAME SOCKET EVENTS ==========
   if (kenoLogic && kenoLogic.handleKenoConnection) {
     kenoLogic.handleKenoConnection(socket);
   }
   
-  // ========== DISCONNECT HANDLER ==========
   socket.on('disconnect', () => {
     console.log(`🔌 Disconnected: ${socket.id}`);
     clearTimeout(authTimeout);
@@ -1423,7 +1475,6 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== GAME EVENTS ==========
   socket.on('join', (data) => {
     if (data.referralCode && agentSystem && agentSystem.processReferral) {
       agentSystem.processReferral(data.userId, data.referralCode).catch(err => {
@@ -1542,7 +1593,6 @@ io.on('connection', (socket) => {
     console.error(`Socket error for ${socket.id}:`, error);
   });
 
-  // ========== BOT MANAGEMENT EVENTS ==========
   socket.on('admin:getBotsList', async () => {
     if (!socket.admin) {
       socket.emit('admin:error', 'Unauthorized');
@@ -2117,6 +2167,7 @@ app.get('/app', (req, res) => {
       </div>
 
       <script>
+        // --- Auto‑redirect if already logged in ---
         (function() {
           const storedUserId = localStorage.getItem('appUserId');
           const storedUserName = localStorage.getItem('appUserName');
@@ -2261,18 +2312,33 @@ app.get('/health', async (req, res) => {
       nodeVersion: process.version,
       platform: process.platform
     };
+    
     res.json(health);
   } catch (error) {
-    res.status(500).json({ status: 'error', error: error.message, timestamp: new Date().toISOString() });
+    res.status(500).json({ 
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
 app.get('/ready', async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
-    res.json({ status: 'ready', database: 'connected', timestamp: new Date().toISOString() });
+    
+    res.json({
+      status: 'ready',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    res.status(503).json({ status: 'not_ready', database: 'disconnected', error: error.message, timestamp: new Date().toISOString() });
+    res.status(503).json({
+      status: 'not_ready',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -2390,13 +2456,14 @@ app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
 });
 
-// ========== FINAL TELEGRAM ENTRY PAGE - WALLET IN TOP RIGHT CORNER ==========
+// ========== REDESIGNED TELEGRAM ENTRY PAGE - WITH BIGGER ADS BOARD, BALANCE NEXT TO WALLET, POPUP LIKE ORIGINAL WALLET ==========
 app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
+    // Load custom icons from root folder
     let bingoIconBase64 = '', kenoIconBase64 = '', crashIconBase64 = '', slotsIconBase64 = '';
     try {
       const bingoPath = path.join(__dirname, 'bingo-icon.png.jpg');
@@ -2418,7 +2485,7 @@ app.get('/telegram', async (req, res) => {
       const slotsBuffer = fs.readFileSync(slotsPath);
       slotsIconBase64 = slotsBuffer.toString('base64');
     } catch (e) {}
-    
+
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -2445,17 +2512,18 @@ app.get('/telegram', async (req, res) => {
           .container {
             max-width: 400px;
             margin: 0 auto;
-            padding: 16px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 12px;
           }
 
+          /* Header with logo, greeting and wallet button */
           .header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding-bottom: 8px;
+            padding-bottom: 4px;
             border-bottom: 1px solid #20262e;
           }
 
@@ -2469,121 +2537,86 @@ app.get('/telegram', async (req, res) => {
             color: #8b5cf6;
           }
 
+          .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+
           .user-greeting {
             font-size: 14px;
             color: #8e9aaf;
-            margin-left: auto;
-            margin-right: 12px;
           }
 
-          /* Compact wallet button in top right */
-          .wallet-container {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #13171c;
-            border: 1px solid #3b82f6;
-            border-radius: 30px;
-            padding: 4px 12px;
-            cursor: pointer;
-            user-select: none;
-            margin-left: auto;
-          }
-          .wallet-emoji {
-            font-size: 20px;
-          }
-          .balance-display {
-            font-size: 16px;
-            font-weight: 600;
-          }
-          .balance-display small {
-            font-size: 11px;
-            color: #8e9aaf;
-            margin-left: 2px;
-          }
-
-          .wallet-menu {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            background: #1e252e;
-            border: 1px solid #3b82f6;
-            border-radius: 20px;
-            padding: 10px;
-            width: 160px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-            display: none;
-            z-index: 100;
-          }
-          .wallet-menu.active {
-            display: block;
-          }
-          .wallet-menu button {
-            width: 100%;
-            padding: 10px;
-            margin: 4px 0;
-            border: none;
-            border-radius: 30px;
-            font-weight: 600;
-            font-size: 14px;
-            background: #20262e;
-            color: white;
-            cursor: pointer;
+          .wallet-button {
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 6px;
+            background: #20262e;
+            padding: 8px 12px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
           }
-          .wallet-menu button.deposit {
-            background: #3b82f6;
+          .wallet-button:active {
+            background: #2d343e;
           }
-          .wallet-menu button.withdraw {
-            background: #10b981;
+          .wallet-emoji {
+            font-size: 18px;
           }
-          .wallet-menu button:active {
-            filter: brightness(1.2);
+          #headerBalance {
+            font-weight: 600;
+            color: #f0f4fa;
           }
 
+          /* Sponsor board - BIGGER */
           .sponsor-board {
             width: 100%;
-            height: 180px;
-            background: #13171c;
-            border-radius: 20px;
+            height: 160px;
+            border-radius: 16px;
             overflow: hidden;
+            background: #13171c;
             border: 1px solid #262d36;
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 8px 0;
           }
-          .sponsor-board img {
+          .sponsor-image {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            display: block;
+          }
+          .sponsor-fallback {
+            color: #8e9aaf;
+            font-size: 14px;
+            text-align: center;
           }
 
           .section-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             color: #f0f4fa;
           }
 
+          /* Smaller games grid */
           .games-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
+            gap: 12px;
           }
 
           .game-card {
             background: #13171c;
             border: 1px solid #262d36;
-            border-radius: 24px;
-            padding: 16px 12px;
+            border-radius: 18px;
+            padding: 12px 8px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2595,10 +2628,10 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            margin-bottom: 10px;
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
+            margin-bottom: 8px;
             object-fit: cover;
             border: 1px solid #3b82f6;
           }
@@ -2612,18 +2645,18 @@ app.get('/telegram', async (req, res) => {
             border-color: #eab308;
           }
 
+          /* Fallback CSS icons (if image missing) */
           .bingo-icon-fallback {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: #1e293b;
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #3b82f6;
             box-shadow: 0 0 0 1px rgba(59,130,246,0.3);
-            margin-bottom: 10px;
           }
           .bingo-numbers-row {
             display: flex;
@@ -2633,8 +2666,8 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2653,15 +2686,14 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #8b5cf6;
-            margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2671,56 +2703,56 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #f97316;
-            margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
+            letter-spacing: 2px;
           }
           .slots-icon-fallback {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
-            border-radius: 16px;
+            border-radius: 14px;
             border: 1px solid #eab308;
-            margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
+            letter-spacing: 2px;
           }
 
           .game-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
           }
 
           .game-desc {
-            font-size: 11px;
+            font-size: 10px;
             color: #8e9aaf;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
           }
 
           .play-btn {
             background: transparent;
             border: 1px solid #3b82f6;
             color: #3b82f6;
-            padding: 6px 16px;
+            padding: 6px 12px;
             border-radius: 40px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             width: 100%;
             transition: all 0.2s;
@@ -2743,13 +2775,13 @@ app.get('/telegram', async (req, res) => {
           }
 
           .footer {
-            margin-top: 24px;
-            padding-top: 16px;
+            margin-top: 16px;
+            padding-top: 12px;
             border-top: 1px solid #20262e;
             display: flex;
             justify-content: center;
             gap: 24px;
-            font-size: 12px;
+            font-size: 11px;
             color: #5a6573;
           }
           .footer a {
@@ -2758,6 +2790,7 @@ app.get('/telegram', async (req, res) => {
           }
           .footer a:active { color: white; }
 
+          /* Wallet Modal (like original wallet card) */
           .modal {
             display: none;
             position: fixed;
@@ -2797,6 +2830,66 @@ app.get('/telegram', async (req, res) => {
             font-size: 24px;
             cursor: pointer;
           }
+
+          .wallet-card {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 1px solid #3b82f6;
+          }
+          .wallet-balance {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+          }
+          .wallet-balance small {
+            font-size: 14px;
+            color: #8e9aaf;
+            margin-left: 4px;
+          }
+          .telebirr-info {
+            margin-top: 12px;
+          }
+          .telebirr-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #60a5fa;
+          }
+          .min-info {
+            color: #8e9aaf;
+            font-size: 13px;
+            margin-top: 8px;
+          }
+
+          .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+          }
+          .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 40px;
+            border: none;
+            font-weight: 600;
+            font-size: 16px;
+            background: #20262e;
+            color: white;
+            cursor: pointer;
+          }
+          .modal-btn.primary {
+            background: #3b82f6;
+          }
+          .modal-btn.primary:active {
+            background: #2563eb;
+          }
+          .modal-btn:active {
+            background: #2d343e;
+          }
+
+          /* Deposit/Withdraw modals (unchanged) */
           .form-group {
             margin-bottom: 16px;
           }
@@ -2814,19 +2907,6 @@ app.get('/telegram', async (req, res) => {
             border-radius: 16px;
             color: white;
             font-size: 16px;
-          }
-          .telebirr-info {
-            background: #0f172a;
-            padding: 16px;
-            border-radius: 16px;
-            margin-bottom: 20px;
-            text-align: center;
-            border: 1px solid #3b82f6;
-          }
-          .telebirr-number {
-            font-size: 20px;
-            font-weight: 700;
-            color: #60a5fa;
           }
           .submit-btn {
             width: 100%;
@@ -2865,18 +2945,16 @@ app.get('/telegram', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <!-- Header with logo and wallet button -->
+          <!-- Header -->
           <div class="header">
             <div class="logo-text">ETHIO<span>GAMES</span></div>
-            <div class="user-greeting" id="userGreeting" style="display: none;">
-              👋 <span id="userName">User</span>
-            </div>
-            <div class="wallet-container" id="walletContainer">
-              <span class="wallet-emoji">💰</span>
-              <span class="balance-display" id="walletBalance">0.00 <small>ETB</small></span>
-              <div class="wallet-menu" id="walletMenu">
-                <button class="deposit" onclick="openDepositModal(); closeWalletMenu()">💳 Deposit</button>
-                <button class="withdraw" onclick="openWithdrawModal(); closeWalletMenu()">💸 Withdraw</button>
+            <div class="header-right">
+              <div class="user-greeting" id="userGreeting" style="display: none;">
+                👋 <span id="userName">User</span>
+              </div>
+              <div class="wallet-button" onclick="openWalletModal()">
+                <span class="wallet-emoji">💰</span>
+                <span id="headerBalance">0.00</span> ETB
               </div>
             </div>
           </div>
@@ -2886,15 +2964,19 @@ app.get('/telegram', async (req, res) => {
             ⚠️ Could not detect Telegram user. <a href="/app" style="color:#f59e0b;">Click here to login via mobile app</a>
           </div>
 
-          <!-- Sponsor Board -->
+          <!-- Sponsor Board (BIGGER) -->
           <div class="sponsor-board">
-            <img id="sponsorImage" src="/sponser1.png" alt="Sponsor">
+            <img id="sponsorImage" class="sponsor-image" src="/sponser1.png" alt="Sponsor" onerror="this.style.display='none'; document.getElementById('sponsorFallback').style.display='flex';">
+            <div id="sponsorFallback" class="sponsor-fallback" style="display: none;">
+              Sponsor Board<br>(ads appear here)
+            </div>
           </div>
 
-          <!-- Active Games -->
+          <!-- Games Grid -->
           <div>
             <div class="section-title"><span>🎮 PLAY NOW</span></div>
             <div class="games-grid">
+              <!-- BINGO card -->
               <div class="game-card" onclick="launchGame('bingo')">
                 ${bingoIconBase64 
                   ? `<img src="data:image/png;base64,${bingoIconBase64}" class="game-icon" alt="Bingo">`
@@ -2914,6 +2996,7 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn">Play</button>
               </div>
 
+              <!-- KENO card -->
               <div class="game-card" onclick="launchGame('keno')">
                 ${kenoIconBase64 
                   ? `<img src="data:image/png;base64,${kenoIconBase64}" class="game-icon keno-icon" alt="Keno">`
@@ -2926,6 +3009,7 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn keno">Play</button>
               </div>
 
+              <!-- CRASH card -->
               <div class="game-card" onclick="launchGame('crash')">
                 ${crashIconBase64 
                   ? `<img src="data:image/png;base64,${crashIconBase64}" class="game-icon crash-icon" alt="Crash">`
@@ -2938,6 +3022,7 @@ app.get('/telegram', async (req, res) => {
                 <button class="play-btn crash">Play</button>
               </div>
 
+              <!-- SLOTS card -->
               <div class="game-card" onclick="launchGame('slots')">
                 ${slotsIconBase64 
                   ? `<img src="data:image/png;base64,${slotsIconBase64}" class="game-icon slots-icon" alt="Slots">`
@@ -2957,6 +3042,30 @@ app.get('/telegram', async (req, res) => {
             <a href="#" onclick="showHelp()">Help</a>
             <a href="#" onclick="showAgentInfo()">Agent</a>
             <a href="#" onclick="showTerms()">Terms</a>
+          </div>
+        </div>
+
+        <!-- Wallet Modal (like original wallet card) -->
+        <div class="modal" id="walletModal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div class="modal-title">💰 Your Wallet</div>
+              <button class="close-btn" onclick="closeWalletModal()">×</button>
+            </div>
+            <div class="wallet-card">
+              <div class="wallet-balance">
+                <span id="modalBalance">0.00</span><small>ETB</small>
+              </div>
+              <div class="telebirr-info">
+                <div style="color:#8e9aaf; margin-bottom:8px;">Send money to</div>
+                <div class="telebirr-number">${telebirrNumber}</div>
+                <div class="min-info">Min deposit: ${minDeposit} ETB</div>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="modal-btn primary" onclick="openDepositModal()">Deposit</button>
+              <button class="modal-btn" onclick="openWithdrawModal()">Withdraw</button>
+            </div>
           </div>
         </div>
 
@@ -3007,39 +3116,35 @@ app.get('/telegram', async (req, res) => {
 
         <script src="/socket.io/socket.io.js"></script>
         <script>
+          // --- Telegram WebApp init ---
           const tg = window.Telegram?.WebApp;
           const socket = io();
           let currentUserId = null;
           let currentBalance = 0;
           let fallbackTimer = null;
 
+          // Sponsor image rotation
           const sponsorImages = ['/sponser1.png', '/sponser2.png'];
-          let sponsorIndex = 0;
-          const sponsorEl = document.getElementById('sponsorImage');
-          setInterval(() => {
-            sponsorIndex = (sponsorIndex + 1) % sponsorImages.length;
-            sponsorEl.src = sponsorImages[sponsorIndex];
-          }, 2000);
+          let currentSponsorIndex = 0;
+          const sponsorImg = document.getElementById('sponsorImage');
+          const sponsorFallback = document.getElementById('sponsorFallback');
 
-          const walletContainer = document.getElementById('walletContainer');
-          const walletMenu = document.getElementById('walletMenu');
-
-          function toggleWalletMenu(e) {
-            if (e.target.closest('button')) return;
-            walletMenu.classList.toggle('active');
+          function rotateSponsor() {
+            if (!sponsorImg) return;
+            currentSponsorIndex = (currentSponsorIndex + 1) % sponsorImages.length;
+            sponsorImg.src = sponsorImages[currentSponsorIndex];
           }
-          function closeWalletMenu() {
-            walletMenu.classList.remove('active');
+          setInterval(rotateSponsor, 2000);
+
+          // Handle image load error
+          if (sponsorImg) {
+            sponsorImg.onerror = function() {
+              sponsorImg.style.display = 'none';
+              sponsorFallback.style.display = 'flex';
+            };
           }
 
-          walletContainer.addEventListener('click', toggleWalletMenu);
-
-          document.addEventListener('click', (e) => {
-            if (!walletContainer.contains(e.target) && walletMenu.classList.contains('active')) {
-              walletMenu.classList.remove('active');
-            }
-          });
-
+          // Try to get user from URL first (app login)
           const urlParams = new URLSearchParams(window.location.search);
           const appUserId = urlParams.get('userId');
           const appUserName = urlParams.get('name');
@@ -3079,13 +3184,15 @@ app.get('/telegram', async (req, res) => {
             }
           }
 
+          // --- Balance ---
           async function loadBalance() {
             if (!currentUserId) return;
             try {
               const res = await fetch('/api/user/' + currentUserId + '/balance');
               const data = await res.json();
               currentBalance = data.balance || 0;
-              document.getElementById('walletBalance').innerHTML = currentBalance.toFixed(2) + ' <small>ETB</small>';
+              document.getElementById('headerBalance').textContent = currentBalance.toFixed(2);
+              document.getElementById('modalBalance').textContent = currentBalance.toFixed(2);
             } catch (e) {
               socket.emit('refreshBalance');
             }
@@ -3093,8 +3200,35 @@ app.get('/telegram', async (req, res) => {
 
           socket.on('balanceUpdate', (bal) => {
             currentBalance = bal;
-            document.getElementById('walletBalance').innerHTML = bal.toFixed(2) + ' <small>ETB</small>';
+            document.getElementById('headerBalance').textContent = bal.toFixed(2);
+            document.getElementById('modalBalance').textContent = bal.toFixed(2);
           });
+
+          // --- Modal controls ---
+          function openWalletModal() {
+            document.getElementById('walletModal').style.display = 'flex';
+          }
+          function closeWalletModal() {
+            document.getElementById('walletModal').style.display = 'none';
+          }
+          function openDepositModal() {
+            closeWalletModal();
+            document.getElementById('depositModal').style.display = 'flex';
+          }
+          function closeDepositModal() {
+            document.getElementById('depositModal').style.display = 'none';
+          }
+          function openWithdrawModal() {
+            if (currentBalance < ${minWithdrawal}) {
+              alert('Minimum withdrawal: ' + ${minWithdrawal} + ' ETB');
+              return;
+            }
+            closeWalletModal();
+            document.getElementById('withdrawModal').style.display = 'flex';
+          }
+          function closeWithdrawModal() {
+            document.getElementById('withdrawModal').style.display = 'none';
+          }
 
           function launchGame(game) {
             tg?.HapticFeedback?.impactOccurred('light');
@@ -3106,23 +3240,7 @@ app.get('/telegram', async (req, res) => {
             if (game === 'slots') window.location.href = '/slots?userId=' + userId + '&name=' + name;
           }
 
-          function openDepositModal() {
-            document.getElementById('depositModal').style.display = 'flex';
-          }
-          function closeDepositModal() {
-            document.getElementById('depositModal').style.display = 'none';
-          }
-          function openWithdrawModal() {
-            if (currentBalance < ${minWithdrawal}) {
-              alert('Minimum withdrawal: ' + ${minWithdrawal} + ' ETB');
-              return;
-            }
-            document.getElementById('withdrawModal').style.display = 'flex';
-          }
-          function closeWithdrawModal() {
-            document.getElementById('withdrawModal').style.display = 'none';
-          }
-
+          // --- Deposit submission ---
           function submitDeposit() {
             const receipt = document.getElementById('depositReceipt').value.trim();
             const amount = parseFloat(document.getElementById('depositAmount').value);
@@ -3151,6 +3269,7 @@ app.get('/telegram', async (req, res) => {
             });
           }
 
+          // --- Withdrawal submission ---
           function submitWithdraw() {
             const amount = parseFloat(document.getElementById('withdrawAmount').value);
             const phone = document.getElementById('withdrawPhone').value.trim();
@@ -3186,6 +3305,7 @@ app.get('/telegram', async (req, res) => {
             el.style.color = type === 'success' ? '#10b981' : '#ef4444';
           }
 
+          // --- Helper popups ---
           function showHelp() {
             tg?.showPopup({ title: 'How to play', message: 'BINGO: select ticket → mark numbers → claim BINGO.\\nKENO: pick 5 numbers → win on matches.\\nCRASH: place bet, cash out before plane crashes.\\nSLOTS: choose bet, spin and win!\\nDeposit: send to ${telebirrNumber}, enter receipt.' });
           }
@@ -3196,11 +3316,14 @@ app.get('/telegram', async (req, res) => {
             tg?.showPopup({ title: 'Terms', message: 'Play responsibly. 18+. Admin decisions final.' });
           }
 
+          // --- Close modal on outside click ---
           window.onclick = (e) => {
+            if (e.target === document.getElementById('walletModal')) closeWalletModal();
             if (e.target === document.getElementById('depositModal')) closeDepositModal();
             if (e.target === document.getElementById('withdrawModal')) closeWithdrawModal();
           };
 
+          // --- Auto refresh balance ---
           setInterval(loadBalance, 30000);
         </script>
       </body>
@@ -3224,7 +3347,7 @@ app.get('/telegram', async (req, res) => {
   }
 });
 
-// ========== OTHER GAME ROUTES ==========
+// ========== Serve Slots HTML page ==========
 app.get('/slots', (req, res) => {
   const slotsPath = path.join(__dirname, 'slots.html');
   if (fs.existsSync(slotsPath)) {
@@ -3263,6 +3386,7 @@ app.get('/slots', (req, res) => {
   }
 });
 
+// Serve Crash HTML page
 app.get('/crash', (req, res) => {
   const crashPath = path.join(__dirname, 'crash.html');
   if (fs.existsSync(crashPath)) {
@@ -3301,6 +3425,7 @@ app.get('/crash', (req, res) => {
   }
 });
 
+// Serve Keno HTML page
 app.get('/keno', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'keno.html'))) {
     res.sendFile(path.join(__dirname, 'keno.html'));
@@ -3311,6 +3436,7 @@ app.get('/keno', (req, res) => {
   }
 });
 
+// Serve Bingo HTML page
 app.get('/game', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'game.html'))) {
     res.sendFile(path.join(__dirname, 'game.html'));
@@ -3321,6 +3447,7 @@ app.get('/game', (req, res) => {
   }
 });
 
+// Serve Admin HTML page
 app.get('/admin', (req, res) => {
   if (fs.existsSync(path.join(__dirname, 'admin.html'))) {
     res.sendFile(path.join(__dirname, 'admin.html'));
@@ -3332,10 +3459,13 @@ app.get('/admin', (req, res) => {
 });
 
 // ========== API ENDPOINTS ==========
+// API endpoint to get user balance
 app.get('/api/user/:userId', async (req, res) => {
   try {
     const user = await User.findOne({ userId: req.params.userId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     res.json({
       userId: user.userId,
       userName: user.userName,
@@ -3354,16 +3484,23 @@ app.get('/api/user/:userId', async (req, res) => {
   }
 });
 
+// API endpoint to get user balance (simple version for Telegram entry page)
 app.get('/api/user/:userId/balance', async (req, res) => {
   try {
     const user = await User.findOne({ userId: req.params.userId });
-    if (!user) return res.json({ balance: 0 });
-    res.json({ balance: user.balance, userName: user.userName });
+    if (!user) {
+      return res.json({ balance: 0 });
+    }
+    res.json({ 
+      balance: user.balance,
+      userName: user.userName 
+    });
   } catch (error) {
     res.json({ balance: 0, error: error.message });
   }
 });
 
+// API endpoint to get Telebirr number
 app.get('/api/telebirr-number', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
@@ -3374,16 +3511,23 @@ app.get('/api/telebirr-number', async (req, res) => {
   }
 });
 
+// API endpoint to add funds (for admin)
 app.post('/api/add-funds', async (req, res) => {
   try {
     const { userId, amount, adminPassword } = req.body;
+    
     if (adminPassword !== (gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    
     const user = await User.findOne({ userId: userId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
     user.balance += parseFloat(amount);
     await user.save();
+    
     const transaction = new Transaction({
       type: 'ADMIN_ADD',
       userId: userId,
@@ -3393,17 +3537,29 @@ app.post('/api/add-funds', async (req, res) => {
       description: `Admin added ${amount} ETB via API`
     });
     await transaction.save();
-    res.json({ success: true, message: `Added ${amount} ETB to ${user.userName}`, newBalance: user.balance });
+    
+    res.json({
+      success: true,
+      message: `Added ${amount} ETB to ${user.userName}`,
+      newBalance: user.balance
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// API endpoint to get agent by referral code
 app.get('/api/agent/:referralCode', async (req, res) => {
   try {
-    const agent = await Agent.findOne({ referralCode: req.params.referralCode, isActive: true })
-      .select('name username referralCode commissionRateBingo commissionRateKeno commissionRateCrash commissionRateSlots');
-    if (!agent) return res.status(404).json({ error: 'Agent not found or inactive' });
+    const agent = await Agent.findOne({ 
+      referralCode: req.params.referralCode,
+      isActive: true 
+    }).select('name username referralCode commissionRateBingo commissionRateKeno commissionRateCrash commissionRateSlots');
+    
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found or inactive' });
+    }
+    
     res.json({
       success: true,
       agent: {
@@ -3422,14 +3578,17 @@ app.get('/api/agent/:referralCode', async (req, res) => {
   }
 });
 
+// API endpoint to get referral statistics
 app.get('/api/referral-stats', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const usersWithAgents = await User.countDocuments({ agentId: { $exists: true, $ne: null } });
     const usersWithoutAgents = totalUsers - usersWithAgents;
+    
     const telegramReferrals = await Referral.countDocuments({ referralMethod: 'telegram_link' });
     const manualReferrals = await Referral.countDocuments({ referralMethod: { $in: ['manual', 'bulk_manual'] } });
     const adminReferrals = await Referral.countDocuments({ referralMethod: 'admin_assigned' });
+    
     res.json({
       success: true,
       stats: {
@@ -3459,12 +3618,21 @@ const REGISTRATION_BONUS = 0;
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, referralCode } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
-    if (username.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters' });
-    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+    if (username.length < 3) {
+      return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
 
     const existingUser = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } });
-    if (existingUser) return res.status(409).json({ error: 'Username already taken' });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Username already taken' });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = generateAppUserId(username);
@@ -3479,6 +3647,7 @@ app.post('/api/register', async (req, res) => {
       joinedAt: new Date(),
       lastSeen: new Date()
     });
+
     await newUser.save();
     console.log(`✅ New app user registered: ${username} (${userId})`);
 
@@ -3499,7 +3668,12 @@ app.post('/api/register', async (req, res) => {
       });
     }
 
-    res.json({ success: true, message: 'Registration successful', userId, userName: username });
+    res.json({
+      success: true,
+      message: 'Registration successful',
+      userId,
+      userName: username
+    });
   } catch (error) {
     console.error('Registration error details:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -3509,19 +3683,35 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
 
     const user = await User.findOne({ userName: { $regex: new RegExp(`^${username}$`, 'i') } }).select('+password');
-    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
-    if (!user.password) return res.status(401).json({ error: 'Account not set up for app login' });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    if (!user.password) {
+      return res.status(401).json({ error: 'Account not set up for app login' });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
 
     user.lastSeen = new Date();
     await user.save();
 
-    res.json({ success: true, message: 'Login successful', userId: user.userId, userName: user.userName, balance: user.balance });
+    res.json({
+      success: true,
+      message: 'Login successful',
+      userId: user.userId,
+      userName: user.userName,
+      balance: user.balance
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -3534,6 +3724,7 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     const { message } = req.body;
+    
     if (message) {
       const chatId = message.chat.id;
       const text = message.text || '';
@@ -3550,6 +3741,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       
       if (text.startsWith('/start') || text === '/play') {
         let user = await User.findOne({ telegramId: userId });
+        
         if (!user) {
           user = new User({
             userId: `tg_${userId}`,
@@ -3560,7 +3752,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             referralCode: `TG${userId}`
           });
           await user.save();
+          
           console.log(`👤 New Telegram user: ${userName} (@${username})`);
+          
           if (REGISTRATION_BONUS > 0) {
             const bonusTransaction = new Transaction({
               type: 'BONUS',
@@ -3571,10 +3765,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             });
             await bonusTransaction.save();
           }
+          
           if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
             await agentSystem.handleTelegramReferral(user.userId, referralCode);
           }
         }
+        
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3614,6 +3810,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       else if (text === '/balance' || text === 'check_balance') {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
+        
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3720,6 +3917,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         });
       }
     }
+    
     res.sendStatus(200);
   } catch (error) {
     console.error('Telegram webhook error:', error);
@@ -3732,7 +3930,11 @@ app.get('/setup-telegram', async (req, res) => {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
     const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
+    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { 
+      totalAgents: 0, 
+      activeAgents: 0, 
+      totalCommissions: 0 
+    };
     
     const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
       method: 'POST',
@@ -3742,6 +3944,7 @@ app.get('/setup-telegram', async (req, res) => {
         drop_pending_updates: true
       })
     });
+    
     const webhookResult = await webhookResponse.json();
     
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
@@ -3914,12 +4117,13 @@ app.get('/debug-connections', (req, res) => {
     const adminSockets = gameLogic && gameLogic.getAdminSockets ? gameLogic.getAdminSockets().size : 0;
     const processingClaims = gameLogic && gameLogic.getProcessingClaims ? gameLogic.getProcessingClaims().size : 0;
     const roomWinners = gameLogic && gameLogic.getRoomWinners ? gameLogic.getRoomWinners().size : 0;
+    
     res.json({
-      connectedSockets,
-      socketToUser,
-      adminSockets,
-      processingClaims,
-      roomWinners,
+      connectedSockets: connectedSockets,
+      socketToUser: socketToUser,
+      adminSockets: adminSockets,
+      processingClaims: processingClaims,
+      roomWinners: roomWinners,
       serverTime: new Date().toISOString(),
       agentSockets: agentSystem && agentSystem.agentSockets ? agentSystem.agentSockets.size : 0
     });
@@ -3932,6 +4136,7 @@ app.get('/debug-users', async (req, res) => {
   try {
     const users = await User.find().sort({ lastSeen: -1 }).limit(50);
     const onlineUsers = users.filter(u => u.isOnline);
+    
     res.json({
       totalUsers: users.length,
       onlineUsers: onlineUsers.length,
@@ -3959,6 +4164,7 @@ app.get('/debug-agents', async (req, res) => {
   try {
     const agents = await Agent.find().sort({ createdAt: -1 }).limit(50);
     const activeAgents = agents.filter(a => a.isActive);
+    
     res.json({
       totalAgents: agents.length,
       activeAgents: activeAgents.length,
@@ -3989,7 +4195,12 @@ app.get('/debug/telebirr', async (req, res) => {
   try {
     const setting = await Setting.findOne({ key: 'telebirrNumber' });
     const telebirrNumber = await getTelebirrNumber();
-    res.json({ databaseSetting: setting, currentNumber: telebirrNumber, timestamp: new Date().toISOString() });
+    
+    res.json({
+      databaseSetting: setting,
+      currentNumber: telebirrNumber,
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -3998,7 +4209,10 @@ app.get('/debug/telebirr', async (req, res) => {
 app.get('/debug/referrals', async (req, res) => {
   try {
     const referrals = await Referral.find().sort({ createdAt: -1 }).limit(50);
-    const usersWithAgents = await User.find({ agentId: { $exists: true, $ne: null } }).sort({ agentReferredAt: -1 }).limit(50);
+    const usersWithAgents = await User.find({ 
+      agentId: { $exists: true, $ne: null } 
+    }).sort({ agentReferredAt: -1 }).limit(50);
+    
     res.json({
       totalReferrals: await Referral.countDocuments(),
       totalUsersWithAgents: await User.countDocuments({ agentId: { $exists: true, $ne: null } }),
@@ -4074,7 +4288,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ========== START SERVER ==========
+// ========== START SERVER WITH GRACEFUL SHUTDOWN ==========
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
