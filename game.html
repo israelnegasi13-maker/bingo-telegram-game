@@ -728,82 +728,170 @@
             color: var(--primary);
         }
 
-        /* ========== NEW LEFT 1–75 GRID WITH BINGO HEADERS ========== */
-        .game-layout {
+        /* ===== NEW GAME SCREEN LAYOUT ===== */
+        .game-main {
             display: flex;
-            gap: 12px;
-            height: calc(100% - 60px); /* account for header */
-            padding: 0 4px;
+            gap: 10px;
+            height: calc(100% - 60px); /* account for game-header */
             overflow: hidden;
+            padding: 0 10px 10px 10px;
         }
 
-        .numbers-panel {
+        /* Left column – numbers 1‑75 grid with BINGO headers */
+        .numbers-container {
             flex: 1;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: var(--radius);
+            background: var(--card-bg);
             border: 1px solid var(--card-border);
+            border-radius: var(--radius);
             padding: 6px;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            max-width: 180px;
         }
 
-        .letters-header {
+        .bingo-letters-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
             margin-bottom: 4px;
-        }
-
-        .letters-header div {
-            text-align: center;
             font-weight: 800;
-            font-size: 14px;
+            font-size: 12px;
+            text-align: center;
             color: var(--primary);
-            background: rgba(99, 102, 241, 0.2);
-            border-radius: 4px;
-            padding: 4px 0;
         }
 
         .numbers-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
+            flex: 1;
             overflow: hidden;
-            height: 100%;
-            align-content: start;
         }
 
         .number-cell {
             aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.5);
             border-radius: 3px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
             font-size: 10px;
+            font-weight: 600;
             color: var(--primary-light);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
         }
 
         .number-cell.called {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(0.98);
+            transform: scale(1.02);
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
         }
 
-        /* ========== RIGHT PANEL – ORIGINAL STYLES (RESTORED) ========== */
-        .game-panel {
-            flex: 1;
+        /* Right column – ball + card + button */
+        .game-right {
+            flex: 2;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            min-width: 0;
+            gap: 8px;
+            overflow-y: auto;
         }
 
-        /* Ball display – original, without history */
+        /* Compact ball display – no history */
+        .ball-display-container.compact {
+            padding: 8px;
+            margin-bottom: 0;
+        }
+
+        .ball-display-container.compact .ball {
+            width: 55px;
+            height: 55px;
+        }
+
+        .ball-display-container.compact .ball-number {
+            font-size: 18px;
+            margin-top: 12px;
+        }
+
+        .ball-display-container.compact .ball-letter {
+            font-size: 11px;
+            top: 4px;
+        }
+
+        /* Smaller bingo card */
+        .bingo-card-container.compact {
+            padding: 6px;
+            margin-bottom: 0;
+        }
+
+        .bingo-card-container.compact .bingo-header .bingo-letter-cell {
+            font-size: 10px;
+            padding: 2px;
+        }
+
+        .bingo-card-container.compact .cell {
+            font-size: 9px;
+            border-radius: 3px;
+        }
+
+        /* Remove ball history completely */
+        .ball-history {
+            display: none;
+        }
+
+        /* ===== END NEW LAYOUT ===== */
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 10px;
+        }
+
+        .room-info-compact {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .room-stake-compact {
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .room-status-compact {
+            font-size: 11px;
+            color: var(--gray);
+            margin-top: 2px;
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-button {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-light);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .control-button:hover {
+            background: var(--primary);
+            color: white;
+        }
+
         .ball-display-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -812,6 +900,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin-bottom: 12px;
         }
 
         .ball-label {
@@ -854,12 +943,12 @@
             margin-top: 16px;
         }
 
-        /* Bingo card – normal size */
         .bingo-card-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 10px;
+            margin-bottom: 12px;
         }
 
         .bingo-header {
@@ -932,7 +1021,96 @@
             color: var(--secondary);
         }
 
-        /* Claim button – original */
+        /* Loading state for buttons */
+        .confirm-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .confirm-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .claim-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .claim-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* Updated confirm button and back button */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .confirm-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .confirm-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .confirm-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .back-button-bottom {
+            background: rgba(30, 41, 59, 0.7);
+            color: var(--gray-light);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .back-button-bottom:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
         .claim-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1679,7 +1857,7 @@
             </div>
         </div>
 
-        <!-- Game Screen (modified layout) -->
+        <!-- Game Screen (NEW LAYOUT) -->
         <div class="screen" id="gameScreen">
             <div class="game-header">
                 <div class="room-info-compact">
@@ -1696,28 +1874,32 @@
                 </div>
             </div>
 
-            <!-- Two‑column layout -->
-            <div class="game-layout">
-                <!-- LEFT: 1–75 number grid grouped by BINGO letters -->
-                <div class="numbers-panel">
-                    <div class="letters-header">
-                        <div>B</div><div>I</div><div>N</div><div>G</div><div>O</div>
+            <div class="game-main">
+                <!-- LEFT: Numbers 1-75 with BINGO headers -->
+                <div class="numbers-container">
+                    <div class="bingo-letters-header">
+                        <div>B</div>
+                        <div>I</div>
+                        <div>N</div>
+                        <div>G</div>
+                        <div>O</div>
                     </div>
                     <div class="numbers-grid" id="numbersGrid"></div>
                 </div>
 
-                <!-- RIGHT: original layout restored, without ball history -->
-                <div class="game-panel">
-                    <div class="ball-display-container">
+                <!-- RIGHT: Ball + Card + Claim -->
+                <div class="game-right">
+                    <!-- Last ball only (no history) -->
+                    <div class="ball-display-container compact">
                         <div class="ball-label">LAST BALL</div>
                         <div class="ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
                         </div>
-                        <!-- ball history removed -->
                     </div>
 
-                    <div class="bingo-card-container">
+                    <!-- Bingo card (smaller) -->
+                    <div class="bingo-card-container compact">
                         <div class="bingo-header">
                             <div class="bingo-letter-cell">B</div>
                             <div class="bingo-letter-cell">I</div>
@@ -1728,6 +1910,7 @@
                         <div class="bingo-grid" id="bingoGrid"></div>
                     </div>
 
+                    <!-- Claim button -->
                     <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
                         CLAIM BINGO!
                     </button>
@@ -1971,7 +2154,7 @@
             grid: [],
             calledNumbers: new Set(),
             markedNumbers: new Set(['FREE']),
-            history: [], // kept but not used in UI
+            history: [],
             isConnected: false,
             balance: 0.00,
             userId: null,
@@ -2001,6 +2184,7 @@
 
         function enableSpeech() {
             if (window.speechSynthesis) {
+                // Create a dummy utterance to request permission on iOS
                 const utter = new SpeechSynthesisUtterance('');
                 window.speechSynthesis.speak(utter);
                 speechEnabled = true;
@@ -2010,6 +2194,7 @@
             }
         }
 
+        // Enable speech on first user interaction
         document.addEventListener('click', function once() {
             enableSpeech();
             document.removeEventListener('click', once);
@@ -2017,12 +2202,16 @@
 
         function speakBall(letter, number) {
             if (!speechEnabled || !window.speechSynthesis) return;
+            
+            // Cancel any ongoing speech to avoid overlapping
             window.speechSynthesis.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(`${letter} ${number}`);
             utterance.lang = 'en-US';
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
+            
             window.speechSynthesis.speak(utterance);
         }
 
@@ -2030,12 +2219,15 @@
         let isClaiming = false;
         let lastClaimTime = 0;
         let currentClaimId = null;
+        let claimGameOverTimeout = null; // timeout to reset button if gameOver not received
 
+        // ========== SAFE PARSING HELPER ==========
         function safeParseInt(value, fallback = 0) {
             const parsed = parseInt(value);
             return isNaN(parsed) ? fallback : parsed;
         }
 
+        // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
             const displayElement = document.getElementById('telebirrNumberDisplay');
             if (displayElement) {
@@ -2045,6 +2237,7 @@
             console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
         }
 
+        // Function to manually request Telebirr number
         function fetchTelebirrNumber() {
             if (state.isConnected) {
                 console.log('📱 Requesting Telebirr number from server...');
@@ -2061,9 +2254,11 @@
             }
         }
 
+        // Update connection status UI
         function updateConnectionStatus(connected, message) {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('connectionStatusText');
+            
             if (connected) {
                 dot.className = 'status-dot connected';
                 text.textContent = 'CONNECTED';
@@ -2075,12 +2270,17 @@
             }
         }
 
+        // ========== generateUserId() with URL priority ==========
         function generateUserId() {
             const urlUserId = getUrlParameter('userId');
-            if (urlUserId) return urlUserId;
+            if (urlUserId) {
+                return urlUserId;
+            }
 
             const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.id) return `tg_${telegramUser.id}`;
+            if (telegramUser && telegramUser.id) {
+                return `tg_${telegramUser.id}`;
+            }
 
             let guestId = localStorage.getItem('bingo_guest_id');
             if (!guestId) {
@@ -2090,12 +2290,17 @@
             return guestId;
         }
 
+        // ========== getUserName() with URL priority ==========
         function getUserName() {
             const urlName = getUrlParameter('name');
-            if (urlName) return urlName;
+            if (urlName) {
+                return urlName;
+            }
 
             const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.first_name) return telegramUser.first_name;
+            if (telegramUser && telegramUser.first_name) {
+                return telegramUser.first_name;
+            }
 
             const savedName = localStorage.getItem('bingo_user_name');
             if (savedName) return savedName;
@@ -2131,6 +2336,7 @@
                     if (response && response.success) {
                         console.log('✅ Init SUCCESS:', response.message);
                         state.isInitialized = true;
+                        
                         fetchTelebirrNumber();
                     } else {
                         console.log('❌ Init FAILED:', response?.message || 'No response');
@@ -2140,9 +2346,14 @@
             }
         }
 
+        // Show notification
         function showNotification(message, type = 'info', duration = 3000) {
-            if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) return;
-            if (type === 'error' && message.includes("hasn't been called")) return;
+            if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) {
+                return;
+            }
+            if (type === 'error' && message.includes("hasn't been called")) {
+                return;
+            }
             
             const notification = document.createElement('div');
             notification.className = 'notification';
@@ -2184,10 +2395,12 @@
             }, duration);
         }
 
+        // Screen management
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
+            
             const targetScreen = document.getElementById(screenId);
             if (targetScreen) {
                 targetScreen.classList.add('active');
@@ -2216,6 +2429,7 @@
             hideOverlay('roomLockedOverlay');
         }
 
+        // Wallet Functions
         function showWallet() {
             document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
             state.selectedWithdrawAmount = 0;
@@ -2244,9 +2458,11 @@
 
         function switchWalletTab(tab) {
             state.walletTab = tab;
+            
             document.querySelectorAll('.wallet-tab').forEach(tabElement => {
                 tabElement.classList.remove('active');
             });
+            
             if (tab === 'deposit') {
                 document.querySelectorAll('.wallet-tab')[0].classList.add('active');
                 document.getElementById('depositForm').classList.add('active');
@@ -2262,6 +2478,7 @@
             state.selectedWithdrawAmount = amount;
             document.getElementById('selectedWithdrawAmount').textContent = amount + ' ETB';
             document.getElementById('customAmount').value = '';
+            
             try { 
                 if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
                     tg.HapticFeedback.impactOccurred('light'); 
@@ -2349,6 +2566,7 @@
             }
         }
 
+        // Handle socket connection
         socket.on('connect', () => {
             console.log('✅ Socket connected:', socket.id);
             state.isConnected = true;
@@ -2377,6 +2595,7 @@
             startActivityMonitoring();
         });
 
+        // Handle socket disconnection
         socket.on('disconnect', (reason) => {
             console.log('❌ Socket disconnected:', reason);
             state.isConnected = false;
@@ -2398,6 +2617,7 @@
             }, delay);
         });
 
+        // Handle connection errors
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error.message);
             updateConnectionStatus(false, 'CONNECTION ERROR');
@@ -2410,6 +2630,7 @@
             }, 3000);
         });
 
+        // Handle user data from server
         socket.on('userData', (data) => {
             console.log('User data received:', data);
             state.userId = data.userId || state.userId;
@@ -2433,15 +2654,17 @@
             }
         });
 
+        // Handle Telebirr number received from server
         socket.on('telebirrNumber', (data) => {
             const number = typeof data === 'string' ? data : (data?.telebirrNumber || data);
-            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number, 'Full data:', data);
+            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number);
             if (number) {
                 state.telebirrNumber = number;
                 updateTelebirrNumberInUI(number);
             }
         });
 
+        // Handle Telebirr number updates in real-time
         socket.on('telebirrNumberUpdate', (data) => {
             console.log('📱 [telebirrNumberUpdate] Telebirr number updated in real-time:', data);
             if (data && data.telebirrNumber) {
@@ -2454,6 +2677,7 @@
             }
         });
 
+        // Handle admin Telebirr number updates
         socket.on('admin:telebirrNumberUpdated', (data) => {
             console.log('📱 [admin:telebirrNumberUpdated] Received admin Telebirr number update:', data);
             if (data && data.telebirrNumber) {
@@ -2466,6 +2690,7 @@
             }
         });
 
+        // Handle room status updates
         socket.on('roomStatus', (roomData) => {
             console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
             
@@ -2538,6 +2763,7 @@
             });
         }
 
+        // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
             const val = state.balance.toFixed(2);
@@ -2547,6 +2773,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // Wallet events
         socket.on('wallet:depositRequestSuccess', (data) => {
             showNotification(data.message, 'success', 5000);
         });
@@ -2727,6 +2954,7 @@
             state.lastBoxCount = takenCount;
         }
 
+        // Update discovery timer
         function updateDiscoveryTimer(seconds, onlinePlayers) {
             const timerContainer = document.getElementById('timerContainer');
             const discoveryTimer = document.getElementById('discoveryTimer');
@@ -2884,40 +3112,60 @@
             return '';
         }
 
-        // ========== Render the left 1–75 grid grouped by BINGO letters ==========
-        function renderNumbersGrid() {
-            const container = document.getElementById('numbersGrid');
-            if (!container) return;
-            container.innerHTML = '';
+        // ========== NUMBERS 1-75 GRID MANAGEMENT ==========
+        let numbersGridInitialized = false;
+
+        function initNumbersGrid() {
+            const grid = document.getElementById('numbersGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
             
-            // Define ranges for each column
-            const ranges = [
-                { min: 1, max: 15 },   // B
-                { min: 16, max: 30 },  // I
-                { min: 31, max: 45 },  // N
-                { min: 46, max: 60 },  // G
-                { min: 61, max: 75 }   // O
-            ];
-            
-            // Generate numbers in row-major order but with each row containing one number from each column
+            // Numbers 1-75 arranged by columns B(1-15), I(16-30), N(31-45), G(46-60), O(61-75)
             for (let row = 0; row < 15; row++) {
                 for (let col = 0; col < 5; col++) {
-                    const num = ranges[col].min + row;
+                    const number = col * 15 + row + 1; // column-major order
                     const cell = document.createElement('div');
                     cell.className = 'number-cell';
-                    cell.dataset.number = num;
-                    cell.textContent = num;
-                    container.appendChild(cell);
+                    cell.dataset.number = number;
+                    cell.textContent = number;
+                    grid.appendChild(cell);
                 }
             }
+            
+            numbersGridInitialized = true;
+            updateNumbersGrid(); // highlight any already called numbers
         }
 
-        function markCalledNumber(num) {
-            const cell = document.querySelector(`.number-cell[data-number="${num}"]`);
-            if (cell) {
-                cell.classList.add('called');
-            }
+        function updateNumbersGrid() {
+            if (!numbersGridInitialized) return;
+            const called = state.calledNumbers || new Set();
+            document.querySelectorAll('.number-cell').forEach(cell => {
+                const num = parseInt(cell.dataset.number);
+                if (called.has(num)) {
+                    cell.classList.add('called');
+                } else {
+                    cell.classList.remove('called');
+                }
+            });
         }
+
+        // Override triggerNewBall to also update the numbers grid
+        const originalTriggerNewBall = triggerNewBall;
+        triggerNewBall = function(num, letter) {
+            originalTriggerNewBall(num, letter);
+            updateNumbersGrid();
+        };
+
+        // Override initGameBoard to ensure numbers grid is (re)created when game starts
+        const originalInitGameBoard = initGameBoard;
+        initGameBoard = function() {
+            originalInitGameBoard();
+            if (!numbersGridInitialized) {
+                initNumbersGrid();
+            } else {
+                updateNumbersGrid();
+            }
+        };
 
         function triggerNewBall(num, letter) {
             console.log(`🎱 Ball drawn: ${letter}-${num}`);
@@ -2941,17 +3189,15 @@
             void ballDisplay.offsetWidth;
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
-            // History is no longer displayed, but we still store it internally
-            state.history.unshift({ num, letter });
-            
+            // History is removed, so we skip pushing to state.history and updating the history container
             state.calledNumbers.add(num);
-            markCalledNumber(num);
             
             console.log(`📌 Number ${letter}-${num} added to called numbers.`);
             
             state.lastActivityTime = Date.now();
         }
 
+        // 🚀 OPTIMIZED BINGO PATTERN CHECKING
         function checkWinningPattern() {
             const grid = state.grid;
             const marked = state.markedNumbers;
@@ -3003,6 +3249,7 @@
             return false;
         }
 
+        // 🚀 FAST BINGO CLAIMING FUNCTION
         function claimBingo() {
             const now = Date.now();
             
@@ -3046,6 +3293,15 @@
                         
                         currentClaimId = response.claimId;
                         
+                        // Set a timeout to reset the button if gameOver doesn't arrive within 15 seconds
+                        if (claimGameOverTimeout) clearTimeout(claimGameOverTimeout);
+                        claimGameOverTimeout = setTimeout(() => {
+                            console.log('⏰ Game over not received after claim, resetting button');
+                            resetClaimButton(button, originalText);
+                            showNotification('Claim processing took too long. Please check your balance or try again.', 'warning', 5000);
+                            claimGameOverTimeout = null;
+                        }, 15000);
+                        
                         button.textContent = 'CLAIM VERIFIED!';
                         
                         try { 
@@ -3067,13 +3323,19 @@
             state.lastActivityTime = Date.now();
         }
 
+        // Reset claim button function
         function resetClaimButton(button, originalText) {
             isClaiming = false;
             button.disabled = false;
             button.classList.remove('loading');
             button.textContent = originalText;
+            if (claimGameOverTimeout) {
+                clearTimeout(claimGameOverTimeout);
+                claimGameOverTimeout = null;
+            }
         }
 
+        // Handle claim processing events
         socket.on('claimProcessing', (data) => {
             console.log('⚡ Claim processing started:', data.claimId);
         });
@@ -3095,6 +3357,7 @@
             }
         });
 
+        // Restore game state after refresh (with error handling)
         function restoreGameState(roomStake) {
             console.log(`🔄 Restoring game state for room ${roomStake}`);
 
@@ -3156,10 +3419,6 @@
                             document.getElementById('ballNumber').textContent = details.currentBall;
                         }
 
-                        if (details.calledNumbers) {
-                            details.calledNumbers.forEach(num => markCalledNumber(num));
-                        }
-
                         if (checkWinningPattern()) {
                             document.getElementById('claimBingoButton').disabled = false;
                         }
@@ -3204,6 +3463,7 @@
             });
         }
 
+        // Helper to keep discovery countdown ticking after reconnect
         function startDiscoveryCountdown(roomStake, initialSeconds) {
             let seconds = initialSeconds;
             const timerContainer = document.getElementById('timerContainer');
@@ -3229,11 +3489,8 @@
             }, 1000);
         }
 
+        // Modified initGameBoard – does NOT reset marked numbers (uses existing)
         function initGameBoard() {
-            renderNumbersGrid();
-
-            state.calledNumbers.forEach(num => markCalledNumber(num));
-
             const target = document.getElementById('bingoGrid');
             target.innerHTML = '';
 
@@ -3292,6 +3549,7 @@
             state.lastActivityTime = Date.now();
         }
 
+        // ========== WINNING PATTERN DISPLAY FUNCTIONS ==========
         function displayWinningPattern(overlayType, data) {
             const isWin = overlayType === 'win';
             const containerId = isWin ? 'winningCardReplicaWin' : 'winningCardReplicaLose';
@@ -3443,6 +3701,11 @@
                 state.discoveryTimerInterval = null;
             }
             
+            if (claimGameOverTimeout) {
+                clearTimeout(claimGameOverTimeout);
+                claimGameOverTimeout = null;
+            }
+            
             isClaiming = false;
             lastClaimTime = 0;
             currentClaimId = null;
@@ -3482,7 +3745,12 @@
             
             document.getElementById('ballLetter').textContent = '--';
             document.getElementById('ballNumber').textContent = '--';
+            document.getElementById('ballHistory').innerHTML = '';
             document.getElementById('bingoGrid').innerHTML = '';
+            
+            numbersGridInitialized = false;
+            const numbersGrid = document.getElementById('numbersGrid');
+            if (numbersGrid) numbersGrid.innerHTML = '';
             
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitMessage').textContent = "Waiting for players...";
@@ -3501,6 +3769,7 @@
             console.log('✅ Lobby reset complete');
         }
 
+        // lobbyUpdate event handler
         socket.on('lobbyUpdate', (d) => {
             console.log('👥 Lobby update:', d);
             
@@ -3521,6 +3790,7 @@
             }
         });
 
+        // gameCountdown event handler
         socket.on('gameCountdown', (d) => {
             console.log('⏱️ Game countdown event:', d);
             
@@ -3647,6 +3917,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // Handle room locked event
         socket.on('roomLocked', (data) => {
             console.log('🔒 Room locked event received:', data);
             
@@ -3670,8 +3941,14 @@
             state.lastActivityTime = Date.now();
         });
 
+        // gameOver event handler with winning pattern display
         socket.on('gameOver', (d) => {
             console.log('🎮 Game over event received:', d);
+            
+            if (claimGameOverTimeout) {
+                clearTimeout(claimGameOverTimeout);
+                claimGameOverTimeout = null;
+            }
             
             if(d.room === state.stake) {
                 const isWinner = d.winnerId === state.userId;
@@ -3739,6 +4016,7 @@
             }
         });
 
+        // Handle game timeout event
         socket.on('gameTimeout', (data) => {
             console.log('⏰ Game timeout event received:', data);
             
@@ -3784,6 +4062,7 @@
             state.lastActivityTime = Date.now();
         });
 
+        // Real-time box update
         socket.on('boxesTakenUpdate', (data) => {
             console.log('📦 Real-time box update received:', data);
 
@@ -3843,6 +4122,7 @@
             resetToLobby();
         });
 
+        // Activity monitoring to keep connection alive
         function startActivityMonitoring() {
             setInterval(() => {
                 if (state.isConnected) {
@@ -3868,6 +4148,7 @@
             }, 15000);
         }
 
+        // Auto-reconnect on load
         window.onload = () => {
             state.userName = getUserName();
             document.getElementById('userName').textContent = state.userName;
