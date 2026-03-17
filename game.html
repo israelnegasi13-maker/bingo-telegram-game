@@ -728,65 +728,164 @@
             color: var(--primary);
         }
 
-        /* ========== NEW LEFT 1–75 GRID ========== */
-        .game-layout {
+        /* ===== NEW GAME SCREEN LAYOUT ===== */
+        .game-main {
             display: flex;
-            gap: 12px;
-            height: calc(100% - 60px); /* account for header */
-            padding: 0 4px;
+            gap: 10px;
+            height: calc(100% - 60px); /* account for game-header */
             overflow: hidden;
+            padding: 0 10px 10px 10px;
         }
 
-        .numbers-panel {
+        /* Left column – numbers 1‑75 grid */
+        .numbers-container {
             flex: 1;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: var(--radius);
+            background: var(--card-bg);
             border: 1px solid var(--card-border);
+            border-radius: var(--radius);
             padding: 6px;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            max-width: 180px;
         }
 
         .numbers-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
+            flex: 1;
             overflow: hidden;
-            height: 100%;
-            align-content: start;
         }
 
         .number-cell {
             aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.7);
+            background: rgba(30, 41, 59, 0.5);
             border-radius: 3px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
             font-size: 10px;
+            font-weight: 600;
             color: var(--primary-light);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
         }
 
         .number-cell.called {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(0.98);
+            transform: scale(1.02);
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
         }
 
-        /* ========== RIGHT PANEL – ORIGINAL STYLES (RESTORED) ========== */
-        .game-panel {
-            flex: 1;
+        /* Right column – ball + card + button */
+        .game-right {
+            flex: 2;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            min-width: 0;
+            gap: 8px;
+            overflow-y: auto;
         }
 
-        /* Ball display – original */
+        /* Compact ball display */
+        .ball-display-container.compact {
+            padding: 8px;
+            margin-bottom: 0;
+        }
+
+        .ball-display-container.compact .ball {
+            width: 55px;
+            height: 55px;
+        }
+
+        .ball-display-container.compact .ball-number {
+            font-size: 18px;
+            margin-top: 12px;
+        }
+
+        .ball-display-container.compact .ball-letter {
+            font-size: 11px;
+            top: 4px;
+        }
+
+        /* Smaller bingo card */
+        .bingo-card-container.compact {
+            padding: 6px;
+            margin-bottom: 0;
+        }
+
+        .bingo-card-container.compact .bingo-header .bingo-letter-cell {
+            font-size: 10px;
+            padding: 2px;
+        }
+
+        .bingo-card-container.compact .cell {
+            font-size: 9px;
+            border-radius: 3px;
+        }
+
+        .bingo-card-container.compact .claim-button {
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        /* Remove ball history */
+        .ball-history {
+            display: none;
+        }
+
+        /* ===== END NEW LAYOUT ===== */
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 10px;
+        }
+
+        .room-info-compact {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .room-stake-compact {
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .room-status-compact {
+            font-size: 11px;
+            color: var(--gray);
+            margin-top: 2px;
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-button {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-light);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .control-button:hover {
+            background: var(--primary);
+            color: white;
+        }
+
         .ball-display-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -795,6 +894,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            margin-bottom: 12px;
         }
 
         .ball-label {
@@ -837,7 +937,6 @@
             margin-top: 16px;
         }
 
-        /* Ball history – visible again */
         .ball-history {
             display: flex;
             gap: 5px;
@@ -879,12 +978,12 @@
             line-height: 1;
         }
 
-        /* Bingo card – normal size */
         .bingo-card-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
             padding: 10px;
+            margin-bottom: 12px;
         }
 
         .bingo-header {
@@ -957,7 +1056,96 @@
             color: var(--secondary);
         }
 
-        /* Claim button – original */
+        /* Loading state for buttons */
+        .confirm-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .confirm-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            margin: -8px 0 0 -8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .claim-button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .claim-button.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* Updated confirm button and back button */
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .confirm-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .confirm-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .confirm-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .back-button-bottom {
+            background: rgba(30, 41, 59, 0.7);
+            color: var(--gray-light);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .back-button-bottom:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
         .claim-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1704,7 +1892,7 @@
             </div>
         </div>
 
-        <!-- Game Screen (modified layout) -->
+        <!-- Game Screen (NEW LAYOUT) -->
         <div class="screen" id="gameScreen">
             <div class="game-header">
                 <div class="room-info-compact">
@@ -1721,27 +1909,25 @@
                 </div>
             </div>
 
-            <!-- Two‑column layout -->
-            <div class="game-layout">
-                <!-- LEFT: 1–75 number grid (no scroll) -->
-                <div class="numbers-panel">
+            <div class="game-main">
+                <!-- LEFT: Numbers 1-75 -->
+                <div class="numbers-container">
                     <div class="numbers-grid" id="numbersGrid"></div>
                 </div>
 
-                <!-- RIGHT: original layout restored -->
-                <div class="game-panel">
-                    <div class="ball-display-container">
+                <!-- RIGHT: Ball + Card + Claim -->
+                <div class="game-right">
+                    <!-- Last ball only (no history) -->
+                    <div class="ball-display-container compact">
                         <div class="ball-label">LAST BALL</div>
                         <div class="ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
                         </div>
-                        <div class="ball-history" id="ballHistory">
-                            <!-- History balls will be added by JavaScript -->
-                        </div>
                     </div>
 
-                    <div class="bingo-card-container">
+                    <!-- Bingo card (smaller) -->
+                    <div class="bingo-card-container compact">
                         <div class="bingo-header">
                             <div class="bingo-letter-cell">B</div>
                             <div class="bingo-letter-cell">I</div>
@@ -1752,6 +1938,7 @@
                         <div class="bingo-grid" id="bingoGrid"></div>
                     </div>
 
+                    <!-- Claim button -->
                     <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
                         CLAIM BINGO!
                     </button>
@@ -2017,7 +2204,7 @@
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
             selectedWithdrawAmount: 0,
-            isRestoring: false // prevent multiple restore attempts
+            isRestoring: false // NEW: prevent multiple restore attempts
         };
 
         // ========== TEXT‑TO‑SPEECH FOR BALL DRAWS ==========
@@ -2509,7 +2696,7 @@
 
             saveUserInfo();
 
-            // If user has a current room and we haven't already tried restoring, do it
+            // NEW: If user has a current room and we haven't already tried restoring, do it
             if (data.currentRoom && !state.isRestoring) {
                 state.isRestoring = true;
                 console.log('🔍 Attempting to restore game state for room', data.currentRoom);
@@ -3010,27 +3197,54 @@
             return '';
         }
 
-        // ========== NEW: Render the left 1–75 grid ==========
-        function renderNumbersGrid() {
-            const container = document.getElementById('numbersGrid');
-            if (!container) return;
-            container.innerHTML = '';
+        // ========== NUMBERS 1-75 GRID MANAGEMENT ==========
+        let numbersGridInitialized = false;
+
+        function initNumbersGrid() {
+            const grid = document.getElementById('numbersGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
             for (let i = 1; i <= 75; i++) {
                 const cell = document.createElement('div');
                 cell.className = 'number-cell';
                 cell.dataset.number = i;
                 cell.textContent = i;
-                container.appendChild(cell);
+                grid.appendChild(cell);
             }
+            numbersGridInitialized = true;
+            updateNumbersGrid(); // highlight any already called numbers
         }
 
-        // ========== Mark a called number in the left grid ==========
-        function markCalledNumber(num) {
-            const cell = document.querySelector(`.number-cell[data-number="${num}"]`);
-            if (cell) {
-                cell.classList.add('called');
-            }
+        function updateNumbersGrid() {
+            if (!numbersGridInitialized) return;
+            const called = state.calledNumbers || new Set();
+            document.querySelectorAll('.number-cell').forEach(cell => {
+                const num = parseInt(cell.dataset.number);
+                if (called.has(num)) {
+                    cell.classList.add('called');
+                } else {
+                    cell.classList.remove('called');
+                }
+            });
         }
+
+        // Override triggerNewBall to also update the numbers grid
+        const originalTriggerNewBall = triggerNewBall;
+        triggerNewBall = function(num, letter) {
+            originalTriggerNewBall(num, letter);
+            updateNumbersGrid();
+        };
+
+        // Override initGameBoard to ensure numbers grid is (re)created when game starts
+        const originalInitGameBoard = initGameBoard;
+        initGameBoard = function() {
+            originalInitGameBoard();
+            if (!numbersGridInitialized) {
+                initNumbersGrid();
+            } else {
+                updateNumbersGrid();
+            }
+        };
 
         function triggerNewBall(num, letter) {
             console.log(`🎱 Ball drawn: ${letter}-${num}`);
@@ -3055,24 +3269,9 @@
             void ballDisplay.offsetWidth;
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
-            state.history.unshift({ num, letter });
-            const historyContainer = document.getElementById('ballHistory');
-            historyContainer.innerHTML = '';
-            
-            state.history.slice(0, 8).forEach(ball => {
-                const historyBall = document.createElement('div');
-                historyBall.className = 'history-ball';
-                historyBall.innerHTML = `
-                    <div class="history-letter">${ball.letter}</div>
-                    <div class="history-number">${ball.num}</div>
-                `;
-                historyContainer.appendChild(historyBall);
-            });
-            
+            // History is removed, so we skip pushing to state.history and updating the history container
+            // We still maintain state.calledNumbers for checking marks
             state.calledNumbers.add(num);
-            
-            // Mark the called number in the left grid
-            markCalledNumber(num);
             
             console.log(`📌 Number ${letter}-${num} added to called numbers.`);
             
@@ -3241,7 +3440,7 @@
             }
         });
 
-        // Restore game state after refresh
+        // NEW: Restore game state after refresh (with error handling)
         function restoreGameState(roomStake) {
             console.log(`🔄 Restoring game state for room ${roomStake}`);
 
@@ -3293,7 +3492,7 @@
                             }
                         });
 
-                        // Set history (last 8 called numbers)
+                        // Set history (last 8 called numbers) – we still keep state.history for potential future use, but UI won't show it
                         state.history = (details.calledNumbers || []).slice(-8).map(num => ({
                             num,
                             letter: getBingoLetter(num)
@@ -3308,11 +3507,6 @@
                             const letter = getBingoLetter(details.currentBall);
                             document.getElementById('ballLetter').textContent = letter;
                             document.getElementById('ballNumber').textContent = details.currentBall;
-                        }
-
-                        // Mark already called numbers in the left grid
-                        if (details.calledNumbers) {
-                            details.calledNumbers.forEach(num => markCalledNumber(num));
                         }
 
                         // Enable claim button if winning pattern already exists
@@ -3394,14 +3588,8 @@
             }, 1000);
         }
 
-        // Modified initGameBoard – now also renders the left numbers grid and marks existing called numbers
+        // Modified initGameBoard – does NOT reset marked numbers (uses existing)
         function initGameBoard() {
-            // Render the left 1–75 grid
-            renderNumbersGrid();
-
-            // Mark any numbers that have already been called
-            state.calledNumbers.forEach(num => markCalledNumber(num));
-
             const target = document.getElementById('bingoGrid');
             target.innerHTML = '';
 
@@ -3678,6 +3866,11 @@
             document.getElementById('ballNumber').textContent = '--';
             document.getElementById('ballHistory').innerHTML = '';
             document.getElementById('bingoGrid').innerHTML = '';
+            
+            // Reset numbers grid
+            numbersGridInitialized = false;
+            const numbersGrid = document.getElementById('numbersGrid');
+            if (numbersGrid) numbersGrid.innerHTML = '';
             
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitMessage').textContent = "Waiting for players...";
