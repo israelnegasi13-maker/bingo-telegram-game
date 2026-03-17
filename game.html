@@ -696,62 +696,64 @@
             color: var(--primary);
         }
 
-        /* ===== NEW GAME SCREEN LAYOUT ===== */
-        #gameScreen .game-content {
+        /* ===== TWO-COLUMN GAME LAYOUT ===== */
+        .game-two-column {
             display: flex;
             gap: 12px;
-            height: calc(100% - 70px); /* account for header + button */
+            height: 100%;
             overflow: hidden;
-            padding: 0 0 10px 0;
         }
 
-        /* Left column: numbers 1-75 vertical */
-        .numbers-column {
-            flex: 0 0 50px; /* fixed narrow width */
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
-            border: 1px solid var(--card-border);
+        .game-left-col {
+            flex: 1;
+            min-width: 0;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.3);
             border-radius: var(--radius);
-            padding: 6px 2px;
+            padding: 8px;
+            border: 1px solid var(--card-border);
+        }
+
+        .game-right-col {
+            flex: 2;
+            min-width: 0;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 2px;
+            gap: 12px;
         }
-        .number-item {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.05);
+
+        /* Numbers grid – vertical single column */
+        .numbers-grid {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 14px;
-            color: var(--gray-light);
-            border: 1px solid var(--card-border);
-            transition: all 0.2s;
-            flex-shrink: 0;
+            flex-direction: column;
+            gap: 2px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-sm);
+            padding: 4px;
         }
-        .number-item.called {
+
+        .number-cell {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 4px;
+            padding: 4px 0;
+            text-align: center;
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--primary-light);
+            border: 1px solid var(--card-border);
+            transition: all 0.2s ease;
+        }
+
+        .number-cell.called {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(1.05);
-            box-shadow: 0 0 8px rgba(99,102,241,0.5);
+            transform: scale(1.02);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
         }
 
-        /* Right column: ball display + bingo card */
-        .right-column {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-width: 0; /* prevent overflow */
-        }
-
-        /* Ball display container - now compact */
+        /* Ball display – smaller */
         .ball-display-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -761,7 +763,13 @@
             flex-direction: column;
             align-items: center;
         }
-        .ball-label { font-size: 11px; color: var(--gray); margin-bottom: 5px; }
+
+        .ball-label {
+            font-size: 10px;
+            color: var(--gray);
+            margin-bottom: 2px;
+        }
+
         .ball {
             width: 60px;
             height: 60px;
@@ -777,8 +785,9 @@
             border: 3px solid #fff;
             position: relative;
             overflow: hidden;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
+
         .ball-letter {
             font-size: 12px;
             font-weight: 900;
@@ -789,58 +798,27 @@
             text-align: center;
             color: var(--primary);
         }
-        .ball-number { font-size: 20px; margin-top: 14px; }
-        .ball-history {
-            display: flex;
-            gap: 4px;
-            overflow-x: auto;
-            padding: 4px;
-            width: 100%;
-        }
-        .history-ball {
-            min-width: 24px;
-            width: 24px;
-            height: 24px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 50%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            color: #94a3b8;
-            border: 1px solid var(--card-border);
-            flex-shrink: 0;
-            position: relative;
-            overflow: hidden;
-        }
-        .history-letter {
-            position: absolute;
-            top: 1px;
-            font-size: 7px;
-            font-weight: 900;
-            line-height: 1;
-            color: var(--primary);
-        }
-        .history-number { margin-top: 5px; font-size: 8px; line-height: 1; }
 
-        /* Bingo card container - smaller */
+        .ball-number {
+            font-size: 20px;
+            margin-top: 12px;
+        }
+
+        /* Bingo card – smaller */
         .bingo-card-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 8px;
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
+            padding: 6px;
         }
+
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
             margin-bottom: 2px;
         }
+
         .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
@@ -849,15 +827,16 @@
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 11px;
+            font-size: 10px;
             color: var(--primary);
         }
+
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
-            flex: 1;
         }
+
         .cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
@@ -867,13 +846,17 @@
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 10px;
+            font-size: 9px;
             color: var(--primary);
             cursor: pointer;
             position: relative;
             transition: all 0.3s ease;
         }
-        .cell:hover { background: rgba(99, 102, 241, 0.1); }
+
+        .cell:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
         .cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -881,39 +864,49 @@
             box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
             transform: scale(1.05);
         }
+
         .cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
             color: white;
             border: none;
-            font-weight: 900;
-            font-size: 8px;
+            font-weight: 700;
+            font-size: 7px;
         }
+
         .cell.corner::before {
             content: "★";
             position: absolute;
             top: 1px;
             right: 1px;
-            font-size: 6px;
+            font-size: 5px;
             color: var(--secondary);
         }
 
-        /* Claim button */
         .claim-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
             border-radius: var(--radius);
-            padding: 12px;
-            font-size: 14px;
+            padding: 10px;
+            font-size: 12px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: var(--shadow);
             width: 100%;
-            margin-top: 10px;
         }
-        .claim-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-        .claim-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .claim-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .claim-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
 
         /* Wait Screen */
         .wait-container {
@@ -924,10 +917,37 @@
             height: 100%;
             text-align: center;
         }
-        .wait-icon { font-size: 45px; color: var(--primary); margin-bottom: 12px; animation: pulse 2s infinite; }
-        .wait-timer { font-size: 48px; font-weight: 800; color: var(--secondary); margin-bottom: 10px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
-        .wait-message { font-size: 15px; font-weight: 600; margin-bottom: 5px; color: white; }
-        .wait-details { font-size: 12px; color: var(--gray); max-width: 260px; margin: 0 auto 15px; line-height: 1.4; }
+
+        .wait-icon {
+            font-size: 45px;
+            color: var(--primary);
+            margin-bottom: 12px;
+            animation: pulse 2s infinite;
+        }
+
+        .wait-timer {
+            font-size: 48px;
+            font-weight: 800;
+            color: var(--secondary);
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+        }
+
+        .wait-message {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: white;
+        }
+
+        .wait-details {
+            font-size: 12px;
+            color: var(--gray);
+            max-width: 260px;
+            margin: 0 auto 15px;
+            line-height: 1.4;
+        }
+
         .leave-button {
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
@@ -939,9 +959,12 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .leave-button:hover { background: rgba(239, 68, 68, 0.3); }
 
-        /* Overlays (unchanged from original) */
+        .leave-button:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Overlays */
         .overlay {
             position: fixed;
             top: 0;
@@ -959,10 +982,12 @@
             transition: opacity 0.3s ease;
             padding: 20px;
         }
+
         .overlay.active {
             opacity: 1;
             pointer-events: all;
         }
+
         .overlay-content {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -973,37 +998,44 @@
             text-align: center;
             box-shadow: var(--shadow-lg);
         }
+
         .overlay-icon {
             font-size: 50px;
             margin-bottom: 12px;
         }
+
         .overlay-title {
             font-size: 24px;
             font-weight: 800;
             margin-bottom: 10px;
         }
+
         .win-title {
             background: linear-gradient(135deg, var(--secondary), #fbbf24);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .lose-title {
             background: linear-gradient(135deg, var(--danger), #b91c1c);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .overlay-message {
             font-size: 15px;
             color: var(--gray-light);
             margin-bottom: 16px;
             line-height: 1.5;
         }
+
         .overlay-amount {
             font-size: 32px;
             font-weight: 800;
             color: var(--secondary);
             margin-bottom: 16px;
         }
+
         .overlay-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1017,6 +1049,7 @@
             width: 100%;
             margin-top: 12px;
         }
+
         .overlay-button:hover {
             transform: translateY(-2px);
             box-shadow: var(--shadow);
@@ -1030,6 +1063,7 @@
             padding: 4px;
             margin-bottom: 16px;
         }
+
         .wallet-tab {
             flex: 1;
             padding: 9px;
@@ -1040,20 +1074,25 @@
             transition: all 0.3s ease;
             font-size: 13px;
         }
+
         .wallet-tab.active {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
         }
+
         .wallet-form {
             display: none;
         }
+
         .wallet-form.active {
             display: block;
         }
+
         .form-group {
             margin-bottom: 14px;
             text-align: left;
         }
+
         .form-label {
             display: block;
             margin-bottom: 5px;
@@ -1061,6 +1100,7 @@
             color: var(--gray-light);
             font-weight: 600;
         }
+
         .form-input {
             width: 100%;
             padding: 11px;
@@ -1071,17 +1111,20 @@
             font-size: 14px;
             transition: all 0.3s ease;
         }
+
         .form-input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
+
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 6px;
             margin-bottom: 14px;
         }
+
         .amount-button {
             padding: 9px;
             background: rgba(30, 41, 59, 0.5);
@@ -1093,13 +1136,13 @@
             transition: all 0.3s ease;
             font-size: 12px;
         }
+
         .amount-button:hover {
             background: rgba(99, 102, 241, 0.2);
             border-color: var(--primary);
             color: var(--primary-light);
         }
 
-        /* Loading Overlay */
         .loading-spinner {
             width: 45px;
             height: 45px;
@@ -1110,7 +1153,7 @@
             margin-bottom: 12px;
         }
 
-        /* Winning pattern display */
+        /* Winning pattern replica */
         .winning-card-replica {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -1120,12 +1163,14 @@
             max-width: 200px;
             box-shadow: var(--shadow);
         }
+
         .replica-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
             margin-bottom: 2px;
         }
+
         .replica-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
@@ -1137,11 +1182,13 @@
             font-size: 10px;
             color: var(--primary);
         }
+
         .replica-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
         }
+
         .replica-cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
@@ -1156,6 +1203,7 @@
             position: relative;
             transition: all 0.3s ease;
         }
+
         .replica-cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1163,6 +1211,7 @@
             transform: scale(1.05);
             box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
         }
+
         .replica-cell.winning {
             background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
             color: white;
@@ -1172,6 +1221,7 @@
             position: relative;
             z-index: 2;
         }
+
         .replica-cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
             color: white;
@@ -1179,10 +1229,12 @@
             font-weight: 700;
             font-size: 8px;
         }
+
         .replica-cell.free.winning {
             background: linear-gradient(135deg, #d97706, #fbbf24);
             animation: freeWinningGlow 2s infinite alternate;
         }
+
         .replica-cell.corner::before {
             content: "★";
             position: absolute;
@@ -1192,18 +1244,21 @@
             color: var(--secondary);
             opacity: 0.7;
         }
+
         .winning-pattern-info {
             text-align: center;
             margin-top: 10px;
             padding-top: 10px;
             border-top: 1px solid var(--card-border);
         }
+
         .winning-pattern-name {
             font-size: 13px;
             font-weight: 800;
             color: var(--secondary);
             margin-bottom: 4px;
         }
+
         .winning-pattern-stats {
             font-size: 11px;
             color: var(--gray);
@@ -1211,39 +1266,56 @@
             justify-content: center;
             gap: 8px;
         }
+
         .pattern-stat {
             display: flex;
             align-items: center;
             gap: 4px;
         }
+
         .pattern-stat i {
             font-size: 10px;
         }
 
         @keyframes winningGlow {
-            0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.5); transform: scale(1.05); }
-            100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.8); transform: scale(1.08); }
+            0% {
+                box-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
+                transform: scale(1.05);
+            }
+            100% {
+                box-shadow: 0 0 15px rgba(245, 158, 11, 0.8);
+                transform: scale(1.08);
+            }
         }
+
         @keyframes freeWinningGlow {
-            0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5); }
-            100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.7); }
+            0% {
+                box-shadow: 0 0 5px rgba(245, 158, 11, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
+            }
+            100% {
+                box-shadow: 0 0 15px rgba(245, 158, 11, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.7);
+            }
         }
+
         .pattern-line {
             position: absolute;
             background: var(--secondary);
             z-index: 1;
             border-radius: 10px;
         }
+
         .pattern-line.row {
             height: 2px;
             width: 100%;
             left: 0;
         }
+
         .pattern-line.column {
             width: 2px;
             height: 100%;
             top: 0;
         }
+
         .pattern-line.diagonal-main {
             width: 140%;
             height: 2px;
@@ -1252,6 +1324,7 @@
             transform: rotate(45deg);
             transform-origin: center;
         }
+
         .pattern-line.diagonal-anti {
             width: 140%;
             height: 2px;
@@ -1260,6 +1333,7 @@
             transform: rotate(-45deg);
             transform-origin: center;
         }
+
         .pattern-line.corners {
             width: 100%;
             height: 100%;
@@ -1273,26 +1347,36 @@
         @keyframes spin {
             100% { transform: rotate(360deg); }
         }
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+
         @keyframes bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
         }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         /* Responsive */
-        @media (max-width: 480px) {
-            .ball { width: 55px; height: 55px; }
-            .ball-number { font-size: 18px; margin-top: 12px; }
-            .ball-letter { font-size: 10px; top: 3px; }
-            .number-item { width: 32px; height: 32px; font-size: 12px; }
+        @media (max-width: 640px) {
+            .game-two-column {
+                flex-direction: column;
+            }
+            .game-left-col {
+                max-height: 140px;
+                overflow-y: auto;
+            }
+            .numbers-grid {
+                display: grid;
+                grid-template-columns: repeat(5, 1fr);
+            }
         }
     </style>
 </head>
@@ -1365,26 +1449,11 @@
             <div class="game-info">
                 <div class="info-title">BINGO LETTERS & RANGES</div>
                 <div class="bingo-letters">
-                    <div class="letter-card">
-                        <div class="letter">B</div>
-                        <div class="letter-range">1-15</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">I</div>
-                        <div class="letter-range">16-30</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">N</div>
-                        <div class="letter-range">31-45</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">G</div>
-                        <div class="letter-range">46-60</div>
-                    </div>
-                    <div class="letter-card">
-                        <div class="letter">O</div>
-                        <div class="letter-range">61-75</div>
-                    </div>
+                    <div class="letter-card"><div class="letter">B</div><div class="letter-range">1-15</div></div>
+                    <div class="letter-card"><div class="letter">I</div><div class="letter-range">16-30</div></div>
+                    <div class="letter-card"><div class="letter">N</div><div class="letter-range">31-45</div></div>
+                    <div class="letter-card"><div class="letter">G</div><div class="letter-range">46-60</div></div>
+                    <div class="letter-card"><div class="letter">O</div><div class="letter-range">61-75</div></div>
                 </div>
             </div>
         </div>
@@ -1412,60 +1481,36 @@
             </div>
 
             <div class="players-info">
-                <div class="player-count">
-                    <div class="count-number" id="availableBoxes">100</div>
-                    <div class="count-label">Available</div>
-                </div>
-                <div class="player-count">
-                    <div class="count-number" id="takenBoxes">0</div>
-                    <div class="count-label">Taken</div>
-                </div>
-                <div class="player-count">
-                    <div class="count-number" id="onlinePlayers">1</div>
-                    <div class="count-label">Online</div>
-                </div>
+                <div class="player-count"><div class="count-number" id="availableBoxes">100</div><div class="count-label">Available</div></div>
+                <div class="player-count"><div class="count-number" id="takenBoxes">0</div><div class="count-label">Taken</div></div>
+                <div class="player-count"><div class="count-number" id="onlinePlayers">1</div><div class="count-label">Online</div></div>
             </div>
 
-            <div class="boxes-grid" id="boxesGrid">
-                <!-- Boxes will be populated by JavaScript -->
-            </div>
+            <div class="boxes-grid" id="boxesGrid"></div>
 
-            <!-- Plate Preview Section -->
             <div class="plate-preview-container" id="platePreviewContainer">
                 <div class="plate-preview-title">Your Bingo Card Preview</div>
-                <div class="preview-grid" id="previewGrid">
-                    <!-- Preview grid will be populated by JavaScript -->
-                </div>
+                <div class="preview-grid" id="previewGrid"></div>
             </div>
 
             <div class="action-buttons">
-                <button class="confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>
-                    Select a box first
-                </button>
-                <button class="back-button-bottom" onclick="leaveDiscovery()">
-                    <i class="fas fa-arrow-left"></i> Back to Lobby
-                </button>
+                <button class="confirm-button" id="confirmBoxButton" onclick="joinLobby()" disabled>Select a box first</button>
+                <button class="back-button-bottom" onclick="leaveDiscovery()"><i class="fas fa-arrow-left"></i> Back to Lobby</button>
             </div>
         </div>
 
         <!-- Wait Screen -->
         <div class="screen" id="waitScreen">
             <div class="wait-container">
-                <div class="wait-icon">
-                    <i class="fas fa-users"></i>
-                </div>
+                <div class="wait-icon"><i class="fas fa-users"></i></div>
                 <div class="wait-timer" id="waitTimer">30</div>
                 <div class="wait-message" id="waitMessage">Waiting for players...</div>
-                <div class="wait-details" id="waitDetails">
-                    Game starts with 1 online player after 30 seconds
-                </div>
-                <button class="leave-button" onclick="leaveLobby()">
-                    Leave Lobby
-                </button>
+                <div class="wait-details" id="waitDetails">Game starts with 1 online player after 30 seconds</div>
+                <button class="leave-button" onclick="leaveLobby()">Leave Lobby</button>
             </div>
         </div>
 
-        <!-- Game Screen - REVISED LAYOUT -->
+        <!-- GAME SCREEN – NEW LAYOUT -->
         <div class="screen" id="gameScreen">
             <div class="game-header">
                 <div class="room-info-compact">
@@ -1473,29 +1518,25 @@
                     <div class="room-status-compact">Game in progress</div>
                 </div>
                 <div class="game-controls">
-                    <div class="control-button" onclick="showWallet()">
-                        <i class="fas fa-wallet"></i>
-                    </div>
-                    <div class="control-button" onclick="resetToLobby()">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </div>
+                    <div class="control-button" onclick="showWallet()"><i class="fas fa-wallet"></i></div>
+                    <div class="control-button" onclick="resetToLobby()"><i class="fas fa-sign-out-alt"></i></div>
                 </div>
             </div>
 
-            <!-- New two-column layout -->
-            <div class="game-content">
-                <!-- Left: numbers 1-75 vertical -->
-                <div class="numbers-column" id="numbersList"></div>
+            <div class="game-two-column">
+                <!-- Left column: numbers 1-75 vertical list -->
+                <div class="game-left-col">
+                    <div class="numbers-grid" id="numbersGrid"></div>
+                </div>
 
-                <!-- Right: ball display + bingo card -->
-                <div class="right-column">
+                <!-- Right column: ball draw, bingo card (small), claim button -->
+                <div class="game-right-col">
                     <div class="ball-display-container">
                         <div class="ball-label">LAST BALL</div>
                         <div class="ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
                         </div>
-                        <div class="ball-history" id="ballHistory"></div>
                     </div>
 
                     <div class="bingo-card-container">
@@ -1508,12 +1549,10 @@
                         </div>
                         <div class="bingo-grid" id="bingoGrid"></div>
                     </div>
+
+                    <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>CLAIM BINGO!</button>
                 </div>
             </div>
-
-            <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
-                CLAIM BINGO!
-            </button>
         </div>
     </div>
 
@@ -1523,44 +1562,27 @@
         <div class="overlay-content">
             <div class="overlay-icon">💰</div>
             <h2 class="overlay-title">Wallet</h2>
-            
             <div class="wallet-tabs">
                 <div class="wallet-tab active" onclick="switchWalletTab('deposit')">Deposit</div>
                 <div class="wallet-tab" onclick="switchWalletTab('withdraw')">Withdraw</div>
             </div>
-            
-            <!-- Deposit Tab -->
             <div class="wallet-form active" id="depositForm">
                 <div class="form-group">
                     <label class="form-label">Telebirr Number</label>
-                    <div id="telebirrNumberDisplay" style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">
-                        Loading...
-                    </div>
-                    <div style="font-size: 11px; color: var(--gray); margin-top: 5px; text-align: center;">
-                        Send money to this number and enter receipt below
-                    </div>
+                    <div id="telebirrNumberDisplay" style="background: rgba(99, 102, 241, 0.1); padding: 12px; border-radius: var(--radius); text-align: center; font-weight: 700; font-size: 18px; letter-spacing: 1px;">Loading...</div>
+                    <div style="font-size: 11px; color: var(--gray); margin-top: 5px; text-align: center;">Send money to this number and enter receipt below</div>
                 </div>
-                
                 <div class="form-group">
                     <label class="form-label">Receipt Number</label>
                     <input type="text" class="form-input" id="receiptNumber" placeholder="Enter receipt number">
                 </div>
-                
                 <div class="form-group">
                     <label class="form-label">Amount Sent (ETB)</label>
                     <input type="number" class="form-input" id="depositAmount" placeholder="Enter amount">
                 </div>
-                
-                <button class="overlay-button" onclick="submitDeposit()">
-                    Submit Deposit Request
-                </button>
-                
-                <div style="margin-top: 16px; font-size: 12px; color: var(--gray); text-align: center;">
-                    Funds will be added within 24 hours after verification
-                </div>
+                <button class="overlay-button" onclick="submitDeposit()">Submit Deposit Request</button>
+                <div style="margin-top: 16px; font-size: 12px; color: var(--gray); text-align: center;">Funds will be added within 24 hours after verification</div>
             </div>
-            
-            <!-- Withdraw Tab -->
             <div class="wallet-form" id="withdrawForm">
                 <div class="form-group">
                     <label class="form-label">Select Amount</label>
@@ -1573,29 +1595,18 @@
                     </div>
                     <input type="number" class="form-input" id="customAmount" placeholder="Custom amount" oninput="updateCustomAmount()">
                 </div>
-                
                 <div class="form-group">
                     <label class="form-label">Phone Number</label>
                     <input type="tel" class="form-input" id="withdrawPhoneNumber" placeholder="e.g., 0912345678">
                 </div>
-                
                 <div style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-radius: var(--radius); margin-bottom: 20px;">
                     <div style="font-size: 12px; color: var(--secondary); margin-bottom: 4px;">Selected Amount</div>
                     <div style="font-size: 24px; font-weight: 800; color: white;" id="selectedWithdrawAmount">0 ETB</div>
                 </div>
-                
-                <button class="overlay-button" onclick="submitWithdrawal()" id="withdrawSubmitBtn">
-                    Submit Withdrawal
-                </button>
-                
-                <div style="margin-top: 16px; font-size: 12px; color: var(--danger); text-align: center;">
-                    Minimum withdrawal: 50 ETB • Processed within 24 hours
-                </div>
+                <button class="overlay-button" onclick="submitWithdrawal()" id="withdrawSubmitBtn">Submit Withdrawal</button>
+                <div style="margin-top: 16px; font-size: 12px; color: var(--danger); text-align: center;">Minimum withdrawal: 50 ETB • Processed within 24 hours</div>
             </div>
-            
-            <button class="overlay-button" onclick="hideWallet()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 16px;">
-                Back to Game
-            </button>
+            <button class="overlay-button" onclick="hideWallet()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 16px;">Back to Game</button>
         </div>
     </div>
 
@@ -1606,14 +1617,9 @@
             <h2 class="overlay-title win-title">BINGO!</h2>
             <div class="overlay-amount" id="winPrizeAmount">+0.00 ETB</div>
             <div class="overlay-message" id="winMessage">Congratulations! You won the game.</div>
-            
             <div class="winning-card-replica" id="winningCardReplicaWin" style="display: none;">
                 <div class="replica-header">
-                    <div class="replica-letter-cell">B</div>
-                    <div class="replica-letter-cell">I</div>
-                    <div class="replica-letter-cell">N</div>
-                    <div class="replica-letter-cell">G</div>
-                    <div class="replica-letter-cell">O</div>
+                    <div class="replica-letter-cell">B</div><div class="replica-letter-cell">I</div><div class="replica-letter-cell">N</div><div class="replica-letter-cell">G</div><div class="replica-letter-cell">O</div>
                 </div>
                 <div class="replica-grid" id="replicaGridWin"></div>
                 <div class="winning-pattern-info">
@@ -1621,10 +1627,7 @@
                     <div class="winning-pattern-stats" id="winningPatternStatsWin"></div>
                 </div>
             </div>
-            
-            <button class="overlay-button" onclick="resetToLobby()">
-                Return to Lobby
-            </button>
+            <button class="overlay-button" onclick="resetToLobby()">Return to Lobby</button>
         </div>
     </div>
 
@@ -1639,14 +1642,9 @@
                 <div style="font-size: 24px; font-weight: 700; color: white;" id="winnerName">Player</div>
                 <div style="font-size: 20px; font-weight: 700; color: var(--secondary); margin-top: 8px;" id="winnerPrize">0.00 ETB</div>
             </div>
-            
             <div class="winning-card-replica" id="winningCardReplicaLose" style="display: none;">
                 <div class="replica-header">
-                    <div class="replica-letter-cell">B</div>
-                    <div class="replica-letter-cell">I</div>
-                    <div class="replica-letter-cell">N</div>
-                    <div class="replica-letter-cell">G</div>
-                    <div class="replica-letter-cell">O</div>
+                    <div class="replica-letter-cell">B</div><div class="replica-letter-cell">I</div><div class="replica-letter-cell">N</div><div class="replica-letter-cell">G</div><div class="replica-letter-cell">O</div>
                 </div>
                 <div class="replica-grid" id="replicaGridLose"></div>
                 <div class="winning-pattern-info">
@@ -1654,10 +1652,7 @@
                     <div class="winning-pattern-stats" id="winningPatternStatsLose"></div>
                 </div>
             </div>
-            
-            <button class="overlay-button" onclick="resetToLobby()">
-                Return to Lobby
-            </button>
+            <button class="overlay-button" onclick="resetToLobby()">Return to Lobby</button>
         </div>
     </div>
 
@@ -1667,12 +1662,8 @@
             <div class="overlay-icon">💰</div>
             <h2 class="overlay-title lose-title">INSUFFICIENT FUNDS</h2>
             <div class="overlay-message" id="insufficientMessage">You need 10 ETB to join this room</div>
-            <button class="overlay-button" onclick="showWallet()">
-                Add Funds
-            </button>
-            <button class="overlay-button" onclick="hideInsufficientOverlay()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 12px;">
-                Cancel
-            </button>
+            <button class="overlay-button" onclick="showWallet()">Add Funds</button>
+            <button class="overlay-button" onclick="hideInsufficientOverlay()" style="background: transparent; border: 1px solid var(--card-border); margin-top: 12px;">Cancel</button>
         </div>
     </div>
 
@@ -1682,9 +1673,7 @@
             <div class="overlay-icon">🔒</div>
             <h2 class="overlay-title lose-title">ROOM LOCKED</h2>
             <div class="overlay-message">Game is in progress. Please wait for the current game to finish.</div>
-            <button class="overlay-button" onclick="hideRoomLockedOverlay()">
-                OK
-            </button>
+            <button class="overlay-button" onclick="hideRoomLockedOverlay()">OK</button>
         </div>
     </div>
 
@@ -1708,19 +1697,14 @@
             showPopup: (p, callback) => { if(callback) callback(); }
         };
         
-        // Initialize Telegram Web App
         try {
             tg.ready();
             tg.expand();
             if (tg.isVersionAtLeast('7.0') && tg.requestFullscreen) {
                 tg.requestFullscreen();
             }
-            
-            // Set Telegram theme colors
             tg.setHeaderColor('#6366f1');
             tg.setBackgroundColor('#0f172a');
-            
-            console.log('Telegram Web App initialized successfully');
         } catch (e) {
             console.log('Running in browser mode (not Telegram)');
         }
@@ -1728,7 +1712,6 @@
         // ⭐⭐ IMPORTANT: Replace this with your actual Render URL ⭐⭐
         const SERVER_URL = "https://bingo-telegram-game.onrender.com";
 
-        // ========== NEW: Helper to get URL parameters ==========
         function getUrlParameter(name) {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get(name);
@@ -1752,12 +1735,11 @@
             grid: [],
             calledNumbers: new Set(),
             markedNumbers: new Set(['FREE']),
-            history: [],
             isConnected: false,
             balance: 0.00,
             userId: null,
             userName: 'Guest',
-            telebirrNumber: '0962577855', // Default value, will be updated from server
+            telebirrNumber: '0962577855',
             roomStatuses: {},
             connectionAttempts: 0,
             lastActivityTime: Date.now(),
@@ -1774,15 +1756,12 @@
             currentDiscoveryTimer: 30,
             walletTab: 'deposit',
             selectedWithdrawAmount: 0,
-            isRestoring: false // NEW: prevent multiple restore attempts
+            isRestoring: false
         };
 
-        // ========== TEXT‑TO‑SPEECH FOR BALL DRAWS ==========
         let speechEnabled = false;
-
         function enableSpeech() {
             if (window.speechSynthesis) {
-                // Create a dummy utterance to request permission on iOS
                 const utter = new SpeechSynthesisUtterance('');
                 window.speechSynthesis.speak(utter);
                 speechEnabled = true;
@@ -1791,8 +1770,6 @@
                 console.warn('⚠️ Speech synthesis not supported');
             }
         }
-
-        // Enable speech on first user interaction
         document.addEventListener('click', function once() {
             enableSpeech();
             document.removeEventListener('click', once);
@@ -1800,68 +1777,44 @@
 
         function speakBall(letter, number) {
             if (!speechEnabled || !window.speechSynthesis) return;
-            
-            // Cancel any ongoing speech to avoid overlapping
             window.speechSynthesis.cancel();
-            
             const utterance = new SpeechSynthesisUtterance(`${letter} ${number}`);
             utterance.lang = 'en-US';
-            utterance.rate = 1.0;      // speed (0.1 to 10)
-            utterance.pitch = 1.0;     // pitch (0 to 2)
-            utterance.volume = 1.0;    // volume (0 to 1)
-            
-            // Optionally select a specific voice (e.g., female)
-            // const voices = window.speechSynthesis.getVoices();
-            // utterance.voice = voices.find(v => v.name.includes('Google UK Female')) || voices[0];
-            
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
             window.speechSynthesis.speak(utterance);
         }
 
-        // 🚨 FAST BINGO CLAIMING VARIABLES
-        let isClaiming = false; // Global flag to prevent double-click
+        let isClaiming = false;
         let lastClaimTime = 0;
         let currentClaimId = null;
 
-        // ========== SAFE PARSING HELPER ==========
         function safeParseInt(value, fallback = 0) {
             const parsed = parseInt(value);
             return isNaN(parsed) ? fallback : parsed;
         }
 
-        // Update Telebirr number in UI
         function updateTelebirrNumberInUI(telebirrNumber) {
             const displayElement = document.getElementById('telebirrNumberDisplay');
-            if (displayElement) {
-                displayElement.textContent = telebirrNumber;
-            }
-            
-            // Also update state for reference
+            if (displayElement) displayElement.textContent = telebirrNumber;
             state.telebirrNumber = telebirrNumber;
-            console.log('📱 Updated Telebirr number in UI:', telebirrNumber);
         }
 
-        // Function to manually request Telebirr number
         function fetchTelebirrNumber() {
             if (state.isConnected) {
-                console.log('📱 Requesting Telebirr number from server...');
                 socket.emit('getTelebirrNumber', (data) => {
-                    console.log('📱 Telebirr number response:', data);
                     if (data) {
                         const number = typeof data === 'string' ? data : (data.telebirrNumber || data);
-                        if (number) {
-                            updateTelebirrNumberInUI(number);
-                            console.log('📱 Fetched and updated Telebirr number:', number);
-                        }
+                        if (number) updateTelebirrNumberInUI(number);
                     }
                 });
             }
         }
 
-        // Update connection status UI
         function updateConnectionStatus(connected, message) {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('connectionStatusText');
-            
             if (connected) {
                 dot.className = 'status-dot connected';
                 text.textContent = 'CONNECTED';
@@ -1873,21 +1826,11 @@
             }
         }
 
-        // ========== MODIFIED: generateUserId() with URL priority ==========
         function generateUserId() {
-            // 1. Check if userId was passed in URL (from app login)
             const urlUserId = getUrlParameter('userId');
-            if (urlUserId) {
-                return urlUserId;
-            }
-
-            // 2. Check Telegram user
+            if (urlUserId) return urlUserId;
             const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.id) {
-                return `tg_${telegramUser.id}`;
-            }
-
-            // 3. Fallback to guest ID in localStorage
+            if (telegramUser && telegramUser.id) return `tg_${telegramUser.id}`;
             let guestId = localStorage.getItem('bingo_guest_id');
             if (!guestId) {
                 guestId = `guest_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
@@ -1896,25 +1839,13 @@
             return guestId;
         }
 
-        // ========== MODIFIED: getUserName() with URL priority ==========
         function getUserName() {
-            // 1. URL parameter
             const urlName = getUrlParameter('name');
-            if (urlName) {
-                return urlName;
-            }
-
-            // 2. Telegram user
+            if (urlName) return urlName;
             const telegramUser = tg.initDataUnsafe?.user;
-            if (telegramUser && telegramUser.first_name) {
-                return telegramUser.first_name;
-            }
-
-            // 3. Stored guest name
+            if (telegramUser && telegramUser.first_name) return telegramUser.first_name;
             const savedName = localStorage.getItem('bingo_user_name');
             if (savedName) return savedName;
-
-            // 4. Random fallback
             return `Player${Math.floor(Math.random() * 1000)}`;
         }
 
@@ -1922,168 +1853,81 @@
             if (state.userId && !state.userId.startsWith('tg_') && !state.userId.startsWith('app_')) {
                 localStorage.setItem('bingo_guest_id', state.userId);
             }
-            if (state.userName) {
-                localStorage.setItem('bingo_user_name', state.userName);
-            }
+            if (state.userName) localStorage.setItem('bingo_user_name', state.userName);
         }
 
         function updateSocketQuery() {
             if (state.userId) {
                 socket.io.opts.query.userId = state.userId;
                 socket.io.opts.query.userName = state.userName;
-                console.log('Socket query updated with userId:', state.userId, 'userName:', state.userName);
             }
         }
 
         function sendInitEvent() {
             if (state.isConnected && state.userId && !state.isInitialized) {
-                console.log('📤 SENDING INIT EVENT for user:', state.userName, 'ID:', state.userId);
-                
-                socket.emit('init', { 
-                    userId: state.userId,
-                    userName: state.userName 
-                }, (response) => {
+                socket.emit('init', { userId: state.userId, userName: state.userName }, (response) => {
                     if (response && response.success) {
-                        console.log('✅ Init SUCCESS:', response.message);
                         state.isInitialized = true;
-                        
-                        // After successful init, fetch Telebirr number
                         fetchTelebirrNumber();
                     } else {
-                        console.log('❌ Init FAILED:', response?.message || 'No response');
                         state.isInitialized = false;
                     }
                 });
             }
         }
 
-        // Show notification
         function showNotification(message, type = 'info', duration = 3000) {
-            // Don't show in-game notifications for marking numbers
-            if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) {
-                return;
-            }
-            if (type === 'error' && message.includes("hasn't been called")) {
-                return;
-            }
-            
-            // Create notification element
+            if (type === 'success' && (message.includes('Marked') || message.includes('marked'))) return;
+            if (type === 'error' && message.includes("hasn't been called")) return;
             const notification = document.createElement('div');
             notification.className = 'notification';
             notification.style.cssText = `
-                position: fixed;
-                top: 80px;
-                left: 50%;
-                transform: translateX(-50%);
-                z-index: 10000;
+                position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 10000;
                 background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#6366f1'};
-                color: white;
-                padding: 12px 20px;
-                border-radius: var(--radius);
-                font-weight: 600;
-                font-size: 14px;
-                box-shadow: var(--shadow-lg);
-                animation: fadeIn 0.3s ease;
-                max-width: 90%;
-                text-align: center;
+                color: white; padding: 12px 20px; border-radius: var(--radius); font-weight: 600; font-size: 14px;
+                box-shadow: var(--shadow-lg); animation: fadeIn 0.3s ease; max-width: 90%; text-align: center;
             `;
-            
-            notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div>
-                    <div>${message}</div>
-                </div>
-            `;
-            
+            notification.innerHTML = `<div style="display: flex; align-items: center; gap: 8px;"><div>${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : '📦'}</div><div>${message}</div></div>`;
             document.body.appendChild(notification);
-            
             setTimeout(() => {
                 notification.style.opacity = '0';
                 notification.style.transform = 'translateX(-50%) translateY(-20px)';
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.parentNode.removeChild(notification);
-                    }
-                }, 300);
+                setTimeout(() => notification.parentNode?.removeChild(notification), 300);
             }, duration);
         }
 
-        // Screen management
         function showScreen(screenId) {
-            // Hide all screens
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-            });
-            
-            // Show target screen
-            const targetScreen = document.getElementById(screenId);
-            if (targetScreen) {
-                targetScreen.classList.add('active');
-            }
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId)?.classList.add('active');
         }
 
         function showOverlay(overlayId) {
-            const overlay = document.getElementById(overlayId);
-            if (overlay) {
-                overlay.classList.add('active');
-            }
+            document.getElementById(overlayId)?.classList.add('active');
         }
 
         function hideOverlay(overlayId) {
-            const overlay = document.getElementById(overlayId);
-            if (overlay) {
-                overlay.classList.remove('active');
-            }
+            document.getElementById(overlayId)?.classList.remove('active');
         }
 
-        function hideInsufficientOverlay() {
-            hideOverlay('insufficientOverlay');
-        }
+        function hideInsufficientOverlay() { hideOverlay('insufficientOverlay'); }
+        function hideRoomLockedOverlay() { hideOverlay('roomLockedOverlay'); }
 
-        function hideRoomLockedOverlay() {
-            hideOverlay('roomLockedOverlay');
-        }
-
-        // Wallet Functions
         function showWallet() {
-            // Update wallet balance display
             document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
             state.selectedWithdrawAmount = 0;
             document.getElementById('customAmount').value = '';
             document.getElementById('withdrawPhoneNumber').value = '';
-            
-            // ✅ Always fetch current Telebirr number from server when opening wallet
-            if (state.isConnected) {
-                console.log('📱 Opening wallet, fetching Telebirr number...');
-                fetchTelebirrNumber();
-            } else {
-                // Use state value if not connected
-                updateTelebirrNumberInUI(state.telebirrNumber);
-            }
-            
-            // Show wallet overlay
+            if (state.isConnected) fetchTelebirrNumber();
+            else updateTelebirrNumberInUI(state.telebirrNumber);
             showOverlay('walletOverlay');
-            
-            // Add haptic feedback
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('light'); 
-                }
-            } catch(e){}
+            try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
         }
 
-        function hideWallet() {
-            hideOverlay('walletOverlay');
-        }
+        function hideWallet() { hideOverlay('walletOverlay'); }
 
         function switchWalletTab(tab) {
             state.walletTab = tab;
-            
-            // Update tab buttons
-            document.querySelectorAll('.wallet-tab').forEach(tabElement => {
-                tabElement.classList.remove('active');
-            });
-            
+            document.querySelectorAll('.wallet-tab').forEach(t => t.classList.remove('active'));
             if (tab === 'deposit') {
                 document.querySelectorAll('.wallet-tab')[0].classList.add('active');
                 document.getElementById('depositForm').classList.add('active');
@@ -2099,13 +1943,7 @@
             state.selectedWithdrawAmount = amount;
             document.getElementById('selectedWithdrawAmount').textContent = amount + ' ETB';
             document.getElementById('customAmount').value = '';
-            
-            // Add haptic feedback
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('light'); 
-                }
-            } catch(e){}
+            try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
         }
 
         function updateCustomAmount() {
@@ -2119,160 +1957,87 @@
         function submitDeposit() {
             const receiptNumber = document.getElementById('receiptNumber').value.trim();
             const depositAmount = parseFloat(document.getElementById('depositAmount').value);
-            
-            if (!receiptNumber) {
-                showNotification('Please enter your receipt number', 'error');
-                return;
-            }
-            
-            if (!depositAmount || depositAmount < 10) {
-                showNotification('Please enter valid amount (minimum 10 ETB)', 'error');
-                return;
-            }
-            
+            if (!receiptNumber) { showNotification('Please enter your receipt number', 'error'); return; }
+            if (!depositAmount || depositAmount < 10) { showNotification('Please enter valid amount (minimum 10 ETB)', 'error'); return; }
             if (state.isConnected) {
-                socket.emit('wallet:depositRequest', {
-                    receiptNumber: receiptNumber,
-                    amount: depositAmount,
-                    userId: state.userId,
-                    userName: state.userName,
-                    telebirrNumber: state.telebirrNumber || '0962577855'
-                });
-                
-                showNotification(`Deposit request submitted! Send ${depositAmount} ETB to: ${state.telebirrNumber || '0962577855'}`, 'success');
+                socket.emit('wallet:depositRequest', { receiptNumber, amount: depositAmount, userId: state.userId, userName: state.userName, telebirrNumber: state.telebirrNumber });
+                showNotification(`Deposit request submitted! Send ${depositAmount} ETB to: ${state.telebirrNumber}`, 'success');
                 hideWallet();
-                
-                // Clear form
                 document.getElementById('receiptNumber').value = '';
                 document.getElementById('depositAmount').value = '';
-            } else {
-                showNotification('Not connected to server', 'error');
-            }
+            } else showNotification('Not connected to server', 'error');
         }
 
         function submitWithdrawal() {
             const phoneNumber = document.getElementById('withdrawPhoneNumber').value.trim();
             const amount = state.selectedWithdrawAmount;
-            
-            if (amount < 50) {
-                showNotification('Minimum withdrawal amount is 50 ETB', 'error');
-                return;
-            }
-            
-            if (amount > state.balance) {
-                showNotification('Insufficient balance for withdrawal', 'error');
-                return;
-            }
-            
-            if (!phoneNumber || phoneNumber.length < 10) {
-                showNotification('Please enter valid phone number', 'error');
-                return;
-            }
-            
+            if (amount < 50) { showNotification('Minimum withdrawal amount is 50 ETB', 'error'); return; }
+            if (amount > state.balance) { showNotification('Insufficient balance for withdrawal', 'error'); return; }
+            if (!phoneNumber || phoneNumber.length < 10) { showNotification('Please enter valid phone number', 'error'); return; }
             if (state.isConnected) {
-                socket.emit('wallet:withdrawRequest', {
-                    amount: amount,
-                    phoneNumber: phoneNumber,
-                    userId: state.userId,
-                    userName: state.userName
-                });
-                
+                socket.emit('wallet:withdrawRequest', { amount, phoneNumber, userId: state.userId, userName: state.userName });
                 showNotification(`Withdrawal request submitted! ${amount} ETB will be sent to ${phoneNumber}`, 'success');
                 hideWallet();
-                
-                // Clear form
                 state.selectedWithdrawAmount = 0;
                 document.getElementById('selectedWithdrawAmount').textContent = '0 ETB';
                 document.getElementById('customAmount').value = '';
                 document.getElementById('withdrawPhoneNumber').value = '';
-            } else {
-                showNotification('Not connected to server', 'error');
-            }
+            } else showNotification('Not connected to server', 'error');
         }
 
-        // Handle socket connection
         socket.on('connect', () => {
             console.log('✅ Socket connected:', socket.id);
             state.isConnected = true;
             state.socketId = socket.id;
             state.connectionAttempts = 0;
             state.isInitialized = false;
-            
             updateConnectionStatus(true, 'CONNECTED');
             hideOverlay('loadingOverlay');
-            
             state.userId = generateUserId();
             state.userName = getUserName();
-            
-            console.log('👤 Generated User ID:', state.userId);
-            console.log('👤 User Name:', state.userName);
-            
-            // Update user info in UI
             document.getElementById('userName').textContent = state.userName;
             document.getElementById('userAvatar').textContent = state.userName.charAt(0).toUpperCase();
-            
             saveUserInfo();
             updateSocketQuery();
             sendInitEvent();
-            
-            console.log('Connected to server as:', state.userName, 'ID:', state.userId, 'Socket:', socket.id);
-            
             startActivityMonitoring();
         });
 
-        // Handle socket disconnection
         socket.on('disconnect', (reason) => {
             console.log('❌ Socket disconnected:', reason);
             state.isConnected = false;
             state.isInitialized = false;
-            
             updateConnectionStatus(false, 'DISCONNECTED');
             showOverlay('loadingOverlay');
             document.getElementById('loadingMessage').textContent = 'Reconnecting to server...';
-            
             state.connectionAttempts++;
-            
             const delay = Math.min(3000 * state.connectionAttempts, 10000);
             setTimeout(() => {
                 if (!state.isConnected) {
-                    console.log(`Attempting to reconnect (attempt ${state.connectionAttempts})...`);
                     updateConnectionStatus(false, 'RECONNECTING...');
                     socket.connect();
                 }
             }, delay);
         });
 
-        // Handle connection errors
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error.message);
             updateConnectionStatus(false, 'CONNECTION ERROR');
             document.getElementById('loadingMessage').textContent = `Connection error: ${error.message}`;
-            
-            setTimeout(() => {
-                if (!state.isConnected) {
-                    socket.connect();
-                }
-            }, 3000);
+            setTimeout(() => { if (!state.isConnected) socket.connect(); }, 3000);
         });
 
-        // Handle user data from server
         socket.on('userData', (data) => {
             console.log('User data received:', data);
             state.userId = data.userId || state.userId;
             state.userName = data.userName || state.userName;
-
             document.getElementById('userName').textContent = data.userName.toUpperCase();
             document.getElementById('userAvatar').textContent = data.userName.charAt(0).toUpperCase();
-
             saveUserInfo();
-
-            // NEW: If user has a current room and we haven't already tried restoring, do it
             if (data.currentRoom && !state.isRestoring) {
                 state.isRestoring = true;
                 console.log('🔍 Attempting to restore game state for room', data.currentRoom);
-                try {
-                    restoreGameState(data.currentRoom);
-                } catch (e) {
+                try { restoreGameState(data.currentRoom); } catch (e) {
                     console.error('❌ Error during restoreGameState:', e);
                     state.isRestoring = false;
                     resetToLobby();
@@ -2280,168 +2045,89 @@
             }
         });
 
-        // ✅ Handle Telebirr number received from server
         socket.on('telebirrNumber', (data) => {
-            // Check if data is a string or object
             const number = typeof data === 'string' ? data : (data?.telebirrNumber || data);
-            console.log('📱 [telebirrNumber] Received Telebirr number from server:', number, 'Full data:', data);
-            if (number) {
-                state.telebirrNumber = number;
-                updateTelebirrNumberInUI(number);
-            }
+            if (number) { state.telebirrNumber = number; updateTelebirrNumberInUI(number); }
         });
 
-        // ✅ Handle Telebirr number updates in real-time
         socket.on('telebirrNumberUpdate', (data) => {
-            console.log('📱 [telebirrNumberUpdate] Telebirr number updated in real-time:', data);
-            if (data && data.telebirrNumber) {
+            if (data?.telebirrNumber) {
                 state.telebirrNumber = data.telebirrNumber;
                 updateTelebirrNumberInUI(data.telebirrNumber);
-                
-                // Show notification to user if they're viewing the wallet
                 if (document.getElementById('walletOverlay')?.classList.contains('active')) {
                     showNotification('📱 Telebirr number has been updated: ' + data.telebirrNumber, 'info', 3000);
                 }
             }
         });
 
-        // ✅ Handle Telebirr number updates from admin panel
         socket.on('admin:telebirrNumberUpdated', (data) => {
-            console.log('📱 [admin:telebirrNumberUpdated] Received admin Telebirr number update:', data);
-            if (data && data.telebirrNumber) {
+            if (data?.telebirrNumber) {
                 state.telebirrNumber = data.telebirrNumber;
                 updateTelebirrNumberInUI(data.telebirrNumber);
-                
-                // Show notification to user if they're viewing the wallet
                 if (document.getElementById('walletOverlay')?.classList.contains('active')) {
                     showNotification('📱 Telebirr number has been updated by admin: ' + data.telebirrNumber, 'info', 3000);
                 }
             }
         });
 
-        // Handle room status updates
         socket.on('roomStatus', (roomData) => {
-            console.log('📊 Room status update received:', Object.keys(roomData).length, 'rooms');
-            
             state.roomStatuses = roomData;
             updateRoomsDisplay();
             state.lastActivityTime = Date.now();
-            
             let totalOnline = 0;
-            Object.values(roomData).forEach(room => {
-                totalOnline += room.playerCount || 0;
-            });
-            
+            Object.values(roomData).forEach(room => totalOnline += room.playerCount || 0);
             state.onlinePlayersCount = totalOnline;
         });
 
         function updateRoomsDisplay() {
             const roomsGrid = document.getElementById('roomsGrid');
             roomsGrid.innerHTML = '';
-            
-            const rooms = [
-                { stake: 10, color: '#d97706' },
-                { stake: 20, color: '#9ca3af' },
-                { stake: 50, color: '#fbbf24' },
-                { stake: 100, color: '#8b5cf6' }
-            ];
-            
+            const rooms = [ { stake: 10 }, { stake: 20 }, { stake: 50 }, { stake: 100 } ];
             rooms.forEach(room => {
-                const roomInfo = state.roomStatuses[room.stake] || {
-                    status: 'waiting',
-                    playerCount: 0,
-                    totalPlayers: 0,
-                    potentialPrize: 0,
-                    locked: false
-                };
-                
+                const roomInfo = state.roomStatuses[room.stake] || { status: 'waiting', playerCount: 0, totalPlayers: 0, potentialPrize: 0, locked: false };
                 const isLocked = roomInfo.locked || roomInfo.status === 'locked';
-                
                 const roomCard = document.createElement('div');
                 roomCard.className = 'room-card' + (isLocked ? ' locked' : '');
-                // ADD DATASET STAKE FOR COLOR ACCENTS
                 roomCard.dataset.stake = room.stake;
                 roomCard.onclick = isLocked ? null : () => selectStake(room.stake);
-                
-                let statusClass = 'status-waiting';
-                let statusText = 'WAITING';
-                
-                if (isLocked) {
-                    statusClass = 'status-locked';
-                    statusText = 'LOCKED';
-                } else if (roomInfo.status === 'starting') {
-                    statusClass = 'status-starting';
-                    statusText = 'STARTING';
-                } else if (roomInfo.status === 'playing') {
-                    statusClass = 'status-playing';
-                    statusText = 'PLAYING';
-                }
-                
+                let statusClass = 'status-waiting', statusText = 'WAITING';
+                if (isLocked) { statusClass = 'status-locked'; statusText = 'LOCKED'; }
+                else if (roomInfo.status === 'starting') { statusClass = 'status-starting'; statusText = 'STARTING'; }
+                else if (roomInfo.status === 'playing') { statusClass = 'status-playing'; statusText = 'PLAYING'; }
                 roomCard.innerHTML = `
                     <div class="room-stake">${room.stake}<span class="room-stake-currency">ETB</span></div>
                     <div class="room-info">
-                        <div class="room-players">
-                            <div class="player-icon"><i class="fas fa-user"></i></div>
-                            <div>${roomInfo.playerCount}/100</div>
-                        </div>
+                        <div class="room-players"><i class="fas fa-user"></i><div>${roomInfo.playerCount}/100</div></div>
                         <div class="room-prize">${roomInfo.potentialPrize || 0} ETB</div>
                     </div>
                     <div class="room-status ${statusClass}">${statusText}</div>
                 `;
-                
                 roomsGrid.appendChild(roomCard);
             });
         }
 
-        // Handle balance updates
         socket.on('balanceUpdate', (bal) => {
             state.balance = parseFloat(bal);
             const val = state.balance.toFixed(2);
             document.getElementById('balanceAmount').textContent = val;
             document.getElementById('lobbyBalance').textContent = val;
-            
             state.lastActivityTime = Date.now();
         });
 
-        // Wallet events
-        socket.on('wallet:depositRequestSuccess', (data) => {
-            showNotification(data.message, 'success', 5000);
-        });
-
-        socket.on('wallet:withdrawRequestSuccess', (data) => {
-            showNotification(data.message, 'success', 5000);
-        });
-
-        socket.on('wallet:depositApproved', (data) => {
-            showNotification(`✅ Deposit approved! ${data.amount} ETB added to your account.`, 'success', 5000);
-        });
-
-        socket.on('wallet:withdrawalApproved', (data) => {
-            showNotification(`✅ Withdrawal approved! ${data.amount} ETB sent to ${data.phoneNumber}.`, 'success', 5000);
-        });
+        socket.on('wallet:depositRequestSuccess', (data) => showNotification(data.message, 'success', 5000));
+        socket.on('wallet:withdrawRequestSuccess', (data) => showNotification(data.message, 'success', 5000));
+        socket.on('wallet:depositApproved', (data) => showNotification(`✅ Deposit approved! ${data.amount} ETB added.`, 'success', 5000));
+        socket.on('wallet:withdrawalApproved', (data) => showNotification(`✅ Withdrawal approved! ${data.amount} ETB sent to ${data.phoneNumber}.`, 'success', 5000));
 
         function refreshBalance() {
             const refreshBtn = document.querySelector('.refresh-btn');
             refreshBtn.style.transform = 'rotate(180deg)';
-            
-            console.log('🔄 Refreshing balance...');
-            
-            if(state.isConnected && state.isInitialized) {
-                socket.emit('refreshBalance');
-                console.log('✅ Balance refresh requested');
-            } else {
-                console.log('⚠️ Cannot refresh balance - not connected or not initialized');
-                if (!state.isConnected) {
-                    socket.connect();
-                } else if (!state.isInitialized) {
-                    sendInitEvent();
-                }
+            if(state.isConnected && state.isInitialized) socket.emit('refreshBalance');
+            else {
+                if (!state.isConnected) socket.connect();
+                else if (!state.isInitialized) sendInitEvent();
             }
-            
-            setTimeout(() => {
-                refreshBtn.style.transform = 'rotate(0deg)';
-            }, 500);
-            
+            setTimeout(() => refreshBtn.style.transform = 'rotate(0deg)', 500);
             state.lastActivityTime = Date.now();
         }
 
@@ -2451,127 +2137,73 @@
                 showOverlay('insufficientOverlay');
                 return;
             }
-
             state.stake = amt;
             document.getElementById('selectedRoomStake').textContent = `${amt} ETB`;
             document.getElementById('gameRoomStake').textContent = `${amt} ETB`;
-            
             showScreen('discoveryScreen');
-            
-            // Reset box counter
             state.lastBoxCount = 0;
             state.previousTakenBoxes = [];
             state.selectedBox = null;
-            
-            // Hide timer container initially
             document.getElementById('timerContainer').style.display = 'none';
-            // Hide plate preview initially
             document.getElementById('platePreviewContainer').classList.remove('active');
-            
             if(state.isConnected) {
-                // Subscribe to room updates
                 socket.emit('subscribeToRoom', { room: amt });
                 state.roomSubscribed = true;
-                
-                // Request taken boxes
-                console.log(`📤 Requesting taken boxes for room ${amt}...`);
                 socket.emit('getTakenBoxes', { room: amt }, (takenBoxes) => {
-                    console.log(`📦 Received taken boxes for room ${amt}:`, takenBoxes);
                     renderBoxes(takenBoxes);
                     updateBoxCounters(takenBoxes);
                 });
-                
-                // Request countdown status for discovery overlay
                 socket.emit('getRoomCountdown', { room: amt }, (response) => {
-                    if (response && response.countdownActive) {
-                        console.log(`⏱️ Discovery timer active: ${response.seconds} seconds, ${response.onlinePlayers} online players`);
+                    if (response?.countdownActive) {
                         updateDiscoveryTimer(response.seconds, response.onlinePlayers);
-                    } else {
-                        // Hide timer if no countdown
-                        document.getElementById('timerContainer').style.display = 'none';
-                    }
+                    } else document.getElementById('timerContainer').style.display = 'none';
                 });
             }
-            
             state.lastActivityTime = Date.now();
         }
 
         function renderBoxes(taken) {
             const grid = document.getElementById('boxesGrid');
             grid.innerHTML = '';
-            
-            // Create boxes 1-100
             for(let i=1; i<=100; i++) {
                 const box = document.createElement('div');
                 const isTaken = taken.includes(i);
-                
                 box.className = 'box-item' + (isTaken ? ' taken' : '');
                 box.textContent = i;
                 box.dataset.number = i;
-                
-                if (!isTaken) {
-                    box.onclick = function() {
-                        selectBox(i);
-                    };
-                }
-                
-                if (state.selectedBox === i) {
-                    box.classList.add('selected');
-                }
-                
+                if (!isTaken) box.onclick = function() { selectBox(i); };
+                if (state.selectedBox === i) box.classList.add('selected');
                 grid.appendChild(box);
             }
-            
             state.previousTakenBoxes = taken;
             state.lastActivityTime = Date.now();
         }
-        
+
         function selectBox(boxNumber) {
-            // Deselect all boxes
-            document.querySelectorAll('.box-item').forEach(box => {
-                box.classList.remove('selected');
-            });
-            
-            // Select the clicked box
+            document.querySelectorAll('.box-item').forEach(box => box.classList.remove('selected'));
             const selectedBox = document.querySelector(`.box-item[data-number="${boxNumber}"]`);
             if (selectedBox && !selectedBox.classList.contains('taken')) {
                 selectedBox.classList.add('selected');
                 state.selectedBox = boxNumber;
-                
-                // Show plate preview
                 showPlatePreview(boxNumber);
-                
-                // Enable confirm button
                 const confirmButton = document.getElementById('confirmBoxButton');
                 confirmButton.disabled = false;
                 confirmButton.textContent = `Select Box ${boxNumber}`;
-                
-                // Add haptic feedback
-                try { 
-                    if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                        tg.HapticFeedback.impactOccurred('light'); 
-                    }
-                } catch(e){}
+                try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
             }
         }
-        
+
         function showPlatePreview(seed) {
-            // Generate preview grid
             generateTraditionalBingoCard(seed);
-            
             const previewGrid = document.getElementById('previewGrid');
             previewGrid.innerHTML = '';
-            
-            // Add header letters
-            const letters = ['B', 'I', 'N', 'G', 'O'];
+            const letters = ['B','I','N','G','O'];
             letters.forEach(letter => {
                 const letterCell = document.createElement('div');
                 letterCell.className = 'preview-letter';
                 letterCell.textContent = letter;
                 previewGrid.appendChild(letterCell);
             });
-            
-            // Add cells
             state.grid.forEach((val, index) => {
                 const cell = document.createElement('div');
                 const isFree = val === 'FREE';
@@ -2579,135 +2211,74 @@
                 cell.textContent = isFree ? 'FREE' : val;
                 previewGrid.appendChild(cell);
             });
-            
-            // Show preview container
             document.getElementById('platePreviewContainer').classList.add('active');
         }
-        
+
         function updateBoxCounters(takenBoxes) {
             const takenCount = takenBoxes.length;
             const availableCount = 100 - takenCount;
-            
             document.getElementById('availableBoxes').textContent = availableCount;
             document.getElementById('takenBoxes').textContent = takenCount;
-            
             if (takenCount > state.lastBoxCount) {
                 const newBoxes = takenCount - state.lastBoxCount;
-                if (newBoxes > 0 && state.lastBoxCount > 0) {
-                    showNotification(`📦 ${newBoxes} new box${newBoxes > 1 ? 'es' : ''} taken!`, 'info', 2000);
-                }
+                if (newBoxes > 0 && state.lastBoxCount > 0) showNotification(`📦 ${newBoxes} new box${newBoxes>1?'es':''} taken!`, 'info', 2000);
             }
-            
             state.lastBoxCount = takenCount;
         }
 
-        // Update discovery timer
         function updateDiscoveryTimer(seconds, onlinePlayers) {
             const timerContainer = document.getElementById('timerContainer');
             const discoveryTimer = document.getElementById('discoveryTimer');
             const timerSeconds = document.getElementById('timerSeconds');
-            
             if (timerContainer && discoveryTimer && timerSeconds) {
-                // Show the timer container
                 timerContainer.style.display = 'block';
-                
-                // Update timer display
                 discoveryTimer.textContent = seconds;
                 timerSeconds.textContent = seconds;
                 state.currentDiscoveryTimer = seconds;
-                
-                // Update player count
                 document.getElementById('onlinePlayers').textContent = onlinePlayers || 1;
-                
-                // Update timer styling
                 if (seconds > 0) {
-                    if (seconds <= 5) {
-                        discoveryTimer.style.color = '#ef4444';
-                    } else if (seconds <= 10) {
-                        discoveryTimer.style.color = '#f59e0b';
-                    } else {
-                        discoveryTimer.style.color = '#f59e0b';
-                    }
-                } else {
-                    // Timer reached 0
-                    discoveryTimer.style.color = '#ef4444';
-                }
+                    if (seconds <= 5) discoveryTimer.style.color = '#ef4444';
+                    else if (seconds <= 10) discoveryTimer.style.color = '#f59e0b';
+                    else discoveryTimer.style.color = '#f59e0b';
+                } else discoveryTimer.style.color = '#ef4444';
             }
         }
 
         function joinLobby() {
-            if (!state.selectedBox) {
-                showNotification('Please select a box first', 'error');
-                return;
-            }
-            
+            if (!state.selectedBox) { showNotification('Please select a box first', 'error'); return; }
             generateTraditionalBingoCard(state.selectedBox);
             showScreen('waitScreen');
-            
             if(state.isConnected) {
-                socket.emit('joinRoom', { 
-                    room: state.stake, 
-                    box: state.selectedBox, 
-                    userName: state.userName
-                });
-                
+                socket.emit('joinRoom', { room: state.stake, box: state.selectedBox, userName: state.userName });
                 socket.emit('player:activity', { action: 'joined_lobby', room: state.stake, box: state.selectedBox });
-                
-                setTimeout(() => {
-                    socket.emit('getRoomInfo', { room: state.stake });
-                }, 500);
+                setTimeout(() => socket.emit('getRoomInfo', { room: state.stake }), 500);
             }
-            
             state.lastActivityTime = Date.now();
         }
-        
+
         function leaveDiscovery() {
-            // Unsubscribe from room updates
             if (state.isConnected && state.roomSubscribed) {
                 socket.emit('unsubscribeFromRoom', { room: state.stake });
                 state.roomSubscribed = false;
             }
-            
-            // Clear discovery timer if any
-            if (state.discoveryTimerInterval) {
-                clearInterval(state.discoveryTimerInterval);
-                state.discoveryTimerInterval = null;
-            }
-            
-            // Clear selected box
+            if (state.discoveryTimerInterval) { clearInterval(state.discoveryTimerInterval); state.discoveryTimerInterval = null; }
             state.selectedBox = null;
-            
             showScreen('lobbyScreen');
         }
-        
+
         function leaveLobby() {
             if(state.isConnected) {
-                socket.emit('player:leaveRoom', { 
-                    action: 'left_lobby',
-                    room: state.stake,
-                    timestamp: Date.now()
-                });
-                
+                socket.emit('player:leaveRoom', { action: 'left_lobby', room: state.stake, timestamp: Date.now() });
                 showScreen('lobbyScreen');
                 showNotification('Left lobby successfully', 'info', 2000);
             }
         }
 
         function generateTraditionalBingoCard(seed) {
-            const letters = ['B', 'I', 'N', 'G', 'O'];
-            const ranges = {
-                'B': { min: 1, max: 15, count: 15 },
-                'I': { min: 16, max: 30, count: 15 },
-                'N': { min: 31, max: 45, count: 15 },
-                'G': { min: 46, max: 60, count: 15 },
-                'O': { min: 61, max: 75, count: 15 }
-            };
-            
+            const letters = ['B','I','N','G','O'];
+            const ranges = { 'B':{min:1,max:15}, 'I':{min:16,max:30}, 'N':{min:31,max:45}, 'G':{min:46,max:60}, 'O':{min:61,max:75} };
             function seededRandom(s) {
-                var mask = 0xffffffff;
-                var m_w = (123456789 + s) & mask;
-                var m_z = (987654321 - s) & mask;
-
+                var mask = 0xffffffff, m_w = (123456789 + s) & mask, m_z = (987654321 - s) & mask;
                 return function() {
                     m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & mask;
                     m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & mask;
@@ -2715,45 +2286,27 @@
                     return result / 4294967296;
                 }
             }
-
             const safeSeed = safeParseInt(seed, 1);
             const random = seededRandom(safeSeed * 777);
             state.grid = [];
-            
             const availableNumbers = {};
-            
             for (const letter of letters) {
                 const range = ranges[letter];
                 availableNumbers[letter] = [];
-                for (let i = range.min; i <= range.max; i++) {
-                    availableNumbers[letter].push(i);
-                }
-                
+                for (let i = range.min; i <= range.max; i++) availableNumbers[letter].push(i);
                 for (let i = availableNumbers[letter].length - 1; i > 0; i--) {
                     const j = Math.floor(random() * (i + 1));
                     [availableNumbers[letter][i], availableNumbers[letter][j]] = [availableNumbers[letter][j], availableNumbers[letter][i]];
                 }
             }
-            
             for (let row = 0; row < 5; row++) {
                 for (let col = 0; col < 5; col++) {
                     const index = row * 5 + col;
                     const letter = letters[col];
-                    
-                    if (col === 2 && row === 2) {
-                        state.grid[index] = 'FREE';
-                        continue;
-                    }
-                    
+                    if (col === 2 && row === 2) { state.grid[index] = 'FREE'; continue; }
                     const available = availableNumbers[letter];
-                    
-                    if (available.length > 0) {
-                        const selectedNumber = available.shift();
-                        state.grid[index] = selectedNumber;
-                    } else {
-                        const range = ranges[letter];
-                        state.grid[index] = Math.floor(random() * (range.max - range.min + 1)) + range.min;
-                    }
+                    if (available.length > 0) state.grid[index] = available.shift();
+                    else { const range = ranges[letter]; state.grid[index] = Math.floor(random() * (range.max - range.min + 1)) + range.min; }
                 }
             }
         }
@@ -2767,361 +2320,140 @@
             return '';
         }
 
-        // ========== NEW FUNCTIONS FOR NUMBERS LIST ==========
-        function renderNumbersList() {
-            const container = document.getElementById('numbersList');
-            if (!container) return;
-            container.innerHTML = '';
+        // ===== NEW FUNCTIONS FOR THE LEFT NUMBER GRID =====
+        function renderNumbersGrid() {
+            const grid = document.getElementById('numbersGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
             for (let i = 1; i <= 75; i++) {
-                const numDiv = document.createElement('div');
-                numDiv.className = 'number-item';
-                numDiv.dataset.num = i;
-                numDiv.textContent = i;
-                if (state.calledNumbers.has(i)) {
-                    numDiv.classList.add('called');
-                }
-                container.appendChild(numDiv);
+                const cell = document.createElement('div');
+                cell.className = 'number-cell';
+                cell.textContent = i;
+                cell.dataset.number = i;
+                grid.appendChild(cell);
             }
         }
 
-        function markNumberCalled(num) {
-            const items = document.querySelectorAll('.number-item');
-            items.forEach(item => {
-                if (parseInt(item.dataset.num) === num) {
-                    item.classList.add('called');
+        function markNumberCalled(number) {
+            const cells = document.querySelectorAll('.number-cell');
+            cells.forEach(cell => {
+                if (parseInt(cell.dataset.number) === number) {
+                    cell.classList.add('called');
                 }
             });
         }
 
-        // Modify triggerNewBall to also mark the number in the left column
-        const originalTriggerNewBall = triggerNewBall;
-        triggerNewBall = function(num, letter) {
-            originalTriggerNewBall(num, letter);
-            markNumberCalled(num);
-        };
-
-        // On game start, initialize the numbers list
-        const originalInitGameBoard = initGameBoard;
-        initGameBoard = function() {
-            originalInitGameBoard();
-            renderNumbersList();
-        };
-
-        // Also ensure numbers list is cleared on reset
-        const originalResetToLobby = resetToLobby;
-        resetToLobby = function() {
-            originalResetToLobby();
-            const container = document.getElementById('numbersList');
-            if (container) container.innerHTML = '';
-        };
-
-        // ========== END NEW FUNCTIONS ==========
-
+        // ===== MODIFIED triggerNewBall to also mark the number =====
         function triggerNewBall(num, letter) {
             console.log(`🎱 Ball drawn: ${letter}-${num}`);
-            
-            // 👇 Speak the ball number
             speakBall(letter, num);
-            
-            try { 
-                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                    tg.HapticFeedback.impactOccurred('medium'); 
-                }
-            } catch(e){}
-            
+            try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
             const ballDisplay = document.getElementById('lastBall');
             const ballLetter = document.getElementById('ballLetter');
             const ballNumber = document.getElementById('ballNumber');
-            
             ballLetter.textContent = letter;
             ballNumber.textContent = num;
-            
             ballDisplay.style.animation = 'none';
             void ballDisplay.offsetWidth;
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
-            state.history.unshift({ num, letter });
-            const historyContainer = document.getElementById('ballHistory');
-            historyContainer.innerHTML = '';
-            
-            state.history.slice(0, 8).forEach(ball => {
-                const historyBall = document.createElement('div');
-                historyBall.className = 'history-ball';
-                historyBall.innerHTML = `
-                    <div class="history-letter">${ball.letter}</div>
-                    <div class="history-number">${ball.num}</div>
-                `;
-                historyContainer.appendChild(historyBall);
-            });
-            
             state.calledNumbers.add(num);
-            
+            markNumberCalled(num); // 👈 highlight in left grid
+
             console.log(`📌 Number ${letter}-${num} added to called numbers.`);
-            
             state.lastActivityTime = Date.now();
         }
 
-        // 🚀 OPTIMIZED BINGO PATTERN CHECKING
         function checkWinningPattern() {
             const grid = state.grid;
             const marked = state.markedNumbers;
-            
-            // FAST CHECK: Convert marked set to array for faster access
             const markedArray = Array.from(marked);
-            
-            // Helper function for fast checking
-            const isMarked = (val) => {
-                if (val === 'FREE') return markedArray.includes('FREE');
-                return markedArray.includes(val);
-            };
-            
-            // Pre-calculate corner positions
-            const corners = [0, 4, 20, 24];
-            const fourCorners = corners.every(idx => isMarked(grid[idx]));
-            if (fourCorners) {
-                console.log('✅ Four Corners BINGO!');
-                return true;
-            }
-            
-            // Check rows and columns in a single pass
+            const isMarked = (val) => { if (val === 'FREE') return markedArray.includes('FREE'); return markedArray.includes(val); };
+            const corners = [0,4,20,24];
+            if (corners.every(idx => isMarked(grid[idx]))) { console.log('✅ Four Corners BINGO!'); return true; }
             for (let i = 0; i < 5; i++) {
-                let rowComplete = true;
-                let colComplete = true;
-                
+                let rowComplete = true, colComplete = true;
                 for (let j = 0; j < 5; j++) {
-                    // Check row
-                    const rowIdx = i * 5 + j;
-                    if (!isMarked(grid[rowIdx])) {
-                        rowComplete = false;
-                    }
-                    
-                    // Check column
-                    const colIdx = i + j * 5;
-                    if (!isMarked(grid[colIdx])) {
-                        colComplete = false;
-                    }
+                    const rowIdx = i*5 + j;
+                    if (!isMarked(grid[rowIdx])) rowComplete = false;
+                    const colIdx = i + j*5;
+                    if (!isMarked(grid[colIdx])) colComplete = false;
                 }
-                
-                if (rowComplete || colComplete) {
-                    console.log(rowComplete ? `✅ Row ${i+1} BINGO!` : `✅ Column ${i+1} BINGO!`);
-                    return true;
-                }
+                if (rowComplete || colComplete) { console.log(rowComplete ? `✅ Row ${i+1} BINGO!` : `✅ Column ${i+1} BINGO!`); return true; }
             }
-            
-            // Check diagonals
-            const diag1 = [0, 6, 12, 18, 24].every(idx => isMarked(grid[idx]));
-            const diag2 = [4, 8, 12, 16, 20].every(idx => isMarked(grid[idx]));
-            
-            if (diag1 || diag2) {
-                console.log('✅ Diagonal BINGO!');
-                return true;
-            }
-            
+            const diag1 = [0,6,12,18,24].every(idx => isMarked(grid[idx]));
+            const diag2 = [4,8,12,16,20].every(idx => isMarked(grid[idx]));
+            if (diag1 || diag2) { console.log('✅ Diagonal BINGO!'); return true; }
             return false;
         }
 
-        // 🚀 FAST BINGO CLAIMING FUNCTION
         function claimBingo() {
             const now = Date.now();
-            
-            // 🚨 PREVENT DOUBLE-CLICK (500ms cooldown)
-            if (isClaiming || (now - lastClaimTime < 500)) {
-                console.log('⚠️ Claim prevented: Already claiming or too fast');
-                return;
-            }
-            
-            isClaiming = true;
-            lastClaimTime = now;
-            
+            if (isClaiming || (now - lastClaimTime < 500)) { console.log('⚠️ Claim prevented'); return; }
+            isClaiming = true; lastClaimTime = now;
             const button = document.getElementById('claimBingoButton');
             const originalText = button.textContent;
-            
-            // IMMEDIATE VISUAL FEEDBACK
-            button.disabled = true;
-            button.classList.add('loading');
-            button.textContent = 'PROCESSING...';
-            
-            console.log('🎯 Claiming BINGO (fast)...');
-            
+            button.disabled = true; button.classList.add('loading'); button.textContent = 'PROCESSING...';
             if(state.isConnected) {
                 const markedNumbers = Array.from(state.markedNumbers);
-                
-                // Send claim with timeout
-                const claimTimeout = setTimeout(() => {
-                    if (isClaiming) {
-                        console.log('⏰ Claim timeout - releasing lock');
-                        resetClaimButton(button, originalText);
-                    }
-                }, 5000);
-                
-                socket.emit('claimBingo', { 
-                    room: state.stake, 
-                    grid: state.grid, 
-                    marked: markedNumbers 
-                }, (response) => {
+                const claimTimeout = setTimeout(() => { if (isClaiming) { resetClaimButton(button, originalText); } }, 5000);
+                socket.emit('claimBingo', { room: state.stake, grid: state.grid, marked: markedNumbers }, (response) => {
                     clearTimeout(claimTimeout);
-                    
-                    if (response && response.success) {
-                        console.log('✅ BINGO claim accepted by server');
-                        showNotification('🎉 BINGO claim sent! Checking pattern...', 'success', 2000);
-                        
-                        // Store claim ID for tracking
+                    if (response?.success) {
                         currentClaimId = response.claimId;
-                        
-                        // Keep button disabled until gameOver event
                         button.textContent = 'CLAIM VERIFIED!';
-                        
-                        // Add haptic feedback
-                        try { 
-                            if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                                tg.HapticFeedback.impactOccurred('medium'); 
-                            }
-                        } catch(e){}
+                        try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('medium'); } catch(e){}
                     } else {
-                        console.log('❌ BINGO claim rejected:', response?.message);
                         showNotification(`❌ ${response?.message || 'Invalid BINGO claim'}`, 'error', 3000);
                         resetClaimButton(button, originalText);
                     }
                 });
-            } else {
-                showNotification('Not connected to server', 'error');
-                resetClaimButton(button, originalText);
-            }
-            
+            } else { showNotification('Not connected to server', 'error'); resetClaimButton(button, originalText); }
             state.lastActivityTime = Date.now();
         }
 
-        // Reset claim button function
-        function resetClaimButton(button, originalText) {
-            isClaiming = false;
-            button.disabled = false;
-            button.classList.remove('loading');
-            button.textContent = originalText;
-        }
+        function resetClaimButton(button, originalText) { isClaiming = false; button.disabled = false; button.classList.remove('loading'); button.textContent = originalText; }
 
-        // Handle claim processing events
-        socket.on('claimProcessing', (data) => {
-            console.log('⚡ Claim processing started:', data.claimId);
-            // Button is already disabled by claimBingo function
-        });
-
+        socket.on('claimProcessing', (data) => { console.log('⚡ Claim processing started:', data.claimId); });
         socket.on('claimResult', (data) => {
-            console.log('📨 Claim result received:', data);
-            
             const button = document.getElementById('claimBingoButton');
             const originalText = 'CLAIM BINGO!';
-            
-            if (data.type === 'invalidBingo' || data.type === 'error') {
-                showNotification(`❌ ${data.message}`, 'error', 3000);
-                resetClaimButton(button, originalText);
-            } else if (data.type === 'alreadyWon') {
-                showNotification('🏆 Game already won by someone else!', 'warning', 3000);
-                resetClaimButton(button, originalText);
-            } else if (data.type === 'processing') {
-                showNotification('⏳ Another claim is being processed...', 'info', 2000);
-                // Keep button disabled
-            }
+            if (data.type === 'invalidBingo' || data.type === 'error') { showNotification(`❌ ${data.message}`, 'error', 3000); resetClaimButton(button, originalText); }
+            else if (data.type === 'alreadyWon') { showNotification('🏆 Game already won by someone else!', 'warning', 3000); resetClaimButton(button, originalText); }
+            else if (data.type === 'processing') { showNotification('⏳ Another claim is being processed...', 'info', 2000); }
         });
 
-        // NEW: Restore game state after refresh (with error handling)
         function restoreGameState(roomStake) {
-            console.log(`🔄 Restoring game state for room ${roomStake}`);
-
-            if (!state.isConnected) {
-                console.log('⏳ Not connected, will retry later');
-                state.isRestoring = false;
-                return;
-            }
-
+            if (!state.isConnected) { state.isRestoring = false; return; }
             socket.emit('getRoomDetails', { room: roomStake });
-
             socket.once('roomDetails', (details) => {
-                console.log('📦 Room details received:', details);
-
-                if (!details || !details.success) {
-                    console.log('❌ Failed to get room details:', details?.message);
-                    state.isRestoring = false;
-                    resetToLobby();
-                    return;
-                }
-
-                if (!details.playerBox) {
-                    console.log('❌ No player box in details');
-                    state.isRestoring = false;
-                    resetToLobby();
-                    return;
-                }
-
-                // Set common state
+                if (!details?.success) { state.isRestoring = false; resetToLobby(); return; }
+                if (!details.playerBox) { state.isRestoring = false; resetToLobby(); return; }
                 state.stake = safeParseInt(roomStake, 0);
                 state.selectedBox = safeParseInt(details.playerBox, 0);
-
-                // Handle based on room status
                 try {
                     if (details.status === 'playing') {
-                        // Generate the same bingo card using the box as seed
-                        if (!state.selectedBox) {
-                            throw new Error('No box selected for card generation');
-                        }
                         generateTraditionalBingoCard(state.selectedBox);
-
-                        // Mark called numbers that appear on the card
                         state.calledNumbers = new Set(details.calledNumbers || []);
-                        state.markedNumbers = new Set(['FREE']); // FREE always marked
-
-                        (details.calledNumbers || []).forEach(num => {
-                            if (state.grid.includes(num)) {
-                                state.markedNumbers.add(num);
-                            }
-                        });
-
-                        // Set history (last 8 called numbers)
-                        state.history = (details.calledNumbers || []).slice(-8).map(num => ({
-                            num,
-                            letter: getBingoLetter(num)
-                        })).reverse();
-
-                        // Show game screen and render
+                        state.markedNumbers = new Set(['FREE']);
+                        (details.calledNumbers || []).forEach(num => { if (state.grid.includes(num)) state.markedNumbers.add(num); });
                         showScreen('gameScreen');
+                        renderNumbersGrid();
                         initGameBoard();
-
-                        // Set last ball display if any
+                        (details.calledNumbers || []).forEach(num => markNumberCalled(num));
                         if (details.currentBall) {
-                            const letter = getBingoLetter(details.currentBall);
-                            document.getElementById('ballLetter').textContent = letter;
+                            document.getElementById('ballLetter').textContent = getBingoLetter(details.currentBall);
                             document.getElementById('ballNumber').textContent = details.currentBall;
                         }
-
-                        // Update history UI
-                        const historyContainer = document.getElementById('ballHistory');
-                        historyContainer.innerHTML = '';
-                        state.history.slice(0, 8).forEach(ball => {
-                            const historyBall = document.createElement('div');
-                            historyBall.className = 'history-ball';
-                            historyBall.innerHTML = `<div class="history-letter">${ball.letter}</div><div class="history-number">${ball.num}</div>`;
-                            historyContainer.appendChild(historyBall);
-                        });
-
-                        // Enable claim button if winning pattern already exists
-                        if (checkWinningPattern()) {
-                            document.getElementById('claimBingoButton').disabled = false;
-                        }
-
-                        // Resubscribe to room updates
+                        if (checkWinningPattern()) document.getElementById('claimBingoButton').disabled = false;
                         socket.emit('subscribeToRoom', { room: roomStake });
                         state.roomSubscribed = true;
-
                     } else if (details.status === 'starting' || details.status === 'waiting') {
-                        // Go to discovery screen
                         document.getElementById('selectedRoomStake').textContent = `${roomStake} ETB`;
                         document.getElementById('gameRoomStake').textContent = `${roomStake} ETB`;
                         showScreen('discoveryScreen');
-
-                        // Render boxes with taken boxes
                         renderBoxes(details.takenBoxes || []);
                         updateBoxCounters(details.takenBoxes || []);
-
-                        // Highlight the player's box
                         const boxElement = document.querySelector(`.box-item[data-number="${details.playerBox}"]`);
                         if (boxElement && !boxElement.classList.contains('taken')) {
                             boxElement.classList.add('selected');
@@ -3129,40 +2461,23 @@
                             document.getElementById('confirmBoxButton').disabled = false;
                             document.getElementById('confirmBoxButton').textContent = `Select Box ${details.playerBox}`;
                         }
-
-                        // If starting, start countdown display
                         if (details.status === 'starting' && details.countdownRemaining > 0) {
                             updateDiscoveryTimer(details.countdownRemaining, details.onlinePlayers || 1);
                             startDiscoveryCountdown(roomStake, details.countdownRemaining);
-                        } else {
-                            document.getElementById('timerContainer').style.display = 'none';
-                        }
-
-                        // Subscribe to real-time box updates
+                        } else document.getElementById('timerContainer').style.display = 'none';
                         socket.emit('subscribeToRoom', { room: roomStake });
                         state.roomSubscribed = true;
-
-                    } else {
-                        // Any other status (ended, etc.) -> lobby
-                        resetToLobby();
-                    }
-                } catch (error) {
-                    console.error('❌ Error during state restoration:', error);
-                    state.isRestoring = false;
-                    resetToLobby();
-                }
+                    } else resetToLobby();
+                } catch (error) { state.isRestoring = false; resetToLobby(); }
             });
         }
 
-        // Helper to keep discovery countdown ticking after reconnect
         function startDiscoveryCountdown(roomStake, initialSeconds) {
             let seconds = initialSeconds;
             const timerContainer = document.getElementById('timerContainer');
             const discoveryTimer = document.getElementById('discoveryTimer');
             const timerSeconds = document.getElementById('timerSeconds');
-
             timerContainer.style.display = 'block';
-
             if (state.discoveryTimerInterval) clearInterval(state.discoveryTimerInterval);
             state.discoveryTimerInterval = setInterval(() => {
                 seconds--;
@@ -3175,715 +2490,286 @@
                 } else {
                     clearInterval(state.discoveryTimerInterval);
                     state.discoveryTimerInterval = null;
-                    // Optionally refresh room details when timer hits zero
-                    socket.emit('getRoomDetails', { room: roomStake });
                 }
             }, 1000);
         }
 
-        // Modified initGameBoard – does NOT reset marked numbers (uses existing)
         function initGameBoard() {
             const target = document.getElementById('bingoGrid');
             target.innerHTML = '';
-
             state.grid.forEach((val, index) => {
                 const cell = document.createElement('div');
                 const isFree = val === 'FREE';
-                const isCorner = [0, 4, 20, 24].includes(index);
-
+                const isCorner = [0,4,20,24].includes(index);
                 cell.className = 'cell' + (isFree ? ' free' : '');
-                if (isCorner) {
-                    cell.classList.add('corner');
-                }
-
+                if (isCorner) cell.classList.add('corner');
                 cell.textContent = isFree ? 'FREE' : val;
                 cell.dataset.index = index;
                 cell.dataset.value = val;
-
-                if (!isFree) {
-                    cell.style.color = '#6366f1';
-                }
-
-                // Mark the cell if it's in markedNumbers
-                if (state.markedNumbers.has(val) || (isFree && state.markedNumbers.has('FREE'))) {
-                    cell.classList.add('marked');
-                }
-
+                if (state.markedNumbers.has(val) || (isFree && state.markedNumbers.has('FREE'))) cell.classList.add('marked');
                 cell.onclick = () => {
                     if (state.calledNumbers.has(val) || isFree) {
                         if(!cell.classList.contains('marked')) {
                             cell.classList.add('marked');
                             state.markedNumbers.add(isFree ? 'FREE' : val);
-
-                            try { 
-                                if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                                    tg.HapticFeedback.impactOccurred('light'); 
-                                }
-                            } catch(e){}
-
-                            if(checkWinningPattern()) {
-                                document.getElementById('claimBingoButton').disabled = false;
-                                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-                            }
+                            try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('light'); } catch(e){}
+                            if(checkWinningPattern()) { document.getElementById('claimBingoButton').disabled = false; showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000); }
                         } else {
                             cell.classList.remove('marked');
                             state.markedNumbers.delete(isFree ? 'FREE' : val);
                         }
                     }
-
                     state.lastActivityTime = Date.now();
                 };
                 target.appendChild(cell);
             });
-
-            console.log('✅ Game board initialized');
-            console.log('Grid:', state.grid);
-
             state.lastActivityTime = Date.now();
         }
 
-        // ========== WINNING PATTERN DISPLAY FUNCTIONS ==========
         function displayWinningPattern(overlayType, data) {
             const isWin = overlayType === 'win';
             const containerId = isWin ? 'winningCardReplicaWin' : 'winningCardReplicaLose';
             const gridId = isWin ? 'replicaGridWin' : 'replicaGridLose';
             const patternNameId = isWin ? 'winningPatternNameWin' : 'winningPatternNameLose';
-            const patternStatsId = isWin ? 'winningPatternStatsWin' : 'winningPatternStatsLose';
-            
             const container = document.getElementById(containerId);
             const gridContainer = document.getElementById(gridId);
             const patternNameElement = document.getElementById(patternNameId);
-            const patternStatsElement = document.getElementById(patternStatsId);
-            
             if (!container || !gridContainer || !data) return;
-            
-            // Show the container
             container.style.display = 'block';
-            
-            // Clear previous grid
             gridContainer.innerHTML = '';
-            
-            // Get grid data
             const grid = data.winnerGrid || [];
             const winningPattern = data.winningPattern || [];
             const markedNumbers = data.markedNumbers || [];
-            const calledNumbers = data.calledNumbers || [];
-            const patternName = data.winningPatternName || 'Winning Pattern';
-            
-            // Count stats
-            const totalMarked = markedNumbers.length;
-            const totalCalled = calledNumbers.length;
-            const isFourCorners = data.isFourCornersWin || false;
-            
-            // Create 5x5 grid (25 cells)
             for (let i = 0; i < 25; i++) {
                 const cell = document.createElement('div');
-                const isFree = (i === 12); // Center cell is free
+                const isFree = (i === 12);
                 const isWinningCell = winningPattern.includes(i);
                 const cellValue = grid[i] || '';
-                
-                // Determine cell styling
                 cell.className = 'replica-cell';
                 if (isFree) cell.classList.add('free');
-                
-                // Check if cell is marked (either winning or regular marked)
                 let isMarked = false;
-                if (isFree) {
-                    isMarked = markedNumbers.includes('FREE');
-                } else if (cellValue && markedNumbers.includes(cellValue)) {
-                    isMarked = true;
-                }
-                
-                // Apply winning style if part of winning pattern
-                if (isWinningCell) {
-                    cell.classList.add('winning');
-                } else if (isMarked) {
-                    cell.classList.add('marked');
-                }
-                
-                // Check if it's a corner cell
-                if ([0, 4, 20, 24].includes(i)) {
-                    cell.classList.add('corner');
-                }
-                
-                // Set cell content
-                if (isFree) {
-                    cell.textContent = 'FREE';
-                } else if (cellValue) {
-                    cell.textContent = cellValue;
-                }
-                
+                if (isFree) isMarked = markedNumbers.includes('FREE');
+                else if (cellValue && markedNumbers.includes(cellValue)) isMarked = true;
+                if (isWinningCell) cell.classList.add('winning');
+                else if (isMarked) cell.classList.add('marked');
+                if ([0,4,20,24].includes(i)) cell.classList.add('corner');
+                cell.textContent = isFree ? 'FREE' : cellValue;
                 gridContainer.appendChild(cell);
             }
-            
-            // Set pattern name
-            if (patternNameElement) {
-                patternNameElement.textContent = patternName;
-            }
-            
-            // Set pattern stats
-            if (patternStatsElement) {
-                patternStatsElement.innerHTML = `
-                    <div class="pattern-stat">
-                        <i class="fas fa-check-circle" style="color: var(--success);"></i>
-                        <span>${totalMarked} marked</span>
-                    </div>
-                    <div class="pattern-stat">
-                        <i class="fas fa-bullseye" style="color: var(--primary);"></i>
-                        <span>${totalCalled} called</span>
-                    </div>
-                    ${isFourCorners ? `
-                    <div class="pattern-stat">
-                        <i class="fas fa-star" style="color: var(--secondary);"></i>
-                        <span>Four Corners</span>
-                    </div>
-                    ` : ''}
-                `;
-            }
-            
-            // Add pattern line visualization (optional)
-            addPatternLineVisualization(gridContainer, data);
+            if (patternNameElement) patternNameElement.textContent = data.winningPatternName || 'Winning Pattern';
         }
-        
-        function addPatternLineVisualization(gridContainer, data) {
-            if (!data.winningPatternType) return;
-            
-            const patternType = data.winningPatternType;
-            const winningPattern = data.winningPattern || [];
-            
-            // Clear any existing pattern lines
-            const existingLines = gridContainer.querySelectorAll('.pattern-line');
-            existingLines.forEach(line => line.remove());
-            
-            // Add pattern line based on pattern type
-            const line = document.createElement('div');
-            line.className = 'pattern-line';
-            
-            switch (patternType) {
-                case 'row':
-                    // For rows, we need to find which row
-                    const rowIndex = Math.floor(winningPattern[0] / 5);
-                    line.classList.add('row');
-                    line.style.top = `${(rowIndex * 20) + 10}%`;
-                    break;
-                    
-                case 'column':
-                    // For columns, we need to find which column
-                    const colIndex = winningPattern[0] % 5;
-                    line.classList.add('column');
-                    line.style.left = `${(colIndex * 20) + 10}%`;
-                    break;
-                    
-                case 'diagonal':
-                    // Check which diagonal
-                    const isMainDiagonal = winningPattern.includes(0) && winningPattern.includes(24);
-                    line.classList.add(isMainDiagonal ? 'diagonal-main' : 'diagonal-anti');
-                    break;
-                    
-                case 'corners':
-                    line.classList.add('corners');
-                    break;
-                    
-                default:
-                    return; // Don't add line for unknown patterns
-            }
-            
-            gridContainer.appendChild(line);
-        }
-        
+
         function hideWinningPatterns() {
             document.getElementById('winningCardReplicaWin').style.display = 'none';
             document.getElementById('winningCardReplicaLose').style.display = 'none';
         }
 
         function resetToLobby() {
-            console.log('🔄 Resetting to lobby...');
-            
-            if (state.isResettingLobby) {
-                console.log('⚠️ Already resetting lobby, skipping');
-                return;
-            }
-            
-            state.isResettingLobby = true;
-            state.isRestoring = false; // clear restore flag
-            
-            // Clear discovery timer if any
-            if (state.discoveryTimerInterval) {
-                clearInterval(state.discoveryTimerInterval);
-                state.discoveryTimerInterval = null;
-            }
-            
-            // Reset claiming state
-            isClaiming = false;
-            lastClaimTime = 0;
-            currentClaimId = null;
-            
-            state.stake = 0;
-            state.grid = [];
-            state.calledNumbers.clear();
-            state.markedNumbers = new Set(['FREE']);
-            state.history = [];
-            state.lastBoxCount = 0;
-            state.previousTakenBoxes = [];
-            state.selectedBox = null;
-            state.onlinePlayersCount = 0;
-            state.totalPlayersCount = 0;
-            
-            if (state.isConnected && state.roomSubscribed) {
-                socket.emit('unsubscribeFromRoom', { room: state.stake });
-                state.roomSubscribed = false;
-            }
-            
-            // Hide all overlays
-            hideOverlay('winOverlay');
-            hideOverlay('loseOverlay');
-            hideOverlay('insufficientOverlay');
-            hideOverlay('roomLockedOverlay');
-            
-            // Hide plate preview
+            if (state.isResettingLobby) return;
+            state.isResettingLobby = true; state.isRestoring = false;
+            if (state.discoveryTimerInterval) { clearInterval(state.discoveryTimerInterval); state.discoveryTimerInterval = null; }
+            isClaiming = false; lastClaimTime = 0; currentClaimId = null;
+            state.stake = 0; state.grid = []; state.calledNumbers.clear(); state.markedNumbers = new Set(['FREE']); state.lastBoxCount = 0; state.previousTakenBoxes = []; state.selectedBox = null; state.onlinePlayersCount = 0; state.totalPlayersCount = 0;
+            if (state.isConnected && state.roomSubscribed) { socket.emit('unsubscribeFromRoom', { room: state.stake }); state.roomSubscribed = false; }
+            hideOverlay('winOverlay'); hideOverlay('loseOverlay'); hideOverlay('insufficientOverlay'); hideOverlay('roomLockedOverlay');
             document.getElementById('platePreviewContainer').classList.remove('active');
-            
-            // Hide winning patterns
             hideWinningPatterns();
-            
-            // Reset UI
             showScreen('lobbyScreen');
-            
             const claimButton = document.getElementById('claimBingoButton');
-            claimButton.disabled = true;
-            claimButton.classList.remove('loading');
-            claimButton.textContent = 'CLAIM BINGO!';
-            claimButton.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
-            
-            document.getElementById('ballLetter').textContent = '--';
-            document.getElementById('ballNumber').textContent = '--';
-            document.getElementById('ballHistory').innerHTML = '';
+            claimButton.disabled = true; claimButton.classList.remove('loading'); claimButton.textContent = 'CLAIM BINGO!'; claimButton.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
+            document.getElementById('ballLetter').textContent = '--'; document.getElementById('ballNumber').textContent = '--';
             document.getElementById('bingoGrid').innerHTML = '';
-            
-            // Clear numbers list
-            const numbersList = document.getElementById('numbersList');
-            if (numbersList) numbersList.innerHTML = '';
-            
-            document.getElementById('waitTimer').textContent = "30";
-            document.getElementById('waitMessage').textContent = "Waiting for players...";
-            document.getElementById('waitDetails').textContent = "Game starts with 1 online player after 30 seconds";
-            
+            const numbersGrid = document.getElementById('numbersGrid');
+            if (numbersGrid) numbersGrid.innerHTML = '';
+            document.getElementById('waitTimer').textContent = "30"; document.getElementById('waitMessage').textContent = "Waiting for players..."; document.getElementById('waitDetails').textContent = "Game starts with 1 online player after 30 seconds";
             updateRoomsDisplay();
-            
-            if (state.isConnected) {
-                socket.emit('player:activity', { action: 'returned_to_lobby' });
-            }
-            
+            if (state.isConnected) socket.emit('player:activity', { action: 'returned_to_lobby' });
             refreshBalance();
             state.lastActivityTime = Date.now();
             state.isResettingLobby = false;
-            
-            console.log('✅ Lobby reset complete');
         }
 
-        // lobbyUpdate event handler
         socket.on('lobbyUpdate', (d) => {
-            console.log('👥 Lobby update:', d);
-            
             if(d.room === state.stake) {
                 const playerCount = d.count;
-                document.getElementById('waitMessage').textContent = playerCount >= 1 ? 
-                    "Game starting soon!" : "Waiting for players...";
-                
-                document.getElementById('waitDetails').innerHTML = playerCount >= 1 ?
-                    `✅ <span style="color: #10b981;">${playerCount} online player${playerCount > 1 ? 's' : ''}</span> - Game will start when timer reaches 0` :
-                    `Need at least 1 player to start`;
-                
-                // Update discovery overlay if active
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    document.getElementById('onlinePlayers').textContent = playerCount;
-                }
-                
+                document.getElementById('waitMessage').textContent = playerCount >= 1 ? "Game starting soon!" : "Waiting for players...";
+                document.getElementById('waitDetails').innerHTML = playerCount >= 1 ? `✅ <span style="color: #10b981;">${playerCount} online player${playerCount>1?'s':''}</span> - Game will start when timer reaches 0` : `Need at least 1 player to start`;
+                if (document.getElementById('discoveryScreen').classList.contains('active')) document.getElementById('onlinePlayers').textContent = playerCount;
                 state.lastActivityTime = Date.now();
             }
         });
 
-        // gameCountdown event handler
         socket.on('gameCountdown', (d) => {
-            console.log('⏱️ Game countdown event:', d);
-            
             if(d.room === state.stake) {
                 const timerElement = document.getElementById('waitTimer');
                 timerElement.textContent = d.timer;
-                
                 if (d.timer > 0) {
                     document.getElementById('waitMessage').textContent = "Game starting in " + d.timer + " seconds!";
-                    
-                    if (d.timer <= 5) {
-                        timerElement.style.color = '#ef4444';
-                    } else if (d.timer <= 10) {
-                        timerElement.style.color = '#f59e0b';
-                    } else {
-                        timerElement.style.color = '#f59e0b';
-                    }
+                    if (d.timer <= 5) timerElement.style.color = '#ef4444';
+                    else if (d.timer <= 10) timerElement.style.color = '#f59e0b';
+                    else timerElement.style.color = '#f59e0b';
                 } else {
                     document.getElementById('waitMessage').textContent = "Game starting now!";
                     timerElement.style.color = '#ef4444';
-                    
                     showNotification('🎮 Game starting now!', 'success', 2000);
                 }
-                
-                // Also update discovery overlay timer if visible
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    updateDiscoveryTimer(d.timer, d.onlinePlayers);
-                }
-                
+                if (document.getElementById('discoveryScreen').classList.contains('active')) updateDiscoveryTimer(d.timer, d.onlinePlayers);
                 state.lastActivityTime = Date.now();
             }
         });
 
         socket.on('countdownStopped', (data) => {
             if (data.room === state.stake) {
-                console.log('Countdown stopped:', data.reason);
-                
                 const timerElement = document.getElementById('waitTimer');
-                timerElement.textContent = "30";
-                timerElement.style.color = '#f59e0b';
-                
+                timerElement.textContent = "30"; timerElement.style.color = '#f59e0b';
                 if (data.reason === 'no_players_online' || data.reason === 'not_enough_players') {
                     document.getElementById('waitMessage').textContent = "Need more online players";
                     document.getElementById('waitDetails').textContent = "Countdown stopped - need 1 online player";
-                    
                     showNotification('⚠️ Countdown stopped - need more online players', 'warning', 3000);
                 }
-                
                 state.lastActivityTime = Date.now();
             }
         });
 
         socket.on('gameStarted', (d) => {
-            console.log('🎮 Game started event received:', d);
-            
             if(d.room === state.stake) {
-                console.log(`✅ Game started in our room ${state.stake}`);
-                
-                // Reset marked numbers for fresh game
                 state.markedNumbers = new Set(['FREE']);
-                
                 showScreen('gameScreen');
+                renderNumbersGrid();
                 initGameBoard();
-                
                 showNotification('🎮 Game started! Balls will be drawn every 3 seconds', 'success', 3000);
-                
-                try { 
-                    if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                        tg.HapticFeedback.impactOccurred('heavy'); 
-                    }
-                } catch(e){}
-                
+                try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
                 state.lastActivityTime = Date.now();
             }
         });
 
         socket.on('admin:forceStartGame', (data) => {
             if (data.room === state.stake) {
-                console.log('🎮 Admin force starting game');
                 state.markedNumbers = new Set(['FREE']);
                 showScreen('gameScreen');
+                renderNumbersGrid();
                 initGameBoard();
                 showNotification('🎮 Game starting now by admin!', 'success', 3000);
-                
                 state.lastActivityTime = Date.now();
             }
         });
 
         socket.on('admin:forceEndGame', (data) => {
-            if (data.room === state.stake) {
-                console.log('🎮 Admin force ending game');
-                resetToLobby();
-                showNotification('⚠️ Game ended by admin', 'warning', 3000);
-                
-                state.lastActivityTime = Date.now();
-            }
+            if (data.room === state.stake) { resetToLobby(); showNotification('⚠️ Game ended by admin', 'warning', 3000); state.lastActivityTime = Date.now(); }
         });
 
         socket.on('ballDrawn', (d) => {
-            console.log('🎱 Ball drawn event received:', d);
-            
-            if(d.room === state.stake) {
-                console.log(`✅ Ball ${d.letter}-${d.num} drawn for our room`);
-                triggerNewBall(d.num, d.letter);
-            }
+            if(d.room === state.stake) triggerNewBall(d.num, d.letter);
         });
 
         socket.on('enableBingo', () => {
-            console.log('✅ Enable BINGO event received');
-            if (checkWinningPattern()) {
-                document.getElementById('claimBingoButton').disabled = false;
-                showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000);
-            }
-            
+            if (checkWinningPattern()) { document.getElementById('claimBingoButton').disabled = false; showNotification('🎯 BINGO possible! Click CLAIM BINGO!', 'success', 3000); }
             state.lastActivityTime = Date.now();
         });
 
-        socket.on('joinedRoom', () => {
-            console.log('Successfully joined room');
-            state.lastActivityTime = Date.now();
-        });
+        socket.on('joinedRoom', () => { state.lastActivityTime = Date.now(); });
+        socket.on('boxTaken', () => { showNotification('This ticket is already taken! Please select another.', 'error', 3000); showScreen('discoveryScreen'); state.lastActivityTime = Date.now(); });
 
-        socket.on('boxTaken', () => {
-            showNotification('This ticket is already taken! Please select another.', 'error', 3000);
-            showScreen('discoveryScreen');
-            state.lastActivityTime = Date.now();
-        });
-
-        // Handle room locked event
         socket.on('roomLocked', (data) => {
-            console.log('🔒 Room locked event received:', data);
-            
             showNotification(`🔒 ${data.message}`, 'warning', 3000);
             showOverlay('roomLockedOverlay');
-            
-            // Automatically return to lobby after 3 seconds
-            setTimeout(() => {
-                hideOverlay('roomLockedOverlay');
-                showScreen('lobbyScreen');
-                
-                // Reset state
-                state.stake = 0;
-                state.selectedBox = null;
-                state.roomSubscribed = false;
-            }, 3000);
+            setTimeout(() => { hideOverlay('roomLockedOverlay'); showScreen('lobbyScreen'); state.stake = 0; state.selectedBox = null; state.roomSubscribed = false; }, 3000);
         });
 
-        socket.on('insufficientFunds', () => {
-            document.getElementById('insufficientMessage').textContent = `You need ${state.stake} ETB to join this room`;
-            showOverlay('insufficientOverlay');
-            showScreen('lobbyScreen');
-            state.lastActivityTime = Date.now();
-        });
+        socket.on('insufficientFunds', () => { document.getElementById('insufficientMessage').textContent = `You need ${state.stake} ETB to join this room`; showOverlay('insufficientOverlay'); showScreen('lobbyScreen'); state.lastActivityTime = Date.now(); });
 
-        // ========== UPDATED: gameOver event handler with winning pattern display ==========
         socket.on('gameOver', (d) => {
-            console.log('🎮 Game over event received:', d);
-            
             if(d.room === state.stake) {
                 const isWinner = d.winnerId === state.userId;
-                console.log(`🎮 Game over: ${isWinner ? 'WE WON!' : 'We lost'}`);
-                
-                if (state.isResettingLobby) {
-                    console.log('⚠️ Already resetting lobby, ignoring gameOver event');
-                    return;
-                }
-                
+                if (state.isResettingLobby) return;
                 const button = document.getElementById('claimBingoButton');
                 button.disabled = true;
-                
-                // Reset claiming state
-                isClaiming = false;
-                lastClaimTime = 0;
-
+                isClaiming = false; lastClaimTime = 0;
                 if(isWinner) {
                     document.getElementById('winPrizeAmount').textContent = `+${d.prize.toFixed(2)} ETB`;
-                    
-                    if (d.isFourCornersWin && d.bonus) {
-                        document.getElementById('winMessage').textContent = `Congratulations! You won with FOUR CORNERS BONUS!`;
-                    } else {
-                        document.getElementById('winMessage').textContent = `Congratulations! You claimed BINGO first!`;
-                    }
-                    
-                    // Display winning pattern for winner
+                    document.getElementById('winMessage').textContent = d.isFourCornersWin ? `Congratulations! You won with FOUR CORNERS BONUS!` : `Congratulations! You claimed BINGO first!`;
                     displayWinningPattern('win', d);
-                    
                     showOverlay('winOverlay');
-                    
-                    try { 
-                        if (tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred) {
-                            tg.HapticFeedback.impactOccurred('heavy'); 
-                        }
-                    } catch(e){}
-                    
-                    setTimeout(() => {
-                        hideOverlay('winOverlay');
-                        resetToLobby();
-                    }, 5000);
+                    try { if (tg.HapticFeedback?.impactOccurred) tg.HapticFeedback.impactOccurred('heavy'); } catch(e){}
+                    setTimeout(() => { hideOverlay('winOverlay'); resetToLobby(); }, 5000);
                 } else {
-                    let msg = "";
-                    if (d.winnerId === 'HOUSE') {
-                        msg = "Game ended - no winner!";
-                    } else if (d.winnerId === 'ADMIN') {
-                        msg = "Game ended by admin!";
-                    } else {
-                        msg = `${d.winnerName} claimed Bingo first!`;
-                    }
-                    
+                    let msg = d.winnerId === 'HOUSE' ? "Game ended - no winner!" : d.winnerId === 'ADMIN' ? "Game ended by admin!" : `${d.winnerName} claimed Bingo first!`;
                     document.getElementById('loseMessage').textContent = msg;
                     document.getElementById('winnerName').textContent = d.winnerName || "Another player";
                     document.getElementById('winnerPrize').textContent = d.prize.toFixed(2) + " ETB";
-                    
-                    // Display winning pattern for losers
                     displayWinningPattern('lose', d);
-                    
                     showOverlay('loseOverlay');
-                    
-                    setTimeout(() => {
-                        hideOverlay('loseOverlay');
-                        resetToLobby();
-                    }, 4000);
+                    setTimeout(() => { hideOverlay('loseOverlay'); resetToLobby(); }, 4000);
                 }
-                
                 state.lastActivityTime = Date.now();
             }
         });
 
-        // Handle game timeout event
         socket.on('gameTimeout', (data) => {
-            console.log('⏰ Game timeout event received:', data);
-            
             if(data.room === state.stake) {
-                console.log('⏰ Game timed out for our room, refunding stake');
-                
                 showNotification(`⏰ Game auto-ended after 7 minutes. Your stake of ${data.refunded} ETB has been refunded.`, 'warning', 4000);
-                
-                // Reset claiming state
-                isClaiming = false;
-                lastClaimTime = 0;
-                
-                // Reset to lobby after delay
-                setTimeout(() => {
-                    resetToLobby();
-                }, 2000);
-                
+                isClaiming = false; lastClaimTime = 0;
+                setTimeout(() => resetToLobby(), 2000);
                 state.lastActivityTime = Date.now();
             }
         });
 
-        socket.on('banned', () => {
-            showNotification('You have been banned from the game.', 'error', 5000);
-            setTimeout(() => {
-                window.location.reload();
-            }, 3000);
-        });
+        socket.on('banned', () => { showNotification('You have been banned from the game.', 'error', 5000); setTimeout(() => window.location.reload(), 3000); });
+        socket.on('balanceRefreshed', (balance) => { state.balance = parseFloat(balance); const val = balance.toFixed(2); document.getElementById('balanceAmount').textContent = val; document.getElementById('lobbyBalance').textContent = val; state.lastActivityTime = Date.now(); });
+        socket.on('fundsAdded', (data) => { showNotification(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`, 'success', 5000); state.balance = parseFloat(data.newBalance); const val = data.newBalance.toFixed(2); document.getElementById('balanceAmount').textContent = val; document.getElementById('lobbyBalance').textContent = val; state.lastActivityTime = Date.now(); });
 
-        socket.on('balanceRefreshed', (balance) => {
-            state.balance = parseFloat(balance);
-            const val = balance.toFixed(2);
-            document.getElementById('balanceAmount').textContent = val;
-            document.getElementById('lobbyBalance').textContent = val;
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        socket.on('fundsAdded', (data) => {
-            showNotification(`💰 Admin added ${data.amount} ETB to your account!\nNew balance: ${data.newBalance} ETB`, 'success', 5000);
-            state.balance = parseFloat(data.newBalance);
-            const val = data.newBalance.toFixed(2);
-            document.getElementById('balanceAmount').textContent = val;
-            document.getElementById('lobbyBalance').textContent = val;
-            
-            state.lastActivityTime = Date.now();
-        });
-
-        // ========== OPTIMIZED: Real-time box update ==========
         socket.on('boxesTakenUpdate', (data) => {
-            console.log('📦 Real-time box update received:', data);
-
-            // Only process if the update is for the room we are currently viewing
             if (data.room !== state.stake) return;
-
-            // Update counters (available / taken)
             document.getElementById('availableBoxes').textContent = 100 - data.takenBoxes.length;
             document.getElementById('takenBoxes').textContent = data.takenBoxes.length;
-
-            // If we have info about the new box, update only that box in the DOM
             if (data.newBox) {
                 const boxElement = document.querySelector(`.box-item[data-number="${data.newBox}"]`);
                 if (boxElement) {
-                    // Mark it as taken and disable click
                     boxElement.classList.add('taken');
-                    boxElement.classList.remove('selected'); // in case it was selected
-                    boxElement.onclick = null; // remove click handler
-
-                    // If the new box was taken by another player, show a quick notification
-                    if (data.playerName && data.playerName !== state.userName) {
-                        showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 2000);
-                    }
-                } else {
-                    // Fallback: if for some reason the box isn't found, re-render the whole grid
-                    renderBoxes(data.takenBoxes);
-                }
-            } else {
-                // No specific new box info – full re-render (should rarely happen)
-                renderBoxes(data.takenBoxes);
-            }
-
-            // If the current player had that box selected (rare race condition), clear selection
+                    boxElement.classList.remove('selected');
+                    boxElement.onclick = null;
+                    if (data.playerName && data.playerName !== state.userName) showNotification(`📦 ${data.playerName} selected box ${data.newBox}!`, 'info', 2000);
+                } else renderBoxes(data.takenBoxes);
+            } else renderBoxes(data.takenBoxes);
             if (data.newBox === state.selectedBox) {
                 state.selectedBox = null;
                 document.getElementById('confirmBoxButton').disabled = true;
                 document.getElementById('confirmBoxButton').textContent = 'Select a box first';
-                // Also hide plate preview if desired
                 document.getElementById('platePreviewContainer').classList.remove('active');
             }
-
             state.lastActivityTime = Date.now();
         });
 
         socket.on('boxesCleared', (data) => {
-            console.log('📦 Boxes cleared event received:', data);
             if (data.room === state.stake) {
-                console.log(`📦 Clearing boxes for room ${state.stake}`);
-                
-                if (document.getElementById('discoveryScreen').classList.contains('active')) {
-                    renderBoxes([]);
-                    updateBoxCounters([]);
-                }
-                
-                state.lastBoxCount = 0;
-                state.previousTakenBoxes = [];
-                
+                if (document.getElementById('discoveryScreen').classList.contains('active')) { renderBoxes([]); updateBoxCounters([]); }
+                state.lastBoxCount = 0; state.previousTakenBoxes = [];
                 showNotification('🎮 Room reset - all boxes are now available!', 'info', 3000);
-                
                 state.lastActivityTime = Date.now();
             }
         });
 
-        socket.on('leftRoom', (data) => {
-            showNotification(data.message || 'Left room successfully', 'info', 2000);
-            resetToLobby();
-        });
+        socket.on('leftRoom', (data) => { showNotification(data.message || 'Left room successfully', 'info', 2000); resetToLobby(); });
 
-        // Activity monitoring to keep connection alive
         function startActivityMonitoring() {
             setInterval(() => {
                 if (state.isConnected) {
                     const now = Date.now();
-                    const timeSinceLastActivity = now - state.lastActivityTime;
-                    
-                    if (timeSinceLastActivity < 30000) {
-                        socket.emit('player:activity', { 
-                            action: 'heartbeat',
-                            timestamp: now,
-                            userId: state.userId,
-                            userName: state.userName,
-                            room: state.stake
-                        });
+                    if (now - state.lastActivityTime < 30000) {
+                        socket.emit('player:activity', { action: 'heartbeat', timestamp: now, userId: state.userId, userName: state.userName, room: state.stake });
                     }
-                    
                     socket.emit('ping');
-                    
-                    if (!state.isInitialized && state.userId) {
-                        sendInitEvent();
-                    }
+                    if (!state.isInitialized && state.userId) sendInitEvent();
                 }
             }, 15000);
         }
 
-        // Auto-reconnect on load
         window.onload = () => {
             state.userName = getUserName();
             document.getElementById('userName').textContent = state.userName;
             document.getElementById('userAvatar').textContent = state.userName.charAt(0).toUpperCase();
-            
             state.userId = generateUserId();
-            
             updateSocketQuery();
-            
             setTimeout(() => {
                 if (!state.isConnected) {
                     document.getElementById('loadingMessage').textContent = "Connecting to Bingo Elite server...";
@@ -3891,23 +2777,9 @@
                     socket.connect();
                 }
             }, 1000);
-            
-            document.addEventListener('click', () => {
-                state.lastActivityTime = Date.now();
-            });
-            
-            document.addEventListener('touchstart', () => {
-                state.lastActivityTime = Date.now();
-            });
-            
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && state.isConnected) {
-                    state.lastActivityTime = Date.now();
-                    if (state.isConnected) {
-                        socket.emit('player:activity', { action: 'tab_visible' });
-                    }
-                }
-            });
+            document.addEventListener('click', () => state.lastActivityTime = Date.now());
+            document.addEventListener('touchstart', () => state.lastActivityTime = Date.now());
+            document.addEventListener('visibilitychange', () => { if (!document.hidden && state.isConnected) { state.lastActivityTime = Date.now(); socket.emit('player:activity', { action: 'tab_visible' }); } });
         };
     </script>
 </body>
