@@ -728,7 +728,7 @@
             color: var(--primary);
         }
 
-        /* ========== NEW GAME LAYOUT ========== */
+        /* ========== NEW LEFT 1–75 GRID ========== */
         .game-layout {
             display: flex;
             gap: 12px;
@@ -777,59 +777,213 @@
             transform: scale(0.98);
         }
 
+        /* ========== RIGHT PANEL – ORIGINAL STYLES (RESTORED) ========== */
         .game-panel {
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            min-width: 0; /* prevent overflow */
+            gap: 12px;
+            min-width: 0;
         }
 
-        /* Hide ball history */
-        .ball-history {
-            display: none;
-        }
-
-        /* Smaller bingo card */
-        .small-card .bingo-header .bingo-letter-cell {
-            font-size: 10px;
-            padding: 4px 0;
-        }
-        .small-card .bingo-grid .cell {
-            font-size: 8px;
-            border-radius: 3px;
-        }
-        .small-card .bingo-grid .cell.free {
-            font-size: 6px;
-        }
-        .small-card .bingo-grid {
-            gap: 2px;
-        }
-
-        /* Adjust claim button */
-        .claim-button {
-            margin-top: auto;
+        /* Ball display – original */
+        .ball-display-container {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
             padding: 12px;
-            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        /* Mobile fine‑tuning */
-        @media (max-width: 480px) {
-            .game-layout {
-                gap: 6px;
-            }
-            .number-cell {
-                font-size: 8px;
-            }
-            .small-card .bingo-grid .cell {
-                font-size: 7px;
-            }
-            .claim-button {
-                padding: 10px;
-                font-size: 12px;
-            }
+        .ball-label {
+            font-size: 11px;
+            color: var(--gray);
+            margin-bottom: 5px;
         }
-        /* ========== END NEW GAME LAYOUT ========== */
+
+        .ball {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #fff, #cbd5e1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #0f172a;
+            font-weight: 900;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            border: 3px solid #fff;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .ball-letter {
+            font-size: 14px;
+            font-weight: 900;
+            position: absolute;
+            top: 6px;
+            height: 14px;
+            width: 100%;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .ball-number {
+            font-size: 24px;
+            margin-top: 16px;
+        }
+
+        /* Ball history – visible again */
+        .ball-history {
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+            padding: 5px;
+            width: 100%;
+        }
+
+        .history-ball {
+            min-width: 26px;
+            width: 26px;
+            height: 26px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #94a3b8;
+            border: 1px solid var(--card-border);
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .history-letter {
+            position: absolute;
+            top: 1px;
+            font-size: 8px;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--primary);
+        }
+
+        .history-number {
+            margin-top: 6px;
+            font-size: 9px;
+            line-height: 1;
+        }
+
+        /* Bingo card – normal size */
+        .bingo-card-container {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 10px;
+        }
+
+        .bingo-header {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 3px;
+            margin-bottom: 3px;
+        }
+
+        .bingo-letter-cell {
+            aspect-ratio: 1;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 12px;
+            color: var(--primary);
+        }
+
+        .bingo-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 3px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 12px;
+            color: var(--primary);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .cell:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .cell.marked {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+            transform: scale(1.05);
+        }
+
+        .cell.free {
+            background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
+            color: white;
+            border: none;
+            font-weight: 900;
+            font-size: 9px;
+        }
+
+        .cell.corner::before {
+            content: "★";
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            font-size: 6px;
+            color: var(--secondary);
+        }
+
+        /* Claim button – original */
+        .claim-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .claim-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .claim-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
 
         /* Wait Screen */
         .wait-container {
@@ -1574,7 +1728,7 @@
                     <div class="numbers-grid" id="numbersGrid"></div>
                 </div>
 
-                <!-- RIGHT: draw number, tiny bingo card, claim button -->
+                <!-- RIGHT: original layout restored -->
                 <div class="game-panel">
                     <div class="ball-display-container">
                         <div class="ball-label">LAST BALL</div>
@@ -1582,10 +1736,12 @@
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
                         </div>
-                        <!-- ball history hidden via CSS -->
+                        <div class="ball-history" id="ballHistory">
+                            <!-- History balls will be added by JavaScript -->
+                        </div>
                     </div>
 
-                    <div class="bingo-card-container small-card">
+                    <div class="bingo-card-container">
                         <div class="bingo-header">
                             <div class="bingo-letter-cell">B</div>
                             <div class="bingo-letter-cell">I</div>
@@ -2900,8 +3056,19 @@
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
             state.history.unshift({ num, letter });
-            // history hidden via CSS, but we still store it
-
+            const historyContainer = document.getElementById('ballHistory');
+            historyContainer.innerHTML = '';
+            
+            state.history.slice(0, 8).forEach(ball => {
+                const historyBall = document.createElement('div');
+                historyBall.className = 'history-ball';
+                historyBall.innerHTML = `
+                    <div class="history-letter">${ball.letter}</div>
+                    <div class="history-number">${ball.num}</div>
+                `;
+                historyContainer.appendChild(historyBall);
+            });
+            
             state.calledNumbers.add(num);
             
             // Mark the called number in the left grid
