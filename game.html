@@ -279,7 +279,6 @@
             line-height: 1.4;
         }
 
-        /* Room Cards */
         .rooms-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -391,30 +390,6 @@
             border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
-        .room-card[data-stake="10"] {
-            border-left: 4px solid #7b5e4b;
-        }
-        .room-card[data-stake="20"] {
-            border-left: 4px solid #5a6268;
-        }
-        .room-card[data-stake="50"] {
-            border-left: 4px solid #b68a3c;
-        }
-        .room-card[data-stake="100"] {
-            border-left: 4px solid #6d5a8c;
-        }
-
-        .room-card[data-stake="10"]:hover { border-left-color: #a07b5c; }
-        .room-card[data-stake="20"]:hover { border-left-color: #7a848c; }
-        .room-card[data-stake="50"]:hover { border-left-color: #d4a017; }
-        .room-card[data-stake="100"]:hover { border-left-color: #8f77b5; }
-
-        @media (max-width: 480px) {
-            .rooms-grid { grid-template-columns: 1fr; }
-            .room-card { padding: 12px; }
-            .room-stake { font-size: 24px; }
-        }
-
         .wallet-section {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -473,7 +448,6 @@
             margin-left: 3px;
         }
 
-        /* Game Info */
         .game-info {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -662,7 +636,6 @@
             font-size: 11px;
         }
 
-        /* Plate Preview Section */
         .plate-preview-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -723,128 +696,75 @@
             color: var(--primary);
         }
 
-        /* Game Screen - New Layout */
-        .game-header {
+        /* ===== NEW GAME SCREEN LAYOUT ===== */
+        #gameScreen .game-content {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
+            gap: 12px;
+            height: calc(100% - 70px); /* account for header + button */
+            overflow: hidden;
+            padding: 0 0 10px 0;
         }
 
-        .room-info-compact {
+        /* Left column: numbers 1-75 vertical */
+        .numbers-column {
+            flex: 0 0 50px; /* fixed narrow width */
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 6px 2px;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
-        }
-
-        .room-stake-compact {
-            font-size: 15px;
-            font-weight: 800;
-        }
-
-        .room-status-compact {
-            font-size: 11px;
-            color: var(--gray);
-            margin-top: 2px;
-        }
-
-        .game-controls {
-            display: flex;
-            gap: 8px;
-        }
-
-        .control-button {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid var(--card-border);
-            display: flex;
             align-items: center;
-            justify-content: center;
-            color: var(--gray-light);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .control-button:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* New two-column layout */
-        .game-main-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-            flex: 1;
-            min-height: 0; /* important for flex children to scroll */
-        }
-
-        .number-grid-container {
-            flex: 1;
-            max-height: 300px;
-            overflow-y: auto;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: var(--radius);
-            border: 1px solid var(--card-border);
-            padding: 5px;
-        }
-
-        .number-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
             gap: 2px;
         }
-
-        .number-cell {
-            aspect-ratio: 1;
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid var(--card-border);
-            border-radius: 3px;
+        .number-item {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
-            color: var(--primary-light);
-            transition: all 0.2s ease;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--gray-light);
+            border: 1px solid var(--card-border);
+            transition: all 0.2s;
+            flex-shrink: 0;
         }
-
-        .number-cell.called {
+        .number-item.called {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            transform: scale(1.02);
-            box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+            transform: scale(1.05);
+            box-shadow: 0 0 8px rgba(99,102,241,0.5);
         }
 
-        .ball-panel {
-            flex: 0 0 120px;
+        /* Right column: ball display + bingo card */
+        .right-column {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            gap: 10px;
+            min-width: 0; /* prevent overflow */
+        }
+
+        /* Ball display container - now compact */
+        .ball-display-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 12px;
-        }
-
-        .ball-display {
+            padding: 8px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            width: 100%;
         }
-
-        .ball-label {
-            font-size: 11px;
-            color: var(--gray);
-            margin-bottom: 5px;
-        }
-
+        .ball-label { font-size: 11px; color: var(--gray); margin-bottom: 5px; }
         .ball {
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             background: radial-gradient(circle at 30% 30%, #fff, #cbd5e1);
             display: flex;
@@ -857,140 +777,117 @@
             border: 3px solid #fff;
             position: relative;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
         }
-
         .ball-letter {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 900;
             position: absolute;
-            top: 6px;
-            height: 14px;
+            top: 4px;
+            height: 12px;
             width: 100%;
             text-align: center;
             color: var(--primary);
         }
-
-        .ball-number {
-            font-size: 24px;
-            margin-top: 16px;
-        }
-
-        .claim-button {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: var(--radius);
-            padding: 12px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: var(--shadow);
+        .ball-number { font-size: 20px; margin-top: 14px; }
+        .ball-history {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            padding: 4px;
             width: 100%;
-            margin-top: 10px;
         }
-
-        .claim-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .claim-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .claim-button.loading {
-            position: relative;
-            color: transparent;
-        }
-
-        .claim-button.loading::after {
-            content: "";
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 20px;
-            height: 20px;
-            margin: -10px 0 0 -10px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
+        .history-ball {
+            min-width: 24px;
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #94a3b8;
+            border: 1px solid var(--card-border);
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
         }
+        .history-letter {
+            position: absolute;
+            top: 1px;
+            font-size: 7px;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--primary);
+        }
+        .history-number { margin-top: 5px; font-size: 8px; line-height: 1; }
 
+        /* Bingo card container - smaller */
         .bingo-card-container {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: var(--radius);
-            padding: 10px;
-            margin-top: 12px;
+            padding: 8px;
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
-
         .bingo-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
-            margin-bottom: 3px;
+            gap: 2px;
+            margin-bottom: 2px;
         }
-
         .bingo-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
-            border-radius: 5px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 900;
-            font-size: 12px;
+            font-size: 11px;
             color: var(--primary);
         }
-
         .bingo-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 3px;
+            gap: 2px;
+            flex: 1;
         }
-
         .cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 5px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 900;
-            font-size: 12px;
+            font-weight: 700;
+            font-size: 10px;
             color: var(--primary);
             cursor: pointer;
             position: relative;
             transition: all 0.3s ease;
         }
-
-        .cell:hover {
-            background: rgba(99, 102, 241, 0.1);
-        }
-
+        .cell:hover { background: rgba(99, 102, 241, 0.1); }
         .cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
             transform: scale(1.05);
         }
-
         .cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
             color: white;
             border: none;
             font-weight: 900;
-            font-size: 9px;
+            font-size: 8px;
         }
-
         .cell.corner::before {
             content: "★";
             position: absolute;
@@ -999,6 +896,24 @@
             font-size: 6px;
             color: var(--secondary);
         }
+
+        /* Claim button */
+        .claim-button {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            width: 100%;
+            margin-top: 10px;
+        }
+        .claim-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+        .claim-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
         /* Wait Screen */
         .wait-container {
@@ -1009,37 +924,10 @@
             height: 100%;
             text-align: center;
         }
-
-        .wait-icon {
-            font-size: 45px;
-            color: var(--primary);
-            margin-bottom: 12px;
-            animation: pulse 2s infinite;
-        }
-
-        .wait-timer {
-            font-size: 48px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 10px;
-            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
-        }
-
-        .wait-message {
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: white;
-        }
-
-        .wait-details {
-            font-size: 12px;
-            color: var(--gray);
-            max-width: 260px;
-            margin: 0 auto 15px;
-            line-height: 1.4;
-        }
-
+        .wait-icon { font-size: 45px; color: var(--primary); margin-bottom: 12px; animation: pulse 2s infinite; }
+        .wait-timer { font-size: 48px; font-weight: 800; color: var(--secondary); margin-bottom: 10px; text-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
+        .wait-message { font-size: 15px; font-weight: 600; margin-bottom: 5px; color: white; }
+        .wait-details { font-size: 12px; color: var(--gray); max-width: 260px; margin: 0 auto 15px; line-height: 1.4; }
         .leave-button {
             background: rgba(239, 68, 68, 0.2);
             color: var(--danger);
@@ -1051,12 +939,9 @@
             cursor: pointer;
             transition: all 0.3s ease;
         }
+        .leave-button:hover { background: rgba(239, 68, 68, 0.3); }
 
-        .leave-button:hover {
-            background: rgba(239, 68, 68, 0.3);
-        }
-
-        /* Overlays */
+        /* Overlays (unchanged from original) */
         .overlay {
             position: fixed;
             top: 0;
@@ -1074,12 +959,10 @@
             transition: opacity 0.3s ease;
             padding: 20px;
         }
-
         .overlay.active {
             opacity: 1;
             pointer-events: all;
         }
-
         .overlay-content {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -1090,44 +973,37 @@
             text-align: center;
             box-shadow: var(--shadow-lg);
         }
-
         .overlay-icon {
             font-size: 50px;
             margin-bottom: 12px;
         }
-
         .overlay-title {
             font-size: 24px;
             font-weight: 800;
             margin-bottom: 10px;
         }
-
         .win-title {
             background: linear-gradient(135deg, var(--secondary), #fbbf24);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
         .lose-title {
             background: linear-gradient(135deg, var(--danger), #b91c1c);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
         .overlay-message {
             font-size: 15px;
             color: var(--gray-light);
             margin-bottom: 16px;
             line-height: 1.5;
         }
-
         .overlay-amount {
             font-size: 32px;
             font-weight: 800;
             color: var(--secondary);
             margin-bottom: 16px;
         }
-
         .overlay-button {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1141,7 +1017,6 @@
             width: 100%;
             margin-top: 12px;
         }
-
         .overlay-button:hover {
             transform: translateY(-2px);
             box-shadow: var(--shadow);
@@ -1155,7 +1030,6 @@
             padding: 4px;
             margin-bottom: 16px;
         }
-
         .wallet-tab {
             flex: 1;
             padding: 9px;
@@ -1166,25 +1040,20 @@
             transition: all 0.3s ease;
             font-size: 13px;
         }
-
         .wallet-tab.active {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
         }
-
         .wallet-form {
             display: none;
         }
-
         .wallet-form.active {
             display: block;
         }
-
         .form-group {
             margin-bottom: 14px;
             text-align: left;
         }
-
         .form-label {
             display: block;
             margin-bottom: 5px;
@@ -1192,7 +1061,6 @@
             color: var(--gray-light);
             font-weight: 600;
         }
-
         .form-input {
             width: 100%;
             padding: 11px;
@@ -1203,20 +1071,17 @@
             font-size: 14px;
             transition: all 0.3s ease;
         }
-
         .form-input:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
-
         .amount-buttons {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 6px;
             margin-bottom: 14px;
         }
-
         .amount-button {
             padding: 9px;
             background: rgba(30, 41, 59, 0.5);
@@ -1228,7 +1093,6 @@
             transition: all 0.3s ease;
             font-size: 12px;
         }
-
         .amount-button:hover {
             background: rgba(99, 102, 241, 0.2);
             border-color: var(--primary);
@@ -1246,7 +1110,7 @@
             margin-bottom: 12px;
         }
 
-        /* Winning Pattern Display */
+        /* Winning pattern display */
         .winning-card-replica {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -1256,14 +1120,12 @@
             max-width: 200px;
             box-shadow: var(--shadow);
         }
-
         .replica-header {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
             margin-bottom: 2px;
         }
-
         .replica-letter-cell {
             aspect-ratio: 1;
             background: rgba(99, 102, 241, 0.2);
@@ -1275,13 +1137,11 @@
             font-size: 10px;
             color: var(--primary);
         }
-
         .replica-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 2px;
         }
-
         .replica-cell {
             aspect-ratio: 1;
             background: rgba(255, 255, 255, 0.03);
@@ -1296,7 +1156,6 @@
             position: relative;
             transition: all 0.3s ease;
         }
-
         .replica-cell.marked {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -1304,7 +1163,6 @@
             transform: scale(1.05);
             box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
         }
-
         .replica-cell.winning {
             background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
             color: white;
@@ -1314,7 +1172,6 @@
             position: relative;
             z-index: 2;
         }
-
         .replica-cell.free {
             background: linear-gradient(135deg, var(--secondary-dark), var(--secondary));
             color: white;
@@ -1322,12 +1179,10 @@
             font-weight: 700;
             font-size: 8px;
         }
-
         .replica-cell.free.winning {
             background: linear-gradient(135deg, #d97706, #fbbf24);
             animation: freeWinningGlow 2s infinite alternate;
         }
-
         .replica-cell.corner::before {
             content: "★";
             position: absolute;
@@ -1337,21 +1192,18 @@
             color: var(--secondary);
             opacity: 0.7;
         }
-
         .winning-pattern-info {
             text-align: center;
             margin-top: 10px;
             padding-top: 10px;
             border-top: 1px solid var(--card-border);
         }
-
         .winning-pattern-name {
             font-size: 13px;
             font-weight: 800;
             color: var(--secondary);
             margin-bottom: 4px;
         }
-
         .winning-pattern-stats {
             font-size: 11px;
             color: var(--gray);
@@ -1359,56 +1211,39 @@
             justify-content: center;
             gap: 8px;
         }
-
         .pattern-stat {
             display: flex;
             align-items: center;
             gap: 4px;
         }
-
         .pattern-stat i {
             font-size: 10px;
         }
 
         @keyframes winningGlow {
-            0% {
-                box-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
-                transform: scale(1.05);
-            }
-            100% {
-                box-shadow: 0 0 15px rgba(245, 158, 11, 0.8);
-                transform: scale(1.08);
-            }
+            0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.5); transform: scale(1.05); }
+            100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.8); transform: scale(1.08); }
         }
-
         @keyframes freeWinningGlow {
-            0% {
-                box-shadow: 0 0 5px rgba(245, 158, 11, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
-            }
-            100% {
-                box-shadow: 0 0 15px rgba(245, 158, 11, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.7);
-            }
+            0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5); }
+            100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.8), inset 0 0 10px rgba(255, 255, 255, 0.7); }
         }
-
         .pattern-line {
             position: absolute;
             background: var(--secondary);
             z-index: 1;
             border-radius: 10px;
         }
-
         .pattern-line.row {
             height: 2px;
             width: 100%;
             left: 0;
         }
-
         .pattern-line.column {
             width: 2px;
             height: 100%;
             top: 0;
         }
-
         .pattern-line.diagonal-main {
             width: 140%;
             height: 2px;
@@ -1417,7 +1252,6 @@
             transform: rotate(45deg);
             transform-origin: center;
         }
-
         .pattern-line.diagonal-anti {
             width: 140%;
             height: 2px;
@@ -1426,7 +1260,6 @@
             transform: rotate(-45deg);
             transform-origin: center;
         }
-
         .pattern-line.corners {
             width: 100%;
             height: 100%;
@@ -1440,121 +1273,26 @@
         @keyframes spin {
             100% { transform: rotate(360deg); }
         }
-
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-
         @keyframes bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-10px); }
         }
-
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Responsive Design */
+        /* Responsive */
         @media (max-width: 480px) {
-            .ball {
-                width: 65px;
-                height: 65px;
-            }
-            
-            .ball-number {
-                font-size: 22px;
-                margin-top: 14px;
-            }
-            
-            .ball-letter {
-                font-size: 12px;
-                top: 5px;
-            }
-            
-            .wait-timer {
-                font-size: 42px;
-            }
-            
-            .timer-display {
-                font-size: 28px;
-            }
-            
-            .overlay-content {
-                padding: 18px;
-            }
-            
-            .overlay-title {
-                font-size: 22px;
-            }
-            
-            .overlay-amount {
-                font-size: 28px;
-            }
-            
-            .boxes-grid {
-                max-height: 150px;
-            }
-            
-            .box-item {
-                font-size: 8px;
-            }
-            
-            .preview-grid {
-                max-width: 160px;
-            }
-            
-            .preview-cell {
-                font-size: 7px;
-            }
-
-            .game-main-row {
-                flex-direction: column;
-            }
-            .ball-panel {
-                flex: 0 0 auto;
-                width: 100%;
-            }
-            .number-grid-container {
-                max-height: 200px;
-            }
-        }
-
-        @media (max-width: 360px) {
-            .app-header {
-                padding: 12px 16px;
-            }
-            
-            .balance-card {
-                padding: 8px 12px;
-            }
-            
-            .balance-amount {
-                font-size: 14px;
-            }
-            
-            .boxes-grid {
-                grid-template-columns: repeat(8, 1fr);
-                gap: 2px;
-            }
-            
-            .cell {
-                font-size: 10px;
-            }
-            
-            .box-item {
-                font-size: 7px;
-            }
-            
-            .preview-grid {
-                max-width: 150px;
-            }
-            
-            .preview-cell {
-                font-size: 6px;
-            }
+            .ball { width: 55px; height: 55px; }
+            .ball-number { font-size: 18px; margin-top: 12px; }
+            .ball-letter { font-size: 10px; top: 3px; }
+            .number-item { width: 32px; height: 32px; font-size: 12px; }
         }
     </style>
 </head>
@@ -1727,7 +1465,7 @@
             </div>
         </div>
 
-        <!-- Game Screen (UPDATED LAYOUT) -->
+        <!-- Game Screen - REVISED LAYOUT -->
         <div class="screen" id="gameScreen">
             <div class="game-header">
                 <div class="room-info-compact">
@@ -1745,44 +1483,41 @@
             </div>
 
             <!-- New two-column layout -->
-            <div class="game-main-row">
-                <!-- Left: Numbers 1-75 grid -->
-                <div class="number-grid-container">
-                    <div class="number-grid" id="numberGrid"></div>
-                </div>
+            <div class="game-content">
+                <!-- Left: numbers 1-75 vertical -->
+                <div class="numbers-column" id="numbersList"></div>
 
-                <!-- Right: Ball display + Claim button -->
-                <div class="ball-panel">
-                    <div class="ball-display">
+                <!-- Right: ball display + bingo card -->
+                <div class="right-column">
+                    <div class="ball-display-container">
                         <div class="ball-label">LAST BALL</div>
                         <div class="ball" id="lastBall">
                             <div class="ball-letter" id="ballLetter">--</div>
                             <div class="ball-number" id="ballNumber">--</div>
                         </div>
+                        <div class="ball-history" id="ballHistory"></div>
                     </div>
-                    <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
-                        CLAIM BINGO!
-                    </button>
+
+                    <div class="bingo-card-container">
+                        <div class="bingo-header">
+                            <div class="bingo-letter-cell">B</div>
+                            <div class="bingo-letter-cell">I</div>
+                            <div class="bingo-letter-cell">N</div>
+                            <div class="bingo-letter-cell">G</div>
+                            <div class="bingo-letter-cell">O</div>
+                        </div>
+                        <div class="bingo-grid" id="bingoGrid"></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Bingo card container (unchanged) -->
-            <div class="bingo-card-container">
-                <div class="bingo-header">
-                    <div class="bingo-letter-cell">B</div>
-                    <div class="bingo-letter-cell">I</div>
-                    <div class="bingo-letter-cell">N</div>
-                    <div class="bingo-letter-cell">G</div>
-                    <div class="bingo-letter-cell">O</div>
-                </div>
-                <div class="bingo-grid" id="bingoGrid">
-                    <!-- Bingo grid will be populated by JavaScript -->
-                </div>
-            </div>
+            <button class="claim-button" id="claimBingoButton" onclick="claimBingo()" disabled>
+                CLAIM BINGO!
+            </button>
         </div>
     </div>
 
-    <!-- Overlays (unchanged) -->
+    <!-- Overlays -->
     <!-- Wallet Overlay -->
     <div class="overlay" id="walletOverlay">
         <div class="overlay-content">
@@ -2017,6 +1752,7 @@
             grid: [],
             calledNumbers: new Set(),
             markedNumbers: new Set(['FREE']),
+            history: [],
             isConnected: false,
             balance: 0.00,
             userId: null,
@@ -3031,33 +2767,56 @@
             return '';
         }
 
-        // ========== NEW: Number grid functions ==========
-        function renderNumberGrid() {
-            const container = document.getElementById('numberGrid');
+        // ========== NEW FUNCTIONS FOR NUMBERS LIST ==========
+        function renderNumbersList() {
+            const container = document.getElementById('numbersList');
             if (!container) return;
             container.innerHTML = '';
             for (let i = 1; i <= 75; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'number-cell';
-                cell.textContent = i;
-                cell.dataset.number = i;
-                container.appendChild(cell);
+                const numDiv = document.createElement('div');
+                numDiv.className = 'number-item';
+                numDiv.dataset.num = i;
+                numDiv.textContent = i;
+                if (state.calledNumbers.has(i)) {
+                    numDiv.classList.add('called');
+                }
+                container.appendChild(numDiv);
             }
         }
 
-        function markNumberInGrid(num) {
-            const cell = document.querySelector(`#numberGrid .number-cell[data-number="${num}"]`);
-            if (cell) {
-                cell.classList.add('called');
-            }
+        function markNumberCalled(num) {
+            const items = document.querySelectorAll('.number-item');
+            items.forEach(item => {
+                if (parseInt(item.dataset.num) === num) {
+                    item.classList.add('called');
+                }
+            });
         }
 
-        function clearNumberGrid() {
-            const container = document.getElementById('numberGrid');
+        // Modify triggerNewBall to also mark the number in the left column
+        const originalTriggerNewBall = triggerNewBall;
+        triggerNewBall = function(num, letter) {
+            originalTriggerNewBall(num, letter);
+            markNumberCalled(num);
+        };
+
+        // On game start, initialize the numbers list
+        const originalInitGameBoard = initGameBoard;
+        initGameBoard = function() {
+            originalInitGameBoard();
+            renderNumbersList();
+        };
+
+        // Also ensure numbers list is cleared on reset
+        const originalResetToLobby = resetToLobby;
+        resetToLobby = function() {
+            originalResetToLobby();
+            const container = document.getElementById('numbersList');
             if (container) container.innerHTML = '';
-        }
+        };
 
-        // Modified triggerNewBall – now marks the left grid and removes history
+        // ========== END NEW FUNCTIONS ==========
+
         function triggerNewBall(num, letter) {
             console.log(`🎱 Ball drawn: ${letter}-${num}`);
             
@@ -3081,8 +2840,19 @@
             void ballDisplay.offsetWidth;
             ballDisplay.style.animation = 'pulse 0.8s ease-out';
 
-            // Mark the number in the left grid
-            markNumberInGrid(num);
+            state.history.unshift({ num, letter });
+            const historyContainer = document.getElementById('ballHistory');
+            historyContainer.innerHTML = '';
+            
+            state.history.slice(0, 8).forEach(ball => {
+                const historyBall = document.createElement('div');
+                historyBall.className = 'history-ball';
+                historyBall.innerHTML = `
+                    <div class="history-letter">${ball.letter}</div>
+                    <div class="history-number">${ball.num}</div>
+                `;
+                historyContainer.appendChild(historyBall);
+            });
             
             state.calledNumbers.add(num);
             
@@ -3299,14 +3069,17 @@
                         state.calledNumbers = new Set(details.calledNumbers || []);
                         state.markedNumbers = new Set(['FREE']); // FREE always marked
 
-                        // Render number grid and mark all called numbers
-                        renderNumberGrid();
                         (details.calledNumbers || []).forEach(num => {
-                            markNumberInGrid(num);
                             if (state.grid.includes(num)) {
                                 state.markedNumbers.add(num);
                             }
                         });
+
+                        // Set history (last 8 called numbers)
+                        state.history = (details.calledNumbers || []).slice(-8).map(num => ({
+                            num,
+                            letter: getBingoLetter(num)
+                        })).reverse();
 
                         // Show game screen and render
                         showScreen('gameScreen');
@@ -3318,6 +3091,16 @@
                             document.getElementById('ballLetter').textContent = letter;
                             document.getElementById('ballNumber').textContent = details.currentBall;
                         }
+
+                        // Update history UI
+                        const historyContainer = document.getElementById('ballHistory');
+                        historyContainer.innerHTML = '';
+                        state.history.slice(0, 8).forEach(ball => {
+                            const historyBall = document.createElement('div');
+                            historyBall.className = 'history-ball';
+                            historyBall.innerHTML = `<div class="history-letter">${ball.letter}</div><div class="history-number">${ball.num}</div>`;
+                            historyContainer.appendChild(historyBall);
+                        });
 
                         // Enable claim button if winning pattern already exists
                         if (checkWinningPattern()) {
@@ -3639,6 +3422,7 @@
             state.grid = [];
             state.calledNumbers.clear();
             state.markedNumbers = new Set(['FREE']);
+            state.history = [];
             state.lastBoxCount = 0;
             state.previousTakenBoxes = [];
             state.selectedBox = null;
@@ -3673,10 +3457,12 @@
             
             document.getElementById('ballLetter').textContent = '--';
             document.getElementById('ballNumber').textContent = '--';
+            document.getElementById('ballHistory').innerHTML = '';
             document.getElementById('bingoGrid').innerHTML = '';
             
-            // Clear number grid
-            clearNumberGrid();
+            // Clear numbers list
+            const numbersList = document.getElementById('numbersList');
+            if (numbersList) numbersList.innerHTML = '';
             
             document.getElementById('waitTimer').textContent = "30";
             document.getElementById('waitMessage').textContent = "Waiting for players...";
@@ -3779,9 +3565,6 @@
                 // Reset marked numbers for fresh game
                 state.markedNumbers = new Set(['FREE']);
                 
-                // Render the number grid
-                renderNumberGrid();
-                
                 showScreen('gameScreen');
                 initGameBoard();
                 
@@ -3801,7 +3584,6 @@
             if (data.room === state.stake) {
                 console.log('🎮 Admin force starting game');
                 state.markedNumbers = new Set(['FREE']);
-                renderNumberGrid();
                 showScreen('gameScreen');
                 initGameBoard();
                 showNotification('🎮 Game starting now by admin!', 'success', 3000);
