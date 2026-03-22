@@ -837,7 +837,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS (full list from previous version) ==========
+  // ========== AGENT SYSTEM SOCKET EVENTS ==========
   socket.on('agent:login', (data) => {
     if (agentSystem && agentSystem.handleAgentLogin) {
       agentSystem.handleAgentLogin(socket, data);
@@ -1258,7 +1258,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== NEW: SLOTS GALAXY SOCKET EVENTS ==========
+  // ========== SLOTS GALAXY SOCKET EVENTS ==========
   if (slotsLogic && slotsLogic.handleSlotsConnection) {
     slotsLogic.handleSlotsConnection(socket);
   }
@@ -2583,7 +2583,7 @@ app.get('/telegram', async (req, res) => {
             background: #13171c;
             border: 1px solid #262d36;
             border-radius: 24px;
-            padding: 20px 16px;  /* Increased padding for larger icons */
+            padding: 20px 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2595,8 +2595,8 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 80px;         /* was 60px */
-            height: 80px;        /* was 60px */
+            width: 80px;
+            height: 80px;
             border-radius: 16px;
             margin-bottom: 10px;
             object-fit: cover;
@@ -2617,8 +2617,8 @@ app.get('/telegram', async (req, res) => {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: #1e293b;
             border-radius: 16px;
             border: 1px solid #3b82f6;
@@ -2633,17 +2633,17 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 22px;          /* was 18px */
-            height: 22px;         /* was 18px */
+            width: 22px;
+            height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            font-size: 12px;      /* was 10px */
+            font-size: 12px;
             font-weight: 600;
           }
           .bingo-word {
-            font-size: 14px;      /* was 12px */
+            font-size: 14px;
             font-weight: 800;
             letter-spacing: 1px;
             color: #fbbf24;
@@ -2653,15 +2653,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #8b5cf6;
             margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 24px;      /* was 18px */
+            font-size: 24px;
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2671,15 +2671,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
             border-radius: 16px;
             border: 1px solid #f97316;
             margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 28px;      /* was 22px */
+            font-size: 28px;
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
@@ -2688,15 +2688,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #eab308;
             margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 28px;      /* was 22px */
+            font-size: 28px;
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
@@ -3554,7 +3554,6 @@ app.post('/api/login', async (req, res) => {
 // ========== TELEGRAM BOT INTEGRATION (with inline buttons) ==========
 const TELEGRAM_TOKEN = '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
 
-// Helper to send a message with inline keyboard
 async function sendTelegramMessage(chatId, text, options = {}) {
   const payload = {
     chat_id: chatId,
@@ -3569,7 +3568,6 @@ async function sendTelegramMessage(chatId, text, options = {}) {
   });
 }
 
-// Helper to edit message (to update inline keyboard)
 async function editTelegramMessage(chatId, messageId, text, options = {}) {
   const payload = {
     chat_id: chatId,
@@ -3585,27 +3583,22 @@ async function editTelegramMessage(chatId, messageId, text, options = {}) {
   });
 }
 
-// Webhook endpoint
 app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     const { message, callback_query } = req.body;
 
-    // Handle inline button clicks
     if (callback_query) {
       const chatId = callback_query.message.chat.id;
       const messageId = callback_query.message.message_id;
       const data = callback_query.data;
       const userId = callback_query.from.id.toString();
-      const userName = callback_query.from.first_name || 'Player';
 
-      // Answer callback query to remove the loading indicator
       await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ callback_query_id: callback_query.id })
       });
 
-      // Handle different callback data
       if (data === 'play') {
         const gameUrl = 'https://bingo-telegram-game.onrender.com/telegram';
         const text = '🎮 *Choose your game:*\n\nClick the button below to enter the game lobby.';
@@ -3620,7 +3613,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
         const text = `💰 *Your current balance:* ${balance.toFixed(2)} ETB`;
-        // Keep main menu inline keyboard
         const mainKeyboard = {
           inline_keyboard: [
             [{ text: '🎮 Play Game', callback_data: 'play' }],
@@ -3655,14 +3647,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
       }
       else if (data === 'close') {
-        // Remove the inline keyboard by sending a new message without it
         const text = 'Menu closed. You can type /start to reopen it.';
         await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify({ inline_keyboard: [] }) });
       }
       return res.sendStatus(200);
     }
 
-    // Handle normal messages
     if (message) {
       const chatId = message.chat.id;
       const text = (message.text || '').trim();
@@ -3674,11 +3664,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
       const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
 
-      // Process referral code from /start ref_xxx
       const referralMatch = text.match(/\/start ref_(\w+)/);
       const referralCode = referralMatch ? referralMatch[1] : null;
 
-      // Handle /start command
       if (text === '/start' || text === '/menu') {
         let user = await User.findOne({ telegramId: userId });
         if (!user) {
@@ -3714,8 +3702,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           reply_markup: JSON.stringify(mainKeyboard)
         });
       }
-
-      // Handle other commands (these don't need inline keyboards)
       else if (text === '/wallet') {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
@@ -3746,7 +3732,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           })
         });
       }
-
       else if (text === '/agent' || text === '/referral') {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
@@ -3779,7 +3764,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           })
         });
       }
-
       else if (text === '/help') {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
@@ -3808,13 +3792,11 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           })
         });
       }
-
       else if (text === '/balance') {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
         await sendTelegramMessage(chatId, `💰 *Your current balance:* ${balance.toFixed(2)} ETB`);
       }
-
       else {
         await sendTelegramMessage(chatId, 'Use /start to see the menu or type /help for commands.');
       }
