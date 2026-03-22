@@ -3552,7 +3552,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ========== TELEGRAM BOT INTEGRATION (with reply keyboard) ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+const TELEGRAM_TOKEN = '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
 
 // Helper to send a message with a keyboard (or without)
 async function sendTelegramMessage(chatId, text, options = {}) {
