@@ -3551,7 +3551,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ========== TELEGRAM BOT INTEGRATION (with inline buttons) ==========
+// ========== TELEGRAM BOT INTEGRATION (with persistent keyboard) ==========
 const TELEGRAM_TOKEN = '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
 
 async function sendTelegramMessage(chatId, text, options = {}) {
@@ -3587,6 +3587,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     const { message, callback_query } = req.body;
 
+    // -----------------------------
+    // 1. Handle callback queries (inline buttons)
+    // -----------------------------
     if (callback_query) {
       const chatId = callback_query.message.chat.id;
       const messageId = callback_query.message.message_id;
@@ -3609,50 +3612,55 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         };
         await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(inlineKeyboard) });
       }
+      // other callback queries (balance, channel, support, close) can be handled similarly
+      // but we will keep them simple – they can just show info and keep the custom keyboard.
+      // For simplicity, we'll send a new message (or edit) with info and the main keyboard.
       else if (data === 'balance') {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
         const text = `💰 *Your current balance:* ${balance.toFixed(2)} ETB`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
+        await editTelegramMessage(chatId, messageId, text, {
+          reply_markup: JSON.stringify({
+            inline_keyboard: []  // remove inline keyboard
+          })
+        });
+        // optionally send the custom keyboard again
+        await sendTelegramMessage(chatId, 'Use the buttons below.', {
+          reply_markup: JSON.stringify(mainMenuKeyboard)
+        });
       }
       else if (data === 'channel') {
         const channelLink = 'https://t.me/your_channel';
         const text = `📢 *Join our official channel* for updates and announcements:\n${channelLink}`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
+        await editTelegramMessage(chatId, messageId, text, {
+          reply_markup: JSON.stringify({ inline_keyboard: [] })
+        });
+        await sendTelegramMessage(chatId, 'Use the buttons below.', {
+          reply_markup: JSON.stringify(mainMenuKeyboard)
+        });
       }
       else if (data === 'support') {
         const supportContact = 'https://t.me/your_support_bot';
-        const text = `🆘 *Need help?* Contact our support team:\n${supportContact}\n\nYou can also use the /wallet command for payment instructions.`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
+        const text = `🆘 *Need help?* Contact our support team:\n${supportContact}`;
+        await editTelegramMessage(chatId, messageId, text, {
+          reply_markup: JSON.stringify({ inline_keyboard: [] })
+        });
+        await sendTelegramMessage(chatId, 'Use the buttons below.', {
+          reply_markup: JSON.stringify(mainMenuKeyboard)
+        });
       }
       else if (data === 'close') {
         const text = 'Menu closed. You can type /start to reopen it.';
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify({ inline_keyboard: [] }) });
+        await editTelegramMessage(chatId, messageId, text, {
+          reply_markup: JSON.stringify({ inline_keyboard: [] })
+        });
       }
       return res.sendStatus(200);
     }
 
+    // -----------------------------
+    // 2. Handle normal messages
+    // -----------------------------
     if (message) {
       const chatId = message.chat.id;
       const text = (message.text || '').trim();
@@ -3667,6 +3675,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const referralMatch = text.match(/\/start ref_(\w+)/);
       const referralCode = referralMatch ? referralMatch[1] : null;
 
+      // -----------------------------
+      // COMMAND: /start or /menu
+      // -----------------------------
       if (text === '/start' || text === '/menu') {
         let user = await User.findOne({ telegramId: userId });
         if (!user) {
@@ -3690,18 +3701,73 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
           `Use the buttons below to navigate.`;
 
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
+        // Custom reply keyboard (persistent)
+        const mainMenuKeyboard = {
+          keyboard: [
+            [{ text: '🎮 Play Game' }, { text: '💰 Balance' }],
+            [{ text: '📢 Channel' }, { text: '🆘 Support' }],
+            [{ text: '❌ Close Menu' }]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: false,
+          persistent: true
         };
 
         await sendTelegramMessage(chatId, welcomeText, {
-          reply_markup: JSON.stringify(mainKeyboard)
+          parse_mode: 'Markdown',
+          reply_markup: JSON.stringify(mainMenuKeyboard)
         });
       }
+
+      // -----------------------------
+      // BUTTON PRESSES (text from custom keyboard)
+      // -----------------------------
+      else if (text === '🎮 Play Game') {
+        const gameUrl = 'https://bingo-telegram-game.onrender.com/telegram';
+        const textMsg = '🎮 *Choose your game:*\n\nClick the button below to enter the game lobby.';
+        const inlineKeyboard = {
+          inline_keyboard: [[
+            { text: '🎮 Open Games', web_app: { url: gameUrl } }
+          ]]
+        };
+        await sendTelegramMessage(chatId, textMsg, {
+          parse_mode: 'Markdown',
+          reply_markup: JSON.stringify(inlineKeyboard)
+        });
+      }
+
+      else if (text === '💰 Balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance : 0;
+        const responseText = `💰 *Your current balance:* ${balance.toFixed(2)} ETB`;
+        await sendTelegramMessage(chatId, responseText, { parse_mode: 'Markdown' });
+        // The custom keyboard stays because we didn't send a new one
+      }
+
+      else if (text === '📢 Channel') {
+        const channelLink = 'https://t.me/your_channel';
+        const responseText = `📢 *Join our official channel* for updates and announcements:\n${channelLink}`;
+        await sendTelegramMessage(chatId, responseText, { parse_mode: 'Markdown' });
+      }
+
+      else if (text === '🆘 Support') {
+        const supportContact = 'https://t.me/your_support_bot';
+        const responseText = `🆘 *Need help?* Contact our support team:\n${supportContact}`;
+        await sendTelegramMessage(chatId, responseText, { parse_mode: 'Markdown' });
+      }
+
+      else if (text === '❌ Close Menu') {
+        const closeKeyboard = {
+          remove_keyboard: true
+        };
+        await sendTelegramMessage(chatId, 'Menu closed. Type /start to reopen it.', {
+          reply_markup: JSON.stringify(closeKeyboard)
+        });
+      }
+
+      // -----------------------------
+      // OTHER COMMANDS (keep existing ones)
+      // -----------------------------
       else if (text === '/wallet') {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
@@ -3801,6 +3867,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         await sendTelegramMessage(chatId, 'Use /start to see the menu or type /help for commands.');
       }
     }
+
     res.sendStatus(200);
   } catch (error) {
     console.error('Telegram webhook error:', error);
