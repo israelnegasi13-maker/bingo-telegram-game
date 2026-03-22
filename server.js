@@ -447,6 +447,26 @@ async function initializeTelebirrNumber() {
   }
 }
 
+// ========== TELEGRAM CHANNEL DATABASE FUNCTION ==========
+async function getTelegramChannel() {
+  try {
+    const setting = await Setting.findOne({ key: 'telegramChannel' });
+    if (!setting) {
+      // Create default channel link
+      await Setting.create({
+        key: 'telegramChannel',
+        value: 'https://t.me/ethio_elite_games',
+        updatedAt: new Date()
+      });
+      return 'https://t.me/ethio_elite_games';
+    }
+    return setting.value;
+  } catch (err) {
+    console.error('Error getting Telegram channel:', err);
+    return 'https://t.me/ethio_elite_games';
+  }
+}
+
 const app = express();
 const server = http.createServer(app);
 
@@ -3551,38 +3571,9 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ========== TELEGRAM BOT INTEGRATION (with reply keyboard) ==========
-const TELEGRAM_TOKEN = '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
+// ========== TELEGRAM BOT INTEGRATION ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
 
-// Helper to send a message with a keyboard (or without)
-async function sendTelegramMessage(chatId, text, options = {}) {
-  const payload = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: options.parse_mode || 'Markdown',
-    ...options
-  };
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-}
-
-// Main keyboard
-function getMainKeyboard() {
-  return {
-    keyboard: [
-      [{ text: '🎮 Play Game' }],
-      [{ text: '💰 Balance' }, { text: '📢 Channel' }],
-      [{ text: '🆘 Support' }, { text: '❌ Close Keyboard' }]
-    ],
-    resize_keyboard: true,
-    one_time_keyboard: false
-  };
-}
-
-// Webhook endpoint
 app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     const { message } = req.body;
@@ -3596,185 +3587,165 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const telebirrNumber = await getTelebirrNumber();
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
       const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+      const channelLink = await getTelegramChannel();
 
-      // Process referral code from /start ref_xxx
+      // Check for referral code in /start command
       const referralMatch = text.match(/\/start ref_(\w+)/);
       const referralCode = referralMatch ? referralMatch[1] : null;
 
-      // Handle /start command (also shows keyboard)
-      if (text === '/start' || text === '/menu') {
-        let user = await User.findOne({ telegramId: userId });
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0,                     // No bonus, can be changed later
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+      // Ensure user exists in database
+      let user = await User.findOne({ telegramId: userId });
+      if (!user) {
+        user = new User({
+          userId: `tg_${userId}`,
+          userName: userName,
+          telegramId: userId,
+          telegramUsername: username,
+          balance: 0,
+          referralCode: `TG${userId}`
+        });
+        await user.save();
+        console.log(`👤 New Telegram user: ${userName} (@${username})`);
 
-          // Process referral if any
-          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
-            await agentSystem.handleTelegramReferral(user.userId, referralCode);
-          }
+        if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+          await agentSystem.handleTelegramReferral(user.userId, referralCode);
         }
-
-        // Welcome message with keyboard
-        const welcomeText = `🎮 *Welcome to ETHIO GAMES, ${userName}!*\n\n` +
-          `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-          `Use the buttons below to navigate.`;
-
-        await sendTelegramMessage(chatId, welcomeText, {
-          reply_markup: JSON.stringify(getMainKeyboard())
-        });
       }
 
-      // Handle button clicks and commands
-      else if (text === '🎮 Play Game' || text === '/play') {
-        // Send a message with a web_app button that opens the game entry page
-        const gameUrl = 'https://bingo-telegram-game.onrender.com/telegram';
-        await sendTelegramMessage(chatId, '🎮 *Choose your game:*\n\nClick the button below to enter the game lobby.', {
-          reply_markup: JSON.stringify({
-            inline_keyboard: [[
-              { text: '🎮 Open Games', web_app: { url: gameUrl } }
-            ]]
-          })
-        });
-      }
+      // ========== CUSTOM KEYBOARD ==========
+      const customKeyboard = {
+        keyboard: [
+          [{ text: '🎮 Play Game' }, { text: '💰 Balance' }],
+          [{ text: '📢 Channel' }, { text: '🆘 Support' }]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false,
+        persistent: true
+      };
 
-      else if (text === '💰 Balance' || text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        await sendTelegramMessage(chatId, `💰 *Your current balance:* ${balance.toFixed(2)} ETB`, {
-          reply_markup: JSON.stringify(getMainKeyboard())   // keep keyboard visible
-        });
-      }
-
-      else if (text === '📢 Channel') {
-        // Replace with your channel link
-        const channelLink = 'https://t.me/your_channel';
-        await sendTelegramMessage(chatId, `📢 *Join our official channel* for updates and announcements:\n${channelLink}`, {
-          reply_markup: JSON.stringify(getMainKeyboard())
-        });
-      }
-
-      else if (text === '🆘 Support') {
-        const supportContact = 'https://t.me/your_support_bot';  // or a username
-        await sendTelegramMessage(chatId, `🆘 *Need help?* Contact our support team:\n${supportContact}\n\nYou can also use the /wallet command for payment instructions.`, {
-          reply_markup: JSON.stringify(getMainKeyboard())
-        });
-      }
-
-      else if (text === '❌ Close Keyboard') {
-        // Hide the keyboard
-        await sendTelegramMessage(chatId, 'Keyboard closed. Type /menu to show it again.', {
-          reply_markup: JSON.stringify({ remove_keyboard: true })
-        });
-      }
-
-      // Existing commands (compatibility)
-      else if (text === '/wallet') {
+      // Helper to send a message with keyboard
+      const sendWithKeyboard = async (text, parse_mode = 'Markdown') => {
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text: `💳 *ETHIO GAMES Wallet*\n\n` +
-                  `*How to Deposit:*\n` +
-                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
-                  `2. Open game and go to Wallet (💰 button)\n` +
-                  `3. Enter receipt number and amount\n` +
-                  `4. Admin will approve within 24 hours\n\n` +
-                  `*How to Withdraw:*\n` +
-                  `1. Minimum withdrawal: ${minWithdrawal} ETB\n` +
-                  `2. Open game Wallet\n` +
-                  `3. Select amount and enter phone number\n` +
-                  `4. Admin will send money within 24 hours\n\n` +
-                  `🎮 *Play Now:* @Ethio_elite_games_bot`,
+            text: text,
+            parse_mode: parse_mode,
+            reply_markup: customKeyboard
+          })
+        });
+      };
+
+      // Helper to send an inline web_app button
+      const sendWebAppButton = async (text) => {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
                 {
-                  text: '🎮 Open Games',
+                  text: '🎮 Open Game',
                   web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
                 }
               ]]
             }
           })
         });
-      }
+      };
 
+      // ========== HANDLE COMMANDS / BUTTONS ==========
+      if (text === '/start' || text === '/play') {
+        const welcome = `🎮 *Welcome to ETHIO GAMES, ${userName}!*\n\n` +
+          `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
+          `🎯 *Games Available:*\n` +
+          `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
+          `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+          `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
+          `• 🎰 **SLOTS GALAXY** - Spin to win big!\n\n` +
+          `💳 *Wallet Instructions:*\n` +
+          `1. Send money to Telebirr: *${telebirrNumber}*\n` +
+          `2. Min deposit: ${minDeposit} ETB\n` +
+          `3. Enter receipt number in game wallet\n` +
+          `4. Admin will approve within 24 hours\n` +
+          `5. Min withdrawal: ${minWithdrawal} ETB\n\n` +
+          `_Use the buttons below to play, check balance, or get help._`;
+        await sendWithKeyboard(welcome);
+      }
+      else if (text === '🎮 Play Game' || text === 'Play Game') {
+        await sendWebAppButton('Click the button below to open the game:');
+      }
+      else if (text === '💰 Balance' || text === 'Balance') {
+        await sendWithKeyboard(`💰 *Your Balance:* ${user.balance.toFixed(2)} ETB`);
+      }
+      else if (text === '📢 Channel' || text === 'Channel') {
+        await sendWithKeyboard(`📢 *Official Telegram Channel:*\n${channelLink}`);
+      }
+      else if (text === '🆘 Support' || text === 'Support') {
+        await sendWithKeyboard(`🆘 *Need help?*\nContact our support team:\n📞 Telegram: @Ethio_elite_support\n✉️ Email: support@ethio-games.com`);
+      }
+      else if (text === '/balance') {
+        await sendWithKeyboard(`💰 *Your Balance:* ${user.balance.toFixed(2)} ETB`);
+      }
+      else if (text === '/wallet') {
+        const walletInfo = `💳 *ETHIO GAMES Wallet*\n\n` +
+          `*How to Deposit:*\n` +
+          `1. Send money to Telebirr: *${telebirrNumber}*\n` +
+          `2. Open game and go to Wallet (💰 button)\n` +
+          `3. Enter receipt number and amount\n` +
+          `4. Admin will approve within 24 hours\n\n` +
+          `*How to Withdraw:*\n` +
+          `1. Minimum withdrawal: ${minWithdrawal} ETB\n` +
+          `2. Open game Wallet\n` +
+          `3. Select amount and enter phone number\n` +
+          `4. Admin will send money within 24 hours`;
+        await sendWithKeyboard(walletInfo);
+      }
       else if (text === '/agent' || text === '/referral') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `👑 *ETHIO GAMES Agent System*\n\n` +
-                  `*Agent Portal:* https://bingo-telegram-game.onrender.com/agent\n\n` +
-                  `*How it works:*\n` +
-                  `1. Become an agent and get referral link\n` +
-                  `2. Share link with friends\n` +
-                  `3. Friends join using your link\n` +
-                  `4. You earn commission from their wins\n\n` +
-                  `*Commission Rates:*\n` +
-                  `• 🎱 Bingo wins: *40% commission*\n` +
-                  `• 🎰 Keno wins: *10% commission*\n` +
-                  `• ✈️ Crash wins: *10% commission*\n` +
-                  `• 🎰 Slots wins: *10% commission*\n\n` +
-                  `*How to become agent:*\n` +
-                  `Contact admin @Ethio_elite_games_bot`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '👑 Open Agent Portal',
-                  url: 'https://bingo-telegram-game.onrender.com/agent'
-                }
-              ]]
-            }
-          })
-        });
+        const agentInfo = `👑 *ETHIO GAMES Agent System*\n\n` +
+          `*Agent Portal:* https://bingo-telegram-game.onrender.com/agent\n\n` +
+          `*How it works:*\n` +
+          `1. Become an agent and get referral link\n` +
+          `2. Share link with friends\n` +
+          `3. Friends join using your link\n` +
+          `4. You earn commission from their wins\n\n` +
+          `*Commission Rates:*\n` +
+          `• 🎱 Bingo wins: *40% commission*\n` +
+          `• 🎰 Keno wins: *10% commission*\n` +
+          `• ✈️ Crash wins: *10% commission*\n` +
+          `• 🎰 Slots wins: *10% commission*\n\n` +
+          `*How to become agent:*\n` +
+          `Contact admin @Ethio_elite_games_bot`;
+        await sendWithKeyboard(agentInfo);
       }
-
       else if (text === '/help') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *ETHIO GAMES Help*\n\n` +
-                  `*Games Available:*\n` +
-                  `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
-                  `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
-                  `• 🎰 **SLOTS GALAXY** - Spin to win big!\n\n` +
-                  `*Commands:*\n` +
-                  `/start - Show the main menu\n` +
-                  `/menu - Show the keyboard\n` +
-                  `/balance - Check your balance\n` +
-                  `/wallet - Deposit/withdrawal instructions\n` +
-                  `/agent - Agent system info\n` +
-                  `/help - This message\n\n` +
-                  `💳 *Wallet:*\n` +
-                  `Deposit to Telebirr: *${telebirrNumber}*\n` +
-                  `Min withdrawal: ${minWithdrawal} ETB\n` +
-                  `Min deposit: ${minDeposit} ETB\n\n` +
-                  `_Need help? Contact admin_`,
-            parse_mode: 'Markdown',
-            reply_markup: JSON.stringify(getMainKeyboard())
-          })
-        });
+        const help = `🎮 *ETHIO GAMES Help*\n\n` +
+          `*Games Available:*\n` +
+          `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
+          `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
+          `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
+          `• 🎰 **SLOTS GALAXY** - Spin to win big!\n\n` +
+          `*Commands:*\n` +
+          `/start - Start the bot\n` +
+          `/play - Play games\n` +
+          `/balance - Check balance\n` +
+          `/wallet - Wallet instructions\n` +
+          `/agent - Agent system info\n` +
+          `/help - This message\n\n` +
+          `💳 *Wallet:*\n` +
+          `Deposit to Telebirr: *${telebirrNumber}*\n` +
+          `Min withdrawal: ${minWithdrawal} ETB\n` +
+          `Min deposit: ${minDeposit} ETB\n\n` +
+          `_Need help? Contact admin_`;
+        await sendWithKeyboard(help);
       }
-
       else {
-        // If the user sends an unrecognized message, optionally show the keyboard again
-        await sendTelegramMessage(chatId, 'Use the buttons below or type /help for commands.', {
-          reply_markup: JSON.stringify(getMainKeyboard())
-        });
+        // Unknown command – repeat the keyboard
+        await sendWithKeyboard('Please use the buttons below or type /help for available commands.');
       }
     }
     res.sendStatus(200);
