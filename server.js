@@ -22,9 +22,6 @@ const slotsLogic = require('./slots-logic');
 // Import Agent System
 const AgentSystem = require('./agent-logic');
 
-// ===== NEW: Admin Telegram IDs (comma-separated) =====
-const ADMIN_IDS = process.env.ADMIN_IDS ? process.env.ADMIN_IDS.split(',').map(id => id.trim()) : [];
-
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -840,7 +837,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS ==========
+  // ========== AGENT SYSTEM SOCKET EVENTS (full list from previous version) ==========
   socket.on('agent:login', (data) => {
     if (agentSystem && agentSystem.handleAgentLogin) {
       agentSystem.handleAgentLogin(socket, data);
@@ -1261,7 +1258,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== SLOTS GALAXY SOCKET EVENTS ==========
+  // ========== NEW: SLOTS GALAXY SOCKET EVENTS ==========
   if (slotsLogic && slotsLogic.handleSlotsConnection) {
     slotsLogic.handleSlotsConnection(socket);
   }
@@ -2391,520 +2388,6 @@ app.get('/agent', (req, res) => {
 
 app.get('/agent-dashboard.html', (req, res) => {
   res.redirect('/agent');
-});
-
-// ========== TELEGRAM BOT INTEGRATION (with inline buttons) ==========
-const TELEGRAM_TOKEN = '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
-
-async function sendTelegramMessage(chatId, text, options = {}) {
-  const payload = {
-    chat_id: chatId,
-    text: text,
-    parse_mode: options.parse_mode || 'Markdown',
-    ...options
-  };
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-}
-
-async function editTelegramMessage(chatId, messageId, text, options = {}) {
-  const payload = {
-    chat_id: chatId,
-    message_id: messageId,
-    text: text,
-    parse_mode: options.parse_mode || 'Markdown',
-    ...options
-  };
-  return fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/editMessageText`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-}
-
-// ===== NEW: Broadcast helper function =====
-async function broadcastToAllUsers(message, photoFileId = null, caption = null) {
-  const users = await User.find({ telegramId: { $exists: true, $ne: null } });
-  console.log(`Broadcasting to ${users.length} users...`);
-
-  for (const user of users) {
-    try {
-      const chatId = user.telegramId;
-      if (photoFileId) {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            photo: photoFileId,
-            caption: caption || message,
-            parse_mode: 'Markdown'
-          })
-        });
-      } else {
-        await sendTelegramMessage(chatId, message);
-      }
-      await new Promise(resolve => setTimeout(resolve, 100)); // small delay to avoid rate limits
-    } catch (err) {
-      console.error(`Failed to send to ${user.telegramId}:`, err.message);
-    }
-  }
-  console.log('Broadcast finished.');
-}
-
-app.post('/telegram-webhook', express.json(), async (req, res) => {
-  try {
-    const { message, callback_query } = req.body;
-
-    if (callback_query) {
-      const chatId = callback_query.message.chat.id;
-      const messageId = callback_query.message.message_id;
-      const data = callback_query.data;
-      const userId = callback_query.from.id.toString();
-
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callback_query_id: callback_query.id })
-      });
-
-      if (data === 'play') {
-        const gameUrl = 'https://bingo-telegram-game.onrender.com/telegram';
-        const text = '🎮 *Choose your game:*\n\nClick the button below to enter the game lobby.';
-        const inlineKeyboard = {
-          inline_keyboard: [[
-            { text: '🎮 Open Games', web_app: { url: gameUrl } }
-          ]]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(inlineKeyboard) });
-      }
-      else if (data === 'balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        const text = `💰 *Your current balance:* ${balance.toFixed(2)} ETB`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
-      }
-      else if (data === 'channel') {
-        const channelLink = 'https://t.me/your_channel';
-        const text = `📢 *Join our official channel* for updates and announcements:\n${channelLink}`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
-      }
-      else if (data === 'support') {
-        const supportContact = 'https://t.me/your_support_bot';
-        const text = `🆘 *Need help?* Contact our support team:\n${supportContact}\n\nYou can also use the /wallet command for payment instructions.`;
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify(mainKeyboard) });
-      }
-      else if (data === 'close') {
-        const text = 'Menu closed. You can type /start to reopen it.';
-        await editTelegramMessage(chatId, messageId, text, { reply_markup: JSON.stringify({ inline_keyboard: [] }) });
-      }
-      return res.sendStatus(200);
-    }
-
-    if (message) {
-      const chatId = message.chat.id;
-      const text = (message.text || '').trim();
-      const userId = message.from.id.toString();
-      const userName = message.from.first_name || 'Player';
-      const username = message.from.username || '';
-
-      const telebirrNumber = await getTelebirrNumber();
-      const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-      const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
-
-      const referralMatch = text.match(/\/start ref_(\w+)/);
-      const referralCode = referralMatch ? referralMatch[1] : null;
-
-      // ==== NEW: Admin check ====
-      const isAdmin = ADMIN_IDS.includes(userId);
-
-      // ===== NEW: Broadcast commands =====
-      if (isAdmin && text.startsWith('/broadcast')) {
-        const broadcastMessage = text.replace(/^\/broadcast\s*/, '').trim();
-        if (!broadcastMessage) {
-          await sendTelegramMessage(chatId, '❌ Please provide a message.\nExample: `/broadcast Hello everyone!`');
-          return;
-        }
-        await sendTelegramMessage(chatId, `📢 Broadcasting: "${broadcastMessage}" to all users...`);
-        await broadcastToAllUsers(broadcastMessage);
-        await sendTelegramMessage(chatId, '✅ Broadcast finished.');
-        return;
-      }
-
-      if (isAdmin && text.startsWith('/broadcast_photo')) {
-        const caption = text.replace(/^\/broadcast_photo\s*/, '').trim();
-        const replyToMessage = message.reply_to_message;
-        if (!replyToMessage || !replyToMessage.photo) {
-          await sendTelegramMessage(chatId, '❌ Please reply to a photo with `/broadcast_photo [caption]`.');
-          return;
-        }
-        const photo = replyToMessage.photo[replyToMessage.photo.length - 1];
-        const fileId = photo.file_id;
-
-        await sendTelegramMessage(chatId, `📸 Broadcasting photo${caption ? ' with caption: "' + caption + '"' : ''}...`);
-        await broadcastToAllUsers(caption || '', fileId, caption);
-        await sendTelegramMessage(chatId, '✅ Broadcast finished.');
-        return;
-      }
-
-      // ===== NEW: Stats command for admin =====
-      if (isAdmin && text === '/stats') {
-        const totalUsers = await User.countDocuments();
-        const onlineUsers = await User.countDocuments({ isOnline: true });
-        const totalBalance = await User.aggregate([{ $group: { _id: null, total: { $sum: "$balance" } } }]);
-        const agentStats = await agentSystem.getAgentStatistics();
-        const statsText = `📊 *Server Stats*\n` +
-          `👥 Total players: ${totalUsers}\n` +
-          `🟢 Online now: ${onlineUsers}\n` +
-          `💰 Total balance: ${(totalBalance[0]?.total || 0).toFixed(2)} ETB\n` +
-          `👑 Active agents: ${agentStats.activeAgents || 0}\n` +
-          `💸 Total commissions: ${(agentStats.totalCommissions || 0).toFixed(2)} ETB`;
-        await sendTelegramMessage(chatId, statsText);
-        return;
-      }
-
-      if (text === '/start' || text === '/menu') {
-        let user = await User.findOne({ telegramId: userId });
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0,
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
-
-          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
-            await agentSystem.handleTelegramReferral(user.userId, referralCode);
-          }
-        }
-
-        const welcomeText = `🎮 *Welcome to ETHIO GAMES, ${userName}!*\n\n` +
-          `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-          `Use the buttons below to navigate.`;
-
-        const mainKeyboard = {
-          inline_keyboard: [
-            [{ text: '🎮 Play Game', callback_data: 'play' }],
-            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '📢 Channel', callback_data: 'channel' }],
-            [{ text: '🆘 Support', callback_data: 'support' }, { text: '❌ Close Menu', callback_data: 'close' }]
-          ]
-        };
-
-        await sendTelegramMessage(chatId, welcomeText, {
-          reply_markup: JSON.stringify(mainKeyboard)
-        });
-      }
-      else if (text === '/wallet') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `💳 *ETHIO GAMES Wallet*\n\n` +
-                  `*How to Deposit:*\n` +
-                  `1. Send money to Telebirr: *${telebirrNumber}*\n` +
-                  `2. Open game and go to Wallet (💰 button)\n` +
-                  `3. Enter receipt number and amount\n` +
-                  `4. Admin will approve within 24 hours\n\n` +
-                  `*How to Withdraw:*\n` +
-                  `1. Minimum withdrawal: ${minWithdrawal} ETB\n` +
-                  `2. Open game Wallet\n` +
-                  `3. Select amount and enter phone number\n` +
-                  `4. Admin will send money within 24 hours\n\n` +
-                  `🎮 *Play Now:* @Ethio_elite_games_bot`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '🎮 Open Games',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/agent' || text === '/referral') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `👑 *ETHIO GAMES Agent System*\n\n` +
-                  `*Agent Portal:* https://bingo-telegram-game.onrender.com/agent\n\n` +
-                  `*How it works:*\n` +
-                  `1. Become an agent and get referral link\n` +
-                  `2. Share link with friends\n` +
-                  `3. Friends join using your link\n` +
-                  `4. You earn commission from their wins\n\n` +
-                  `*Commission Rates:*\n` +
-                  `• 🎱 Bingo wins: *40% commission*\n` +
-                  `• 🎰 Keno wins: *10% commission*\n` +
-                  `• ✈️ Crash wins: *10% commission*\n` +
-                  `• 🎰 Slots wins: *10% commission*\n\n` +
-                  `*How to become agent:*\n` +
-                  `Contact admin @Ethio_elite_games_bot`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                {
-                  text: '👑 Open Agent Portal',
-                  url: 'https://bingo-telegram-game.onrender.com/agent'
-                }
-              ]]
-            }
-          })
-        });
-      }
-      else if (text === '/help') {
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: `🎮 *ETHIO GAMES Help*\n\n` +
-                  `*Games Available:*\n` +
-                  `• 🎱 **BINGO ELITE** - Real-time multiplayer bingo\n` +
-                  `• 🎰 **KENO ULTRA** - Fast number selection game\n` +
-                  `• ✈️ **CRASH GAME** - Cash out before it crashes\n` +
-                  `• 🎰 **SLOTS GALAXY** - Spin to win big!\n\n` +
-                  `*Commands:*\n` +
-                  `/start - Show the main menu\n` +
-                  `/menu - Show the keyboard\n` +
-                  `/balance - Check your balance\n` +
-                  `/wallet - Deposit/withdrawal instructions\n` +
-                  `/agent - Agent system info\n` +
-                  `/help - This message\n\n` +
-                  `💳 *Wallet:*\n` +
-                  `Deposit to Telebirr: *${telebirrNumber}*\n` +
-                  `Min withdrawal: ${minWithdrawal} ETB\n` +
-                  `Min deposit: ${minDeposit} ETB\n\n` +
-                  `_Need help? Contact admin_`,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-      else if (text === '/balance') {
-        const user = await User.findOne({ telegramId: userId });
-        const balance = user ? user.balance : 0;
-        await sendTelegramMessage(chatId, `💰 *Your current balance:* ${balance.toFixed(2)} ETB`);
-      }
-      else {
-        await sendTelegramMessage(chatId, 'Use /start to see the menu or type /help for commands.');
-      }
-    }
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Telegram webhook error:', error);
-    res.sendStatus(200);
-  }
-});
-
-app.get('/setup-telegram', async (req, res) => {
-  try {
-    const telebirrNumber = await getTelebirrNumber();
-    const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-    const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
-    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
-    
-    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
-        drop_pending_updates: true
-      })
-    });
-    const webhookResult = await webhookResponse.json();
-    
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        menu_button: {
-          type: 'web_app',
-          text: '🎮 Play Games',
-          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-        }
-      })
-    });
-    
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Telegram Bot Setup Complete</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
-          .container { max-width: 600px; margin: 0 auto; }
-          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
-          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
-          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
-          .telebirr-highlight { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
-          .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
-          .agent-highlight { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
-          .game-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
-          .crash-highlight { background: rgba(249, 115, 22, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(249, 115, 22, 0.3); }
-          .slots-highlight { background: rgba(234, 179, 8, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(234, 179, 8, 0.3); }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>✅ Telegram Bot Setup Complete!</h1>
-          <div class="success">✓ Webhook Configured</div>
-          <div class="success">✓ Menu Button Set</div>
-          <div class="success">✓ Agent System Active</div>
-          
-          <div class="telebirr-highlight">
-            <h3>📱 TELEBIRR PAYMENT NUMBER (DATABASE PERSISTED)</h3>
-            <div class="telebirr-number">${telebirrNumber}</div>
-            <p>This number is stored in MongoDB and will survive server restarts.</p>
-            <p>Admin can update it in Admin Panel → Settings</p>
-          </div>
-          
-          <div class="agent-highlight">
-            <h3>👑 AGENT SYSTEM - NOW AVAILABLE</h3>
-            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
-            <p><strong>Agent Statistics:</strong></p>
-            <p>• Total Agents: ${agentStats.totalAgents || 0}</p>
-            <p>• Active Agents: ${agentStats.activeAgents || 0}</p>
-            <p>• Total Commissions: ${(agentStats.totalCommissions || 0).toFixed(2)} ETB</p>
-            <p><strong>Commission Rates:</strong></p>
-            <p>• Bingo wins: 40% commission</p>
-            <p>• Keno wins: 10% commission</p>
-            <p>• Crash wins: 10% commission</p>
-            <p>• Slots wins: 10% commission</p>
-            <p><strong>Agent Features:</strong></p>
-            <p>• Real-time commission tracking</p>
-            <p>• Agent dashboard with statistics</p>
-            <p>• Referral link generation</p>
-            <p>• Agent withdrawal system</p>
-            <p>• Super admin management panel</p>
-            <p>• Agent leaderboard</p>
-          </div>
-          
-          <div class="game-highlight">
-            <h3>🎮 ALL GAMES - NOW AVAILABLE</h3>
-            <p><strong>Active Games:</strong></p>
-            <p>• 🎱 <strong>BINGO ELITE:</strong> Real-time multiplayer bingo</p>
-            <p>• 🎰 <strong>KENO ULTRA:</strong> Fast number selection game</p>
-            <p>• ✈️ <strong>CRASH GAME:</strong> Cash out before it crashes</p>
-            <p>• 🎰 <strong>SLOTS GALAXY:</strong> Spin to win big!</p>
-            <p><strong>Coming Soon:</strong></p>
-            <p>• 🎫 <strong>ETHIO LOTTERY:</strong> Daily draws with massive jackpots</p>
-            <p><strong>Wallet Features:</strong></p>
-            <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
-            <p>• Minimum Deposit: ${minDeposit} ETB</p>
-            <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
-            <p>• Admin approval for all transactions</p>
-          </div>
-          
-          <div class="crash-highlight">
-            <h3>✈️ CRASH GAME - NEW!</h3>
-            <p>• Multiplier increases until crash</p>
-            <p>• Cash out anytime before crash</p>
-            <p>• Auto cashout option</p>
-            <p>• Real‑time canvas animation</p>
-            <p>• 10% agent commission on net wins</p>
-            <p>• Play at <a href="/crash" style="color:#f97316;">/crash</a></p>
-          </div>
-
-          <div class="slots-highlight">
-            <h3>🎰 SLOTS GALAXY - NEW!</h3>
-            <p>• 3x3 slot machine with 5 paylines</p>
-            <p>• Bet amounts: 5, 10, 20, 50, 100 ETB</p>
-            <p>• Symbol multipliers up to 100x</p>
-            <p>• 10% agent commission on net wins</p>
-            <p>• Play at <a href="/slots" style="color:#eab308;">/slots</a></p>
-          </div>
-          
-          <div class="info-box">
-            <h3>Bot Information:</h3>
-            <p><strong>Bot:</strong> @Ethio_elite_games_bot</p>
-            <p><strong>Game Entry:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
-            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
-            <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
-            <p><strong>Keno Game:</strong> https://bingo-telegram-game.onrender.com/keno</p>
-            <p><strong>Crash Game:</strong> https://bingo-telegram-game.onrender.com/crash</p>
-            <p><strong>Slots Game:</strong> https://bingo-telegram-game.onrender.com/slots</p>
-            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
-            <p><strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</p>
-          </div>
-          
-          <div>
-            <a href="https://t.me/Ethio_elite_games_bot" class="btn" target="_blank">Open Bot in Telegram</a>
-            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
-            <a href="/agent" class="btn" style="background: #f59e0b;" target="_blank">Test Agent Portal</a>
-            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">Test Telegram Entry</a>
-          </div>
-          
-          <div style="margin-top: 30px; text-align: left;">
-            <h4>Next Steps:</h4>
-            <ol>
-              <li>Open @Ethio_elite_games_bot in Telegram</li>
-              <li>Click "Start"</li>
-              <li>Click menu button (bottom left)</li>
-              <li>Choose between Bingo, Keno, Crash, or Slots!</li>
-              <li>Check your wallet balance on the main screen</li>
-            </ol>
-            
-            <h4>Agent System Instructions:</h4>
-            <ol>
-              <li>Open Agent Portal (/agent)</li>
-              <li>Login with agent credentials (contact admin)</li>
-              <li>Generate referral link</li>
-              <li>Share link with friends</li>
-              <li>Earn 40% from Bingo, 10% from Keno, 10% from Crash, 10% from Slots wins</li>
-              <li>Request withdrawal when you have earnings</li>
-            </ol>
-            
-            <h4>Default Admin Agent:</h4>
-            <ul>
-              <li>Username: admin</li>
-              <li>Password: admin123</li>
-              <li>Referral Code: ADMIN001</li>
-              <li>Can create new agents in admin panel</li>
-            </ul>
-          </div>
-        </div>
-      </body>
-      </html>
-    `);
-  } catch (error) {
-    res.send(`
-      <h1 style="color: #ef4444;">❌ Setup Error</h1>
-      <p>${error.message}</p>
-      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
-    `);
-  }
 });
 
 // ========== FINAL TELEGRAM ENTRY PAGE - WALLET IN TOP RIGHT CORNER ==========
@@ -4065,6 +3548,404 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ========== TELEGRAM BOT INTEGRATION (MODIFIED) ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8524935415:AAHE-MI2W7lNA9EO7aF6nzH7DVr71-qp_Wk';
+const SERVER_URL = process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com';
+const WELCOME_IMAGE_URL = `${SERVER_URL}/sponser1.png`;
+
+// Helper to send a photo with caption and inline keyboard
+async function sendWelcomePhoto(chatId, userName) {
+  const caption = `🎉 *Welcome to ETHIO GAMES, ${userName}!* 🎉\n\n` +
+    `🔥 *Play Bingo, Keno, Crash & Slots!*\n` +
+    `💰 *Balance:* check your wallet\n` +
+    `💳 *Deposit/Withdraw:* easy via Telebirr\n` +
+    `👑 *Agents:* earn commissions from referrals\n\n` +
+    `👇 *Choose an option below:*`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        {
+          text: '🎮 Play Games',
+          web_app: { url: `${SERVER_URL}/telegram` }
+        },
+        {
+          text: '💰 Balance',
+          callback_data: 'balance'
+        }
+      ],
+      [
+        {
+          text: '💳 Deposit',
+          callback_data: 'deposit'
+        },
+        {
+          text: '💸 Withdraw',
+          callback_data: 'withdraw'
+        }
+      ],
+      [
+        {
+          text: '🆘 Support',
+          callback_data: 'support'
+        },
+        {
+          text: '📢 Join Channel',
+          url: 'https://t.me/Ethio_elite_games_channel'  // Replace with your actual channel link
+        }
+      ]
+    ]
+  };
+
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      photo: WELCOME_IMAGE_URL,
+      caption: caption,
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    })
+  });
+}
+
+// Helper to send a simple text message
+async function sendTextMessage(chatId, text, keyboard = null) {
+  const payload = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: 'Markdown'
+  };
+  if (keyboard) payload.reply_markup = keyboard;
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+}
+
+app.post('/telegram-webhook', express.json(), async (req, res) => {
+  try {
+    // Handle callback queries (button presses)
+    if (req.body.callback_query) {
+      const callback = req.body.callback_query;
+      const chatId = callback.message.chat.id;
+      const userId = callback.from.id.toString();
+      const userName = callback.from.first_name || 'Player';
+      const data = callback.data;
+
+      // Answer the callback to remove the loading indicator
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callback_query_id: callback.id })
+      });
+
+      // Process each button action
+      if (data === 'balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance.toFixed(2) : '0.00';
+        await sendTextMessage(chatId, `💰 *Your balance:* ${balance} ETB\n\nPlay games to win more! 🎮`);
+      }
+      else if (data === 'deposit') {
+        const telebirrNumber = await getTelebirrNumber();
+        const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+        await sendTextMessage(chatId,
+          `💳 *How to Deposit:*\n\n` +
+          `1️⃣ Send money to Telebirr: *${telebirrNumber}*\n` +
+          `2️⃣ Minimum deposit: *${minDeposit} ETB*\n` +
+          `3️⃣ Open the game and tap the wallet icon (💰)\n` +
+          `4️⃣ Enter your receipt number and amount\n` +
+          `5️⃣ Admin will approve within 24 hours\n\n` +
+          `📱 *Telebirr Number:* ${telebirrNumber}\n` +
+          `🔁 *Copy it:* ${telebirrNumber}`
+        );
+      }
+      else if (data === 'withdraw') {
+        const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+        await sendTextMessage(chatId,
+          `💸 *How to Withdraw:*\n\n` +
+          `1️⃣ Minimum withdrawal: *${minWithdrawal} ETB*\n` +
+          `2️⃣ Open the game and tap the wallet icon\n` +
+          `3️⃣ Choose amount and enter your Telebirr number\n` +
+          `4️⃣ Admin will process within 24 hours\n\n` +
+          `📞 *Need help?* Contact support below.`
+        );
+      }
+      else if (data === 'support') {
+        await sendTextMessage(chatId,
+          `🆘 *Support Contact*\n\n` +
+          `📧 Email: support@ethiogames.com\n` +
+          `🤖 Bot: @Ethio_elite_games_bot\n` +
+          `👑 Admin: @Ethio_elite_admin\n\n` +
+          `We're here to help! 🎯`
+        );
+      }
+
+      return res.sendStatus(200);
+    }
+
+    // Handle regular messages
+    const { message } = req.body;
+    if (message) {
+      const chatId = message.chat.id;
+      const text = message.text || '';
+      const userId = message.from.id.toString();
+      const userName = message.from.first_name || 'Player';
+      const username = message.from.username || '';
+
+      const telebirrNumber = await getTelebirrNumber();
+      const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+      const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+
+      // Check for referral in /start command
+      const referralMatch = text.match(/\/start ref_(\w+)/);
+      const referralCode = referralMatch ? referralMatch[1] : null;
+
+      // Process /start or /play
+      if (text.startsWith('/start') || text === '/play') {
+        // Create or update user
+        let user = await User.findOne({ telegramId: userId });
+        if (!user) {
+          user = new User({
+            userId: `tg_${userId}`,
+            userName: userName,
+            telegramId: userId,
+            telegramUsername: username,
+            balance: 0,
+            referralCode: `TG${userId}`
+          });
+          await user.save();
+          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+
+          // Handle referral if any
+          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+            await agentSystem.handleTelegramReferral(user.userId, referralCode);
+          }
+        }
+
+        // Send the welcome photo with inline buttons
+        await sendWelcomePhoto(chatId, userName);
+      }
+      // Handle other commands (kept for backward compatibility)
+      else if (text === '/balance' || text === 'check_balance') {
+        const user = await User.findOne({ telegramId: userId });
+        const balance = user ? user.balance.toFixed(2) : '0.00';
+        await sendTextMessage(chatId, `💰 *Your Balance:* ${balance} ETB`);
+      }
+      else if (text === '/wallet') {
+        await sendTextMessage(chatId,
+          `💳 *ETHIO GAMES Wallet*\n\n` +
+          `*Deposit:*\nSend to Telebirr: *${telebirrNumber}*\nMin deposit: ${minDeposit} ETB\n` +
+          `*Withdraw:*\nMin withdrawal: ${minWithdrawal} ETB\n` +
+          `🎮 Open the game to manage your wallet.`
+        );
+      }
+      else if (text === '/agent' || text === '/referral') {
+        await sendTextMessage(chatId,
+          `👑 *ETHIO GAMES Agent System*\n\n` +
+          `*Commission Rates:*\n` +
+          `• 🎱 Bingo: 40%\n• 🎰 Keno: 10%\n• ✈️ Crash: 10%\n• 🎰 Slots: 10%\n\n` +
+          `*Agent Portal:* ${SERVER_URL}/agent\n\n` +
+          `Contact admin to become an agent.`
+        );
+      }
+      else if (text === '/help') {
+        await sendTextMessage(chatId,
+          `🎮 *ETHIO GAMES Help*\n\n` +
+          `*Commands:*\n/start - Welcome message\n/balance - Check balance\n/wallet - Wallet guide\n/agent - Agent info\n/help - This message\n\n` +
+          `*Games:* Bingo, Keno, Crash, Slots – all inside the app!\n\n` +
+          `_Have fun!_`
+        );
+      }
+    }
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Telegram webhook error:', error);
+    res.sendStatus(200);
+  }
+});
+
+app.get('/setup-telegram', async (req, res) => {
+  try {
+    const telebirrNumber = await getTelebirrNumber();
+    const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
+    const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+    const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
+    
+    const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
+        drop_pending_updates: true
+      })
+    });
+    const webhookResult = await webhookResponse.json();
+    
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: {
+          type: 'web_app',
+          text: '🎮 Play Games',
+          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+        }
+      })
+    });
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Telegram Bot Setup Complete</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; text-align: center; background: #0f172a; color: #f8fafc; }
+          .container { max-width: 600px; margin: 0 auto; }
+          .success { color: #10b981; font-size: 2rem; margin: 20px 0; }
+          .info-box { background: #1e293b; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: left; }
+          .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; margin: 10px; font-weight: bold; }
+          .telebirr-highlight { background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
+          .telebirr-number { font-size: 1.5rem; font-weight: bold; color: #60a5fa; margin: 10px 0; }
+          .agent-highlight { background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(245, 158, 11, 0.3); }
+          .game-highlight { background: rgba(139, 92, 246, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(139, 92, 246, 0.3); }
+          .crash-highlight { background: rgba(249, 115, 22, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(249, 115, 22, 0.3); }
+          .slots-highlight { background: rgba(234, 179, 8, 0.1); padding: 15px; border-radius: 12px; margin: 20px 0; border: 1px solid rgba(234, 179, 8, 0.3); }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✅ Telegram Bot Setup Complete!</h1>
+          <div class="success">✓ Webhook Configured</div>
+          <div class="success">✓ Menu Button Set</div>
+          <div class="success">✓ Agent System Active</div>
+          
+          <div class="telebirr-highlight">
+            <h3>📱 TELEBIRR PAYMENT NUMBER (DATABASE PERSISTED)</h3>
+            <div class="telebirr-number">${telebirrNumber}</div>
+            <p>This number is stored in MongoDB and will survive server restarts.</p>
+            <p>Admin can update it in Admin Panel → Settings</p>
+          </div>
+          
+          <div class="agent-highlight">
+            <h3>👑 AGENT SYSTEM - NOW AVAILABLE</h3>
+            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
+            <p><strong>Agent Statistics:</strong></p>
+            <p>• Total Agents: ${agentStats.totalAgents || 0}</p>
+            <p>• Active Agents: ${agentStats.activeAgents || 0}</p>
+            <p>• Total Commissions: ${(agentStats.totalCommissions || 0).toFixed(2)} ETB</p>
+            <p><strong>Commission Rates:</strong></p>
+            <p>• Bingo wins: 40% commission</p>
+            <p>• Keno wins: 10% commission</p>
+            <p>• Crash wins: 10% commission</p>
+            <p>• Slots wins: 10% commission</p>
+            <p><strong>Agent Features:</strong></p>
+            <p>• Real-time commission tracking</p>
+            <p>• Agent dashboard with statistics</p>
+            <p>• Referral link generation</p>
+            <p>• Agent withdrawal system</p>
+            <p>• Super admin management panel</p>
+            <p>• Agent leaderboard</p>
+          </div>
+          
+          <div class="game-highlight">
+            <h3>🎮 ALL GAMES - NOW AVAILABLE</h3>
+            <p><strong>Active Games:</strong></p>
+            <p>• 🎱 <strong>BINGO ELITE:</strong> Real-time multiplayer bingo</p>
+            <p>• 🎰 <strong>KENO ULTRA:</strong> Fast number selection game</p>
+            <p>• ✈️ <strong>CRASH GAME:</strong> Cash out before it crashes</p>
+            <p>• 🎰 <strong>SLOTS GALAXY:</strong> Spin to win big!</p>
+            <p><strong>Coming Soon:</strong></p>
+            <p>• 🎫 <strong>ETHIO LOTTERY:</strong> Daily draws with massive jackpots</p>
+            <p><strong>Wallet Features:</strong></p>
+            <p>• Telebirr Number: ${telebirrNumber} <strong>(DATABASE PERSISTED)</strong></p>
+            <p>• Minimum Deposit: ${minDeposit} ETB</p>
+            <p>• Minimum Withdrawal: ${minWithdrawal} ETB</p>
+            <p>• Admin approval for all transactions</p>
+          </div>
+          
+          <div class="crash-highlight">
+            <h3>✈️ CRASH GAME - NEW!</h3>
+            <p>• Multiplier increases until crash</p>
+            <p>• Cash out anytime before crash</p>
+            <p>• Auto cashout option</p>
+            <p>• Real‑time canvas animation</p>
+            <p>• 10% agent commission on net wins</p>
+            <p>• Play at <a href="/crash" style="color:#f97316;">/crash</a></p>
+          </div>
+
+          <div class="slots-highlight">
+            <h3>🎰 SLOTS GALAXY - NEW!</h3>
+            <p>• 3x3 slot machine with 5 paylines</p>
+            <p>• Bet amounts: 5, 10, 20, 50, 100 ETB</p>
+            <p>• Symbol multipliers up to 100x</p>
+            <p>• 10% agent commission on net wins</p>
+            <p>• Play at <a href="/slots" style="color:#eab308;">/slots</a></p>
+          </div>
+          
+          <div class="info-box">
+            <h3>Bot Information:</h3>
+            <p><strong>Bot:</strong> @Ethio_elite_games_bot</p>
+            <p><strong>Game Entry:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
+            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
+            <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
+            <p><strong>Keno Game:</strong> https://bingo-telegram-game.onrender.com/keno</p>
+            <p><strong>Crash Game:</strong> https://bingo-telegram-game.onrender.com/crash</p>
+            <p><strong>Slots Game:</strong> https://bingo-telegram-game.onrender.com/slots</p>
+            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</p>
+          </div>
+          
+          <div>
+            <a href="https://t.me/Ethio_elite_games_bot" class="btn" target="_blank">Open Bot in Telegram</a>
+            <a href="/admin" class="btn" style="background: #ef4444;" target="_blank">Open Admin Panel</a>
+            <a href="/agent" class="btn" style="background: #f59e0b;" target="_blank">Test Agent Portal</a>
+            <a href="/telegram" class="btn" style="background: #8b5cf6;" target="_blank">Test Telegram Entry</a>
+          </div>
+          
+          <div style="margin-top: 30px; text-align: left;">
+            <h4>Next Steps:</h4>
+            <ol>
+              <li>Open @Ethio_elite_games_bot in Telegram</li>
+              <li>Click "Start"</li>
+              <li>Click menu button (bottom left)</li>
+              <li>Choose between Bingo, Keno, Crash, or Slots!</li>
+              <li>Check your wallet balance on the main screen</li>
+            </ol>
+            
+            <h4>Agent System Instructions:</h4>
+            <ol>
+              <li>Open Agent Portal (/agent)</li>
+              <li>Login with agent credentials (contact admin)</li>
+              <li>Generate referral link</li>
+              <li>Share link with friends</li>
+              <li>Earn 40% from Bingo, 10% from Keno, 10% from Crash, 10% from Slots wins</li>
+              <li>Request withdrawal when you have earnings</li>
+            </ol>
+            
+            <h4>Default Admin Agent:</h4>
+            <ul>
+              <li>Username: admin</li>
+              <li>Password: admin123</li>
+              <li>Referral Code: ADMIN001</li>
+              <li>Can create new agents in admin panel</li>
+            </ul>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.send(`
+      <h1 style="color: #ef4444;">❌ Setup Error</h1>
+      <p>${error.message}</p>
+      <p>Make sure your bot token is correct: ${TELEGRAM_TOKEN}</p>
+    `);
   }
 });
 
