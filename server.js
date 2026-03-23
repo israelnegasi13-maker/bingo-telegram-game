@@ -4292,6 +4292,75 @@ const httpServer = server.listen(PORT, HOST, async () => {
   `);
 });
 
+// ========== TELEGRAM RESTART NOTIFICATION ==========
+async function notifyAllUsersAboutRestart() {
+  try {
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+    if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') {
+      console.log('⚠️ Telegram token not set – skipping restart notifications.');
+      return;
+    }
+
+    const users = await User.find({ telegramId: { $exists: true, $ne: null } });
+    console.log(`📢 Sending restart notification to ${users.length} Telegram users...`);
+
+    const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
+                    `✨ አስደሳች ጨዋታዎች፡\n` +
+                    `🎱 ቢንጎ\n` +
+                    `🎰 ኬኖ\n` +
+                    `✈️ ክራሽ\n` +
+                    `🎰 ስሎትስ\n\n` +
+                    `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
+                    `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const user of users) {
+      const chatId = user.telegramId;
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }
+              ]]
+            }
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          const errorData = await response.text();
+          console.error(`Failed to send to ${user.userName} (${chatId}): ${response.status} ${errorData}`);
+        }
+      } catch (err) {
+        failCount++;
+        console.error(`Error sending to ${user.userName}:`, err.message);
+      }
+
+      // Small delay to avoid hitting rate limits
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    console.log(`✅ Restart notifications sent: ${successCount} delivered, ${failCount} failed.`);
+  } catch (err) {
+    console.error('❌ Error during restart notification broadcast:', err);
+  }
+}
+
+// Call this after server is fully up
+setTimeout(() => {
+  notifyAllUsersAboutRestart().catch(console.error);
+}, 3000);
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
