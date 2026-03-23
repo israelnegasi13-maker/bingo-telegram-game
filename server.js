@@ -3692,16 +3692,20 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const referralCode = referralMatch ? referralMatch[1] : null;
 
       if (text.startsWith('/start') || text === '/play') {
-        // Create or update user in database
+        // ✅ FIXED: Send welcome photo + keyboard to EVERY user (new and returning)
         let user = await User.findOne({ telegramId: userId });
         if (!user) {
+          // New user
           user = new User({
             userId: `tg_${userId}`,
             userName: userName,
             telegramId: userId,
             telegramUsername: username,
-            balance: 0, // No bonus by default – you can set REGISTRATION_BONUS if desired
-            referralCode: `TG${userId}`
+            balance: 0,
+            referralCode: `TG${userId}`,
+            joinedAt: new Date(),
+            lastSeen: new Date(),
+            isOnline: true
           });
           await user.save();
           console.log(`👤 New Telegram user: ${userName} (@${username})`);
@@ -3710,64 +3714,90 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
             await agentSystem.handleTelegramReferral(user.userId, referralCode);
           }
+        } else {
+          // Existing user – update last seen and online status
+          user.lastSeen = new Date();
+          user.isOnline = true;
+          if (username && !user.telegramUsername) user.telegramUsername = username;
+          await user.save();
+          console.log(`👋 Returning Telegram user: ${userName} (@${username})`);
         }
 
-        // Send welcome photo with caption and inline keyboard
-        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`; // Use your sponsor image
-        await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            photo: imageUrl,
-            caption: `🎉 *WELCOME TO ETHIO GAMES, ${userName}!* 🎉\n\n` +
-                     `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                     `🎯 *Available Games:*\n` +
-                     `• 🎱 BINGO ELITE - Real-time multiplayer bingo\n` +
-                     `• 🎰 KENO ULTRA - Fast number selection\n` +
-                     `• ✈️ CRASH GAME - Cash out before it crashes\n` +
-                     `• 🎰 SLOTS GALAXY - Spin to win!\n\n` +
-                     `💳 *Wallet:*\n` +
-                     `Deposit to Telebirr: *${telebirrNumber}* (min ${minDeposit} ETB)\n` +
-                     `Withdrawals from ${minWithdrawal} ETB\n\n` +
-                     `👇 Use the buttons below to get started!`,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: '🎮 Play Games',
-                    web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
-                  },
-                  {
-                    text: '💰 Balance',
-                    callback_data: 'balance'
-                  }
-                ],
-                [
-                  {
-                    text: '📞 Support',
-                    callback_data: 'support'
-                  },
-                  {
-                    text: '💳 Deposit',
-                    callback_data: 'deposit'
-                  },
-                  {
-                    text: '💸 Withdraw',
-                    callback_data: 'withdraw'
-                  }
-                ],
-                [
-                  {
-                    text: '📢 Join Channel',
-                    callback_data: 'join_channel'
-                  }
+        // Prepare the welcome message (photo + caption + inline keyboard)
+        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`;
+
+        // Send the photo with inline keyboard – wrapped in try/catch to log any failure
+        try {
+          const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              photo: imageUrl,
+              caption: `🎉 *WELCOME TO ETHIO GAMES, ${userName}!* 🎉\n\n` +
+                       `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
+                       `🎯 *Available Games:*\n` +
+                       `• 🎱 BINGO ELITE - Real-time multiplayer bingo\n` +
+                       `• 🎰 KENO ULTRA - Fast number selection\n` +
+                       `• ✈️ CRASH GAME - Cash out before it crashes\n` +
+                       `• 🎰 SLOTS GALAXY - Spin to win!\n\n` +
+                       `💳 *Wallet:*\n` +
+                       `Deposit to Telebirr: *${telebirrNumber}* (min ${minDeposit} ETB)\n` +
+                       `Withdrawals from ${minWithdrawal} ETB\n\n` +
+                       `👇 Use the buttons below to get started!`,
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '🎮 Play Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } },
+                    { text: '💰 Balance', callback_data: 'balance' }
+                  ],
+                  [
+                    { text: '📞 Support', callback_data: 'support' },
+                    { text: '💳 Deposit', callback_data: 'deposit' },
+                    { text: '💸 Withdraw', callback_data: 'withdraw' }
+                  ],
+                  [
+                    { text: '📢 Join Channel', callback_data: 'join_channel' }
+                  ]
                 ]
-              ]
-            }
-          })
-        });
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Telegram sendPhoto failed for user ${userId}: ${response.status} ${errorText}`);
+            // Fallback: send a text message
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `Welcome back to ETHIO GAMES, ${userName}! Use the button below to play.`,
+                reply_markup: {
+                  inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
+                }
+              })
+            });
+          } else {
+            console.log(`✅ Welcome photo sent to ${userName} (${userId})`);
+          }
+        } catch (photoErr) {
+          console.error(`❌ Error sending photo to ${userId}:`, photoErr);
+          // Fallback message
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `Welcome to ETHIO GAMES, ${userName}! Use the button below to start playing.`,
+              reply_markup: {
+                inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
+              }
+            })
+          });
+        }
       }
       else if (text === '/balance' || text === 'check_balance') {
         const user = await User.findOne({ telegramId: userId });
