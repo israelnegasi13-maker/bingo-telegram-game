@@ -3692,35 +3692,44 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const referralCode = referralMatch ? referralMatch[1] : null;
 
       if (text.startsWith('/start') || text === '/play') {
-        // Create or update user in database
-        let user = await User.findOne({ telegramId: userId });
-        if (!user) {
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0, // No bonus by default – you can set REGISTRATION_BONUS if desired
-            referralCode: `TG${userId}`
-          });
-          await user.save();
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
+        // Atomic upsert to avoid duplicate key errors
+        const user = await User.findOneAndUpdate(
+          { telegramId: userId },
+          {
+            $setOnInsert: {
+              userId: `tg_${userId}`,
+              userName: userName,
+              telegramId: userId,
+              telegramUsername: username,
+              balance: 0,
+              referralCode: `TG${userId}`,
+              joinedAt: new Date()
+            },
+            $set: {
+              lastSeen: new Date(),
+              userName: userName
+            }
+          },
+          { upsert: true, new: true }
+        );
 
-          // Process referral if any
-          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
-            await agentSystem.handleTelegramReferral(user.userId, referralCode);
-          }
+        const isNew = user.joinedAt && (new Date() - user.joinedAt) < 5000; // approximate check
+
+        console.log(`👤 Telegram user: ${user.userName} (@${user.telegramUsername})`);
+
+        if (isNew && referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+          await agentSystem.handleTelegramReferral(user.userId, referralCode);
         }
 
-        // Send welcome photo with caption and inline keyboard
-        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`; // Use your sponsor image
+        // Send welcome photo with caption and inline keyboard (ALWAYS, for both new and old users)
+        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`;
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
             photo: imageUrl,
-            caption: `🎉 *WELCOME TO ETHIO GAMES, ${userName}!* 🎉\n\n` +
+            caption: `🎉 *WELCOME BACK, ${user.userName}!* 🎉\n\n` +
                      `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
                      `🎯 *Available Games:*\n` +
                      `• 🎱 BINGO ELITE - Real-time multiplayer bingo\n` +
