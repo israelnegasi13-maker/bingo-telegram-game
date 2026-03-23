@@ -3692,41 +3692,47 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const referralCode = referralMatch ? referralMatch[1] : null;
 
       if (text.startsWith('/start') || text === '/play') {
-        // ✅ FIXED: Send welcome photo + keyboard to EVERY user (new and returning)
-        let user = await User.findOne({ telegramId: userId });
-        if (!user) {
-          // New user
-          user = new User({
-            userId: `tg_${userId}`,
-            userName: userName,
-            telegramId: userId,
-            telegramUsername: username,
-            balance: 0,
-            referralCode: `TG${userId}`,
-            joinedAt: new Date(),
-            lastSeen: new Date(),
-            isOnline: true
-          });
-          await user.save();
-          console.log(`👤 New Telegram user: ${userName} (@${username})`);
-
-          // Process referral if any
-          if (referralCode && agentSystem && agentSystem.handleTelegramReferral) {
-            await agentSystem.handleTelegramReferral(user.userId, referralCode);
+        // ✅ FIXED: Use findOneAndUpdate with upsert to avoid duplicate key errors
+        const user = await User.findOneAndUpdate(
+          {
+            $or: [
+              { telegramId: userId },
+              { userId: `tg_${userId}` }
+            ]
+          },
+          {
+            $set: {
+              userName: userName,
+              telegramId: userId,
+              telegramUsername: username,
+              lastSeen: new Date(),
+              isOnline: true
+            },
+            $setOnInsert: {
+              userId: `tg_${userId}`,
+              balance: 0,
+              referralCode: `TG${userId}`,
+              joinedAt: new Date()
+            }
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true
           }
-        } else {
-          // Existing user – update last seen and online status
-          user.lastSeen = new Date();
-          user.isOnline = true;
-          if (username && !user.telegramUsername) user.telegramUsername = username;
-          await user.save();
-          console.log(`👋 Returning Telegram user: ${userName} (@${username})`);
+        );
+
+        console.log(`User processed: ${user.userName} (${user.userId})`);
+
+        // Detect if this is a new user (joined within last 10 seconds)
+        const isNew = user.joinedAt && (new Date() - user.joinedAt) < 10000;
+        if (isNew && referralCode && agentSystem && agentSystem.handleTelegramReferral) {
+          await agentSystem.handleTelegramReferral(user.userId, referralCode);
         }
 
-        // Prepare the welcome message (photo + caption + inline keyboard)
+        // Prepare welcome message data
         const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`;
 
-        // Send the photo with inline keyboard – wrapped in try/catch to log any failure
         try {
           const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
             method: 'POST',
