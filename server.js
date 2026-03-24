@@ -515,10 +515,6 @@ app.get('/sponser1.png', (req, res) => {
 app.get('/sponser2.png', (req, res) => {
   res.sendFile(path.join(__dirname, 'sponser2.png'));
 });
-// ADDED: route to serve welcome.png
-app.get('/welcome.png', (req, res) => {
-  res.sendFile(path.join(__dirname, 'welcome.png'));
-});
 
 app.get('/bots-panel.html', (req, res) => {
   const filePath = path.join(__dirname, 'bots-panel.html');
@@ -3735,8 +3731,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         }
 
         // Prepare welcome message data
-        // UPDATED: Use welcome.png instead of sponser1.png
-        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/welcome.png`;
+        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/sponser1.png`;
 
         try {
           const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
