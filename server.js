@@ -2583,7 +2583,7 @@ app.get('/telegram', async (req, res) => {
             background: #13171c;
             border: 1px solid #262d36;
             border-radius: 24px;
-            padding: 20px 16px;  /* Increased padding for larger icons */
+            padding: 20px 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -2595,8 +2595,8 @@ app.get('/telegram', async (req, res) => {
           }
 
           .game-icon {
-            width: 80px;         /* was 60px */
-            height: 80px;        /* was 60px */
+            width: 80px;
+            height: 80px;
             border-radius: 16px;
             margin-bottom: 10px;
             object-fit: cover;
@@ -2617,8 +2617,8 @@ app.get('/telegram', async (req, res) => {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: #1e293b;
             border-radius: 16px;
             border: 1px solid #3b82f6;
@@ -2633,17 +2633,17 @@ app.get('/telegram', async (req, res) => {
           .bingo-number {
             background: #0f172a;
             color: #60a5fa;
-            width: 22px;          /* was 18px */
-            height: 22px;         /* was 18px */
+            width: 22px;
+            height: 22px;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            font-size: 12px;      /* was 10px */
+            font-size: 12px;
             font-weight: 600;
           }
           .bingo-word {
-            font-size: 14px;      /* was 12px */
+            font-size: 14px;
             font-weight: 800;
             letter-spacing: 1px;
             color: #fbbf24;
@@ -2653,15 +2653,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #8b5cf6;
             margin-bottom: 10px;
           }
           .keno-word {
-            font-size: 24px;      /* was 18px */
+            font-size: 24px;
             font-weight: 800;
             color: white;
             text-shadow: 0 2px 0 #5b21b6;
@@ -2671,15 +2671,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #3b2a1a, #251a0f);
             border-radius: 16px;
             border: 1px solid #f97316;
             margin-bottom: 10px;
           }
           .crash-word {
-            font-size: 28px;      /* was 22px */
+            font-size: 28px;
             font-weight: 800;
             color: #fdba74;
             text-shadow: 0 2px 0 #b45309;
@@ -2688,15 +2688,15 @@ app.get('/telegram', async (req, res) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 80px;          /* was 60px */
-            height: 80px;         /* was 60px */
+            width: 80px;
+            height: 80px;
             background: linear-gradient(145deg, #2d2b55, #1e1a3a);
             border-radius: 16px;
             border: 1px solid #eab308;
             margin-bottom: 10px;
           }
           .slots-word {
-            font-size: 28px;      /* was 22px */
+            font-size: 28px;
             font-weight: 800;
             color: #fbbf24;
             text-shadow: 0 2px 0 #b45309;
@@ -3740,17 +3740,22 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             body: JSON.stringify({
               chat_id: chatId,
               photo: imageUrl,
-              caption: `🎉 *WELCOME TO ETHIO GAMES, ${userName}!* 🎉\n\n` +
-                       `💰 Your balance: *${user.balance.toFixed(2)} ETB*\n\n` +
-                       `🎯 *Available Games:*\n` +
-                       `• 🎱 BINGO ELITE - Real-time multiplayer bingo\n` +
-                       `• 🎰 KENO ULTRA - Fast number selection\n` +
-                       `• ✈️ CRASH GAME - Cash out before it crashes\n` +
-                       `• 🎰 SLOTS GALAXY - Spin to win!\n\n` +
-                       `💳 *Wallet:*\n` +
-                       `Deposit to Telebirr: *${telebirrNumber}* (min ${minDeposit} ETB)\n` +
-                       `Withdrawals from ${minWithdrawal} ETB\n\n` +
-                       `👇 Use the buttons below to get started!`,
+              caption: `🎉 እንኳን ወደ ETHIO GAMES በደህና መጡ! 🎉
+
+🎯 ከፍተኛ ሽልማት ያላቸውን ጨዋታዎች ይጫወቱ፡
+
+🎱 **ቢንጎ ኤሊት** – በእውነተኛ ጊዜ ከሌሎች ተጫዋቾች ጋር ይወዳደሩ።
+🎰 **ኬኖ አልትራ** – ፈጣን ቁጥሮች ይምረጡ እና ያሸንፉ።
+✈️ **ክራሽ ጨዋታ** – አውሮፕላኑ ከመውደቁ በፊት ገንዘብዎን ያውጡ።
+🎰 **ስሎትስ ጋላክሲ** – ያሽከርክሩ እና ትልቅ ሽልማት ያግኙ።
+
+💰 **የቴሌብር ቁጥር፦** \`${telebirrNumber}\`
+💸 ዝቅተኛ ተቀማጭ፦ ${minDeposit} ብር
+💵 ዝቅተኛ ማውጫ፦ ${minWithdrawal} ብር
+
+✨ **አዲስ ለተመዘገቡ** – ከመጀመሪያ ተቀማጭ ጋር ልዩ ጉርሻ ያግኙ!
+
+👇 **ጨዋታዎችን ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።**`,
               parse_mode: 'Markdown',
               reply_markup: {
                 inline_keyboard: [
@@ -3780,7 +3785,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 chat_id: chatId,
-                text: `Welcome back to ETHIO GAMES, ${userName}! Use the button below to play.`,
+                text: `🎉 እንኳን ወደ ETHIO GAMES በደህና መጡ! 🎉\n\nጨዋታዎችን ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።`,
                 reply_markup: {
                   inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
                 }
@@ -3797,7 +3802,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: chatId,
-              text: `Welcome to ETHIO GAMES, ${userName}! Use the button below to start playing.`,
+              text: `🎉 እንኳን ወደ ETHIO GAMES በደህና መጡ! 🎉\n\nጨዋታዎችን ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።`,
               reply_markup: {
                 inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
               }
