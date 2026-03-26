@@ -613,6 +613,114 @@ if (agentSystem && agentSystem.setKenoLogic) {
   console.log(`📱 Initial Telebirr number loaded: ${telebirrNumber}`);
 })();
 
+// ========== TELEGRAM BOT CONFIGURATION ==========
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
+// ✅ Admin Telegram ID (replace with your admin's numeric ID)
+const TELEGRAM_ADMIN_ID = '7634100371';
+
+// ========== BROADCAST FUNCTIONS ==========
+/**
+ * Send a broadcast text message to all users who have a Telegram ID.
+ * @param {string} message - The text to broadcast.
+ * @returns {Promise<{success: number, failed: number}>}
+ */
+async function broadcastTextToAllUsers(message) {
+  if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') {
+    console.error('❌ Telegram token not set – cannot broadcast.');
+    return { success: 0, failed: 0 };
+  }
+
+  const users = await User.find({ telegramId: { $exists: true, $ne: null } });
+  console.log(`📢 Broadcasting text to ${users.length} users...`);
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const user of users) {
+    const chatId = user.telegramId;
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+        }),
+      });
+
+      if (response.ok) {
+        successCount++;
+      } else {
+        failCount++;
+        const errorData = await response.text();
+        console.error(`Failed to send to ${user.userName} (${chatId}): ${response.status} ${errorData}`);
+      }
+    } catch (err) {
+      failCount++;
+      console.error(`Error sending to ${user.userName}:`, err.message);
+    }
+
+    // Small delay to avoid hitting rate limits
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  console.log(`✅ Broadcast finished: ${successCount} delivered, ${failCount} failed.`);
+  return { success: successCount, failed: failCount };
+}
+
+/**
+ * Send a broadcast photo to all users who have a Telegram ID.
+ * @param {string} fileId - Telegram file_id of the photo (largest size).
+ * @param {string} caption - Optional caption (Markdown allowed).
+ * @returns {Promise<{success: number, failed: number}>}
+ */
+async function broadcastPhotoToAllUsers(fileId, caption = '') {
+  if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') {
+    console.error('❌ Telegram token not set – cannot broadcast photo.');
+    return { success: 0, failed: 0 };
+  }
+
+  const users = await User.find({ telegramId: { $exists: true, $ne: null } });
+  console.log(`📢 Broadcasting photo to ${users.length} users...`);
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const user of users) {
+    const chatId = user.telegramId;
+    try {
+      const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: fileId,
+          caption: caption,
+          parse_mode: 'Markdown',
+        }),
+      });
+
+      if (response.ok) {
+        successCount++;
+      } else {
+        failCount++;
+        const errorData = await response.text();
+        console.error(`Failed to send photo to ${user.userName} (${chatId}): ${response.status} ${errorData}`);
+      }
+    } catch (err) {
+      failCount++;
+      console.error(`Error sending photo to ${user.userName}:`, err.message);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  console.log(`✅ Photo broadcast finished: ${successCount} delivered, ${failCount} failed.`);
+  return { success: successCount, failed: failCount };
+}
+
 // ========== SOCKET.IO EVENT HANDLERS ==========
 io.on('connection', (socket) => {
   console.log(`🔌 New connection: ${socket.id}`);
@@ -849,7 +957,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== AGENT SYSTEM SOCKET EVENTS (full list from previous version) ==========
+  // ========== AGENT SYSTEM SOCKET EVENTS ==========
   socket.on('agent:login', (data) => {
     if (agentSystem && agentSystem.handleAgentLogin) {
       agentSystem.handleAgentLogin(socket, data);
@@ -3577,9 +3685,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ========== TELEGRAM BOT INTEGRATION ==========
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || 'YOUR_BOT_TOKEN_HERE';
-
+// ========== TELEGRAM WEBHOOK (with broadcast support for photos) ==========
 app.post('/telegram-webhook', express.json(), async (req, res) => {
   try {
     // Handle callback queries (button presses)
@@ -3590,14 +3696,12 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const userId = callback.from.id.toString();
       const userName = callback.from.first_name || 'Player';
 
-      // Answer the callback immediately to avoid timeout
       await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ callback_query_id: callback.id })
       });
 
-      // Process different button actions
       if (data === 'balance') {
         const user = await User.findOne({ telegramId: userId });
         const balance = user ? user.balance : 0;
@@ -3682,8 +3786,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
         });
       }
       else if (data === 'join_channel') {
-        // Replace with your actual channel link
-        const channelLink = 'https://t.me/ethio_elite_games'; // Example – change to your channel
+        const channelLink = 'https://t.me/ethio_elite_games';
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3705,11 +3808,115 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
     const { message } = req.body;
     if (message) {
       const chatId = message.chat.id;
-      const text = message.text || '';
       const userId = message.from.id.toString();
       const userName = message.from.first_name || 'Player';
-      const username = message.from.username || '';
+      const text = message.text || '';
+      const photo = message.photo; // array of photo sizes (if any)
 
+      // ------------------------------------------------------------
+      // ADMIN BROADCAST HANDLING (text & photos)
+      // ------------------------------------------------------------
+      if (userId === TELEGRAM_ADMIN_ID) {
+        // Text broadcast: /broadcast <message>
+        if (text && text.startsWith('/broadcast')) {
+          let broadcastMsg = text.replace(/^\/broadcast(@\w+)?\s*/, '').trim();
+          if (!broadcastMsg) {
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: '📢 *Usage:* `/broadcast <your message>`\n\n*Or send a photo with the caption* `/broadcast`\n\nExample:\n`/broadcast Welcome to our new game!`',
+                parse_mode: 'Markdown',
+              }),
+            });
+            return res.sendStatus(200);
+          }
+
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `📢 *Broadcasting text...*\n\nMessage: ${broadcastMsg}`,
+              parse_mode: 'Markdown',
+            }),
+          });
+
+          broadcastTextToAllUsers(broadcastMsg).then(({ success, failed }) => {
+            fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `✅ *Text broadcast complete*\n\nDelivered: ${success}\nFailed: ${failed}`,
+                parse_mode: 'Markdown',
+              }),
+            }).catch(console.error);
+          }).catch(async (err) => {
+            console.error('Broadcast error:', err);
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `❌ Broadcast failed: ${err.message}`,
+                parse_mode: 'Markdown',
+              }),
+            });
+          });
+
+          return res.sendStatus(200);
+        }
+
+        // Photo broadcast: if photo exists and caption contains /broadcast
+        if (photo && photo.length > 0) {
+          const largestPhoto = photo[photo.length - 1];
+          const fileId = largestPhoto.file_id;
+          const caption = message.caption || '';
+
+          if (caption && caption.includes('/broadcast')) {
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `📢 *Broadcasting photo...*\n\nCaption: ${caption.replace('/broadcast', '').trim() || '(no caption)'}`,
+                parse_mode: 'Markdown',
+              }),
+            });
+
+            broadcastPhotoToAllUsers(fileId, caption.replace('/broadcast', '').trim()).then(({ success, failed }) => {
+              fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: `✅ *Photo broadcast complete*\n\nDelivered: ${success}\nFailed: ${failed}`,
+                  parse_mode: 'Markdown',
+                }),
+              }).catch(console.error);
+            }).catch(async (err) => {
+              console.error('Photo broadcast error:', err);
+              await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: `❌ Photo broadcast failed: ${err.message}`,
+                  parse_mode: 'Markdown',
+                }),
+              });
+            });
+
+            return res.sendStatus(200);
+          }
+        }
+      }
+
+      // ------------------------------------------------------------
+      // Regular commands (for all users)
+      // ------------------------------------------------------------
       const telebirrNumber = await getTelebirrNumber();
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
       const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 50) : 50;
@@ -3718,7 +3925,6 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       const referralCode = referralMatch ? referralMatch[1] : null;
 
       if (text.startsWith('/start') || text === '/play') {
-        // ✅ FIXED: Use findOneAndUpdate with upsert to avoid duplicate key errors
         const user = await User.findOneAndUpdate(
           {
             $or: [
@@ -3730,7 +3936,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             $set: {
               userName: userName,
               telegramId: userId,
-              telegramUsername: username,
+              telegramUsername: message.from.username || '',
               lastSeen: new Date(),
               isOnline: true
             },
@@ -3750,18 +3956,15 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
 
         console.log(`User processed: ${user.userName} (${user.userId})`);
 
-        // Detect if this is a new user (joined within last 10 seconds)
         const isNew = user.joinedAt && (new Date() - user.joinedAt) < 10000;
         if (isNew && referralCode && agentSystem && agentSystem.handleTelegramReferral) {
           await agentSystem.handleTelegramReferral(user.userId, referralCode);
         }
 
-        // Prepare welcome message data
-        // Updated: use welcome.jpg instead of sponser1.png
         const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/welcome.jpg`;
 
         try {
-          const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
+          await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3802,28 +4005,9 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               }
             })
           });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`❌ Telegram sendPhoto failed for user ${userId}: ${response.status} ${errorText}`);
-            // Fallback: send a text message
-            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                text: `🎉 እንኳን ወደ ETHIO GAMES በደህና መጡ! 🎉\n\nጨዋታዎችን ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።`,
-                reply_markup: {
-                  inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
-                }
-              })
-            });
-          } else {
-            console.log(`✅ Welcome photo sent to ${userName} (${userId})`);
-          }
+          console.log(`✅ Welcome photo sent to ${userName} (${userId})`);
         } catch (photoErr) {
           console.error(`❌ Error sending photo to ${userId}:`, photoErr);
-          // Fallback message
           await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4326,69 +4510,17 @@ const httpServer = server.listen(PORT, HOST, async () => {
 
 // ========== TELEGRAM RESTART NOTIFICATION ==========
 async function notifyAllUsersAboutRestart() {
-  try {
-    const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-    if (!TELEGRAM_TOKEN || TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') {
-      console.log('⚠️ Telegram token not set – skipping restart notifications.');
-      return;
-    }
-
-    const users = await User.find({ telegramId: { $exists: true, $ne: null } });
-    console.log(`📢 Sending restart notification to ${users.length} Telegram users...`);
-
-    const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
-                    `✨ አስደሳች ጨዋታዎች፡\n` +
-                    `🎱 ቢንጎ\n` +
-                    `🎰 ኬኖ\n` +
-                    `✈️ ክራሽ\n` +
-                    `🎰 ስሎትስ\n\n` +
-                    `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
-                    `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of users) {
-      const chatId = user.telegramId;
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: message,
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [[
-                { text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }
-              ]]
-            }
-          })
-        });
-
-        if (response.ok) {
-          successCount++;
-        } else {
-          failCount++;
-          const errorData = await response.text();
-          console.error(`Failed to send to ${user.userName} (${chatId}): ${response.status} ${errorData}`);
-        }
-      } catch (err) {
-        failCount++;
-        console.error(`Error sending to ${user.userName}:`, err.message);
-      }
-
-      // Small delay to avoid hitting rate limits
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    console.log(`✅ Restart notifications sent: ${successCount} delivered, ${failCount} failed.`);
-  } catch (err) {
-    console.error('❌ Error during restart notification broadcast:', err);
-  }
+  const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
+                  `✨ አስደሳች ጨዋታዎች፡\n` +
+                  `🎱 ቢንጎ\n` +
+                  `🎰 ኬኖ\n` +
+                  `✈️ ክራሽ\n` +
+                  `🎰 ስሎትስ\n\n` +
+                  `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
+                  `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
+  broadcastTextToAllUsers(message).catch(console.error);
 }
 
-// Call this after server is fully up
 setTimeout(() => {
   notifyAllUsersAboutRestart().catch(console.error);
 }, 3000);
