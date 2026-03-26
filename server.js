@@ -564,7 +564,8 @@ const models = {
 };
 
 if (gameLogic && gameLogic.CONFIG) {
-  gameLogic.CONFIG.MIN_DEPOSIT = gameLogic.CONFIG.MIN_DEPOSIT || 10;
+  // Set minimum deposit to 50 ETB
+  gameLogic.CONFIG.MIN_DEPOSIT = gameLogic.CONFIG.MIN_DEPOSIT || 50;
 }
 
 if (gameLogic && gameLogic.initialize) {
@@ -714,6 +715,13 @@ io.on('connection', (socket) => {
   socket.on('wallet:depositRequest', async (data) => {
     try {
       console.log(`💰 Deposit request from ${data.userName} (${data.userId}): ${data.amount} ETB, Receipt: ${data.receiptNumber}`);
+      
+      // Minimum deposit validation
+      const MIN_DEPOSIT = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 50;
+      if (parseFloat(data.amount) < MIN_DEPOSIT) {
+        socket.emit('wallet:error', `Minimum deposit amount is ${MIN_DEPOSIT} ETB`);
+        return;
+      }
       
       const existingDeposit = await models.Transaction.findOne({
         type: 'DEPOSIT_REQUEST',
@@ -1166,6 +1174,7 @@ io.on('connection', (socket) => {
   
   socket.on('admin:updateTelebirrNumber', async (newNumber) => {
     if (socket.admin) {
+      console.log(`📞 Received telebirr update request: ${newNumber} (type: ${typeof newNumber})`);
       try {
         const result = await updateTelebirrNumber(newNumber);
         const updatedNumber = result.value;
@@ -1909,7 +1918,7 @@ app.get('/', async (req, res) => {
               Referral System: ✅ ACTIVE (${usersWithAgents} users with agents)<br>
               <strong>Telebirr Number: ${telebirrNumber} (PERSISTED IN DATABASE)</strong><br>
               Min Withdrawal: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50} ETB<br>
-              Min Deposit: ${gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10} ETB<br>
+              Min Deposit: ${gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 50} ETB<br>
               <strong>🎯 AGENT SYSTEM FEATURES:</strong><br>
               • 40% commission from Bingo wins<br>
               • 10% commission from Keno wins<br>
@@ -2399,7 +2408,7 @@ app.get('/telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-    const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+    const minDeposit = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_DEPOSIT : 50;
 
     let bingoIconBase64 = '', kenoIconBase64 = '', crashIconBase64 = '', slotsIconBase64 = '';
     try {
@@ -3111,6 +3120,19 @@ app.get('/telegram', async (req, res) => {
             document.getElementById('walletBalance').innerHTML = bal.toFixed(2) + ' <small>ETB</small>';
           });
 
+          // Listen for Telebirr number updates
+          socket.on('telebirrNumberUpdate', (data) => {
+            const telebirrNumberDiv = document.querySelector('.telebirr-number');
+            if (telebirrNumberDiv) {
+              telebirrNumberDiv.textContent = data.telebirrNumber;
+            }
+            // Also update in deposit modal if it's open
+            const depositModalNumber = document.querySelector('#depositModal .telebirr-number');
+            if (depositModalNumber) {
+              depositModalNumber.textContent = data.telebirrNumber;
+            }
+          });
+
           function launchGame(game) {
             tg?.HapticFeedback?.impactOccurred('light');
             const userId = encodeURIComponent(currentUserId);
@@ -3608,7 +3630,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
       }
       else if (data === 'deposit') {
         const telebirrNumber = await getTelebirrNumber();
-        const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+        const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 50) : 50;
         await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -3690,7 +3712,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
 
       const telebirrNumber = await getTelebirrNumber();
       const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-      const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+      const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 50) : 50;
 
       const referralMatch = text.match(/\/start ref_(\w+)/);
       const referralCode = referralMatch ? referralMatch[1] : null;
@@ -3934,7 +3956,7 @@ app.get('/setup-telegram', async (req, res) => {
   try {
     const telebirrNumber = await getTelebirrNumber();
     const minWithdrawal = gameLogic.CONFIG ? gameLogic.CONFIG.MIN_WITHDRAWAL : 50;
-    const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 10) : 10;
+    const minDeposit = gameLogic.CONFIG ? (gameLogic.CONFIG.MIN_DEPOSIT || 50) : 50;
     const agentStats = agentSystem && agentSystem.getAgentStatistics ? await agentSystem.getAgentStatistics() : { totalAgents: 0, activeAgents: 0, totalCommissions: 0 };
     
     const webhookResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
