@@ -7,6 +7,9 @@
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
+// ENHANCEMENT: Bots now start with 1,000,000 ETB to never run out
+// ENHANCEMENT: Bots always join when possible (no random skip)
+// ENHANCEMENT: Bot handles 'insufficientFunds' event and retries
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -89,7 +92,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + RANDOM PARTICIPATION) ==========
+// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + UNSTOPPABLE) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -101,7 +104,7 @@ class Bot {
     this.grid = [];
     this.markedNumbers = new Set(['FREE']);
     this.calledNumbers = new Set();
-    this.balance = 5000;                   // starting balance
+    this.balance = 1000000;               // ← HUGE starting balance (unstoppable)
     this.isInGame = false;
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
@@ -134,6 +137,10 @@ class Bot {
       case 'balanceUpdate':
         this.balance = data;
         break;
+      case 'insufficientFunds':          // ← NEW: handle insufficient funds
+        console.log(`⚠️ Bot ${this.userName} insufficient funds, retrying later`);
+        this._scheduleRetry(10000);
+        break;
       // 👇 Handle join failures
       case 'boxTaken':
       case 'roomLocked':
@@ -141,14 +148,6 @@ class Bot {
         console.log(`🤖 Bot ${this.userName} received ${event}: ${data?.message || ''}`);
         if (!this.isInGame) {
           this._scheduleRetry(3000 + Math.random() * 5000);
-        }
-        break;
-      // NEW: handle insufficient funds
-      case 'insufficientFunds':
-        console.log(`🤖 Bot ${this.userName} insufficient funds (balance=${this.balance})`);
-        if (!this.isInGame) {
-          // wait a bit before retrying (maybe the balance will be topped up)
-          this._scheduleRetry(10000 + Math.random() * 10000);
         }
         break;
     }
@@ -295,7 +294,7 @@ class Bot {
     }
   }
 
-  // ========== FIXED BOX SELECTION + RANDOM PARTICIPATION ==========
+  // ========== FIXED BOX SELECTION + ALWAYS JOIN (UNSTOPPABLE) ==========
   async _decideNextAction() {
     // If bot is deactivated, do nothing and schedule a long re-check
     if (!this.active) {
@@ -333,32 +332,8 @@ class Bot {
         return;
       }
 
-      // ----- RANDOM PARTICIPATION LOGIC (improved) -----
-      const currentPlayers = roomStatus.playerCount;
-      // target about 15-20 bots in the room, but never more than 30
-      let joinProbability = 1.0;
-      if (currentPlayers >= 10) {
-        // decrease probability as the room gets fuller
-        joinProbability = Math.max(0, (30 - currentPlayers) / 20);
-      }
-      if (Math.random() < joinProbability) {
-        console.log(`🤖 Bot ${this.userName} joining (players=${currentPlayers}, prob=${joinProbability.toFixed(2)})`);
-      } else {
-        console.log(`🤖 Bot ${this.userName} skipping this game (players=${currentPlayers}, prob=${joinProbability.toFixed(2)})`);
-        // use a short retry (5-10 seconds) to try again soon
-        this._scheduleRetry(5000 + Math.random() * 5000);
-        return;
-      }
-      // --------------------------------------
-
-      // Fetch the actual room to get the taken boxes array
-      try {
-        room = await this.getRoomWithCache(stake);
-      } catch (e) {
-        console.error(`Bot ${this.userName} error fetching room:`, e);
-        this._scheduleRetry(5000);
-        return;
-      }
+      // ----- ALWAYS JOIN (NO RANDOM SKIP) -----
+      console.log(`🤖 Bot ${this.userName} joining (always join mode)`);
     } else {
       // No cache entry – fetch room directly
       try {
@@ -550,7 +525,7 @@ async function initialize(socketIo, dbModels) {
 
 // ========== INITIALIZE BOTS ==========
 async function initializeBots() {
-  console.log('🤖 Initializing 20 Ethiopian bots...');
+  console.log('🤖 Initializing 20 Ethiopian bots (unstoppable mode)...');
   for (let i = 0; i < BOT_COUNT; i++) {
     // First 10 bots get full names, next 10 get only first names
     let name;
@@ -565,7 +540,7 @@ async function initializeBots() {
       checkBingo,
       processBingoClaim,
       getRoomStatus,
-      getRoomWithCache,    // 👈 Added for smarter fallback
+      getRoomWithCache,
     });
 
     // Ensure bot user exists in database (with starting balance)
@@ -582,7 +557,7 @@ async function initializeBots() {
         });
         await user.save();
       } else {
-        bot.balance = Number(user.balance) || 5000;   // ensure number
+        bot.balance = Number(user.balance) || 1000000;   // ensure huge balance
         bot.active = user.botActive !== false;
       }
 
@@ -613,7 +588,7 @@ async function initializeBots() {
       console.error(`❌ Failed to initialize bot ${i}:`, err);
     }
   }
-  console.log(`🤖 ${bots.length} bots initialized.`);
+  console.log(`🤖 ${bots.length} bots initialized with 1,000,000 ETB each.`);
 }
 
 // ========== TELEBIRR NUMBER FUNCTIONS ==========
