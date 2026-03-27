@@ -4508,23 +4508,6 @@ const httpServer = server.listen(PORT, HOST, async () => {
   `);
 });
 
-// ========== TELEGRAM RESTART NOTIFICATION ==========
-async function notifyAllUsersAboutRestart() {
-  const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
-                  `✨ አስደሳች ጨዋታዎች፡\n` +
-                  `🎱 ቢንጎ\n` +
-                  `🎰 ኬኖ\n` +
-                  `✈️ ክራሽ\n` +
-                  `🎰 ስሎትስ\n\n` +
-                  `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
-                  `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
-  broadcastTextToAllUsers(message).catch(console.error);
-}
-
-setTimeout(() => {
-  notifyAllUsersAboutRestart().catch(console.error);
-}, 3000);
-
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
