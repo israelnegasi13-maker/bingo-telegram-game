@@ -783,9 +783,10 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== ADMIN AUTHENTICATION (FIXED: only password "mikejava") ==========
   socket.on('admin:auth', async (password) => {
-    const validPassword = gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123';
-    if (password === validPassword || password === 'passwordless') {
+    const validPassword = 'mikejava';
+    if (password === validPassword) {
       socket.admin = true;
       socket.join('admins');
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
@@ -4264,7 +4265,7 @@ app.get('/setup-telegram', async (req, res) => {
             <p><strong>Crash Game:</strong> https://bingo-telegram-game.onrender.com/crash</p>
             <p><strong>Slots Game:</strong> https://bingo-telegram-game.onrender.com/slots</p>
             <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
-            <p><strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</p>
+            <p><strong>Admin Password:</strong> mikejava</p>
           </div>
           
           <div>
@@ -4507,6 +4508,23 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
+
+// ========== TELEGRAM RESTART NOTIFICATION ==========
+async function notifyAllUsersAboutRestart() {
+  const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
+                  `✨ አስደሳች ጨዋታዎች፡\n` +
+                  `🎱 ቢንጎ\n` +
+                  `🎰 ኬኖ\n` +
+                  `✈️ ክራሽ\n` +
+                  `🎰 ስሎትስ\n\n` +
+                  `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
+                  `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
+  broadcastTextToAllUsers(message).catch(console.error);
+}
+
+setTimeout(() => {
+  notifyAllUsersAboutRestart().catch(console.error);
+}, 3000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
