@@ -7,9 +7,9 @@
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
-// ENHANCEMENT: Bots now start with 1,000,000 ETB to never run out
-// ENHANCEMENT: Bots always join when possible (no random skip)
-// ENHANCEMENT: Bot handles 'insufficientFunds' event and retries
+// NEW: Bot watchdog – prevents bots from getting stuck after several rounds
+// FIX: Enhanced syncState to reset isInGame flag when stale
+// FIX: Improved error handling in bot event handlers
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -92,7 +92,7 @@ function getEndpoint(socketId) {
   return botSockets.get(socketId);
 }
 
-// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + UNSTOPPABLE) ==========
+// ========== ENHANCED BOT CLASS (FIXED STUCK ROOMS + RANDOM PARTICIPATION) ==========
 class Bot {
   constructor(id, name, serverContext) {
     this.userId = `bot_${id}`;
@@ -104,13 +104,14 @@ class Bot {
     this.grid = [];
     this.markedNumbers = new Set(['FREE']);
     this.calledNumbers = new Set();
-    this.balance = 1000000;               // ← HUGE starting balance (unstoppable)
+    this.balance = 5000;                   // starting balance
     this.isInGame = false;
     this.claimTimeout = null;
     this.waitTimeout = null;                // timeout for waiting to start
-    this.retryTimer = null;                  // timer for next action attempt
+    this.retryTimer = null;                // timer for next action attempt
+    this.lastActionTime = Date.now();      // for watchdog
     this.getRoomWithCache = serverContext.getRoomWithCache; // for smarter fallback
-    this.active = true;                      // will be updated from DB
+    this.active = true;                    // will be updated from DB
   }
 
   _createSocket() {
@@ -119,7 +120,7 @@ class Bot {
       id: bot.userId,
       emit: (event, data) => bot._handleEvent(event, data),
       on: () => {},                        // not used for bots
-      disconnect: () => {},                 // stub
+      disconnect: () => {},                // stub
     };
   }
 
@@ -137,10 +138,6 @@ class Bot {
       case 'balanceUpdate':
         this.balance = data;
         break;
-      case 'insufficientFunds':          // ← NEW: handle insufficient funds
-        console.log(`⚠️ Bot ${this.userName} insufficient funds, retrying later`);
-        this._scheduleRetry(10000);
-        break;
       // 👇 Handle join failures
       case 'boxTaken':
       case 'roomLocked':
@@ -154,16 +151,22 @@ class Bot {
   }
 
   _onBallDrawn({ room, num, letter }) {
-    if (!this.active) return; // ignore if deactivated
+    if (!this.active) return;
     if (room !== this.currentRoom) return;
-    this.calledNumbers.add(num);
-    if (this.grid.includes(num) || (num === 'FREE' && this.grid.includes('FREE'))) {
-      this.markedNumbers.add(num);
-    }
-    if (this._checkBingo()) {
-      // 🚀 Bots react extremely fast (50–200 ms) – effectively unbeatable
-      const delay = 50 + Math.random() * 150;
-      this.claimTimeout = setTimeout(() => this._claimBingo(), delay);
+    try {
+      this.calledNumbers.add(num);
+      if (this.grid.includes(num) || (num === 'FREE' && this.grid.includes('FREE'))) {
+        this.markedNumbers.add(num);
+      }
+      if (this._checkBingo()) {
+        // 🚀 Bots react extremely fast (50–200 ms) – effectively unbeatable
+        const delay = 50 + Math.random() * 150;
+        this.claimTimeout = setTimeout(() => this._claimBingo(), delay);
+      }
+      this.lastActionTime = Date.now();
+    } catch (err) {
+      console.error(`❌ Bot ${this.userName} error in _onBallDrawn:`, err);
+      this._scheduleRetry(5000);
     }
   }
 
@@ -172,6 +175,7 @@ class Bot {
     if (room !== this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} game started in room ${room}`);
     this.isInGame = true;
+    this.lastActionTime = Date.now();
     // Clear the wait timeout because game has started
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
@@ -195,6 +199,7 @@ class Bot {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
     }
+    this.lastActionTime = Date.now();
     // Schedule next action after a short pause (2-5 seconds for quick re-entry)
     this._scheduleRetry(2000 + Math.random() * 3000);
   }
@@ -232,7 +237,14 @@ class Bot {
       // Update active flag from DB
       this.active = user.botActive !== false;
 
-      // If DB says we're in a room, validate it
+      // ✅ FIX: if DB says no room but we think we are in a game, reset in‑game flag
+      if (!dbRoom && this.isInGame) {
+        console.log(`🧹 Bot ${this.userName} had stale isInGame=true, resetting.`);
+        this.isInGame = false;
+        if (this.claimTimeout) clearTimeout(this.claimTimeout);
+        if (this.waitTimeout) clearTimeout(this.waitTimeout);
+      }
+
       if (dbRoom) {
         const room = await this.getRoomWithCache(dbRoom);
         // 👇 FIX: Treat 'ended' rooms as stale even if player is still listed
@@ -262,6 +274,7 @@ class Bot {
           );
           this.currentRoom = null;
           this.box = null;
+          this.isInGame = false;   // ✅ FIX: also reset in‑game flag
 
           // Clean up the room's takenBoxes if the bot's box is still there
           if (room && dbBox && room.takenBoxes.includes(dbBox)) {
@@ -288,13 +301,15 @@ class Bot {
         // DB says no room – ensure internal state matches
         this.currentRoom = null;
         this.box = null;
+        this.isInGame = false;
       }
+      this.lastActionTime = Date.now();
     } catch (error) {
       console.error(`❌ Error syncing bot ${this.userName} state:`, error);
     }
   }
 
-  // ========== FIXED BOX SELECTION + ALWAYS JOIN (UNSTOPPABLE) ==========
+  // ========== FIXED BOX SELECTION + RANDOM PARTICIPATION ==========
   async _decideNextAction() {
     // If bot is deactivated, do nothing and schedule a long re-check
     if (!this.active) {
@@ -304,6 +319,12 @@ class Bot {
     }
 
     await this.syncState(); // 👈 Ensure fresh state
+
+    // ✅ FIX: health check – if isInGame true but no currentRoom, force reset
+    if (this.isInGame && !this.currentRoom) {
+      console.log(`⚠️ Bot ${this.userName} is marked in‑game but has no room. Resetting flag.`);
+      this.isInGame = false;
+    }
 
     if (this.currentRoom) {
       console.log(`🤖 Bot ${this.userName} already in room ${this.currentRoom}, skipping action`);
@@ -332,8 +353,32 @@ class Bot {
         return;
       }
 
-      // ----- ALWAYS JOIN (NO RANDOM SKIP) -----
-      console.log(`🤖 Bot ${this.userName} joining (always join mode)`);
+      // ----- RANDOM PARTICIPATION LOGIC -----
+      // Ensure at least 10 bots join, then randomly add more
+      const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
+      if (currentPlayers >= 10) {
+        // 50% chance to join if we already have 10+ players
+        if (Math.random() < 0.5) {
+          console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
+        } else {
+          console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
+          // Schedule a long retry to skip this game cycle
+          this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
+          return;
+        }
+      } else {
+        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
+      }
+      // --------------------------------------
+
+      // Fetch the actual room to get the taken boxes array
+      try {
+        room = await this.getRoomWithCache(stake);
+      } catch (e) {
+        console.error(`Bot ${this.userName} error fetching room:`, e);
+        this._scheduleRetry(5000);
+        return;
+      }
     } else {
       // No cache entry – fetch room directly
       try {
@@ -370,6 +415,7 @@ class Bot {
     console.log(`🤖 Bot ${this.userName} attempting to take box ${box} in room ${stake}`);
     const fakeData = { room: stake, box, userName: this.userName };
     socketHandlers.joinRoom.call(this.socket, fakeData, null);
+    this.lastActionTime = Date.now();
   }
 
   // Called after successful join
@@ -382,6 +428,7 @@ class Bot {
     }
     this.currentRoom = room;
     this.box = box;
+    this.lastActionTime = Date.now();
     // Set a timeout to leave if game doesn't start within CONFIG.BOT_WAIT_TIMEOUT
     this.waitTimeout = setTimeout(() => {
       console.log(`⏰ Bot ${this.userName} leaving room ${room} – game didn't start in time`);
@@ -397,6 +444,7 @@ class Bot {
     // Immediately clear internal state to prevent being stuck
     this.currentRoom = null;
     this.box = null;
+    this.isInGame = false;
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
@@ -405,6 +453,7 @@ class Bot {
       clearTimeout(this.claimTimeout);
       this.claimTimeout = null;
     }
+    this.lastActionTime = Date.now();
     this._scheduleRetry(3000 + Math.random() * 5000);
   }
 
@@ -426,6 +475,27 @@ class Bot {
         this._scheduleRetry(5000); // reschedule on error
       }
     }, retryDelay);
+  }
+}
+
+// ========== BOT WATCHDOG ==========
+async function botWatchdog() {
+  for (const bot of bots) {
+    if (!bot.active) continue;
+    const now = Date.now();
+    // If bot hasn't taken any action for 2 minutes and is not in a game, force a retry
+    if (!bot.currentRoom && !bot.isInGame && bot.retryTimer === null) {
+      if (now - bot.lastActionTime > 120000) {
+        console.log(`🐕 Bot watchdog: ${bot.userName} seems stuck, forcing retry.`);
+        bot._scheduleRetry(1000);
+      }
+    }
+    // If bot thinks it's in a game but has no active room (stale), reset
+    if (bot.isInGame && !bot.currentRoom) {
+      console.log(`🐕 Bot watchdog: ${bot.userName} has isInGame=true but no room, resetting.`);
+      bot.isInGame = false;
+      bot._scheduleRetry(3000);
+    }
   }
 }
 
@@ -525,7 +595,7 @@ async function initialize(socketIo, dbModels) {
 
 // ========== INITIALIZE BOTS ==========
 async function initializeBots() {
-  console.log('🤖 Initializing 20 Ethiopian bots (unstoppable mode)...');
+  console.log('🤖 Initializing 20 Ethiopian bots...');
   for (let i = 0; i < BOT_COUNT; i++) {
     // First 10 bots get full names, next 10 get only first names
     let name;
@@ -540,7 +610,7 @@ async function initializeBots() {
       checkBingo,
       processBingoClaim,
       getRoomStatus,
-      getRoomWithCache,
+      getRoomWithCache,    // 👈 Added for smarter fallback
     });
 
     // Ensure bot user exists in database (with starting balance)
@@ -557,7 +627,7 @@ async function initializeBots() {
         });
         await user.save();
       } else {
-        bot.balance = Number(user.balance) || 1000000;   // ensure huge balance
+        bot.balance = Number(user.balance) || 5000;   // ensure number
         bot.active = user.botActive !== false;
       }
 
@@ -588,7 +658,7 @@ async function initializeBots() {
       console.error(`❌ Failed to initialize bot ${i}:`, err);
     }
   }
-  console.log(`🤖 ${bots.length} bots initialized with 1,000,000 ETB each.`);
+  console.log(`🤖 ${bots.length} bots initialized.`);
 }
 
 // ========== TELEBIRR NUMBER FUNCTIONS ==========
@@ -4180,6 +4250,9 @@ function startPeriodicTasks() {
     playerRateLimit.clear();
     console.log('🧹 Cleared rate limit cache');
   }, 60000);
+
+  // Bot watchdog (every 30 seconds) – prevents bots from getting stuck
+  setInterval(botWatchdog, 30000);
 
   // Health check
   setInterval(async () => {
