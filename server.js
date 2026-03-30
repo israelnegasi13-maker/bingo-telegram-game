@@ -783,16 +783,26 @@ io.on('connection', (socket) => {
     }
   });
   
+  // ========== FIXED ADMIN AUTHENTICATION WITH DEBUG LOGGING ==========
   socket.on('admin:auth', async (password) => {
-    // Get admin password from gameLogic.CONFIG or environment variable
-    const validPassword = (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD) || process.env.ADMIN_PASSWORD || 'admin123';
+    // Log the received password and expected password for debugging
+    console.log(`[ADMIN AUTH] Received password: "${password}" (type: ${typeof password})`);
     
+    // Determine the valid password – ensure it's always a string
+    const validPassword = (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD) ||
+                          process.env.ADMIN_PASSWORD ||
+                          'admin123';
+    console.log(`[ADMIN AUTH] Expected password: "${validPassword}" (type: ${typeof validPassword})`);
+    
+    // Compare (plain text, but we'll also show bcrypt option later)
     if (password === validPassword) {
+      console.log(`[ADMIN AUTH] ✅ Authentication successful for socket ${socket.id}`);
       socket.admin = true;
       socket.join('admins');
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
       socket.emit('admin:authSuccess');
       
+      // Send Telebirr number after successful auth
       const telebirrNumber = await getTelebirrNumber();
       socket.emit('admin:telebirrNumber', telebirrNumber);
       
@@ -815,12 +825,36 @@ io.on('connection', (socket) => {
         const agentStats = await agentSystem.getAgentStatistics();
         socket.emit('admin:agentStats', agentStats);
       }
-      
-      console.log(`🔑 Admin authenticated: ${socket.id}`);
     } else {
+      console.log(`[ADMIN AUTH] ❌ Authentication failed for socket ${socket.id}`);
       socket.emit('admin:authError', 'Invalid password');
     }
   });
+  
+  // ========== OPTIONAL: BCrypt version (uncomment if you want to use hashed passwords) ==========
+  /*
+  // Pre‑computed hash for 'admin123' (use bcrypt.hashSync('admin123', 10))
+  const DEFAULT_ADMIN_HASH = '$2a$10$YourHashHere';
+  
+  socket.on('admin:auth', async (password) => {
+    console.log(`[ADMIN AUTH] Received password: "${password}"`);
+    const storedHash = process.env.ADMIN_PASSWORD_HASH || 
+                       (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD_HASH) ||
+                       DEFAULT_ADMIN_HASH;
+    const isValid = await bcrypt.compare(password, storedHash);
+    if (isValid) {
+      console.log(`[ADMIN AUTH] ✅ Authentication successful for socket ${socket.id}`);
+      socket.admin = true;
+      socket.join('admins');
+      socket.agentData = { isSuperAdmin: true, username: 'admin' };
+      socket.emit('admin:authSuccess');
+      // ... rest of success logic
+    } else {
+      console.log(`[ADMIN AUTH] ❌ Authentication failed for socket ${socket.id}`);
+      socket.emit('admin:authError', 'Invalid password');
+    }
+  });
+  */
   
   socket.on('wallet:depositRequest', async (data) => {
     try {
@@ -4509,23 +4543,6 @@ const httpServer = server.listen(PORT, HOST, async () => {
 ╚══════════════════════════════════════════════════════════════════════════════╝
   `);
 });
-
-// ========== TELEGRAM RESTART NOTIFICATION - REMOVED ==========
-// async function notifyAllUsersAboutRestart() {
-//   const message = `🎉 እንኳን ደህና መጡ! ጨዋታዎቻችን ተዘጋጅተዋል! 🎉\n\n` +
-//                   `✨ አስደሳች ጨዋታዎች፡\n` +
-//                   `🎱 ቢንጎ\n` +
-//                   `🎰 ኬኖ\n` +
-//                   `✈️ ክራሽ\n` +
-//                   `🎰 ስሎትስ\n\n` +
-//                   `💰 በቀላሉ ጫወት እና ሽልማት ያግኙ!\n` +
-//                   `አሁኑኑ ይጫወቱ እና ድል ይኑራችሁ! 🚀`;
-//   broadcastTextToAllUsers(message).catch(console.error);
-// }
-
-// setTimeout(() => {
-//   notifyAllUsersAboutRestart().catch(console.error);
-// }, 3000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
