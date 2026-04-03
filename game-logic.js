@@ -7,9 +7,12 @@
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
-// NEW: Bot watchdog – prevents bots from getting stuck after several rounds
+// NEW: Bot watchdog – prevents bots from getting stuck after several rounds (ENHANCED)
 // FIX: Enhanced syncState to reset isInGame flag when stale
 // FIX: Improved error handling in bot event handlers
+// FIX: Bots now force-refresh room status before joining to avoid stale "locked"
+// FIX: Reduced retry delays for faster recovery after failures
+// FIX: Watchdog also rescues bots stuck in a non-playing room for >90 seconds
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -335,52 +338,54 @@ class Bot {
     const stake = 10;
     console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
 
-    // Quick checks using cached room status
-    const roomStatus = getRoomStatus(stake);
-    let room = null;
+    // 👇 FIX: Force fresh room status (bypass cache) to avoid stale "locked" state
+    const freshRoom = await this.getRoomWithCache(stake);
+    if (!freshRoom) {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} does not exist, retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000);
+      return;
+    }
 
-    if (roomStatus) {
-      console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
-      // 👇 FIX: Also block 'ended' status – treat as unavailable
-      if (roomStatus.locked || roomStatus.status === 'ended') {
-        console.log(`🤖 Bot ${this.userName}: room ${stake} is not available (${roomStatus.status}), retrying later`);
-        this._scheduleRetry(5000 + Math.random() * 5000);
-        return;
-      }
-      if (roomStatus.playerCount >= 100) {
-        console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
-        this._scheduleRetry(5000 + Math.random() * 5000);
-        return;
-      }
+    const roomStatus = {
+      locked: freshRoom.status === 'playing' || freshRoom.status === 'ended',
+      status: freshRoom.status,
+      playerCount: freshRoom.players.length
+    };
 
-      // ----- RANDOM PARTICIPATION LOGIC -----
-      // Ensure at least 10 bots join, then randomly add more
-      const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
-      if (currentPlayers >= 10) {
-        // 50% chance to join if we already have 10+ players
-        if (Math.random() < 0.5) {
-          console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
-        } else {
-          console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
-          // Schedule a long retry to skip this game cycle
-          this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
-          return;
-        }
+    console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
+    // 👇 FIX: Also block 'ended' status – treat as unavailable
+    if (roomStatus.locked || roomStatus.status === 'ended') {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} is not available (${roomStatus.status}), retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000);
+      return;
+    }
+    if (roomStatus.playerCount >= 100) {
+      console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
+      this._scheduleRetry(5000 + Math.random() * 5000);
+      return;
+    }
+
+    // ----- RANDOM PARTICIPATION LOGIC -----
+    // Ensure at least 10 bots join, then randomly add more
+    const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
+    if (currentPlayers >= 10) {
+      // 50% chance to join if we already have 10+ players
+      if (Math.random() < 0.5) {
+        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
       } else {
-        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
-      }
-      // --------------------------------------
-
-      // Fetch the actual room to get the taken boxes array
-      try {
-        room = await this.getRoomWithCache(stake);
-      } catch (e) {
-        console.error(`Bot ${this.userName} error fetching room:`, e);
-        this._scheduleRetry(5000);
+        console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
+        // Schedule a long retry to skip this game cycle
+        this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
         return;
       }
     } else {
-      // No cache entry – fetch room directly
+      console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
+    }
+    // --------------------------------------
+
+    // Fetch the actual room to get the taken boxes array
+    let room = freshRoom;
+    if (!room) {
       try {
         room = await this.getRoomWithCache(stake);
       } catch (e) {
@@ -463,8 +468,8 @@ class Bot {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    // Use provided delay or default 5-10 seconds
-    const retryDelay = delay || (5000 + Math.random() * 5000);
+    // Use shorter delays for faster recovery (2-5 seconds default)
+    const retryDelay = delay || (2000 + Math.random() * 3000);
     console.log(`🤖 Bot ${this.userName} scheduling retry in ${Math.round(retryDelay/1000)}s`);
     this.retryTimer = setTimeout(async () => {
       this.retryTimer = null;
@@ -478,19 +483,35 @@ class Bot {
   }
 }
 
-// ========== BOT WATCHDOG ==========
+// ========== ENHANCED BOT WATCHDOG (rescues stuck-in-room bots) ==========
 async function botWatchdog() {
   for (const bot of bots) {
     if (!bot.active) continue;
     const now = Date.now();
-    // If bot hasn't taken any action for 2 minutes and is not in a game, force a retry
+
+    // 1) No room and no game – stuck idle
     if (!bot.currentRoom && !bot.isInGame && bot.retryTimer === null) {
       if (now - bot.lastActionTime > 120000) {
-        console.log(`🐕 Bot watchdog: ${bot.userName} seems stuck, forcing retry.`);
+        console.log(`🐕 Bot watchdog: ${bot.userName} seems stuck (idle), forcing retry.`);
         bot._scheduleRetry(1000);
       }
     }
-    // If bot thinks it's in a game but has no active room (stale), reset
+
+    // 2) IN A ROOM but not in a game – check if the room is stalled
+    if (bot.currentRoom && !bot.isInGame) {
+      const room = await getRoomWithCache(bot.currentRoom);
+      if (room) {
+        const timeInRoom = now - (bot.lastActionTime || room.lastBoxUpdate?.getTime() || now);
+        // If room status is not 'playing' and we've been waiting > 90 seconds, force leave
+        if (room.status !== 'playing' && timeInRoom > 90000) {
+          console.log(`🐕 Bot watchdog: ${bot.userName} stuck in room ${bot.currentRoom} (${room.status}) for ${Math.round(timeInRoom/1000)}s → leaving.`);
+          await bot._leaveRoom();
+          bot._scheduleRetry(2000);
+        }
+      }
+    }
+
+    // 3) isInGame true but no room – stale flag
     if (bot.isInGame && !bot.currentRoom) {
       console.log(`🐕 Bot watchdog: ${bot.userName} has isInGame=true but no room, resetting.`);
       bot.isInGame = false;
@@ -3347,10 +3368,6 @@ function setupSocketHandlers() {
       }
     });
 
-    // ========== WALLET EVENT HANDLERS (REMOVED DUPLICATES) ==========
-    // (The wallet:depositRequest and wallet:withdrawRequest handlers have been removed from here.
-    //  Only the handlers in server.js will process these events.)
-
     // ========== PLAYER EVENTS ==========
     socket.on('init', async (data, callback) => {
       try {
@@ -4251,8 +4268,8 @@ function startPeriodicTasks() {
     console.log('🧹 Cleared rate limit cache');
   }, 60000);
 
-  // Bot watchdog (every 30 seconds) – prevents bots from getting stuck
-  setInterval(botWatchdog, 30000);
+  // Bot watchdog (every 15 seconds) – prevents bots from getting stuck
+  setInterval(botWatchdog, 15000);
 
   // Health check
   setInterval(async () => {
