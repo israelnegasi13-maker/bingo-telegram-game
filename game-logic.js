@@ -13,6 +13,7 @@
 // FIX: Bots now force-refresh room status before joining to avoid stale "locked"
 // FIX: Reduced retry delays for faster recovery after failures
 // FIX: Watchdog also rescues bots stuck in a non-playing room for >90 seconds
+// FIX: Bots can now leave during active game (forfeit stake) – prevents stuck bots
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -441,10 +442,11 @@ class Bot {
     }, CONFIG.BOT_WAIT_TIMEOUT);
   }
 
+  // ========== FIXED: allow bots to leave even during active game ==========
   _leaveRoom() {
     if (!this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} leaving room ${this.currentRoom}`);
-    // Use the stored leaveRoom handler
+    // Call the leave handler (will succeed for bots even if game is playing)
     socketHandlers.leaveRoom.call(this.socket, {});
     // Immediately clear internal state to prevent being stuck
     this.currentRoom = null;
@@ -3915,7 +3917,7 @@ function setupSocketHandlers() {
       }
     });
 
-    // ========== FIXED: player:leaveRoom - NO REFUND DURING COUNTDOWN ==========
+    // ========== FIXED: player:leaveRoom - BOTS ALLOWED TO LEAVE DURING ACTIVE GAME ==========
     socketHandlers.leaveRoom = async function(data) {
       try {
         const userId = socketToUser.get(this.id) || this.userId;
@@ -3953,11 +3955,17 @@ function setupSocketHandlers() {
           return;
         }
 
-        // Prevent leaving if game is already playing
+        // Prevent leaving if game is playing, UNLESS it's a bot
         if (room.status === 'playing') {
-          console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
-          this.emit('error', 'Cannot leave room during active game! Wait for game to end.');
-          return;
+          if (user && user.isBot === true) {
+            // Bot is allowed to leave during active game (forfeit stake)
+            console.log(`🤖 Bot ${user.userName} leaving during active game (forfeit)`);
+            // Continue with removal (no refund)
+          } else {
+            console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
+            this.emit('error', 'Cannot leave room during active game! Wait for game to end.');
+            return;
+          }
         }
 
         // Remove user from room
@@ -3998,6 +4006,7 @@ function setupSocketHandlers() {
 
         // 🚨🚨🚨 CRITICAL FIX: ONLY REFUND if room is in 'waiting' status (BEFORE countdown starts)
         // If room status is 'starting' (countdown phase), NO REFUND!
+        // Also bots never get refund.
         if (room.status === 'waiting') {
           // Refund only if game hasn't started counting down
           const oldBalance = user.balance;
@@ -4017,18 +4026,20 @@ function setupSocketHandlers() {
           await transaction.save();
 
           this.emit('balanceUpdate', user.balance);
-        } else if (room.status === 'starting') {
-          console.log(`⚠️ Player ${user.userName} left during countdown - NO REFUND given`);
-          // Record that player forfeited stake
-          const transaction = new models.Transaction({
-            type: 'STAKE',
-            userId: userId,
-            userName: user.userName,
-            amount: -roomStake,
-            room: roomStake,
-            description: `Left room during countdown - stake forfeited`
-          });
-          await transaction.save();
+        } else {
+          console.log(`⚠️ Player ${user.userName} left during ${room.status} phase - NO REFUND given`);
+          // Record that player forfeited stake (only if not already recorded)
+          if (room.status !== 'waiting') {
+            const transaction = new models.Transaction({
+              type: 'STAKE',
+              userId: userId,
+              userName: user.userName,
+              amount: -roomStake,
+              room: roomStake,
+              description: `Left room during ${room.status} - stake forfeited`
+            });
+            await transaction.save();
+          }
         }
 
         await user.save();
@@ -4038,9 +4049,9 @@ function setupSocketHandlers() {
 
         // Send success message
         this.emit('leftRoom', {
-          message: room.status === 'starting'
-            ? 'Left room successfully - No refund (countdown in progress)'
-            : 'Left room successfully',
+          message: room.status === 'waiting'
+            ? 'Left room successfully - Stake refunded'
+            : 'Left room successfully - No refund (game in progress or countdown)',
           refunded: room.status === 'waiting'
         });
 
