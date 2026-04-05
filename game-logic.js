@@ -7,13 +7,10 @@
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
-// NEW: Bot watchdog – prevents bots from getting stuck after several rounds (ENHANCED)
+// NEW: Bot watchdog – prevents bots from getting stuck after several rounds
 // FIX: Enhanced syncState to reset isInGame flag when stale
 // FIX: Improved error handling in bot event handlers
-// FIX: Bots now force-refresh room status before joining to avoid stale "locked"
-// FIX: Reduced retry delays for faster recovery after failures
-// FIX: Watchdog also rescues bots stuck in a non-playing room for >90 seconds
-// FIX: Bots can now leave during active game (forfeit stake) – prevents stuck bots
+// NEW: Aggressive post‑game retry for bots to re‑join immediately after game ends
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -116,6 +113,9 @@ class Bot {
     this.lastActionTime = Date.now();      // for watchdog
     this.getRoomWithCache = serverContext.getRoomWithCache; // for smarter fallback
     this.active = true;                    // will be updated from DB
+    // New: quick retry after game over
+    this._quickRetryCount = 0;
+    this._quickRetryTimer = null;
   }
 
   _createSocket() {
@@ -204,8 +204,32 @@ class Bot {
       this.waitTimeout = null;
     }
     this.lastActionTime = Date.now();
-    // Schedule next action after a short pause (2-5 seconds for quick re-entry)
-    this._scheduleRetry(2000 + Math.random() * 3000);
+    // Start quick retry loop – try to re‑join every second for up to 10 seconds
+    this._startQuickRetry();
+  }
+
+  _startQuickRetry() {
+    if (this._quickRetryTimer) clearTimeout(this._quickRetryTimer);
+    this._quickRetryCount = 0;
+    const attempt = () => {
+      if (!this.active) return;
+      if (this.currentRoom) {
+        console.log(`🤖 Bot ${this.userName} already in a room, stopping quick retry`);
+        return;
+      }
+      if (this._quickRetryCount >= 10) {
+        console.log(`🤖 Bot ${this.userName} quick retry limit reached, falling back to normal retry`);
+        this._scheduleRetry(3000);
+        return;
+      }
+      console.log(`🤖 Bot ${this.userName} quick retry attempt ${this._quickRetryCount + 1}`);
+      this._decideNextAction().catch(err => {
+        console.error(`❌ Bot ${this.userName} quick retry error:`, err);
+      });
+      this._quickRetryCount++;
+      this._quickRetryTimer = setTimeout(attempt, 1000);
+    };
+    attempt();
   }
 
   _checkBingo() {
@@ -339,54 +363,53 @@ class Bot {
     const stake = 10;
     console.log(`🤖 Bot ${this.userName} attempting to join room ${stake} ETB`);
 
-    // 👇 FIX: Force fresh room status (bypass cache) to avoid stale "locked" state
-    const freshRoom = await this.getRoomWithCache(stake);
-    if (!freshRoom) {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} does not exist, retrying later`);
-      this._scheduleRetry(5000 + Math.random() * 5000);
-      return;
-    }
+    // Quick checks using cached room status
+    let roomStatus = getRoomStatus(stake);
+    let room = null;
 
-    const roomStatus = {
-      locked: freshRoom.status === 'playing' || freshRoom.status === 'ended',
-      status: freshRoom.status,
-      playerCount: freshRoom.players.length
-    };
+    if (roomStatus) {
+      console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
+      // 👇 FIX: Also block 'ended' status – treat as unavailable
+      if (roomStatus.locked || roomStatus.status === 'ended' || roomStatus.status === 'playing') {
+        console.log(`🤖 Bot ${this.userName}: room ${stake} is not available (${roomStatus.status}), retrying in 1s`);
+        // Wait 1 second and try again (don't give up)
+        setTimeout(() => this._decideNextAction(), 1000);
+        return;
+      }
+      if (roomStatus.playerCount >= 100) {
+        console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
+        this._scheduleRetry(5000 + Math.random() * 5000);
+        return;
+      }
 
-    console.log(`🤖 Bot ${this.userName} roomStatus:`, JSON.stringify(roomStatus));
-    // 👇 FIX: Also block 'ended' status – treat as unavailable
-    if (roomStatus.locked || roomStatus.status === 'ended') {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} is not available (${roomStatus.status}), retrying later`);
-      this._scheduleRetry(5000 + Math.random() * 5000);
-      return;
-    }
-    if (roomStatus.playerCount >= 100) {
-      console.log(`🤖 Bot ${this.userName}: room ${stake} is full, retrying later`);
-      this._scheduleRetry(5000 + Math.random() * 5000);
-      return;
-    }
-
-    // ----- RANDOM PARTICIPATION LOGIC -----
-    // Ensure at least 10 bots join, then randomly add more
-    const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
-    if (currentPlayers >= 10) {
-      // 50% chance to join if we already have 10+ players
-      if (Math.random() < 0.5) {
-        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
+      // ----- RANDOM PARTICIPATION LOGIC -----
+      // Ensure at least 10 bots join, then randomly add more
+      const currentPlayers = roomStatus.playerCount; // includes real players + bots already in
+      if (currentPlayers >= 10) {
+        // 50% chance to join if we already have 10+ players
+        if (Math.random() < 0.5) {
+          console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} >=10, random yes)`);
+        } else {
+          console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
+          // Schedule a long retry to skip this game cycle
+          this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
+          return;
+        }
       } else {
-        console.log(`🤖 Bot ${this.userName} skipping this game (count ${currentPlayers} >=10, random no)`);
-        // Schedule a long retry to skip this game cycle
-        this._scheduleRetry(60000 + Math.random() * 60000); // 1-2 minutes
+        console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
+      }
+      // --------------------------------------
+
+      // Fetch the actual room to get the taken boxes array
+      try {
+        room = await this.getRoomWithCache(stake);
+      } catch (e) {
+        console.error(`Bot ${this.userName} error fetching room:`, e);
+        this._scheduleRetry(5000);
         return;
       }
     } else {
-      console.log(`🤖 Bot ${this.userName} joining (count ${currentPlayers} <10)`);
-    }
-    // --------------------------------------
-
-    // Fetch the actual room to get the taken boxes array
-    let room = freshRoom;
-    if (!room) {
+      // No cache entry – fetch room directly
       try {
         room = await this.getRoomWithCache(stake);
       } catch (e) {
@@ -432,6 +455,11 @@ class Bot {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    // Stop quick retry loop if active
+    if (this._quickRetryTimer) {
+      clearTimeout(this._quickRetryTimer);
+      this._quickRetryTimer = null;
+    }
     this.currentRoom = room;
     this.box = box;
     this.lastActionTime = Date.now();
@@ -442,11 +470,10 @@ class Bot {
     }, CONFIG.BOT_WAIT_TIMEOUT);
   }
 
-  // ========== FIXED: allow bots to leave even during active game ==========
   _leaveRoom() {
     if (!this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} leaving room ${this.currentRoom}`);
-    // Call the leave handler (will succeed for bots even if game is playing)
+    // Use the stored leaveRoom handler
     socketHandlers.leaveRoom.call(this.socket, {});
     // Immediately clear internal state to prevent being stuck
     this.currentRoom = null;
@@ -470,8 +497,8 @@ class Bot {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    // Use shorter delays for faster recovery (2-5 seconds default)
-    const retryDelay = delay || (2000 + Math.random() * 3000);
+    // Use provided delay or default 5-10 seconds
+    const retryDelay = delay || (5000 + Math.random() * 5000);
     console.log(`🤖 Bot ${this.userName} scheduling retry in ${Math.round(retryDelay/1000)}s`);
     this.retryTimer = setTimeout(async () => {
       this.retryTimer = null;
@@ -485,35 +512,19 @@ class Bot {
   }
 }
 
-// ========== ENHANCED BOT WATCHDOG (rescues stuck-in-room bots) ==========
+// ========== BOT WATCHDOG ==========
 async function botWatchdog() {
   for (const bot of bots) {
     if (!bot.active) continue;
     const now = Date.now();
-
-    // 1) No room and no game – stuck idle
+    // If bot hasn't taken any action for 2 minutes and is not in a game, force a retry
     if (!bot.currentRoom && !bot.isInGame && bot.retryTimer === null) {
       if (now - bot.lastActionTime > 120000) {
-        console.log(`🐕 Bot watchdog: ${bot.userName} seems stuck (idle), forcing retry.`);
+        console.log(`🐕 Bot watchdog: ${bot.userName} seems stuck, forcing retry.`);
         bot._scheduleRetry(1000);
       }
     }
-
-    // 2) IN A ROOM but not in a game – check if the room is stalled
-    if (bot.currentRoom && !bot.isInGame) {
-      const room = await getRoomWithCache(bot.currentRoom);
-      if (room) {
-        const timeInRoom = now - (bot.lastActionTime || room.lastBoxUpdate?.getTime() || now);
-        // If room status is not 'playing' and we've been waiting > 90 seconds, force leave
-        if (room.status !== 'playing' && timeInRoom > 90000) {
-          console.log(`🐕 Bot watchdog: ${bot.userName} stuck in room ${bot.currentRoom} (${room.status}) for ${Math.round(timeInRoom/1000)}s → leaving.`);
-          await bot._leaveRoom();
-          bot._scheduleRetry(2000);
-        }
-      }
-    }
-
-    // 3) isInGame true but no room – stale flag
+    // If bot thinks it's in a game but has no active room (stale), reset
     if (bot.isInGame && !bot.currentRoom) {
       console.log(`🐕 Bot watchdog: ${bot.userName} has isInGame=true but no room, resetting.`);
       bot.isInGame = false;
@@ -3370,6 +3381,10 @@ function setupSocketHandlers() {
       }
     });
 
+    // ========== WALLET EVENT HANDLERS (REMOVED DUPLICATES) ==========
+    // (The wallet:depositRequest and wallet:withdrawRequest handlers have been removed from here.
+    //  Only the handlers in server.js will process these events.)
+
     // ========== PLAYER EVENTS ==========
     socket.on('init', async (data, callback) => {
       try {
@@ -3917,7 +3932,7 @@ function setupSocketHandlers() {
       }
     });
 
-    // ========== FIXED: player:leaveRoom - BOTS ALLOWED TO LEAVE DURING ACTIVE GAME ==========
+    // ========== FIXED: player:leaveRoom - NO REFUND DURING COUNTDOWN ==========
     socketHandlers.leaveRoom = async function(data) {
       try {
         const userId = socketToUser.get(this.id) || this.userId;
@@ -3955,17 +3970,11 @@ function setupSocketHandlers() {
           return;
         }
 
-        // Prevent leaving if game is playing, UNLESS it's a bot
+        // Prevent leaving if game is already playing
         if (room.status === 'playing') {
-          if (user && user.isBot === true) {
-            // Bot is allowed to leave during active game (forfeit stake)
-            console.log(`🤖 Bot ${user.userName} leaving during active game (forfeit)`);
-            // Continue with removal (no refund)
-          } else {
-            console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
-            this.emit('error', 'Cannot leave room during active game! Wait for game to end.');
-            return;
-          }
+          console.log(`❌ Player ${user.userName} tried to leave during active game in room ${roomStake}`);
+          this.emit('error', 'Cannot leave room during active game! Wait for game to end.');
+          return;
         }
 
         // Remove user from room
@@ -4006,7 +4015,6 @@ function setupSocketHandlers() {
 
         // 🚨🚨🚨 CRITICAL FIX: ONLY REFUND if room is in 'waiting' status (BEFORE countdown starts)
         // If room status is 'starting' (countdown phase), NO REFUND!
-        // Also bots never get refund.
         if (room.status === 'waiting') {
           // Refund only if game hasn't started counting down
           const oldBalance = user.balance;
@@ -4026,20 +4034,18 @@ function setupSocketHandlers() {
           await transaction.save();
 
           this.emit('balanceUpdate', user.balance);
-        } else {
-          console.log(`⚠️ Player ${user.userName} left during ${room.status} phase - NO REFUND given`);
-          // Record that player forfeited stake (only if not already recorded)
-          if (room.status !== 'waiting') {
-            const transaction = new models.Transaction({
-              type: 'STAKE',
-              userId: userId,
-              userName: user.userName,
-              amount: -roomStake,
-              room: roomStake,
-              description: `Left room during ${room.status} - stake forfeited`
-            });
-            await transaction.save();
-          }
+        } else if (room.status === 'starting') {
+          console.log(`⚠️ Player ${user.userName} left during countdown - NO REFUND given`);
+          // Record that player forfeited stake
+          const transaction = new models.Transaction({
+            type: 'STAKE',
+            userId: userId,
+            userName: user.userName,
+            amount: -roomStake,
+            room: roomStake,
+            description: `Left room during countdown - stake forfeited`
+          });
+          await transaction.save();
         }
 
         await user.save();
@@ -4049,9 +4055,9 @@ function setupSocketHandlers() {
 
         // Send success message
         this.emit('leftRoom', {
-          message: room.status === 'waiting'
-            ? 'Left room successfully - Stake refunded'
-            : 'Left room successfully - No refund (game in progress or countdown)',
+          message: room.status === 'starting'
+            ? 'Left room successfully - No refund (countdown in progress)'
+            : 'Left room successfully',
           refunded: room.status === 'waiting'
         });
 
@@ -4279,8 +4285,8 @@ function startPeriodicTasks() {
     console.log('🧹 Cleared rate limit cache');
   }, 60000);
 
-  // Bot watchdog (every 15 seconds) – prevents bots from getting stuck
-  setInterval(botWatchdog, 15000);
+  // Bot watchdog (every 30 seconds) – prevents bots from getting stuck
+  setInterval(botWatchdog, 30000);
 
   // Health check
   setInterval(async () => {
