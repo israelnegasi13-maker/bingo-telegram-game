@@ -7,6 +7,7 @@
 // NEW: roomSockets map for reliable per‑room event delivery (fixes missed ball draws after reconnect)
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
+// NEW: Bot heartbeat to prevent bots from getting stuck (30s interval)
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -108,6 +109,26 @@ class Bot {
     this.retryTimer = null;                  // timer for next action attempt
     this.getRoomWithCache = serverContext.getRoomWithCache; // for smarter fallback
     this.active = true;                      // will be updated from DB
+    this.heartbeatInterval = null;           // heartbeat to prevent getting stuck
+
+    // Start the heartbeat
+    this.startHeartbeat();
+  }
+
+  startHeartbeat() {
+    // Run every 30 seconds to ensure bot doesn't get stuck
+    this.heartbeatInterval = setInterval(async () => {
+      if (!this.active) return;
+      try {
+        await this.syncState();
+        if (!this.currentRoom && !this.retryTimer) {
+          console.log(`🔄 Bot ${this.userName} heartbeat: no room, scheduling retry`);
+          this._scheduleRetry(5000);
+        }
+      } catch (err) {
+        console.error(`❌ Bot ${this.userName} heartbeat error:`, err);
+      }
+    }, 30000);
   }
 
   _createSocket() {
@@ -117,6 +138,8 @@ class Bot {
       emit: (event, data) => bot._handleEvent(event, data),
       on: () => {},                        // not used for bots
       disconnect: () => {},                 // stub
+      connected: true,
+      userId: bot.userId,
     };
   }
 
@@ -219,6 +242,9 @@ class Bot {
       const user = await models.User.findOne({ userId: this.userId });
       if (!user) return;
 
+      // Update lastSeen so the bot doesn't appear offline
+      await models.User.updateOne({ userId: this.userId }, { lastSeen: new Date() });
+
       const dbRoom = user.currentRoom;
       const dbBox = user.box;
 
@@ -263,7 +289,6 @@ class Bot {
               room.takenBoxes.splice(boxIndex, 1);
               await room.save();
               updateRoomCache(room.stake, room);
-              console.log(`🧹 Removed orphaned box ${dbBox} from room ${dbRoom}`);
             }
           }
 
@@ -409,11 +434,15 @@ class Bot {
   _leaveRoom() {
     if (!this.currentRoom) return;
     console.log(`🤖 Bot ${this.userName} leaving room ${this.currentRoom}`);
-    // Use the stored leaveRoom handler
-    socketHandlers.leaveRoom.call(this.socket, {});
-    // Immediately clear internal state to prevent being stuck
-    this.currentRoom = null;
-    this.box = null;
+
+    // Remove from roomSockets
+    const socketsSet = roomSockets.get(this.currentRoom);
+    if (socketsSet) {
+      socketsSet.delete(this.socket);
+      if (socketsSet.size === 0) roomSockets.delete(this.currentRoom);
+    }
+
+    // Clear all timers
     if (this.waitTimeout) {
       clearTimeout(this.waitTimeout);
       this.waitTimeout = null;
@@ -422,6 +451,14 @@ class Bot {
       clearTimeout(this.claimTimeout);
       this.claimTimeout = null;
     }
+
+    // Use the stored leaveRoom handler
+    socketHandlers.leaveRoom.call(this.socket, {});
+
+    // Immediately clear internal state to prevent being stuck
+    this.currentRoom = null;
+    this.box = null;
+
     this._scheduleRetry(3000 + Math.random() * 5000);
   }
 
