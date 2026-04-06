@@ -1,5 +1,5 @@
 // game-logic.js - BINGO ELITE GAME LOGIC MODULE (PERFORMANCE OPTIMIZED)
-// ========== FULLY UPDATED – 20 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
+// ========== FULLY UPDATED – 50 BOTS, ONLY 10 ETB ROOM, LEAVE STUCK ROOMS ==========
 // FIX: Orphaned boxes cleanup in bot syncState
 // FIX: Block joins during 'ended' state, bots wait for room reset
 // NEW: Random bot participation – at least 10, random additional bots
@@ -8,6 +8,7 @@
 // UPDATE: Agent commission now calculated from house earnings (40% of house fee) instead of player's win
 // FIX: Win transaction now stores agentId for fallback processing
 // NEW: Bot heartbeat to prevent bots from getting stuck (30s interval)
+// UPDATED: 50 bots with cool male Ethiopian first names
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -64,22 +65,19 @@ const MAX_EVENTS_PER_WINDOW = 10;
 // ========== NEW: PER‑ROOM SOCKET SET FOR RELIABLE EVENT DELIVERY ==========
 let roomSockets = new Map(); // stake → Set of socket objects
 
-// ========== ETHIOPIAN BOT NAMES ==========
-// First 10 full names (first + last)
-const ETHIOPIAN_FULL_NAMES = [
-  "Abebe Kebede", "Almaz Tesfaye", "Ayele Mengistu", "Berhanu Demeke", "Chaltu Dibaba",
-  "Desta Fikre", "Etetu Gemeda", "Fikre Lemma", "Genet Bekele", "Hailu Gebre"
-];
-// Next 10 only first names
-const ETHIOPIAN_FIRST_NAMES = [
-  "Kebede", "Lemlem", "Mekdes", "Negasi", "Selam",
-  "Tigist", "Wondimu", "Yonas", "Zeritu", "Abebech"
+// ========== 50 COOL MALE ETHIOPIAN FIRST NAMES ==========
+const ETHIOPIAN_BOT_NAMES = [
+  "Abebe", "Alemu", "Ashenafi", "Bekele", "Biruk", "Chala", "Dawit", "Dereje", "Ermias", "Eyob",
+  "Fikru", "Gashaw", "Gemechu", "Getachew", "Girma", "Habtamu", "Henok", "Ketema", "Lemma", "Mathewos",
+  "Melaku", "Mengistu", "Meressa", "Mesay", "Mulugeta", "Negash", "Samuel", "Sebastian", "Sisay", "Solomon",
+  "Tadesse", "Tamirat", "Tarekegn", "Tekle", "Temesgen", "Tesfaye", "Tewodros", "Tigabu", "Wondimu", "Yared",
+  "Yonas", "Zelalem", "Zerihun", "Abiy", "Addisu", "Aklilu", "Alemitu", "Amare", "Anteneh", "Biniyam"
 ];
 
 // ========== BOT MANAGEMENT ==========
 let bots = [];
 let botSockets = new Map(); // botId -> virtual socket object
-const BOT_COUNT = 20;
+const BOT_COUNT = 50;
 
 // Helper to get a socket (real or bot) by its ID
 function getEndpoint(socketId) {
@@ -579,15 +577,10 @@ async function initialize(socketIo, dbModels) {
 
 // ========== INITIALIZE BOTS ==========
 async function initializeBots() {
-  console.log('🤖 Initializing 20 Ethiopian bots...');
+  console.log('🤖 Initializing 50 Ethiopian bots...');
   for (let i = 0; i < BOT_COUNT; i++) {
-    // First 10 bots get full names, next 10 get only first names
-    let name;
-    if (i < 10) {
-      name = ETHIOPIAN_FULL_NAMES[i % ETHIOPIAN_FULL_NAMES.length];
-    } else {
-      name = ETHIOPIAN_FIRST_NAMES[(i - 10) % ETHIOPIAN_FIRST_NAMES.length];
-    }
+    // Use cool male Ethiopian first names
+    const name = ETHIOPIAN_BOT_NAMES[i % ETHIOPIAN_BOT_NAMES.length];
 
     const bot = new Bot(i, name, {
       generateTraditionalBingoCard,
