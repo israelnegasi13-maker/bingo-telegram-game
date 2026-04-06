@@ -9,6 +9,7 @@
 // FIX: Win transaction now stores agentId for fallback processing
 // NEW: Bot heartbeat to prevent bots from getting stuck (30s interval)
 // UPDATED: 50 bots with cool male Ethiopian first names
+// ** NEW: Bots are now UNBEATABLE – they claim Bingo instantly with zero delay **
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -167,6 +168,7 @@ class Bot {
     }
   }
 
+  // ========== UNBEATABLE BOT: INSTANT BINGO CLAIM (NO DELAY) ==========
   _onBallDrawn({ room, num, letter }) {
     if (!this.active) return; // ignore if deactivated
     if (room !== this.currentRoom) return;
@@ -175,9 +177,13 @@ class Bot {
       this.markedNumbers.add(num);
     }
     if (this._checkBingo()) {
-      // 🚀 Bots react extremely fast (50–200 ms) – effectively unbeatable
-      const delay = 50 + Math.random() * 150;
-      this.claimTimeout = setTimeout(() => this._claimBingo(), delay);
+      // 🚀 Bots claim Bingo IMMEDIATELY – zero delay, unbeatable
+      // Clear any pending claim timeout (should not exist, but safe)
+      if (this.claimTimeout) {
+        clearTimeout(this.claimTimeout);
+        this.claimTimeout = null;
+      }
+      this._claimBingo();
     }
   }
 
