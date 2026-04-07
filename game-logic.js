@@ -10,6 +10,7 @@
 // NEW: Bot heartbeat to prevent bots from getting stuck (30s interval)
 // UPDATED: 50 bots with cool male Ethiopian first names
 // ** NEW: Bots are now UNBEATABLE – they claim Bingo instantly with zero delay **
+// ** UPDATED: Bot balances reset to 5000 ETB on every server restart **
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -581,7 +582,7 @@ async function initialize(socketIo, dbModels) {
   await initializeBots();
 }
 
-// ========== INITIALIZE BOTS ==========
+// ========== INITIALIZE BOTS (with balance reset to 5000 on server restart) ==========
 async function initializeBots() {
   console.log('🤖 Initializing 50 Ethiopian bots...');
   for (let i = 0; i < BOT_COUNT; i++) {
@@ -603,16 +604,21 @@ async function initializeBots() {
         user = new models.User({
           userId: bot.userId,
           userName: bot.userName,
-          balance: bot.balance,
+          balance: 5000,                // ✅ force 5000 on creation
           referralCode: generateReferralCode(bot.userId),
           isBot: true,
           botActive: true
         });
         await user.save();
       } else {
-        bot.balance = Number(user.balance) || 5000;   // ensure number
-        bot.active = user.botActive !== false;
+        // ✅ RESET balance to 5000 on every server restart
+        user.balance = 5000;
+        await user.save();
       }
+
+      // Sync bot's internal balance and active flag
+      bot.balance = 5000;                     // ✅ force internal balance to 5000
+      bot.active = user.botActive !== false;
 
       // 🔥 FIX: Clear any stale room assignment from previous server runs
       if (user.currentRoom) {
@@ -641,7 +647,7 @@ async function initializeBots() {
       console.error(`❌ Failed to initialize bot ${i}:`, err);
     }
   }
-  console.log(`🤖 ${bots.length} bots initialized.`);
+  console.log(`🤖 ${bots.length} bots initialized with balance reset to 5000 ETB.`);
 }
 
 // ========== TELEBIRR NUMBER FUNCTIONS ==========
