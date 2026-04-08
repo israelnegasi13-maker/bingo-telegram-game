@@ -22,6 +22,13 @@ const slotsLogic = require('./slots-logic');
 // Import Agent System
 const AgentSystem = require('./agent-logic');
 
+// ========== ENSURE gameLogic.CONFIG EXISTS WITH DEFAULT ADMIN PASSWORD ==========
+if (!gameLogic.CONFIG) gameLogic.CONFIG = {};
+if (!gameLogic.CONFIG.ADMIN_PASSWORD) {
+  gameLogic.CONFIG.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+  console.log('🔐 Default admin password loaded:', gameLogic.CONFIG.ADMIN_PASSWORD);
+}
+
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -783,44 +790,51 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== FIXED ADMIN AUTHENTICATION WITH DEBUG LOGGING ==========
+  // ========== FIXED ADMIN AUTHENTICATION WITH STRICT CHECK ==========
   socket.on('admin:auth', async (password) => {
-    // Log the received password and expected password for debugging
     console.log(`[ADMIN AUTH] Received password: "${password}" (type: ${typeof password})`);
-    
-    // Determine the valid password – ensure it's always a string
-    const validPassword = (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD) ||
-                          process.env.ADMIN_PASSWORD ||
-                          'admin123';
+
+    // Determine the valid password – ensure it's always a non‑empty string
+    let validPassword = (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD) ||
+                        process.env.ADMIN_PASSWORD ||
+                        'admin123';
+    if (!validPassword || validPassword.trim() === '') {
+      console.warn('[ADMIN AUTH] No valid password configured – using default "admin123"');
+      validPassword = 'admin123';
+    }
     console.log(`[ADMIN AUTH] Expected password: "${validPassword}" (type: ${typeof validPassword})`);
-    
-    // Compare (plain text, but we'll also show bcrypt option later)
+
+    // Reject empty password
+    if (!password || password.trim() === '') {
+      console.log(`[ADMIN AUTH] ❌ Empty password rejected for socket ${socket.id}`);
+      socket.emit('admin:authError', 'Password cannot be empty');
+      return;
+    }
+
+    // Strict string comparison
     if (password === validPassword) {
       console.log(`[ADMIN AUTH] ✅ Authentication successful for socket ${socket.id}`);
       socket.admin = true;
       socket.join('admins');
       socket.agentData = { isSuperAdmin: true, username: 'admin' };
       socket.emit('admin:authSuccess');
-      
+
       // Send Telebirr number after successful auth
       const telebirrNumber = await getTelebirrNumber();
       socket.emit('admin:telebirrNumber', telebirrNumber);
-      
+
       if (kenoLogic && kenoLogic.getKenoGameStats) {
         const kenoStats = kenoLogic.getKenoGameStats();
         socket.emit('admin:kenoStats', kenoStats);
       }
-      
       if (crashLogic && crashLogic.getCrashGameStats) {
         const crashStats = crashLogic.getCrashGameStats();
         socket.emit('admin:crashStats', crashStats);
       }
-      
       if (slotsLogic && slotsLogic.getSlotsGameStats) {
         const slotsStats = slotsLogic.getSlotsGameStats();
         socket.emit('admin:slotsStats', slotsStats);
       }
-      
       if (agentSystem && agentSystem.getAgentStatistics) {
         const agentStats = await agentSystem.getAgentStatistics();
         socket.emit('admin:agentStats', agentStats);
@@ -830,31 +844,11 @@ io.on('connection', (socket) => {
       socket.emit('admin:authError', 'Invalid password');
     }
   });
-  
-  // ========== OPTIONAL: BCrypt version (uncomment if you want to use hashed passwords) ==========
-  /*
-  // Pre‑computed hash for 'admin123' (use bcrypt.hashSync('admin123', 10))
-  const DEFAULT_ADMIN_HASH = '$2a$10$YourHashHere';
-  
-  socket.on('admin:auth', async (password) => {
-    console.log(`[ADMIN AUTH] Received password: "${password}"`);
-    const storedHash = process.env.ADMIN_PASSWORD_HASH || 
-                       (gameLogic.CONFIG && gameLogic.CONFIG.ADMIN_PASSWORD_HASH) ||
-                       DEFAULT_ADMIN_HASH;
-    const isValid = await bcrypt.compare(password, storedHash);
-    if (isValid) {
-      console.log(`[ADMIN AUTH] ✅ Authentication successful for socket ${socket.id}`);
-      socket.admin = true;
-      socket.join('admins');
-      socket.agentData = { isSuperAdmin: true, username: 'admin' };
-      socket.emit('admin:authSuccess');
-      // ... rest of success logic
-    } else {
-      console.log(`[ADMIN AUTH] ❌ Authentication failed for socket ${socket.id}`);
-      socket.emit('admin:authError', 'Invalid password');
-    }
+
+  // Alias for compatibility with some admin panels
+  socket.on('admin:login', (password) => {
+    socket.emit('admin:auth', password);
   });
-  */
   
   socket.on('wallet:depositRequest', async (data) => {
     try {
@@ -1308,7 +1302,7 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== TELEBIRR NUMBER EVENTS ==========
+  // ========== TELEBIRR NUMBER EVENTS (FIXED) ==========
   socket.on('admin:getTelebirrNumber', async () => {
     if (socket.admin) {
       const number = await getTelebirrNumber();
@@ -1317,28 +1311,51 @@ io.on('connection', (socket) => {
   });
   
   socket.on('admin:updateTelebirrNumber', async (newNumber) => {
-    if (socket.admin) {
-      console.log(`📞 Received telebirr update request: ${newNumber} (type: ${typeof newNumber})`);
-      try {
-        const result = await updateTelebirrNumber(newNumber);
-        const updatedNumber = result.value;
-        io.emit('admin:telebirrNumberUpdated', { telebirrNumber: updatedNumber, updatedAt: result.updatedAt });
-        io.emit('telebirrNumberUpdate', { telebirrNumber: updatedNumber, timestamp: new Date().toISOString() });
-        socket.emit('admin:success', `Telebirr number updated to ${updatedNumber}`);
-        console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
-        const adminTransaction = new Transaction({
-          type: 'TELEBIRR_UPDATE',
-          userId: 'admin',
-          userName: 'Admin',
-          amount: 0,
-          admin: true,
-          description: `Telebirr number updated to ${updatedNumber}`
-        });
-        await adminTransaction.save();
-      } catch (error) {
-        console.error('❌ Error updating Telebirr number:', error);
-        socket.emit('admin:error', error.message || 'Failed to update Telebirr number');
-      }
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized – please log in as admin');
+      return;
+    }
+
+    // Ensure newNumber is a string and trim whitespace
+    const trimmedNumber = String(newNumber).trim();
+    console.log(`📞 Received telebirr update request: "${trimmedNumber}" (type: ${typeof trimmedNumber})`);
+
+    if (!trimmedNumber) {
+      socket.emit('admin:error', 'Telebirr number cannot be empty');
+      return;
+    }
+
+    try {
+      const result = await updateTelebirrNumber(trimmedNumber);
+      const updatedNumber = result.value;
+
+      // Broadcast to all connected clients (admin panels and players)
+      io.emit('admin:telebirrNumberUpdated', {
+        telebirrNumber: updatedNumber,
+        updatedAt: result.updatedAt
+      });
+      io.emit('telebirrNumberUpdate', {
+        telebirrNumber: updatedNumber,
+        timestamp: new Date().toISOString()
+      });
+
+      // Confirm to the admin who made the change
+      socket.emit('admin:success', `Telebirr number successfully updated to ${updatedNumber}`);
+      console.log(`📱 Telebirr number updated by admin to: ${updatedNumber}`);
+
+      // Log the change
+      const adminTransaction = new Transaction({
+        type: 'TELEBIRR_UPDATE',
+        userId: 'admin',
+        userName: 'Admin',
+        amount: 0,
+        admin: true,
+        description: `Telebirr number updated from previous to ${updatedNumber}`
+      });
+      await adminTransaction.save();
+    } catch (error) {
+      console.error('❌ Error updating Telebirr number:', error);
+      socket.emit('admin:error', error.message || 'Failed to update Telebirr number. Please check the format (09xxxxxxxx).');
     }
   });
   
@@ -1434,19 +1451,28 @@ io.on('connection', (socket) => {
     }
   });
   
-  // ========== HOUSE EARNINGS ==========
+  // ========== HOUSE EARNINGS RESET (FIXED) ==========
   socket.on('admin:resetHouseEarnings', async () => {
-    if (!socket.admin) return;
+    if (!socket.admin) {
+      socket.emit('admin:error', 'Unauthorized – please log in as admin');
+      return;
+    }
 
     try {
-      const houseEarningsTransactions = await Transaction.find({ type: 'HOUSE_EARNINGS' });
+      // Get all HOUSE_EARNINGS transactions (positive amounts only)
+      const houseEarningsTransactions = await Transaction.find({ type: 'HOUSE_EARNINGS', amount: { $gt: 0 } });
       const currentTotal = houseEarningsTransactions.reduce((sum, t) => sum + t.amount, 0);
 
       if (currentTotal === 0) {
-        socket.emit('admin:houseEarningsReset', { previousAmount: 0, message: 'House earnings are already zero.' });
+        socket.emit('admin:houseEarningsReset', {
+          previousAmount: 0,
+          message: 'House earnings are already zero.',
+          resetAmount: 0
+        });
         return;
       }
 
+      // Create a negative transaction to zero out the earnings
       const resetTransaction = new Transaction({
         type: 'HOUSE_EARNINGS',
         userId: 'system',
@@ -1457,18 +1483,34 @@ io.on('connection', (socket) => {
       });
       await resetTransaction.save();
 
-      socket.emit('admin:houseEarningsReset', { previousAmount: currentTotal, resetAmount: 0, message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB` });
+      // Also record a separate log entry for auditing
+      const auditTransaction = new Transaction({
+        type: 'ADMIN_ACTION',
+        userId: 'admin',
+        userName: 'Admin',
+        amount: 0,
+        admin: true,
+        description: `House earnings manually reset by admin. Previous total: ${currentTotal.toFixed(2)} ETB`
+      });
+      await auditTransaction.save();
 
+      socket.emit('admin:houseEarningsReset', {
+        previousAmount: currentTotal,
+        resetAmount: 0,
+        message: `House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`
+      });
+
+      // Refresh all admin dashboards
       if (gameLogic && gameLogic.handleAdminGetData) {
         io.sockets.sockets.forEach(s => {
           if (s.admin) gameLogic.handleAdminGetData(s);
         });
       }
 
-      console.log(`🔄 House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB`);
+      console.log(`🔄 House earnings reset from ${currentTotal.toFixed(2)} to 0 ETB by admin`);
     } catch (error) {
       console.error('Error resetting house earnings:', error);
-      socket.emit('admin:houseEarningsResetError', error.message);
+      socket.emit('admin:houseEarningsResetError', error.message || 'Failed to reset house earnings');
     }
   });
   
