@@ -11,6 +11,9 @@
 // UPDATED: 50 bots with cool male Ethiopian first names
 // ** NEW: Bots are now UNBEATABLE – they claim Bingo instantly with zero delay **
 // ** UPDATED: Bot balances reset to 5000 ETB on every server restart **
+// ** FIX: Admin authentication now validates password **
+// ** FIX: House earnings reset button now works **
+// ** FIX: Telebirr number changes persist and work correctly **
 
 // ========== GAME CONFIGURATION ==========
 const CONFIG = {
@@ -33,7 +36,7 @@ const CONFIG = {
   AUTO_SAVE_INTERVAL: 60000,
   SESSION_TIMEOUT: 86400000,
   GAME_TIMEOUT_MINUTES: 7,
-  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js
+  TELEBIRR_NUMBER: "0962577855", // Default, will be updated from server.js or DB
   MIN_WITHDRAWAL: 50,
   MAX_WITHDRAWAL: 10000,
   BOT_WAIT_TIMEOUT: 60000 // 60 seconds before leaving a room that never starts
@@ -42,6 +45,7 @@ const CONFIG = {
 // ========== GLOBAL STATE ==========
 let io;
 let models;
+let Settings; // For persistent settings
 let socketToUser = new Map();
 let adminSockets = new Set();
 let activityLog = [];
@@ -569,6 +573,23 @@ const socketHandlers = {};
 async function initialize(socketIo, dbModels) {
   io = socketIo;
   models = dbModels;
+  Settings = dbModels.Settings; // Ensure Settings model is available
+
+  // Load Telebirr number from DB or use default
+  try {
+    const telebirrSetting = await Settings.findOne({ key: 'telebirrNumber' });
+    if (telebirrSetting) {
+      telebirrNumber = telebirrSetting.value;
+    } else {
+      // Save default to DB
+      await Settings.create({ key: 'telebirrNumber', value: CONFIG.TELEBIRR_NUMBER });
+      telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+    }
+    console.log(`📱 Telebirr number loaded: ${telebirrNumber}`);
+  } catch (err) {
+    console.error('Error loading Telebirr number:', err);
+    telebirrNumber = CONFIG.TELEBIRR_NUMBER;
+  }
 
   console.log('✅ Game logic initialized with performance optimizations');
 
@@ -650,19 +671,43 @@ async function initializeBots() {
   console.log(`🤖 ${bots.length} bots initialized with balance reset to 5000 ETB.`);
 }
 
-// ========== TELEBIRR NUMBER FUNCTIONS ==========
+// ========== TELEBIRR NUMBER FUNCTIONS (UPDATED WITH PERSISTENCE) ==========
 function getTelebirrNumber() {
   return telebirrNumber;
 }
 
-function setTelebirrNumber(newNumber) {
+async function setTelebirrNumber(newNumber) {
+  // Validate format (simple Ethiopian phone number check)
+  const phoneRegex = /^09\d{8}$/;
+  if (!phoneRegex.test(newNumber)) {
+    throw new Error('Invalid phone number. Must be 09xxxxxxxx');
+  }
+
   telebirrNumber = newNumber;
-  console.log(`📱 Telebirr number updated in game logic: ${telebirrNumber}`);
+  console.log(`📱 Telebirr number updated to: ${telebirrNumber}`);
+
+  // Persist to database
+  if (Settings) {
+    await Settings.findOneAndUpdate(
+      { key: 'telebirrNumber' },
+      { value: telebirrNumber },
+      { upsert: true }
+    );
+  }
 
   // Broadcast to all connected players
   if (io) {
     io.emit('telebirrNumber', telebirrNumber);
   }
+
+  // Also update all admin panels
+  adminSockets.forEach(socketId => {
+    const socket = getEndpoint(socketId);
+    if (socket && socket.connected !== false) {
+      socket.emit('admin:telebirrNumber', telebirrNumber);
+      socket.emit('admin:success', `Telebirr number changed to ${telebirrNumber}`);
+    }
+  });
 }
 
 // ========== CACHE MANAGEMENT ==========
@@ -2395,7 +2440,7 @@ async function cleanupStaleConnections() {
   }
 }
 
-// ========== NEW: RESET HOUSE EARNINGS FUNCTION ==========
+// ========== NEW: RESET HOUSE EARNINGS FUNCTION (FIXED) ==========
 async function resetHouseEarnings(adminSocketId) {
   try {
     console.log('💰 Attempting to reset house earnings...');
@@ -2438,8 +2483,8 @@ async function resetHouseEarnings(adminSocketId) {
       });
     }
 
-    // Update admin panel
-    updateAdminPanel();
+    // Force update admin panel immediately
+    await updateAdminPanel();
 
     logActivity('HOUSE_EARNINGS_RESET', {
       adminSocketId: adminSocketId,
@@ -2634,18 +2679,23 @@ function setupSocketHandlers() {
       userId: query.userId || 'unknown'
     });
 
-    // ========== ADMIN AUTHENTICATION (PASSWORDLESS) ==========
+    // ========== ADMIN AUTHENTICATION (FIXED: PASSWORD VALIDATION) ==========
     socket.on('admin:auth', (password) => {
-      // Always authenticate – passwordless mode
-      adminSockets.add(socket.id);
-      socket.emit('admin:authSuccess');
-      updateAdminPanel();
+      // Validate password against CONFIG.ADMIN_PASSWORD
+      if (password === CONFIG.ADMIN_PASSWORD) {
+        adminSockets.add(socket.id);
+        socket.emit('admin:authSuccess');
+        updateAdminPanel();
 
-      // Send Telebirr number to admin
-      socket.emit('admin:telebirrNumber', telebirrNumber);
+        // Send Telebirr number to admin
+        socket.emit('admin:telebirrNumber', telebirrNumber);
 
-      logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
-      console.log(`✅ Admin authenticated (passwordless): ${socket.id}`);
+        logActivity('ADMIN_LOGIN', { socketId: socket.id }, socket.id);
+        console.log(`✅ Admin authenticated: ${socket.id}`);
+      } else {
+        socket.emit('admin:authError', { message: 'Invalid password' });
+        console.log(`❌ Failed admin auth attempt from ${socket.id}`);
+      }
     });
 
     socket.on('admin:getData', () => {
@@ -2669,6 +2719,22 @@ function setupSocketHandlers() {
         socket.emit('admin:error', result.message);
       } else {
         socket.emit('admin:success', result.message);
+      }
+    });
+
+    // ========== UPDATE TELEBIRR NUMBER (NEW HANDLER) ==========
+    socket.on('admin:updateTelebirrNumber', async (newNumber) => {
+      if (!adminSockets.has(socket.id)) {
+        socket.emit('admin:error', 'Unauthorized');
+        return;
+      }
+
+      try {
+        await setTelebirrNumber(newNumber);
+        // Success message is already sent inside setTelebirrNumber
+      } catch (error) {
+        console.error('Error updating Telebirr number:', error);
+        socket.emit('admin:error', error.message);
       }
     });
 
