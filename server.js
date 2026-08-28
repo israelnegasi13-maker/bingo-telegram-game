@@ -461,7 +461,7 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com"]
+      ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game-1.onrender.com"]
       : "*",
     methods: ["GET", "POST"],
     credentials: true
@@ -481,7 +481,7 @@ io.engine.on("connection_error", (err) => {
 // ========== MIDDLEWARE ==========
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game.onrender.com"]
+    ? ["https://*.telegram.org", "https://web.telegram.org", "https://bingo-telegram-game-1.onrender.com"]
     : "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
@@ -3804,7 +3804,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
             text: `📞 *Support*\n\n` +
                   `For assistance, please contact our admin:\n` +
                   `👤 @Ethio_elite_games_bot\n` +
-                  `✉️ Or visit our website: https://bingo-telegram-game.onrender.com\n\n` +
+                  `✉️ Or visit our website: https://bingo-telegram-game-1.onrender.com\n\n` +
                   `We'll respond as soon as possible.`,
             parse_mode: 'Markdown'
           })
@@ -3830,7 +3830,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               inline_keyboard: [[
                 {
                   text: '🎮 Open Game',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                  web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' }
                 }
               ]]
             }
@@ -3856,7 +3856,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               inline_keyboard: [[
                 {
                   text: '🎮 Open Game',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                  web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' }
                 }
               ]]
             }
@@ -4039,7 +4039,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           await agentSystem.handleTelegramReferral(user.userId, referralCode);
         }
 
-        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game.onrender.com'}/welcome.jpg`;
+        const imageUrl = `${process.env.SERVER_URL || 'https://bingo-telegram-game-1.onrender.com'}/welcome.jpg`;
 
         try {
           await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto`, {
@@ -4068,7 +4068,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               reply_markup: {
                 inline_keyboard: [
                   [
-                    { text: '🎮 Play Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } },
+                    { text: '🎮 Play Games', web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' } },
                     { text: '💰 Balance', callback_data: 'balance' }
                   ],
                   [
@@ -4093,7 +4093,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               chat_id: chatId,
               text: `🎉 እንኳን ወደ ETHIO GAMES በደህና መጡ! 🎉\n\nጨዋታዎችን ለመጀመር ከታች ያለውን ቁልፍ ይጫኑ።`,
               reply_markup: {
-                inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' } }]]
+                inline_keyboard: [[{ text: '🎮 Open Games', web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' } }]]
               }
             })
           });
@@ -4138,7 +4138,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               inline_keyboard: [[
                 {
                   text: '🎮 Open Games',
-                  web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+                  web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' }
                 }
               ]]
             }
@@ -4152,7 +4152,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
           body: JSON.stringify({
             chat_id: chatId,
             text: `👑 *ETHIO GAMES Agent System*\n\n` +
-                  `*Agent Portal:* https://bingo-telegram-game.onrender.com/agent\n\n` +
+                  `*Agent Portal:* https://bingo-telegram-game-1.onrender.com/agent\n\n` +
                   `*How it works:*\n` +
                   `1. Become an agent and get referral link\n` +
                   `2. Share link with friends\n` +
@@ -4170,7 +4170,7 @@ app.post('/telegram-webhook', express.json(), async (req, res) => {
               inline_keyboard: [[
                 {
                   text: '👑 Open Agent Portal',
-                  url: 'https://bingo-telegram-game.onrender.com/agent'
+                  url: 'https://bingo-telegram-game-1.onrender.com/agent'
                 }
               ]]
             }
@@ -4225,7 +4225,7 @@ app.get('/setup-telegram', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        url: 'https://bingo-telegram-game.onrender.com/telegram-webhook',
+        url: 'https://bingo-telegram-game-1.onrender.com/telegram-webhook',
         drop_pending_updates: true
       })
     });
@@ -4238,7 +4238,7 @@ app.get('/setup-telegram', async (req, res) => {
         menu_button: {
           type: 'web_app',
           text: '🎮 Play Games',
-          web_app: { url: 'https://bingo-telegram-game.onrender.com/telegram' }
+          web_app: { url: 'https://bingo-telegram-game-1.onrender.com/telegram' }
         }
       })
     });
@@ -4278,7 +4278,7 @@ app.get('/setup-telegram', async (req, res) => {
           
           <div class="agent-highlight">
             <h3>👑 AGENT SYSTEM - NOW AVAILABLE</h3>
-            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
+            <p><strong>Agent Portal:</strong> https://bingo-telegram-game-1.onrender.com/agent</p>
             <p><strong>Agent Statistics:</strong></p>
             <p>• Total Agents: ${agentStats.totalAgents || 0}</p>
             <p>• Active Agents: ${agentStats.activeAgents || 0}</p>
@@ -4335,13 +4335,13 @@ app.get('/setup-telegram', async (req, res) => {
           <div class="info-box">
             <h3>Bot Information:</h3>
             <p><strong>Bot:</strong> @Ethio_elite_games_bot</p>
-            <p><strong>Game Entry:</strong> https://bingo-telegram-game.onrender.com/telegram</p>
-            <p><strong>Agent Portal:</strong> https://bingo-telegram-game.onrender.com/agent</p>
-            <p><strong>Bingo Game:</strong> https://bingo-telegram-game.onrender.com/game</p>
-            <p><strong>Keno Game:</strong> https://bingo-telegram-game.onrender.com/keno</p>
-            <p><strong>Crash Game:</strong> https://bingo-telegram-game.onrender.com/crash</p>
-            <p><strong>Slots Game:</strong> https://bingo-telegram-game.onrender.com/slots</p>
-            <p><strong>Admin Panel:</strong> https://bingo-telegram-game.onrender.com/admin</p>
+            <p><strong>Game Entry:</strong> https://bingo-telegram-game-1.onrender.com/telegram</p>
+            <p><strong>Agent Portal:</strong> https://bingo-telegram-game-1.onrender.com/agent</p>
+            <p><strong>Bingo Game:</strong> https://bingo-telegram-game-1.onrender.com/game</p>
+            <p><strong>Keno Game:</strong> https://bingo-telegram-game-1.onrender.com/keno</p>
+            <p><strong>Crash Game:</strong> https://bingo-telegram-game-1.onrender.com/crash</p>
+            <p><strong>Slots Game:</strong> https://bingo-telegram-game-1.onrender.com/slots</p>
+            <p><strong>Admin Panel:</strong> https://bingo-telegram-game-1.onrender.com/admin</p>
             <p><strong>Admin Password:</strong> ${gameLogic.CONFIG ? gameLogic.CONFIG.ADMIN_PASSWORD : 'admin123'}</p>
           </div>
           
